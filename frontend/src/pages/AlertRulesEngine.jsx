@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import useFocusTrap from '../hooks/useFocusTrap';
 import { useTranslation } from 'react-i18next';
 import { Bell, Plus, Trash2, Edit, Play, Pause, AlertTriangle } from 'lucide-react';
@@ -29,6 +29,7 @@ export default function AlertRulesEngine() {
   const { toast } = useToast();
   const [rules, setRules] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [unavailable, setUnavailable] = useState(false);
   const [filter, setFilter] = useState('all'); // all, enabled, disabled
   const [createModal, setCreateModal] = useState(false);
   const [editModal, setEditModal] = useState(null);
@@ -42,9 +43,17 @@ export default function AlertRulesEngine() {
     try {
       setLoading(true);
       const data = await api.get('/api/alerts/rules');
-      setRules(data.rules || []);
+      if (data?.ok === false || data?.unavailable) {
+        throw new Error(data.detail || t('pages.alertRulesEngine.load_failed'));
+      }
+      if (!Array.isArray(data.rules)) {
+        throw new Error(t('pages.alertRulesEngine.load_failed'));
+      }
+      setUnavailable(false);
+      setRules(data.rules);
     } catch (error) {
       console.error('Failed to fetch alert rules:', error);
+      setUnavailable(true);
       toast.error(t('pages.alertRulesEngine.load_failed'));
     } finally {
       setLoading(false);
@@ -135,6 +144,11 @@ export default function AlertRulesEngine() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (unavailable) return
+    exportCsv()
+  }, [unavailable, exportCsv])
+
   const visibleRules = useMemo(() => {
     if (!searchQuery.trim()) return filteredRules
     const ids = new Set(filteredFindings.map((f) => f.id))
@@ -148,14 +162,22 @@ export default function AlertRulesEngine() {
       actions={(
         <ShellScanActions
           onRefresh={fetchRules}
-          onExport={exportCsv}
+          onExport={unavailable ? undefined : handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={unavailable || !filteredFindings.length}
         />
       )}
     >
       <div className="space-y-6">
-        {/* Stats */}
+        {unavailable ? (
+          <div data-testid="alert-rules-unavailable">
+            <EmptyState
+              icon="alert"
+              title={t('pages.alertRulesEngine.unavailable_title')}
+              body={t('pages.alertRulesEngine.unavailable_body')}
+            />
+          </div>
+        ) : (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
@@ -189,6 +211,7 @@ export default function AlertRulesEngine() {
             <div className="text-2xl font-bold text-purple-400">{stats.triggered}</div>
           </div>
         </div>
+        )}
 
         {/* Controls */}
         <div className="flex items-center justify-between">
@@ -222,13 +245,13 @@ export default function AlertRulesEngine() {
           <div className="p-4 border-b border-[var(--border-default)] space-y-3">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Bell className="w-4 h-4 text-cyan-400" />
-              {t('pages.alertRulesEngine.rules_heading', { count: filteredRules.length })}
+              {t('pages.alertRulesEngine.rules_heading', { count: unavailable ? '—' : filteredRules.length })}
             </h3>
             <WeissmanListToolbar
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
-              resultCount={visibleRules.length}
-              totalCount={filteredRules.length}
+              resultCount={unavailable ? undefined : visibleRules.length}
+              totalCount={unavailable ? undefined : filteredRules.length}
             />
           </div>
 
@@ -236,6 +259,12 @@ export default function AlertRulesEngine() {
             <div className="p-8 text-center text-[var(--text-muted)]">
               <div className="animate-spin w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full mx-auto mb-3" />
               Loading rules...
+            </div>
+          ) : unavailable ? (
+            <div className="p-6">
+              <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400" role="alert">
+                {t('pages.alertRulesEngine.rules_unavailable')}
+              </div>
             </div>
           ) : filteredRules.length === 0 ? (
             <div className="p-6">
@@ -477,7 +506,7 @@ export default function AlertRulesEngine() {
       </div>
 
       {/* Create/Edit Modal */}
-      {(createModal || editModal) && (
+      {(createModal || (editModal && !unavailable)) && (
         <RuleModal
           rule={editModal}
           template={createModal?.template ? createModal : null}

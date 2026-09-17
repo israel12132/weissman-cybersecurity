@@ -144,9 +144,12 @@ function FindingCard({ f }) {
 
 function Scorecard({ summary, t }) {
   if (!summary) return null
-  const score = summary.posture_score ?? summary.evidence?.posture_score ?? 100
-  const grade = summary.grade ?? summary.evidence?.grade ?? 'A'
-  const color = gradeColor(grade)
+  const raw = summary.posture_score ?? summary.evidence?.posture_score
+  const hasScore = raw != null && Number.isFinite(Number(raw))
+  const score = hasScore ? Number(raw) : 0
+  const grade = summary.grade ?? summary.evidence?.grade
+  const hasGrade = grade != null && String(grade).trim() !== ''
+  const color = hasScore ? gradeColor(grade) : 'rgba(255,255,255,0.12)'
   const worst = summary.worst_severity ?? summary.evidence?.worst_severity ?? 'info'
   const st = SEV_STYLE[worst] || SEV_STYLE.info
   const cats = summary.weak_categories || summary.evidence?.weak_categories || []
@@ -157,16 +160,16 @@ function Scorecard({ summary, t }) {
           <div className="relative w-28 h-28 shrink-0">
             <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
               <circle cx="50" cy="50" r="44" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="8" />
-              <circle cx="50" cy="50" r="44" fill="none" stroke={color} strokeWidth="8" strokeLinecap="round" strokeDasharray={`${(score / 100) * 276.46} 276.46`} />
+              <circle cx="50" cy="50" r="44" fill="none" stroke={color} strokeWidth="8" strokeLinecap="round" strokeDasharray={hasScore ? `${(score / 100) * 276.46} 276.46` : '0 276.46'} />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-3xl font-bold" style={{ color }}>{score}</span>
+              <span className="text-3xl font-bold" style={{ color }}>{hasScore ? score : '—'}</span>
               <span className="text-[10px] font-mono text-[var(--text-muted)]">/ 100</span>
             </div>
           </div>
           <div>
             <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{t('pages.httpSmugglingPosture.desync_resistance', 'Desync Resistance')}</div>
-            <div className="text-5xl font-black leading-none" style={{ color }}>{grade}</div>
+            <div className="text-5xl font-black leading-none" style={{ color }}>{hasGrade ? grade : '—'}</div>
             <div className="mt-1.5">
               <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${st.bd} ${st.text}`}>
                 {t('pages.httpSmugglingPosture.worst', 'Worst: {{sev}}', { sev: worst })}
@@ -219,7 +222,13 @@ export default function HttpSmugglingPosture() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE, detailFindings)
+
+  const handleExportCsv = useCallback(() => {
+    if (historyUnavailable) return
+    exportCsv()
+  }, [historyUnavailable, exportCsv])
 
   useEffect(() => {
     refreshFromHistory().then((run) => {
@@ -320,10 +329,10 @@ export default function HttpSmugglingPosture() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={exportCsv}
+          onExport={historyUnavailable ? undefined : handleExportCsv}
           refreshLoading={historyLoading}
           refreshDisabled={status === 'running'}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={historyUnavailable || !filteredFindings.length}
         />
       )}
     >
@@ -421,8 +430,13 @@ export default function HttpSmugglingPosture() {
         <p className="text-xs font-mono text-[var(--text-muted)] mb-6">{t('pages.httpSmugglingPosture.select_client_warning', 'Select an in-scope client and target URL to run the desync posture scan.')}</p>
       )}
 
-      {findings.length > 0 && <Scorecard summary={summary} t={t} />}
+      {findings.length > 0 && !historyUnavailable && <Scorecard summary={summary} t={t} />}
 
+      {historyUnavailable && (
+        <p data-testid="http-smuggling-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+          {t('pages.httpSmugglingPosture.history_unavailable')}
+        </p>
+      )}
       <WeissmanFindingsPanel
         findings={detailFindings}
         filteredFindings={filteredFindings}
@@ -437,7 +451,10 @@ export default function HttpSmugglingPosture() {
         lastUpdated={lastUpdated}
         jobId={pendingJobId || lastJobId}
         accent={ACCENT}
-        showEmptyReady={status !== 'running' && detailFindings.length === 0}
+        unavailable={historyUnavailable}
+        unavailableTitle={t('pages.httpSmugglingPosture.history_unavailable')}
+        unavailableBody={t('pages.httpSmugglingPosture.history_unavailable')}
+        showEmptyReady={status !== 'running' && detailFindings.length === 0 && !historyUnavailable}
         emptyReadyTitle={t('pages.httpSmugglingPosture.run_to_populate', 'Run a desync scan to assess CL.TE/TE.CL confusion, TE obfuscation, pipeline behaviour and protocol-boundary fractures.')}
         emptyReadyBody={t('pages.httpSmugglingPosture.no_findings', 'No HTTP desync indicators observed — front/back-end parsing appears consistent.')}
         renderFinding={(f, i) => <FindingCard key={i} f={f} />}

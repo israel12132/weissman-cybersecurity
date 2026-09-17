@@ -1,7 +1,7 @@
 /**
  * Control-plane of controls — live findings from fusion engines that prove installed defenses.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ShieldCheck, Search } from 'lucide-react'
 import PageShell from './PageShell'
@@ -31,23 +31,35 @@ export default function ControlPlaneOfControls() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const abortRef = useRef(null)
 
   const load = useCallback(async () => {
+    abortRef.current?.abort()
+    const ac = new AbortController()
+    abortRef.current = ac
     setLoading(true)
     setError('')
     try {
-      const d = await apiFetch('/api/findings?limit=500')
-      if (d?.ok === false) throw new Error(d.detail || 'load failed')
-      const all = Array.isArray(d.findings) ? d.findings : []
+      const d = await apiFetch('/api/findings?limit=500', { signal: ac.signal })
+      if (d?.ok === false || d?.unavailable) {
+        throw new Error(d.detail || 'findings unavailable')
+      }
+      const all = Array.isArray(d) ? d : (Array.isArray(d.findings) ? d.findings : [])
+      if (ac.signal.aborted) return
       setFindings(all.filter((f) => ENGINES.includes(f.source || f.type || f.engine)))
     } catch (e) {
-      setError(e.message || t(`${NS}.load_failed`))
+      if (e?.name === 'AbortError' || ac.signal.aborted) return
+      setFindings([])
+      setError(e.message || 'load failed')
     } finally {
-      setLoading(false)
+      if (abortRef.current === ac && !ac.signal.aborted) setLoading(false)
     }
-  }, [t])
+  }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    load()
+    return () => abortRef.current?.abort()
+  }, [load])
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
@@ -58,14 +70,19 @@ export default function ControlPlaneOfControls() {
   }, [findings, searchQuery])
 
   const exportCsv = useCallback(() => {
+    if (error) return
     downloadCsv(
       filtered.map((f) => [f.source || f.type, f.title, f.severity, f.status, f.discovered_at]),
       ['engine', 'title', 'severity', 'status', 'discovered'],
       'weissman-control-plane',
     )
-  }, [filtered])
+  }, [error, filtered])
 
   const crit = findings.filter((f) => ['critical', 'high'].includes((f.severity || '').toLowerCase())).length
+  const liveEngineCount = useMemo(
+    () => new Set(findings.map((f) => f.source || f.engine || f.type).filter(Boolean)).size,
+    [findings],
+  )
 
   return (
     <PageShell
@@ -73,7 +90,7 @@ export default function ControlPlaneOfControls() {
       subtitle={t(`${NS}.subtitle`)}
       icon={<ShieldCheck />}
       actions={(
-        <ShellScanActions onRefresh={load} onExport={exportCsv} refreshLoading={loading} exportDisabled={!filtered.length} />
+        <ShellScanActions onRefresh={load} onExport={error ? undefined : exportCsv} refreshLoading={loading} exportDisabled={!!error || !filtered.length} />
       )}
     >
       <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>
@@ -84,7 +101,7 @@ export default function ControlPlaneOfControls() {
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <ExecutiveWidget label={t(`${NS}.kpi_findings`)} value={findings.length} />
             <ExecutiveWidget label={t(`${NS}.kpi_crit`)} value={crit} />
-            <ExecutiveWidget label={t(`${NS}.kpi_engines`)} value={ENGINES.length} />
+            <ExecutiveWidget label={t(`${NS}.kpi_engines`)} value={findings.length ? liveEngineCount : '—'} />
           </div>
           <div className="relative max-w-sm">
             <Search className="w-3.5 h-3.5 text-white/30 absolute left-2.5 top-1/2 -translate-y-1/2" />

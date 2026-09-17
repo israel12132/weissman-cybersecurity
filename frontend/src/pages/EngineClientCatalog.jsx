@@ -320,6 +320,7 @@ export default function EngineClientCatalog() {
   const [telemetryById, setTelemetryById] = useState({})
   const [activeProfileId, setActiveProfileId] = useState('enterprise')
   const [clients, setClients] = useState([])
+  const [clientsUnavailable, setClientsUnavailable] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState(null)
   const [engineStates, setEngineStates] = useState({})
   const [selectedEngines, setSelectedEngines] = useState(new Set())
@@ -354,8 +355,13 @@ export default function EngineClientCatalog() {
   }, [selectedClientId])
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((d) => { if (Array.isArray(d)) setClients(d) })
-      .catch((err) => { if (import.meta.env.DEV) console.warn('[EngineClientCatalog] clients load failed:', err) })
+      .then((d) => {
+        const list = Array.isArray(d) ? d : Array.isArray(d?.clients) ? d.clients : null
+        if (!list) { setClientsUnavailable(true); return }
+        setClientsUnavailable(false)
+        setClients(list)
+      })
+      .catch(() => setClientsUnavailable(true))
   }, [])
 
   useEffect(() => {
@@ -655,7 +661,12 @@ export default function EngineClientCatalog() {
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
-          {!selectedClientId && (
+          {clientsUnavailable && (
+            <p data-testid="engine-client-catalog-clients-unavailable" className="text-xs text-amber-300/80 font-mono">
+              {t('pages.engineClientCatalog.clients_unavailable')}
+            </p>
+          )}
+          {!selectedClientId && !clientsUnavailable && (
             <span className="text-[10px] font-mono text-amber-400/70">
               ⚠ {t('engines.catalog_select_client_warn')}
             </span>

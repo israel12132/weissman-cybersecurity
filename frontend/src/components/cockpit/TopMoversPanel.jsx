@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { apiFetch } from '../../utils/apiFetch'
+import { useVisiblePolling } from '../../hooks/useVisiblePolling'
 
 const NS = 'components.cockpitWidgets.topMoversPanel'
 
@@ -66,23 +67,40 @@ export default function TopMoversPanel({ className = '' }) {
   const { t } = useTranslation()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [unavailable, setUnavailable] = useState(false)
+  const abortRef = useRef(null)
+  const inflightRef = useRef(false)
+
+  const load = useCallback(async ({ silent = false } = {}) => {
+    if (silent && inflightRef.current) return
+    if (!silent) abortRef.current?.abort()
+    else if (inflightRef.current) return
+    const ac = new AbortController()
+    abortRef.current = ac
+    inflightRef.current = true
+    try {
+      const d = await apiFetch('/api/dashboard/exec-kpis', { signal: ac.signal })
+      if (ac.signal.aborted) return
+      if (d?.ok === false || d?.unavailable) {
+        throw new Error(d.detail || 'unavailable')
+      }
+      setData(d)
+      setUnavailable(false)
+    } catch (e) {
+      if (e?.name === 'AbortError' || ac.signal.aborted) return
+      setData(null)
+      setUnavailable(true)
+    } finally {
+      if (abortRef.current === ac) inflightRef.current = false
+      if (abortRef.current === ac && !ac.signal.aborted) setLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
-    let cancelled = false
-    const load = async () => {
-      try {
-        const d = await apiFetch('/api/dashboard/exec-kpis')
-        if (!cancelled) setData(d)
-      } catch (_) {
-        // dashboard tile soft-fails — keep last good payload
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
     load()
-    const timer = setInterval(load, 30_000)
-    return () => { cancelled = true; clearInterval(timer) }
-  }, [])
+    return () => abortRef.current?.abort()
+  }, [load])
+  useVisiblePolling(() => load({ silent: true }), 30_000)
 
   if (loading && !data) {
     return (
@@ -91,6 +109,18 @@ export default function TopMoversPanel({ className = '' }) {
           <div key={i} className="h-72 rounded-2xl bg-white/[0.025] border border-white/10 animate-pulse" />
         ))}
       </div>
+    )
+  }
+
+  if (unavailable && !data) {
+    return (
+      <p
+        className={`text-sm text-amber-200/90 ${className}`}
+        data-testid="top-movers-unavailable"
+        role="alert"
+      >
+        {t(`${NS}.unavailable`)}
+      </p>
     )
   }
 
@@ -104,6 +134,11 @@ export default function TopMoversPanel({ className = '' }) {
 
   return (
     <div className={`grid grid-cols-1 md:grid-cols-3 gap-3 ${className}`}>
+      {unavailable && (
+        <p className="md:col-span-3 text-sm text-amber-200/90" data-testid="top-movers-unavailable" role="alert">
+          {t(`${NS}.unavailable`)}
+        </p>
+      )}
       <Card title={t(`${NS}.enginesTitle`)} count={engines.length} footer={t(`${NS}.enginesFooter`)} accent="#22d3ee">
         {engines.length === 0 ? (
           <EmptyRow label={t(`${NS}.enginesEmpty`)} />

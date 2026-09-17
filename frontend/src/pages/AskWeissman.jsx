@@ -145,6 +145,11 @@ export default function AskWeissman() {
           rows: result.rows || [],
           row_count: result.row_count || 0,
           elapsed_ms: result.elapsed_ms,
+          plan_sealed: result.plan_sealed === true,
+          exec_role: result.exec_role || null,
+          tenant_bound: result.tenant_bound ?? null,
+          row_cap: result.row_cap ?? null,
+          statement_timeout_ms: result.statement_timeout_ms ?? null,
           t: Date.now(),
         }
         if (idx >= 0) next[idx] = turn
@@ -269,6 +274,29 @@ export default function AskWeissman() {
         ref={transcriptRef}
         className="flex-1 overflow-y-auto rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] backdrop-blur-md p-4 space-y-4"
       >
+        <ul
+          aria-label={t('ask_weissman.safeguards_aria')}
+          className="flex flex-wrap gap-1.5 mb-1"
+        >
+          {[
+            'guard_tenant',
+            'guard_role',
+            'guard_timeout',
+            'guard_limit',
+            'guard_plan',
+            'guard_oracle',
+            'guard_mask',
+            'guard_depth',
+            'guard_vector',
+          ].map((g) => (
+            <li
+              key={g}
+              className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-[var(--border-default)] text-[var(--text-tertiary)]"
+            >
+              {t(`ask_weissman.${g}`)}
+            </li>
+          ))}
+        </ul>
         {visibleHistory.length === 0 && history.length > 0 ? (
           <div className="text-center text-[11px] font-mono text-[var(--text-muted)] py-12">
             {t('weissmanFindings.filtered_title')}
@@ -318,6 +346,26 @@ export default function AskWeissman() {
                   <p className="text-[12px] font-mono text-rose-300">{turn.error}</p>
                 ) : (
                   <>
+                    {turn.exec_role && (
+                      <ul
+                        aria-label={t('ask_weissman.live_guards_aria')}
+                        className="flex flex-wrap gap-2 text-[10px] font-mono text-[var(--text-tertiary)]"
+                      >
+                        <li className="px-1.5 py-0.5 rounded border border-emerald-500/30 text-emerald-200">
+                          {turn.exec_role} · {turn.statement_timeout_ms}ms · LIMIT {turn.row_cap}
+                        </li>
+                        {turn.plan_sealed && (
+                          <li className="px-1.5 py-0.5 rounded border border-violet-500/30 text-violet-200">
+                            {t('ask_weissman.guard_plan')}
+                          </li>
+                        )}
+                        {turn.tenant_bound != null && (
+                          <li className="px-1.5 py-0.5 rounded border border-cyan-500/30 text-cyan-200">
+                            {t('ask_weissman.guard_tenant')}
+                          </li>
+                        )}
+                      </ul>
+                    )}
                     {turn.plan && (
                       <details className="rounded border border-[var(--border-default)] bg-[var(--bg-2)]" open>
                         <summary className="cursor-pointer text-[10px] font-mono text-violet-300/80 px-2 py-1 hover:text-violet-200">
@@ -393,6 +441,7 @@ export default function AskWeissman() {
           onChange={(e) => setQuestion(e.target.value)}
           placeholder={t('ask_weissman.placeholder')}
           aria-label={t('ask_weissman.placeholder')}
+          maxLength={2000}
           className="flex-1 bg-[var(--bg-2)] border border-[var(--border-strong)] rounded-lg px-3 py-2 text-[13px] text-[var(--text-primary)] focus:outline-none focus:border-cyan-500/40"
           // eslint-disable-next-line jsx-a11y/no-autofocus -- intentional: focus the primary question input on this dedicated Q&A page
           autoFocus

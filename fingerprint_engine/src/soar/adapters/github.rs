@@ -62,9 +62,9 @@ impl OpenPullRequestAdapter for GithubPrAdapter {
         }
 
         let spec_id = Uuid::new_v4();
-        let Ok(mut tx) = crate::db::begin_tenant_tx(ctx.pool, ctx.cmd.tenant_id).await else {
-            return Err(AdapterError::Provider("tenant tx".into()));
-        };
+        let mut tx = crate::db::begin_tenant_tx(ctx.pool, ctx.cmd.tenant_id)
+            .await
+            .map_err(|_| AdapterError::Provider("store_down".into()))?;
         let ins = sqlx::query(
             r#"INSERT INTO auto_heal_job_specs (
                 id, tenant_id, client_id, vuln_id, finding_id,
@@ -89,7 +89,9 @@ impl OpenPullRequestAdapter for GithubPrAdapter {
                 "auto_heal_job_specs insert failed".into(),
             ));
         }
-        let _ = tx.commit().await;
+        if tx.commit().await.is_err() {
+            return Err(AdapterError::Provider("store_down".into()));
+        }
 
         let queue_payload = json!({ "spec_id": spec_id.to_string(), "soar": true });
         let queue_payload =
@@ -190,7 +192,9 @@ async fn load_heal_material(
     .fetch_optional(&mut *tx)
     .await
     .map_err(|e| AdapterError::Provider(e.to_string()))?;
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return Err(AdapterError::Provider("store_down".into()));
+    }
     let Some(r) = row else {
         return Err(AdapterError::Skipped("finding not found".into()));
     };

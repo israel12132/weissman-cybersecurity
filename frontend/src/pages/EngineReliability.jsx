@@ -10,6 +10,7 @@ import EngineRealityBadge, { REALITY_KIND_META, EngineRealitySummary } from '../
 import { useEngineCapabilities } from '../lib/useEngineCapabilities'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import { api } from '../utils/apiFetch'
+import EmptyState from '../components/ui/EmptyState'
 import Button from '../components/ui/Button'
 
 const KIND_FILTERS = ['all', 'real_probe', 'alias', 'agent_required', 'special']
@@ -55,7 +56,7 @@ function StatCard({ label, value, tone, icon, hint }) {
 
 export default function EngineReliability() {
   const { t } = useTranslation()
-  const { byId, summary, total, legend, remoteDetectionCount, loading: capsLoading, error: capsError, refresh: refreshCaps } =
+  const { byId, summary, total, legend, remoteDetectionCount, loading: capsLoading, error: capsError, unavailable: capsUnavailable, refresh: refreshCaps } =
     useEngineCapabilities()
   const [telem, setTelem] = useState(null)
   const [telemLoading, setTelemLoading] = useState(true)
@@ -93,8 +94,14 @@ export default function EngineReliability() {
     return m
   }, [telem])
 
+  const catalogUnavailable = capsUnavailable || !!capsError
+  const telemUnavailable = !!telemError || telem == null
+
   const rows = useMemo(() => {
-    const list = Object.values(byId).map((c) => ({ ...c, health: telemById[c.id] || null }))
+    const list = Object.values(byId).map((c) => ({
+      ...c,
+      health: telemUnavailable ? null : (telemById[c.id] || null),
+    }))
     const filtered = list.filter(
       (r) =>
         (kindFilter === 'all' || r.kind === kindFilter) &&
@@ -108,7 +115,7 @@ export default function EngineReliability() {
       return a.id.localeCompare(b.id)
     })
     return filtered
-  }, [byId, telemById, kindFilter, onlyRuns, onlyRemote])
+  }, [byId, telemById, kindFilter, onlyRuns, onlyRemote, telemUnavailable])
 
   const rowFindings = useMemo(() => rows.map((r) => {
     const h = r.health
@@ -117,8 +124,10 @@ export default function EngineReliability() {
     if (h?.last_error) parts.push(h.last_error)
     if (h) {
       parts.push(`${h.total_runs ?? 0} runs · ${h.recovered_runs ?? 0} self-heal · ${h.failed_runs ?? 0} failed`)
+    } else if (telemUnavailable) {
+      parts.push(t('pages.engineReliability.unconfirmed'))
     } else {
-      parts.push('never run')
+      parts.push(t('pages.engineReliability.never_run'))
     }
     return {
       id: r.id,
@@ -128,7 +137,7 @@ export default function EngineReliability() {
       description: parts.join(' · '),
       _row: r,
     }
-  }), [rows])
+  }), [rows, telemUnavailable, t])
 
   const {
     filteredFindings,
@@ -147,10 +156,17 @@ export default function EngineReliability() {
     },
   })
 
-  const recoveryRate =
-    telem && telem.total_runs > 0 ? Math.round((telem.recovered_runs / telem.total_runs) * 100) : 0
+  const handleExportCsv = useCallback(() => {
+    if (telemError) return
+    exportCsv()
+  }, [telemError, exportCsv])
 
-  const loading = capsLoading && !total
+  const recoveryRate =
+    telemUnavailable || !telem || typeof telem.total_runs !== 'number' || telem.total_runs <= 0
+      ? null
+      : Math.round((telem.recovered_runs / telem.total_runs) * 100)
+
+  const loading = capsLoading && total == null
 
   return (
     <PageShell
@@ -159,9 +175,9 @@ export default function EngineReliability() {
       actions={(
         <ShellScanActions
           onRefresh={refreshAll}
-          onExport={exportCsv}
+          onExport={(telemError || catalogUnavailable) ? undefined : handleExportCsv}
           refreshLoading={loading || telemLoading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={!!telemError || !filteredFindings.length}
         />
       )}
     >
@@ -184,55 +200,63 @@ export default function EngineReliability() {
           <div className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-6">
             <SkeletonWidgetGrid count={8} />
           </div>
+        ) : catalogUnavailable ? (
+          <div data-testid="engine-reliability-unavailable">
+            <EmptyState
+              icon="alert"
+              title={t('pages.engineReliability.unavailable_title')}
+              body={t('pages.engineReliability.unavailable_body')}
+            />
+          </div>
         ) : (
           <>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
               <StatCard
                 label={t('pages.engineReliability.total_engines')}
-                value={total}
+                value={total ?? '—'}
                 icon={<Cpu className="w-4 h-4 text-cyan-400" />}
               />
               <StatCard
                 label={t('pages.engineReliability.remote_capable')}
-                value={remoteDetectionCount}
+                value={remoteDetectionCount ?? '—'}
                 tone="#22d3ee"
                 icon={<Globe className="w-4 h-4 text-cyan-400" />}
                 hint="Engines that can detect from a remote scan without an agent"
               />
               <StatCard
                 label={t('pages.engineReliability.real_probes')}
-                value={summary.real_probe ?? 0}
+                value={typeof summary.real_probe === 'number' ? summary.real_probe : '—'}
                 tone="#34d399"
               />
               <StatCard
                 label={t('pages.engineReliability.aliases')}
-                value={summary.alias ?? 0}
+                value={typeof summary.alias === 'number' ? summary.alias : '—'}
                 tone="#9ca3af"
               />
               <StatCard
                 label={t('pages.engineReliability.agent_required')}
-                value={summary.agent_required ?? 0}
+                value={typeof summary.agent_required === 'number' ? summary.agent_required : '—'}
                 tone="#f59e0b"
                 icon={<WifiOff className="w-4 h-4 text-amber-400" />}
               />
               <StatCard
                 label={t('pages.engineReliability.engines_observed')}
-                value={telem?.engines_observed ?? 0}
+                value={telemUnavailable ? '—' : (telem.engines_observed ?? '—')}
                 icon={<Activity className="w-4 h-4 text-purple-400" />}
               />
               <StatCard
                 label={t('pages.engineReliability.total_runs')}
-                value={telem?.total_runs ?? 0}
+                value={telemUnavailable ? '—' : (telem.total_runs ?? '—')}
               />
               <StatCard
                 label={t('pages.engineReliability.recovery_rate')}
-                value={`${recoveryRate}%`}
+                value={recoveryRate == null ? '—' : `${recoveryRate}%`}
                 tone="#34d399"
                 icon={<ShieldCheck className="w-4 h-4 text-emerald-400" />}
               />
             </div>
 
-            {(telem?.failed_runs ?? 0) > 0 && (
+            {!telemUnavailable && (telem?.failed_runs ?? 0) > 0 && (
               <div className="flex items-center gap-2 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
                 <AlertTriangle className="w-4 h-4" />
                 {t('pages.engineReliability.failed_note', { failed: telem.failed_runs,
@@ -368,7 +392,9 @@ export default function EngineReliability() {
                             <span className="text-[9px] font-mono text-[var(--text-muted)]">{formatTs(h.updated_ts)}</span>
                           </div>
                         ) : (
-                          <span className="text-xs text-[var(--text-muted)]">{t('pages.engineReliability.never_run')}</span>
+                          <span className="text-xs text-[var(--text-muted)]">
+                            {telemUnavailable ? t('pages.engineReliability.unconfirmed') : t('pages.engineReliability.never_run')}
+                          </span>
                         )}
                       </div>
                     </div>

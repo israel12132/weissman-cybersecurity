@@ -632,7 +632,8 @@ async fn execute_legacy_feedback_fuzz(
                 target_url,
                 12,
             )
-            .await;
+            .await
+            .unwrap_or_default();
             pentest_memory::prepend_memory_payloads(
                 &mut guided,
                 &winners.into_iter().map(|w| w.payload).collect::<Vec<_>>(),
@@ -788,7 +789,8 @@ async fn execute_generative_feedback_fuzz(
                 target_url,
                 8,
             )
-            .await;
+            .await
+            .unwrap_or_default();
             if !winners.is_empty() {
                 let hints: Vec<String> = winners
                     .iter()

@@ -20,21 +20,54 @@ export default function ReportView() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (!clientId) return
+    if (!clientId) return undefined
+    let cancelled = false
+    setLoading(true)
+    setError('')
+    setClient(null)
+    const ac = new AbortController()
     Promise.all([
-      apiFetch('/api/clients').catch(() => []),
-      apiFetch('/api/findings').catch(() => []),
-      apiFetch(`/api/clients/${clientId}/report/crypto-proof`).catch(() => null),
+      apiFetch('/api/clients', { signal: ac.signal }),
+      apiFetch('/api/findings', { signal: ac.signal }),
+      apiFetch(`/api/clients/${clientId}/report/crypto-proof`, { signal: ac.signal }),
     ])
       .then(([clients, findingsList, proof]) => {
+        if (cancelled) return
+        if (clients?.ok === false || clients?.unavailable) {
+          throw new Error(clients.detail || t('components.reportView.unavailable'))
+        }
+        if (findingsList?.ok === false || findingsList?.unavailable) {
+          throw new Error(findingsList.detail || t('components.reportView.unavailable'))
+        }
+        if (proof?.ok === false || proof?.unavailable) {
+          throw new Error(proof.detail || t('components.reportView.unavailable'))
+        }
         const c = Array.isArray(clients) ? clients.find((x) => String(x?.id) === String(clientId)) : null
+        const findingsArr = Array.isArray(findingsList)
+          ? findingsList
+          : (Array.isArray(findingsList?.findings) ? findingsList.findings : null)
+        if (!findingsArr) {
+          throw new Error(t('components.reportView.unavailable'))
+        }
         setClient(c || null)
-        setFindings(Array.isArray(findingsList) ? findingsList.filter((f) => String(f.client) === String(clientId)) : [])
+        setFindings(findingsArr.filter((f) => String(f.client) === String(clientId) || String(f.client_id) === String(clientId)))
         setCryptoProof(proof?.audit_root_hash ? proof : null)
       })
-      .catch((e) => setError(e?.message || t('components.reportView.load_failed')))
-      .finally(() => setLoading(false))
-  }, [clientId, t])
+      .catch((e) => {
+        if (cancelled || e?.name === 'AbortError') return
+        setError(e?.message || t('components.reportView.unavailable'))
+        setClient(null)
+        setFindings([])
+        setCryptoProof(null)
+      })
+      .finally(() => {
+        if (!cancelled && !ac.signal.aborted) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+      ac.abort()
+    }
+  }, [clientId])
 
   if (loading) {
     return (
@@ -58,7 +91,7 @@ export default function ReportView() {
     <StandaloneLabShell
       title={t('components.reportView.title', { name: clientName })}
       maxWidth="max-w-4xl"
-      actions={(
+      actions={!error ? (
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -79,14 +112,20 @@ export default function ReportView() {
             {t('components.reportView.download_pdf')}
           </a>
         </div>
-      )}
+      ) : null}
     >
       {error && (
-        <div className="mb-4 p-3 rounded bg-rose-500/20 border border-rose-400/50 text-rose-300 text-sm">
-          {error}
+        <div
+          className="mb-4 p-3 rounded bg-rose-500/20 border border-rose-400/50 text-rose-300 text-sm"
+          data-testid="report-unavailable"
+          data-live="false"
+          role="alert"
+        >
+          {t('components.reportView.unavailable')}
         </div>
       )}
 
+      {!error && (
       <section className="mb-8">
         <h2 className="text-lg font-semibold text-[var(--text-secondary)] mb-2">{t('components.reportView.executive_summary')}</h2>
         <p className="text-[var(--text-tertiary)] text-sm">
@@ -105,8 +144,9 @@ export default function ReportView() {
           </p>
         )}
       </section>
+      )}
 
-      {findings.length > 0 && (
+      {!error && findings.length > 0 && (
         <section className="mb-8 overflow-x-auto">
           <h2 className="text-lg font-semibold text-[var(--text-secondary)] mb-2">{t('components.reportView.recent_findings')}</h2>
           <table className="w-full border-collapse border border-[var(--border-strong)]">
@@ -136,6 +176,7 @@ export default function ReportView() {
         </section>
       )}
 
+      {!error && (
       <section className="rounded-xl border border-cyan-500/40 bg-[var(--bg-1)]/60 p-6 backdrop-blur">
         <h2 className="text-lg font-semibold text-cyan-400 mb-2">{t('components.reportView.crypto_proof')}</h2>
         <p className="text-[var(--text-tertiary)] text-sm mb-4">
@@ -175,6 +216,7 @@ export default function ReportView() {
           </p>
         )}
       </section>
+      )}
     </StandaloneLabShell>
   )
 }

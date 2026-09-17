@@ -11,17 +11,23 @@ import { apiFetch } from '../../utils/apiFetch'
 export default function HealTrendSparkline({ clientIds = [], days = 30 }) {
   const { t } = useTranslation()
   const [data, setData] = useState(null)
+  const [unavailable, setUnavailable] = useState(false)
 
   const key = clientIds.join(',')
   useEffect(() => {
-    if (!clientIds.length) { setData(null); return undefined }
+    if (!clientIds.length) { setData(null); setUnavailable(false); return undefined }
     let cancelled = false
     Promise.all(
       clientIds.map((id) =>
-        apiFetch(`/api/clients/${id}/heal-trends?days=${days}`)
-          .catch(() => null)),
+        apiFetch(`/api/clients/${id}/heal-trends?days=${days}`)),
     ).then((list) => {
       if (cancelled) return
+      if (list.some((res) => !res)) {
+        setUnavailable(true)
+        setData(null)
+        return
+      }
+      setUnavailable(false)
       const dayMap = {}
       let total = 0
       let fixed = 0
@@ -48,11 +54,23 @@ export default function HealTrendSparkline({ clientIds = [], days = 30 }) {
         rate: total ? fixed / total : 0,
         avgAttempts: total ? attemptsWeighted / total : 0,
       })
+    }).catch(() => {
+      if (!cancelled) {
+        setUnavailable(true)
+        setData(null)
+      }
     })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, days])
 
+  if (unavailable) {
+    return (
+      <p data-testid="heal-trend-unavailable" className="text-xs text-amber-300/80 font-mono">
+        {t('pages.healTrends.unavailable')}
+      </p>
+    )
+  }
   if (!data || data.total === 0) return null
 
   const W = 560

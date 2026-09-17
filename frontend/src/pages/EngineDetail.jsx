@@ -255,29 +255,44 @@ function mapServerHistoryJob(job) {
 }
 
 function RunHistoryPanel({ engineId, emptyLabel }) {
+  const { t } = useTranslation()
   const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(true)
   const [fromServer, setFromServer] = useState(false)
+  const [unavailable, setUnavailable] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     async function load() {
       setLoading(true)
+      setUnavailable(false)
       try {
         const data = await apiFetch(`/api/engines/history/${encodeURIComponent(engineId)}?limit=20`)
-        if (!cancelled && Array.isArray(data?.jobs) && data.jobs.length > 0) {
-          setHistory(data.jobs.map(mapServerHistoryJob))
-          setFromServer(true)
+        if (cancelled) return
+        if (data?.ok === false || data?.unavailable || !data || typeof data !== 'object' || Array.isArray(data)) {
+          setUnavailable(true)
           setLoading(false)
           return
         }
+        if (Array.isArray(data?.jobs) && data.jobs.length > 0) {
+          setHistory(data.jobs.map(mapServerHistoryJob))
+          setFromServer(true)
+          setUnavailable(false)
+          setLoading(false)
+          return
+        }
+        if (Array.isArray(data?.jobs)) {
+          setHistory(loadHistory(engineId))
+          setFromServer(false)
+          setUnavailable(false)
+          setLoading(false)
+          return
+        }
+        setUnavailable(true)
       } catch {
-        /* fall through to localStorage */
-      }
-      if (!cancelled) {
-        setHistory(loadHistory(engineId))
-        setFromServer(false)
-        setLoading(false)
+        if (!cancelled) setUnavailable(true)
+      } finally {
+        if (!cancelled) setLoading(false)
       }
     }
     load()
@@ -285,6 +300,13 @@ function RunHistoryPanel({ engineId, emptyLabel }) {
   }, [engineId])
 
   if (loading) return <p className="text-[11px] font-mono text-[var(--text-disabled)]">Loading run history…</p>
+  if (unavailable) {
+    return (
+      <p data-testid="engine-detail-history-unavailable" className="text-xs text-amber-300/80 font-mono">
+        {t('pages.engineDetail.history_unavailable')}
+      </p>
+    )
+  }
   if (!history.length) return <p className="text-[11px] font-mono text-[var(--text-disabled)]">{emptyLabel}</p>
   return (
     <div className="space-y-2">
@@ -412,8 +434,11 @@ export default function EngineDetail() {
   const esRef = useRef(null)
   const { selectedClientId: cockpitClientId } = useClient()
   const [clients, setClients]             = useState([])
+  const [clientsUnavailable, setClientsUnavailable] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState(null)
   const [clientIntegrations, setClientIntegrations] = useState(null)
+  const [integrationsUnavailable, setIntegrationsUnavailable] = useState(false)
+  const [historyUnavailable, setHistoryUnavailable] = useState(false)
   const { extraParams, setParam: setExtraParam } = useEngineScanParams(engineId, clientIntegrations)
   useSyncHubScanParams(engineId, extraParams)
   useRegisterHubClient(selectedClientId)
@@ -428,9 +453,13 @@ export default function EngineDetail() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((d) => { if (Array.isArray(d)) setClients(d) })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {})
+      .then((d) => {
+        const list = Array.isArray(d) ? d : Array.isArray(d?.clients) ? d.clients : null
+        if (!list) { setClientsUnavailable(true); return }
+        setClientsUnavailable(false)
+        setClients(list)
+      })
+      .catch(() => setClientsUnavailable(true))
   }, [])
 
   const reloadHistory = useCallback(async () => {
@@ -438,13 +467,23 @@ export default function EngineDetail() {
     setHistoryLoading(true)
     try {
       const data = await apiFetch(`/api/engines/history/${encodeURIComponent(engineId)}?limit=20`)
+      if (data?.ok === false || data?.unavailable) {
+        setHistoryUnavailable(true)
+        return
+      }
       if (Array.isArray(data?.jobs) && data.jobs.length > 0) {
+        setHistoryUnavailable(false)
         setRunHistory(data.jobs.map(mapServerHistoryJob))
         return
       }
-      setRunHistory(loadHistory(engineId))
+      if (Array.isArray(data?.jobs)) {
+        setHistoryUnavailable(false)
+        setRunHistory(loadHistory(engineId))
+        return
+      }
+      setHistoryUnavailable(true)
     } catch {
-      setRunHistory(loadHistory(engineId))
+      setHistoryUnavailable(true)
     } finally {
       setHistoryLoading(false)
     }
@@ -457,12 +496,27 @@ export default function EngineDetail() {
   useEffect(() => {
     if (!selectedClientId) {
       setClientIntegrations(null)
+      setIntegrationsUnavailable(false)
       return
     }
     let cancelled = false
     apiFetch(`/api/clients/${selectedClientId}/integrations`)
-      .then((d) => { if (!cancelled && d) setClientIntegrations(normalizeIntegrations(d)) })
-      .catch(() => { if (!cancelled) setClientIntegrations(null) })
+      .then((d) => {
+        if (cancelled) return
+        if (!d || d.ok === false || d.unavailable) {
+          setIntegrationsUnavailable(true)
+          setClientIntegrations(null)
+          return
+        }
+        setIntegrationsUnavailable(false)
+        setClientIntegrations(normalizeIntegrations(d))
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setIntegrationsUnavailable(true)
+          setClientIntegrations(null)
+        }
+      })
     return () => { cancelled = true }
   }, [selectedClientId])
 
@@ -569,6 +623,7 @@ export default function EngineDetail() {
   useEffect(() => () => { if (esRef.current) esRef.current.close() }, [])
 
   const handleExport = useCallback(() => {
+    if (historyUnavailable) return
     const payload = {
       engine: engineId,
       label: engine?.label,
@@ -576,17 +631,18 @@ export default function EngineDetail() {
       job_id: jobId,
       last_run_status: lastRunStatus,
       findings,
-      run_history: runHistory,
+      run_history: historyUnavailable ? null : runHistory,
     }
     const bytes = new TextEncoder().encode(JSON.stringify(payload, null, 2))
     downloadBytes(bytes, `${engineId}-export.json`, 'application/json')
     showToast('info', 'Export downloaded')
-  }, [engineId, engine?.label, jobId, lastRunStatus, findings, runHistory, showToast])
+  }, [engineId, engine?.label, jobId, lastRunStatus, findings, runHistory, historyUnavailable, showToast])
 
   const exportFindingsCsv = useCallback(() => {
+    if (historyUnavailable) return
     if (!findings.length) return
     exportStandardFindingsCsv(findings, `${engineId}-findings`)
-  }, [findings, engineId])
+  }, [historyUnavailable, findings, engineId])
 
   const {
     searchQuery,
@@ -602,10 +658,14 @@ export default function EngineDetail() {
     ? t('engines.detail_health_live')
     : t('engines.detail_health_catalog')
   const healthAccent = isProduction(engineId) ? '#4ade80' : '#9ca3af'
-  const lastRunDisplay = lastHistoryRun
+  const lastRunDisplay = historyUnavailable
+    ? '—'
+    : lastHistoryRun
     ? new Date(lastHistoryRun.ts).toLocaleString()
     : t('engines.detail_never_run')
-  const totalFindings = findings.length || (lastHistoryRun?.findingsCount ?? 0)
+  const totalFindings = historyUnavailable
+    ? '—'
+    : (findings.length || (lastHistoryRun?.findingsCount ?? 0))
 
   if (!engine) {
     return (
@@ -681,9 +741,9 @@ export default function EngineDetail() {
           </div>
           <ShellScanActions
             onRefresh={reloadHistory}
-            onExport={exportFindingsCsv}
+            onExport={historyUnavailable ? undefined : exportFindingsCsv}
             refreshLoading={historyLoading}
-            exportDisabled={!findings.length}
+            exportDisabled={historyUnavailable || !findings.length}
           />
         </div>
       </header>
@@ -772,6 +832,7 @@ export default function EngineDetail() {
               >
                 {t('engines.detail_view_history')}
               </Button>
+              {!historyUnavailable && (
               <Button variant="unstyled"
                 type="button"
                 onClick={handleExport}
@@ -779,6 +840,7 @@ export default function EngineDetail() {
               >
                 ↓ {t('engines.detail_export')}
               </Button>
+              )}
             </div>
           </div>
 
@@ -786,14 +848,16 @@ export default function EngineDetail() {
             <StatCard
               label={t('engines.detail_stat_last_run')}
               value={lastRunDisplay}
-              sub={lastHistoryRun?.status ? String(lastHistoryRun.status) : (jobId ? `Job ${jobId}` : undefined)}
+              sub={historyUnavailable
+                ? (jobId ? `Job ${jobId}` : undefined)
+                : (lastHistoryRun?.status ? String(lastHistoryRun.status) : (jobId ? `Job ${jobId}` : undefined))}
               accent="#a78bfa"
               icon="⏱"
             />
             <StatCard
               label={t('engines.detail_stat_findings')}
               value={String(totalFindings)}
-              sub={findings.length > 0 ? `${findings.length} this session` : undefined}
+              sub={historyUnavailable ? undefined : (findings.length > 0 ? `${findings.length} this session` : undefined)}
               accent="#f59e0b"
               icon="⚠"
             />
@@ -829,6 +893,21 @@ export default function EngineDetail() {
               <option value="">{t('engines.select_client')}</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
+            {clientsUnavailable && (
+              <p data-testid="engine-detail-clients-unavailable" className="text-xs text-amber-300/80 font-mono mt-1">
+                {t('pages.engineDetail.clients_unavailable')}
+              </p>
+            )}
+            {integrationsUnavailable && (
+              <p data-testid="engine-detail-integrations-unavailable" className="text-xs text-amber-300/80 font-mono mt-1">
+                {t('pages.engineDetail.integrations_unavailable')}
+              </p>
+            )}
+            {historyUnavailable && (
+              <p data-testid="engine-detail-history-stat-unavailable" className="text-xs text-amber-300/80 font-mono mt-1">
+                {t('pages.engineDetail.history_unavailable')}
+              </p>
+            )}
           </div>
 
           {/* Target */}
@@ -902,7 +981,7 @@ export default function EngineDetail() {
             {[
               { id:'output',   label: t('engines.live_output'),  badge: lines.length > 0 ? lines.length : null },
               { id:'findings', label: t('engines.findings_tab'), badge: findings.length > 0 ? findings.length : null },
-              { id:'history',  label: t('engines.run_history'),  badge: runHistory.length > 0 ? runHistory.length : null },
+              { id:'history',  label: t('engines.run_history'),  badge: historyUnavailable ? null : (runHistory.length > 0 ? runHistory.length : null) },
               { id:'contract', label: t('engines.contract_tab'), badge: null },
             ].map((tab) => (
               <Button variant="unstyled" key={tab.id} type="button" onClick={() => setActiveTab(tab.id)}

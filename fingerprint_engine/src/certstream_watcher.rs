@@ -190,22 +190,24 @@ fn match_sans_to_scope(sans: &[String], scope: &[ScopeRow]) -> Vec<(ScopeRow, St
     hits
 }
 
-async fn load_scope(app_pool: &PgPool, auth_pool: &PgPool) -> Vec<ScopeRow> {
+async fn load_scope(app_pool: &PgPool, auth_pool: &PgPool) -> Result<Vec<ScopeRow>, String> {
     let tenants: Vec<i64> = sqlx::query_scalar("SELECT id FROM tenants WHERE active = true")
         .fetch_all(auth_pool)
         .await
-        .unwrap_or_default();
+        .map_err(|_| "store_down".to_string())?;
     let mut out = Vec::new();
     for tenant_id in tenants {
-        let Ok(mut tx) = crate::db::begin_tenant_tx(app_pool, tenant_id).await else {
-            continue;
-        };
+        let mut tx = crate::db::begin_tenant_tx(app_pool, tenant_id)
+            .await
+            .map_err(|_| "store_down".to_string())?;
         let rows =
             sqlx::query("SELECT id, COALESCE(domains, '[]') AS domains FROM clients ORDER BY id")
                 .fetch_all(&mut *tx)
                 .await
-                .unwrap_or_default();
-        let _ = tx.commit().await;
+                .map_err(|_| "store_down".to_string())?;
+        if tx.commit().await.is_err() {
+            return Err("store_down".to_string());
+        }
         for r in rows {
             let client_id: i64 = r.try_get("id").unwrap_or(0);
             if client_id <= 0 {
@@ -224,7 +226,7 @@ async fn load_scope(app_pool: &PgPool, auth_pool: &PgPool) -> Vec<ScopeRow> {
             }
         }
     }
-    out
+    Ok(out)
 }
 
 struct Dedup {
@@ -344,13 +346,25 @@ async fn connect_and_read(url: &str, app_pool: &PgPool, auth_pool: &PgPool) -> R
     tracing::info!(target: "certstream", url, "CT squirt connected");
 
     let (_write, mut read) = ws.split();
-    let mut scope = load_scope(app_pool, auth_pool).await;
+    let mut scope = match load_scope(app_pool, auth_pool).await {
+        Ok(s) => s,
+        Err(e) => {
+            set_error(format!("store_down: {e}"));
+            Vec::new()
+        }
+    };
     let mut last_scope = Instant::now();
     let mut dedup = Dedup::new();
 
     while let Some(msg) = read.next().await {
         if last_scope.elapsed() >= SCOPE_REFRESH {
-            scope = load_scope(app_pool, auth_pool).await;
+            match load_scope(app_pool, auth_pool).await {
+                Ok(s) => {
+                    set_error("");
+                    scope = s;
+                }
+                Err(e) => set_error(format!("store_down: {e}")),
+            }
             last_scope = Instant::now();
         }
         match msg {

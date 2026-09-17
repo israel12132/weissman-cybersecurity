@@ -96,6 +96,11 @@ export default function IocFeed() {
     [types, typeFilter, t],
   )
 
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    iocCsv(filtered)
+  }, [error, filtered])
+
   const columns = useMemo(
     () => [
       columnHelper.accessor((i) => (i.type || '').toLowerCase(), {
@@ -178,9 +183,9 @@ export default function IocFeed() {
       actions={
         <ShellScanActions
           onRefresh={load}
-          onExport={() => iocCsv(filtered)}
+          onExport={error ? undefined : handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filtered.length}
+          exportDisabled={!!error || !filtered.length}
         />
       }
     >
@@ -190,7 +195,11 @@ export default function IocFeed() {
         {loading && <SkeletonWidgetGrid count={3} />}
 
         {error && (
-          <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-4 py-3 text-sm text-rose-300 font-mono">
+          <div
+            role="alert"
+            data-testid="ioc-feed-unavailable"
+            className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-4 py-3 text-sm text-rose-300 font-mono"
+          >
             {error}
           </div>
         )}

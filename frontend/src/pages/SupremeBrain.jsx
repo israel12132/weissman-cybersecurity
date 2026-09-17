@@ -93,6 +93,11 @@ export default function SupremeBrain() {
   )
   const hasAny = Boolean(pathsSnap || financial || memory)
 
+  const handleExportJson = useCallback(() => {
+    if (error) return
+    exportBrain(payload)
+  }, [error, payload])
+
   const columns = useMemo(
     () => [
       columnHelper.display({
@@ -182,9 +187,9 @@ export default function SupremeBrain() {
           </Button>
           <ShellScanActions
             onRefresh={() => load(false)}
-            onExport={() => exportBrain(payload)}
+            onExport={error ? undefined : handleExportJson}
             refreshLoading={loading}
-            exportDisabled={!payload}
+            exportDisabled={!!error || !payload}
           />
         </div>
       }

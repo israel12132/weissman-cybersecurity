@@ -86,10 +86,10 @@ pub async fn run_chronos_result(target: &str, ctx: &EngineRunContext) -> EngineR
     {
         let mut tx = match crate::db::begin_tenant_tx(pool.as_ref(), tenant_id).await {
             Ok(t) => t,
-            Err(e) => return EngineResult::error(format!("db: {e}")),
+            Err(_) => return EngineResult::error("store_down"),
         };
 
-        let recent_events = sqlx::query(
+        let recent_events = match sqlx::query(
             r#"SELECT id, event_type, pid, parent_pid, process_name, syscall_hint, action_taken, created_at
                  FROM chronos_events
                 WHERE client_id = $1
@@ -98,7 +98,10 @@ pub async fn run_chronos_result(target: &str, ctx: &EngineRunContext) -> EngineR
         .bind(client_id)
         .fetch_all(&mut *tx)
         .await
-        .unwrap_or_default();
+        {
+            Ok(rows) => rows,
+            Err(_) => return EngineResult::error("store_down"),
+        };
 
         for r in &recent_events {
             let et = r.try_get::<String, _>("event_type").unwrap_or_default();
@@ -143,7 +146,7 @@ pub async fn run_chronos_result(target: &str, ctx: &EngineRunContext) -> EngineR
             ));
         }
 
-        let traces = sqlx::query(
+        let traces = match sqlx::query(
             r#"SELECT function_name, payload_hash, metadata, created_at
                  FROM runtime_traces
                 WHERE client_id = $1
@@ -152,7 +155,10 @@ pub async fn run_chronos_result(target: &str, ctx: &EngineRunContext) -> EngineR
         .bind(client_id)
         .fetch_all(&mut *tx)
         .await
-        .unwrap_or_default();
+        {
+            Ok(rows) => rows,
+            Err(_) => return EngineResult::error("store_down"),
+        };
 
         let shell_syscalls = traces
             .iter()
@@ -181,7 +187,9 @@ pub async fn run_chronos_result(target: &str, ctx: &EngineRunContext) -> EngineR
             ));
         }
 
-        let _ = tx.commit().await;
+        if tx.commit().await.is_err() {
+            return EngineResult::error("store_down");
+        }
 
         if cfg.deploy_ebpf {
             if let (Some(ssh_host), Some(ssh_user), Some(key_path)) = (

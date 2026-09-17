@@ -53,9 +53,12 @@ export default function CemDagoMesh() {
         apiFetch(`/api/cem-dago/manifests?limit=${PRODUCTION_ENGINE_COUNT}`),
         apiFetch('/api/cem-dago/waves?signals=internet_exposed,web_port_active'),
       ])
+      if (!Array.isArray(man?.manifests) || !Array.isArray(wv?.waves)) {
+        throw new Error(t(`${NS}.load_failed`))
+      }
       setStatus(st)
-      setManifests(Array.isArray(man?.manifests) ? man.manifests : [])
-      setWaves(Array.isArray(wv?.waves) ? wv.waves : [])
+      setManifests(man.manifests)
+      setWaves(wv.waves)
       if (selectedClientId != null) {
         const bb = await apiFetch(`/api/cem-dago/blackboard?client_id=${encodeURIComponent(selectedClientId)}`)
         setBlackboard(bb)
@@ -158,6 +161,11 @@ export default function CemDagoMesh() {
     [t],
   )
 
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    evidenceCsv(evidenceRows)
+  }, [error, evidenceRows])
+
   return (
     <PageShell
       title={t(`${NS}.title`)}
@@ -192,9 +200,9 @@ export default function CemDagoMesh() {
           </Button>
           <ShellScanActions
             onRefresh={load}
-            onExport={() => evidenceCsv(evidenceRows)}
+            onExport={error ? undefined : handleExportCsv}
             refreshLoading={loading}
-            exportDisabled={!evidenceRows.length}
+            exportDisabled={!!error || !evidenceRows.length}
           />
         </div>
       }
@@ -202,12 +210,12 @@ export default function CemDagoMesh() {
       <div className="space-y-6">
         <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>
 
-        {error && (
-          <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-4 py-3 text-sm text-rose-300 font-mono">
-            {error}
+        {error ? (
+          <div data-testid="cem-dago-unavailable">
+            <EmptyState icon="alert" title={t(`${NS}.unavailable_title`)} body={t(`${NS}.unavailable_body`)} />
           </div>
-        )}
-
+        ) : (
+        <>
         {loading && !status && <SkeletonWidgetGrid count={4} />}
 
         {status && (
@@ -378,6 +386,8 @@ export default function CemDagoMesh() {
             />
           )}
         </div>
+        </>
+        )}
       </div>
     </PageShell>
   )

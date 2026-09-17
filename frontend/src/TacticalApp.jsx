@@ -101,6 +101,7 @@ import {
   LiveFeed,
   ReportHistory,
   BoardEvidencePack,
+  DominionBoardPack,
   ExecutiveOverview,
   AgentManagement,
   DarkWebMonitor,
@@ -311,6 +312,7 @@ export default function TacticalApp() {
           <Route path="live-feed" element={<LiveFeed />} />
           <Route path="reports" element={<ReportHistory />} />
           <Route path="board-pack" element={<BoardEvidencePack />} />
+          <Route path="dominion" element={<DominionBoardPack />} />
           <Route path="overview" element={<ExecutiveOverview />} />
           <Route path="dark-web" element={<DarkWebMonitor />} />
           <Route path="adversary-mirror" element={<AdversaryMirror />} />

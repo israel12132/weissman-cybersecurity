@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { Users, Shield, Key, AlertTriangle, Clock, X, ArrowRight } from 'lucide-react';
@@ -7,6 +7,7 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
+import EmptyState from '../components/ui/EmptyState'
 import { api } from '../utils/apiFetch';
 import { useFirstTenantClientId, withClientId } from '../lib/aliasClient';
 import Button from '../components/ui/Button'
@@ -25,7 +26,7 @@ import Button from '../components/ui/Button'
  */
 export default function IdentityContextManager() {
   const { t } = useTranslation();
-  const { clientId, loading: clientLoading } = useFirstTenantClientId();
+  const { clientId, loading: clientLoading, unavailable: clientsUnavailable } = useFirstTenantClientId();
   const [identities, setIdentities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -33,21 +34,30 @@ export default function IdentityContextManager() {
 
   useEffect(() => {
     if (clientLoading) return;
+    if (clientsUnavailable) {
+      setError(t('pages.identityContextManager.unavailable_title'))
+      setLoading(false)
+      return
+    }
     if (clientId == null) {
       setIdentities([]);
+      setError(null)
       setLoading(false);
       return;
     }
     fetchIdentities(clientId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientId, clientLoading]);
+  }, [clientId, clientLoading, clientsUnavailable]);
 
   const fetchIdentities = async (cid) => {
     try {
       setLoading(true);
       setError(null);
       const data = await api.get(withClientId('/api/identity/contexts', cid));
-      setIdentities(data.identities || []);
+      if (!Array.isArray(data.identities)) {
+        throw new Error(t('pages.identityContextManager.load_error'));
+      }
+      setIdentities(data.identities);
     } catch (err) {
       console.error('Failed to fetch identities:', err);
       setError(t('pages.identityContextManager.load_error'));
@@ -89,6 +99,11 @@ export default function IdentityContextManager() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    exportCsv()
+  }, [error, exportCsv])
+
   const visibleIdentities = useMemo(() => {
     if (!searchQuery.trim()) return identities
     const ids = new Set(filteredFindings.map((f) => f.id))
@@ -106,9 +121,9 @@ export default function IdentityContextManager() {
       actions={(
         <ShellScanActions
           onRefresh={reloadIdentities}
-          onExport={exportCsv}
+          onExport={error ? undefined : handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={!!error || !filteredFindings.length}
         />
       )}
     >
@@ -165,6 +180,7 @@ export default function IdentityContextManager() {
         )}
 
         {/* Stats */}
+        {error ? null : (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -176,7 +192,7 @@ export default function IdentityContextManager() {
               <span className="text-sm text-[var(--text-tertiary)]">{t('pages.identityContextManager.total_identities')}</span>
               <Users className="w-4 h-4 text-cyan-400" />
             </div>
-            <div className="text-2xl font-bold text-white">{stats.total}</div>
+            <div className="text-2xl font-bold text-white">{error ? '—' : stats.total}</div>
           </motion.div>
 
           <motion.div
@@ -189,7 +205,7 @@ export default function IdentityContextManager() {
               <span className="text-sm text-red-400">{t('pages.identityContextManager.high_risk')}</span>
               <AlertTriangle className="w-4 h-4 text-red-400" />
             </div>
-            <div className="text-2xl font-bold text-red-400">{stats.highRisk}</div>
+            <div className="text-2xl font-bold text-red-400">{error ? '—' : stats.highRisk}</div>
           </motion.div>
 
           <motion.div
@@ -202,7 +218,7 @@ export default function IdentityContextManager() {
               <span className="text-sm text-purple-400">{t('pages.identityContextManager.privileged')}</span>
               <Key className="w-4 h-4 text-purple-400" />
             </div>
-            <div className="text-2xl font-bold text-purple-400">{stats.privileged}</div>
+            <div className="text-2xl font-bold text-purple-400">{error ? '—' : stats.privileged}</div>
           </motion.div>
 
           <motion.div
@@ -215,22 +231,23 @@ export default function IdentityContextManager() {
               <span className="text-sm text-yellow-400">{t('pages.identityContextManager.anomalies')}</span>
               <AlertTriangle className="w-4 h-4 text-yellow-400" />
             </div>
-            <div className="text-2xl font-bold text-yellow-400">{stats.anomalies}</div>
+            <div className="text-2xl font-bold text-yellow-400">{error ? '—' : stats.anomalies}</div>
           </motion.div>
         </div>
+        )}
 
         {/* Identities List */}
         <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
           <div className="p-4 border-b border-[var(--border-default)] space-y-3">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Users className="w-4 h-4 text-cyan-400" />
-              {t('pages.identityContextManager.identities_heading', { count: identities.length })}
+              {t('pages.identityContextManager.identities_heading', { count: error ? '—' : identities.length })}
             </h3>
             <WeissmanListToolbar
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
-              resultCount={visibleIdentities.length}
-              totalCount={identities.length}
+              resultCount={error ? undefined : visibleIdentities.length}
+              totalCount={error ? undefined : identities.length}
             />
           </div>
 
@@ -242,6 +259,14 @@ export default function IdentityContextManager() {
                 className="w-10 h-10 border-3 border-cyan-500/30 border-t-cyan-500 rounded-full mx-auto mb-4"
               />
               <p className="text-sm text-[var(--text-tertiary)] font-mono">{t('pages.identityContextManager.loading')}</p>
+            </div>
+          ) : error ? (
+            <div data-testid="identity-context-unavailable" className="p-12">
+              <EmptyState
+                icon="alert"
+                title={t('pages.identityContextManager.unavailable_title')}
+                body={t('pages.identityContextManager.unavailable_body')}
+              />
             </div>
           ) : identities.length === 0 ? (
             <motion.div
@@ -325,7 +350,7 @@ export default function IdentityContextManager() {
         </div>
 
         {/* High Risk Alert */}
-        {stats.highRisk > 0 && (
+        {!error && stats.highRisk > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -344,7 +369,7 @@ export default function IdentityContextManager() {
 
       {/* Identity Detail Modal */}
       <AnimatePresence>
-        {selectedIdentity && (
+        {selectedIdentity && !error && (
           <IdentityDetailModal
             identity={selectedIdentity}
             onClose={() => setSelectedIdentity(null)}

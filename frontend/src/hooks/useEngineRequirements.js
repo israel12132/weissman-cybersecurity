@@ -87,7 +87,7 @@ export function computeLocalReadiness(catalog, tenantStatus, form, selectedModul
     llm_secops_endpoints: splitLines(llmSecopsUrlsFromForm(form)).length > 0,
     tenant_llm: tenantStatus?.llm_configured,
     tenant_oast: tenantStatus?.oast_configured,
-    tenant_ai_entitlement: tenantStatus?.ai_heavy_entitled !== false,
+    tenant_ai_entitlement: tenantStatus?.ai_heavy_entitled === true,
   }
 
   const optional = new Set(['scope_exclusions', 'llm_secops_endpoints'])

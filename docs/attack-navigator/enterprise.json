@@ -148,8 +148,8 @@
     },
     {
       "techniqueID": "T1610",
-      "score": 8,
-      "comment": "cloud_function_escape, edge_computing_exploit, eks_attack, k8s_container, kubernetes_rbac_escape, lambda_escape, lambda_layer_inject, nfv_mano_attack",
+      "score": 9,
+      "comment": "admission_signature_enforcement, cloud_function_escape, edge_computing_exploit, eks_attack, k8s_container, kubernetes_rbac_escape, lambda_escape, lambda_layer_inject, nfv_mano_attack",
       "enabled": true
     },
     {

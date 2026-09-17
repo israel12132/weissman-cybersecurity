@@ -427,6 +427,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/clients/:id/surface-diff",
             get(api_client_surface_diff),
         )
+        .route(
+            "/api/clients/:id/first-seen-hits",
+            get(api_client_first_seen_hits),
+        )
         .route("/api/first-mover/nerve", get(api_first_mover_nerve))
         .route(
             "/api/clients/:id/semantic-state-machine",
@@ -684,6 +688,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/integrations/:id/test", post(api_integrations_test))
         .route("/api/integrations/:id", delete(api_integrations_delete))
         .route("/api/ot-ics/devices", get(api_ot_ics_devices))
+        .route("/api/ot-ics/safety", get(api_ot_ics_safety))
         .route("/api/mobile-security/apps", get(api_mobile_security_apps))
         .route("/api/soc/incidents", get(api_soc_incidents))
         .route(
@@ -816,6 +821,58 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/sovereign/phantom-trap",
             post(api_sovereign_phantom_trap),
         )
+        .route(
+            "/api/sovereign/operator/chat",
+            post(api_sovereign_operator_chat),
+        )
+        .route(
+            "/api/sovereign/operator/session",
+            get(api_sovereign_operator_session_get),
+        )
+        .route(
+            "/api/sovereign/operator/knowledge",
+            get(api_sovereign_operator_knowledge_get),
+        )
+        .route(
+            "/api/sovereign/operator/logs",
+            get(api_sovereign_operator_logs_get),
+        )
+        .route(
+            "/api/sovereign/operator/windows",
+            get(api_sovereign_operator_windows_get),
+        )
+        .route(
+            "/api/sovereign/operator/tools",
+            post(api_sovereign_operator_tools_post),
+        )
+        .route(
+            "/api/sovereign/operator/tune",
+            post(api_sovereign_operator_tune_post),
+        )
+        .route(
+            "/api/sovereign/operator/race",
+            post(api_sovereign_operator_race_post),
+        )
+        .route(
+            "/api/sovereign/operator/stream-ticket",
+            post(api_sovereign_operator_stream_ticket),
+        )
+        .route(
+            "/api/sovereign/operator/stream",
+            get(api_sovereign_operator_stream),
+        )
+        .route(
+            "/api/sovereign/operator/memory",
+            get(api_sovereign_operator_memory_get),
+        )
+        .route(
+            "/api/sovereign/operator/forge",
+            get(api_sovereign_operator_forge_get),
+        )
+        .route(
+            "/api/sovereign/operator/scripts",
+            get(api_sovereign_operator_scripts_get),
+        )
         .route("/api/deception/triggered", post(api_deception_triggered))
         .route("/api/deception/aws-events", post(api_deception_aws_events))
         .route(
@@ -899,6 +956,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route(
             "/api/clients/:id/ot-ics/fingerprints",
             get(api_client_ot_ics_fingerprints),
+        )
+        .route(
+            "/api/clients/:id/ot-ics/safety",
+            get(api_client_ot_ics_safety),
         )
         .route(
             "/api/ceo/council/sessions/:job_id/stream",
@@ -992,4 +1053,60 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/compliance/evidence-pack/:client_id",
             get(api_compliance_evidence_pack),
         )
+        // ── CEM-DAGO mesh (server_handlers_cem_dago.inc) ──
+        .route("/api/cem-dago/status", get(api_cem_dago_status))
+        .route("/api/cem-dago/manifests", get(api_cem_dago_manifests))
+        .route("/api/cem-dago/waves", get(api_cem_dago_waves))
+        .route("/api/cem-dago/blackboard", get(api_cem_dago_blackboard))
+        // ── Elite hardening + market readiness (server_handlers_elite_hardening.inc) ──
+        .route("/api/elite-hardening/status", get(api_elite_hardening_status))
+        .route("/api/market-readiness", get(api_market_readiness))
+        // ── Previously-orphaned routes for already-compiled handlers ──
+        .route(
+            "/api/discovery-knowledge/stats",
+            get(api_discovery_knowledge_stats),
+        )
+        .route("/api/scan-finding-spine", get(api_scan_finding_spine))
+        .route(
+            "/api/supreme-brain/:client_id",
+            get(api_supreme_brain_for_client),
+        )
+        // ── SCIM provisioning — admin/* prefix (ScimProvisioning.jsx) ──
+        .route("/api/admin/scim/audit", get(crate::scim::api_scim_events))
+        .route(
+            "/api/admin/scim/tokens",
+            get(crate::scim::api_scim_tokens_list).post(crate::scim::api_scim_token_mint),
+        )
+        .route(
+            "/api/admin/scim/tokens/:id",
+            delete(crate::scim::api_scim_token_revoke),
+        )
+        // ── SCIM provisioning — sso/* prefix (SsoDashboard.jsx) ──
+        .route("/api/sso/scim/status", get(crate::scim::api_scim_status))
+        .route("/api/sso/scim/events", get(crate::scim::api_scim_events))
+        .route(
+            "/api/sso/scim/group-maps",
+            get(crate::scim::api_scim_group_maps_get).put(crate::scim::api_scim_group_maps_put),
+        )
+        .route(
+            "/api/sso/scim/tokens",
+            get(crate::scim::api_scim_tokens_list).post(crate::scim::api_scim_token_mint),
+        )
+        .route(
+            "/api/sso/scim/tokens/:id",
+            delete(crate::scim::api_scim_token_revoke),
+        )
+        // ── Public platform pulse (unauthenticated; gated in serve.rs PUBLIC_ROUTES) ──
+        .route(
+            "/api/public/platform-pulse",
+            get(crate::public_site::api_platform_pulse),
+        )
+        // ── Competitive intelligence (competitive_delta.rs, panw_displacement.rs) ──
+        .route(
+            "/api/competitive-delta",
+            get(crate::competitive_delta::api_competitive_delta),
+        )
+        .route("/api/competitive/panw-displacement", get(api_panw_displacement))
+        // ── Board evidence pack (board_pack module) ──
+        .route("/api/board-pack", get(api_board_pack))
 }

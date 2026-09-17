@@ -23,9 +23,9 @@ pub async fn alert_stale_work(app_pool: &PgPool, auth_pool: &PgPool) -> Result<u
 }
 
 async fn alert_stale_executions(pool: &PgPool, tenant_id: i64) -> Result<u64, String> {
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return Ok(0);
-    };
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let rows = sqlx::query(
         r#"SELECT id, action_kind, status, target_id, EXTRACT(EPOCH FROM (now() - updated_at))::bigint AS age_secs
            FROM soar_action_executions
@@ -83,14 +83,16 @@ async fn alert_stale_executions(pool: &PgPool, tenant_id: i64) -> Result<u64, St
         );
         metrics::counter!("weissman_soar_stale_alert_total", "kind" => "execution").increment(1);
     }
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
     Ok(fired)
 }
 
 async fn alert_stale_verifications(pool: &PgPool, tenant_id: i64) -> Result<u64, String> {
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return Ok(0);
-    };
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let rows = sqlx::query(
         r#"SELECT id, execution_id, probe_type, status,
                   EXTRACT(EPOCH FROM (now() - created_at))::bigint AS age_secs
@@ -148,7 +150,9 @@ async fn alert_stale_verifications(pool: &PgPool, tenant_id: i64) -> Result<u64,
         );
         metrics::counter!("weissman_soar_stale_alert_total", "kind" => "verification").increment(1);
     }
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
     Ok(fired)
 }
 

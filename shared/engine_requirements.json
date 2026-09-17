@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generated_at": "2026-09-12T00:21:29.344Z",
-  "production_engine_count": 585,
+  "generated_at": "2026-09-15T23:01:12.968Z",
+  "production_engine_count": 594,
   "requirements": {
     "msa_acknowledged": {
       "id": "msa_acknowledged",
@@ -183,15 +183,6 @@
       "hint_en": "Out-of-band verification for blind SSRF/XSS/OAST engines.",
       "hint_he": "אימות OOB ל-SSRF/XSS blind."
     },
-    "tenant_ai_entitlement": {
-      "id": "tenant_ai_entitlement",
-      "scope": "tenant",
-      "config_key": "ai_heavy_entitled",
-      "type": "tenant_config",
-      "required": true,
-      "label_en": "AI-heavy entitlement enabled",
-      "label_he": "Entitlement למנועי AI-heavy"
-    },
     "intelx_key": {
       "id": "intelx_key",
       "scope": "tenant",
@@ -224,6 +215,15 @@
       "label_he": "מפתח AlienVault OTX (אופציונלי)",
       "hint_en": "OTX domain pulses for darkweb_intel / dominion_fusion. Not a substitute for IntelX or abuse.ch.",
       "hint_he": "פולסי דומיין ב-OTX. לא מחליף IntelX או abuse.ch."
+    },
+    "tenant_ai_entitlement": {
+      "id": "tenant_ai_entitlement",
+      "scope": "tenant",
+      "config_key": "ai_heavy_entitled",
+      "type": "tenant_config",
+      "required": true,
+      "label_en": "AI-heavy entitlement enabled",
+      "label_he": "Entitlement למנועי AI-heavy"
     }
   },
   "modules": {
@@ -238,7 +238,7 @@
         "scope_domains",
         "scope_exclusions"
       ],
-      "engine_count": 428
+      "engine_count": 435
     },
     "cloud_aws": {
       "id": "cloud_aws",
@@ -278,7 +278,7 @@
         "ad_domain",
         "scope_domains"
       ],
-      "engine_count": 51
+      "engine_count": 52
     },
     "endpoint_agent": {
       "id": "endpoint_agent",
@@ -706,6 +706,16 @@
         "scope_domains"
       ]
     },
+    "admission_signature_enforcement": {
+      "id": "admission_signature_enforcement",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Admission Signature Enforcement",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
     "iac_misconfig": {
       "id": "iac_misconfig",
       "group": "cloud",
@@ -732,6 +742,30 @@
       "group": "ot",
       "kind": "real_probe",
       "label": "SCADA / ICS",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "ot_passive_active_safety": {
+      "id": "ot_passive_active_safety",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "OT Passive/Active Safety Interlock",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "ot_crown_jewel_path": {
+      "id": "ot_crown_jewel_path",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "OT Crown-Jewel Path",
       "requirements": [
         "contact_email",
         "industrial_ot",
@@ -828,30 +862,6 @@
       "group": "ot",
       "kind": "real_probe",
       "label": "OT SIS / Triconex TriStation",
-      "requirements": [
-        "contact_email",
-        "industrial_ot",
-        "scope_domains",
-        "scope_ips"
-      ]
-    },
-    "ot_passive_active_safety": {
-      "id": "ot_passive_active_safety",
-      "group": "ot",
-      "kind": "real_probe",
-      "label": "OT Passive/Active Safety Interlock",
-      "requirements": [
-        "contact_email",
-        "industrial_ot",
-        "scope_domains",
-        "scope_ips"
-      ]
-    },
-    "ot_crown_jewel_path": {
-      "id": "ot_crown_jewel_path",
-      "group": "ot",
-      "kind": "real_probe",
-      "label": "OT Crown-Jewel Path",
       "requirements": [
         "contact_email",
         "industrial_ot",
@@ -1835,6 +1845,16 @@
       "group": "web",
       "kind": "real_probe",
       "label": "Credential Stuffing",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "credential_ransomware_fusion": {
+      "id": "credential_ransomware_fusion",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Credential → Ransomware Fusion",
       "requirements": [
         "contact_email",
         "scope_domains"
@@ -2857,11 +2877,11 @@
       "kind": "real_probe",
       "label": "Dark Web Brand Monitor",
       "requirements": [
-        "contact_email",
-        "scope_domains",
         "abusech_key",
+        "contact_email",
         "intelx_key",
-        "otx_key"
+        "otx_key",
+        "scope_domains"
       ]
     },
     "passive_dns_forensics": {
@@ -3476,11 +3496,11 @@
       "kind": "real_probe",
       "label": "Dark Web Intelligence",
       "requirements": [
-        "contact_email",
-        "scope_domains",
         "abusech_key",
+        "contact_email",
         "intelx_key",
-        "otx_key"
+        "otx_key",
+        "scope_domains"
       ]
     },
     "dll_hijacking_engine": {
@@ -6609,74 +6629,72 @@
         "scope_ips"
       ]
     },
-    "exposure_schism_fusion": {
-      "id": "exposure_schism_fusion",
-      "group": "recon",
-      "kind": "real_probe",
-      "label": "Exposure Schism Fusion",
-      "requirements": [
-        "contact_email",
-        "scope_domains"
-      ]
-    },
-    "prevention_fabric_breach_proof": {
-      "id": "prevention_fabric_breach_proof",
+    "cortex_proven_finding_bridge": {
+      "id": "cortex_proven_finding_bridge",
       "group": "defense",
       "kind": "real_probe",
-      "label": "Prevention Fabric Breach Proof",
+      "label": "Cortex Proven Finding Bridge",
       "requirements": [
         "contact_email",
         "scope_domains"
       ]
     },
-    "credential_ransomware_fusion": {
-      "id": "credential_ransomware_fusion",
-      "group": "recon",
+    "honey_routing_gateway": {
+      "id": "honey_routing_gateway",
+      "group": "defense",
       "kind": "real_probe",
-      "label": "Credential-to-Ransomware Fusion",
+      "label": "Honey-Routing Gateway",
       "requirements": [
         "contact_email",
         "scope_domains"
       ]
     },
-    "dominion_fusion": {
-      "id": "dominion_fusion",
-      "group": "recon",
-      "kind": "real_probe",
-      "label": "Dominion Public-Intel Fusion",
-      "requirements": [
-        "abusech_key",
-        "contact_email",
-        "intelx_key",
-        "otx_key",
-        "scope_domains"
-      ]
-    },
-    "adversary_gap_mirror": {
-      "id": "adversary_gap_mirror",
-      "group": "recon",
-      "kind": "real_probe",
-      "label": "Adversary Gap Mirror",
-      "requirements": [
-        "contact_email",
-        "scope_domains"
-      ]
-    },
-    "adversary_underground_delta": {
-      "id": "adversary_underground_delta",
-      "group": "recon",
-      "kind": "real_probe",
-      "label": "Adversary Underground Delta",
-      "requirements": [
-        "contact_email",
-        "scope_domains"
-      ]
-    },
-    "adversary_path_prover": {
-      "id": "adversary_path_prover",
+    "advanced_c2_covert_exfil": {
+      "id": "advanced_c2_covert_exfil",
       "group": "apt",
       "kind": "real_probe",
-      "label": "Adversary Path Prover",
+      "label": "Advanced C2 & Covert Exfil",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "stealthy_persistence_evasion": {
+      "id": "stealthy_persistence_evasion",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Stealthy Persistence & Evasion",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "web_http_intel": {
+      "id": "web_http_intel",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Web HTTP Intelligence",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "web_identity_surface": {
+      "id": "web_identity_surface",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "Web Identity Surface",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "api_cloud_intel": {
+      "id": "api_cloud_intel",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "API & Cloud Storage Intel",
       "requirements": [
         "contact_email",
         "scope_domains"

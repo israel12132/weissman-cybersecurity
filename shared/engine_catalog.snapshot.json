@@ -1,32 +1,32 @@
 {
-  "generated_at": "2026-09-12T00:21:29.375Z",
+  "generated_at": "2026-09-13T01:12:33.368Z",
   "source": {
     "production": "backend/weissman-core/src/models/engine.rs",
     "agent_required": "backend/weissman-core/src/models/engine_agent.rs",
     "frontend": "frontend/src/lib/enginesRegistry.js"
   },
   "counts": {
-    "production": 585,
-    "frontend": 585,
+    "production": 593,
+    "frontend": 593,
     "agent_required": 58,
     "groups": 15
   },
   "groups": {
     "recon": 49,
-    "web": 71,
+    "web": 72,
     "ai": 47,
-    "cloud": 51,
+    "cloud": 53,
     "ot": 45,
     "stealth": 53,
-    "crypto": 44,
+    "crypto": 45,
     "network": 59,
     "supply_chain": 33,
-    "apt": 65,
+    "apt": 67,
     "malware": 15,
     "social": 16,
     "mobile": 15,
     "data": 15,
-    "defense": 7
+    "defense": 9
   },
   "agent_required_ids": [
     "process_hollowing",

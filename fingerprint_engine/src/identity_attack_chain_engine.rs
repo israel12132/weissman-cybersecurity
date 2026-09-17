@@ -73,14 +73,17 @@ fn ingest_source(
     true
 }
 
-async fn itdr_findings_from_db(ctx: &EngineRunContext, host: &str) -> Vec<Value> {
+async fn itdr_findings_from_db(
+    ctx: &EngineRunContext,
+    host: &str,
+) -> Result<Vec<Value>, String> {
     let (pool, tenant_id, client_id) = match (ctx.app_pool.as_ref(), ctx.tenant_id, ctx.client_id) {
         (Some(p), Some(t), Some(c)) => (p.as_ref(), t, c),
-        _ => return Vec::new(),
+        _ => return Ok(Vec::new()),
     };
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return Vec::new();
-    };
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let rows = sqlx::query(
         r#"SELECT ts, username, ip, country, success, mfa_prompted
              FROM itdr_auth_events
@@ -90,8 +93,10 @@ async fn itdr_findings_from_db(ctx: &EngineRunContext, host: &str) -> Vec<Value>
     .bind(client_id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let _ = tx.commit().await;
+    .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".into());
+    }
 
     let mut out = Vec::new();
     for r in rows {
@@ -139,7 +144,7 @@ async fn itdr_findings_from_db(ctx: &EngineRunContext, host: &str) -> Vec<Value>
         }
         out.push(f);
     }
-    out
+    Ok(out)
 }
 
 pub async fn run_identity_attack_chain_result(
@@ -184,7 +189,10 @@ pub async fn run_identity_attack_chain_result(
         sources.push("kerberos_attack_suite");
     }
     if include_itdr {
-        let itdr = itdr_findings_from_db(ctx, &host).await;
+        let itdr = match itdr_findings_from_db(ctx, &host).await {
+            Ok(v) => v,
+            Err(_) => return EngineResult::error("store_down"),
+        };
         if !itdr.is_empty() {
             sources.push("itdr");
             for f in itdr {

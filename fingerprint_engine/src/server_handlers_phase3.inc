@@ -40,7 +40,7 @@ async fn api_client_cloud_integration_patch(
     let actor = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
     let ext = body.aws_external_id.clone().unwrap_or_default();
     let gcp = body.gcp_project_id.clone().unwrap_or_default();
-    let n = sqlx::query(
+    let n = match sqlx::query(
         "UPDATE clients SET aws_cross_account_role_arn = $1, aws_external_id = $2, gcp_project_id = $3, updated_at = now() WHERE id = $4",
     )
     .bind(arn)
@@ -49,13 +49,23 @@ async fn api_client_cloud_integration_patch(
     .bind(id)
     .execute(&mut *tx)
     .await
-    .map(|r| r.rows_affected())
-    .unwrap_or(0);
+    {
+        Ok(r) => r.rows_affected(),
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::client_lookup_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
     if n == 0 {
         let _ = tx.rollback().await;
         return (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "client not found"}))).into_response();
     }
-    let _ = audit_log::insert_audit(
+    if audit_log::insert_audit(
         &mut tx,
         auth.tenant_id,
         Some(auth.user_id),
@@ -64,8 +74,26 @@ async fn api_client_cloud_integration_patch(
         &format!("client_id={} role_configured={}", id, !arn.is_empty()),
         &ip,
     )
-    .await;
-    let _ = tx.commit().await;
+    .await
+    .is_err()
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::client_lookup_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::client_lookup_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     (StatusCode::OK, Json(json!({"ok": true}))).into_response()
 }
 
@@ -106,9 +134,15 @@ async fn api_client_integrations_get(
     Path(id): Path<i64>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::client_lookup_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let row = sqlx::query(
+    let row = match sqlx::query(
         r#"SELECT id, name, domains, ip_ranges,
             COALESCE(aws_cross_account_role_arn,'') AS aws_cross_account_role_arn,
             COALESCE(aws_external_id,'') AS aws_external_id,
@@ -120,9 +154,27 @@ async fn api_client_integrations_get(
     .bind(DEFAULT_CLIENT_CONFIGS_JSON)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::client_lookup_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::client_lookup_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     let Some(r) = row else {
         return (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "client not found"}))).into_response();
     };
@@ -168,12 +220,20 @@ async fn api_client_integrations_get(
     let mut github_token = String::new();
     let mut oast_domain = String::new();
     let mut oast_api_key = String::new();
-    if let Ok(mut ttx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
+    let Ok(mut ttx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::system_configs_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    };
         async fn cfg_val(
             tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
             tenant_id: i64,
             key: &str,
-        ) -> Option<String> {
+        ) -> Result<Option<String>, ()> {
             sqlx::query_scalar::<_, String>(
                 "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = $2",
             )
@@ -181,22 +241,54 @@ async fn api_client_integrations_get(
             .bind(key)
             .fetch_optional(&mut **tx)
             .await
-            .ok()
-            .flatten()
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
+            .map_err(|_| ())
+            .map(|v| v.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()))
         }
-        github_token = cfg_val(&mut ttx, auth.tenant_id, "github_token")
-            .await
-            .unwrap_or_default();
-        oast_domain = cfg_val(&mut ttx, auth.tenant_id, "oast_domain")
-            .await
-            .unwrap_or_default();
-        oast_api_key = cfg_val(&mut ttx, auth.tenant_id, "oast_api_key")
-            .await
-            .unwrap_or_default();
-        let _ = ttx.commit().await;
-    }
+        github_token = match cfg_val(&mut ttx, auth.tenant_id, "github_token").await {
+            Ok(v) => v.unwrap_or_default(),
+            Err(_) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::system_configs_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
+        };
+        oast_domain = match cfg_val(&mut ttx, auth.tenant_id, "oast_domain").await {
+            Ok(v) => v.unwrap_or_default(),
+            Err(_) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::system_configs_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
+        };
+        oast_api_key = match cfg_val(&mut ttx, auth.tenant_id, "oast_api_key").await {
+            Ok(v) => v.unwrap_or_default(),
+            Err(_) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::system_configs_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
+        };
+        if ttx.commit().await.is_err() {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::system_configs_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
     if oast_domain.is_empty() {
         oast_domain = std::env::var("WEISSMAN_OAST_DOMAIN")
             .or_else(|_| std::env::var("WEISSMAN_OAST_BASE_DOMAIN"))
@@ -250,7 +342,7 @@ async fn api_client_integrations_patch(
     let ip = extract_client_ip(&headers, addr);
     let actor = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
 
-    let row = sqlx::query(
+    let row = match sqlx::query(
         r#"SELECT COALESCE(aws_cross_account_role_arn,'') AS arn,
             COALESCE(aws_external_id,'') AS ext,
             COALESCE(gcp_project_id,'') AS gcp,
@@ -263,8 +355,18 @@ async fn api_client_integrations_patch(
     .bind(DEFAULT_CLIENT_CONFIGS_JSON)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::client_lookup_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
 
     let Some(r) = row else {
         let _ = tx.rollback().await;
@@ -382,7 +484,7 @@ async fn api_client_integrations_patch(
     let new_config = serde_json::to_string(&Value::Object(config)).unwrap_or_else(|_| "{}".to_string());
 
     if let Some(ips) = ip_update {
-        let _ = sqlx::query(
+        if sqlx::query(
             "UPDATE clients SET aws_cross_account_role_arn = $1, aws_external_id = $2, gcp_project_id = $3, client_configs = $4, ip_ranges = $5, updated_at = now() WHERE id = $6",
         )
         .bind(&arn)
@@ -392,9 +494,18 @@ async fn api_client_integrations_patch(
         .bind(ips)
         .bind(id)
         .execute(&mut *tx)
-        .await;
-    } else {
-        let _ = sqlx::query(
+        .await
+        .is_err()
+        {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::client_lookup_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    } else if sqlx::query(
             "UPDATE clients SET aws_cross_account_role_arn = $1, aws_external_id = $2, gcp_project_id = $3, client_configs = $4, updated_at = now() WHERE id = $5",
         )
         .bind(&arn)
@@ -403,10 +514,19 @@ async fn api_client_integrations_patch(
         .bind(&new_config)
         .bind(id)
         .execute(&mut *tx)
-        .await;
+        .await
+        .is_err()
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::client_lookup_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     }
 
-    let _ = audit_log::insert_audit(
+    if audit_log::insert_audit(
         &mut tx,
         auth.tenant_id,
         Some(auth.user_id),
@@ -415,8 +535,26 @@ async fn api_client_integrations_patch(
         &format!("client_id={}", id),
         &ip,
     )
-    .await;
-    let _ = tx.commit().await;
+    .await
+    .is_err()
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::client_lookup_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::client_lookup_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     (StatusCode::OK, Json(json!({"ok": true}))).into_response()
 }
 
@@ -526,25 +664,45 @@ async fn api_client_cloud_scan_run(
     if let Err(detail) =
         crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
     {
-        return (
-            StatusCode::PAYMENT_REQUIRED,
-            Json(json!({"ok": false, "detail": detail})),
-        )
-            .into_response();
+        return payment_or_store_down(detail);
     }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::client_lookup_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let row = sqlx::query(
+    let row = match sqlx::query(
         "SELECT COALESCE(trim(aws_cross_account_role_arn),'') AS role_arn, COALESCE(trim(aws_external_id),'') AS ext FROM clients WHERE id = $1 AND tenant_id = $2",
     )
     .bind(id)
     .bind(auth.tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::client_lookup_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::client_lookup_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     let Some(_r) = row else {
         return (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "client not found"}))).into_response();
     };
@@ -584,13 +742,25 @@ async fn api_compliance_posture(
     Query(q): Query<CompliancePostureQuery>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"frameworks": []}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::compliance_posture_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
     let mappings = match crate::compliance_engine::load_mappings(&mut *tx).await {
         Ok(m) => m,
         Err(_) => {
             let _ = tx.rollback().await;
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"frameworks": []}))).into_response();
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::compliance_posture_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
         }
     };
     let cloud_rows = if let Some(cid) = q.client_id {
@@ -598,12 +768,22 @@ async fn api_compliance_posture(
             .bind(cid)
             .fetch_all(&mut *tx)
             .await
-            .unwrap_or_default()
     } else {
         sqlx::query("SELECT rule_id FROM cloud_scan_findings")
             .fetch_all(&mut *tx)
             .await
-            .unwrap_or_default()
+    };
+    let cloud_rows = match cloud_rows {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::compliance_posture_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
     };
     let cloud_rules: Vec<String> = cloud_rows
         .into_iter()
@@ -615,12 +795,22 @@ async fn api_compliance_posture(
             .bind(cid)
             .fetch_all(&mut *tx)
             .await
-            .unwrap_or_default()
     } else {
         sqlx::query("SELECT COALESCE(source,'') AS source, COALESCE(title,'') AS title, COALESCE(severity,'') AS severity FROM vulnerabilities")
             .fetch_all(&mut *tx)
             .await
-            .unwrap_or_default()
+    };
+    let vuln_rows = match vuln_rows {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::compliance_posture_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
     };
     let vulns: Vec<(String, String, String)> = vuln_rows
         .into_iter()
@@ -632,7 +822,15 @@ async fn api_compliance_posture(
             ))
         })
         .collect();
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::compliance_posture_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
 
     let frameworks = crate::compliance_engine::compute_posture(&mappings, &cloud_rules, &vulns);
     let body = crate::compliance_engine::CompliancePostureResponse {
@@ -648,23 +846,57 @@ async fn api_reports_executive(
     Query(q): Query<ExecutiveReportQuery>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::report_pdf_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let tenant_name: String = sqlx::query_scalar("SELECT name FROM tenants WHERE id = $1")
+    let tenant_name: String = match sqlx::query_scalar("SELECT name FROM tenants WHERE id = $1")
         .bind(auth.tenant_id)
         .fetch_optional(&mut *tx)
         .await
-        .ok()
-        .flatten()
-        .unwrap_or_else(|| "Tenant".to_string());
+    {
+        Ok(Some(n)) => n,
+        Ok(None) => "Tenant".to_string(),
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::report_pdf_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
 
     let client_name: Option<String> = if let Some(cid) = q.client_id {
-        sqlx::query_scalar("SELECT name FROM clients WHERE id = $1")
+        match sqlx::query_scalar("SELECT name FROM clients WHERE id = $1")
             .bind(cid)
             .fetch_optional(&mut *tx)
             .await
-            .ok()
-            .flatten()
+        {
+            Ok(Some(n)) => Some(n),
+            Ok(None) => {
+                let _ = tx.rollback().await;
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(json!({"ok": false, "detail": "Client not found"})),
+                )
+                    .into_response();
+            }
+            Err(_) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::client_lookup_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
+        }
     } else {
         None
     };
@@ -688,52 +920,101 @@ async fn api_reports_executive(
             .fetch_one(&mut *tx)
             .await
     };
-    let (mut critical, mut high, mut medium, mut low) = (0u32, 0u32, 0u32, 0u32);
-    if let Ok(r) = sev_row {
-        critical = r.try_get::<i64, _>("critical").unwrap_or(0).max(0) as u32;
-        high = r.try_get::<i64, _>("high").unwrap_or(0).max(0) as u32;
-        medium = r.try_get::<i64, _>("medium").unwrap_or(0).max(0) as u32;
-        low = r.try_get::<i64, _>("low").unwrap_or(0).max(0) as u32;
-    }
+    let r = match sev_row {
+        Ok(r) => r,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::report_pdf_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    let critical = r.try_get::<i64, _>("critical").unwrap_or(0).max(0) as u32;
+    let high = r.try_get::<i64, _>("high").unwrap_or(0).max(0) as u32;
+    let medium = r.try_get::<i64, _>("medium").unwrap_or(0).max(0) as u32;
+    let low = r.try_get::<i64, _>("low").unwrap_or(0).max(0) as u32;
 
-    let cloud_n: i64 = if let Some(cid) = q.client_id {
+    let cloud_n: i64 = match if let Some(cid) = q.client_id {
         sqlx::query_scalar("SELECT COUNT(*)::bigint FROM cloud_scan_findings WHERE client_id = $1")
             .bind(cid)
             .fetch_one(&mut *tx)
             .await
-            .unwrap_or(0)
     } else {
         sqlx::query_scalar("SELECT COUNT(*)::bigint FROM cloud_scan_findings")
             .fetch_one(&mut *tx)
             .await
-            .unwrap_or(0)
+    } {
+        Ok(n) => n,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::report_pdf_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
     };
 
     let mappings = match crate::compliance_engine::load_mappings(&mut *tx).await {
         Ok(m) => m,
         Err(_) => {
             let _ = tx.rollback().await;
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "compliance catalog"}))).into_response();
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::report_pdf_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
         }
     };
-    let cloud_rules: Vec<String> = if let Some(cid) = q.client_id {
+    let cloud_rules: Vec<String> = match if let Some(cid) = q.client_id {
         sqlx::query_scalar::<_, String>("SELECT rule_id FROM cloud_scan_findings WHERE client_id = $1")
             .bind(cid)
             .fetch_all(&mut *tx)
             .await
-            .unwrap_or_default()
     } else {
         sqlx::query_scalar::<_, String>("SELECT rule_id FROM cloud_scan_findings")
             .fetch_all(&mut *tx)
             .await
-            .unwrap_or_default()
+    } {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::report_pdf_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
     };
-    let vuln_tuples: Vec<(String, String, String)> = if let Some(cid) = q.client_id {
-        let rows = sqlx::query("SELECT COALESCE(source,'') AS source, COALESCE(title,'') AS title, COALESCE(severity,'') AS severity FROM vulnerabilities WHERE client_id = $1")
-            .bind(cid)
-            .fetch_all(&mut *tx)
-            .await
-            .unwrap_or_default();
+    let vuln_tuples: Vec<(String, String, String)> = {
+        let rows = match if let Some(cid) = q.client_id {
+            sqlx::query("SELECT COALESCE(source,'') AS source, COALESCE(title,'') AS title, COALESCE(severity,'') AS severity FROM vulnerabilities WHERE client_id = $1")
+                .bind(cid)
+                .fetch_all(&mut *tx)
+                .await
+        } else {
+            sqlx::query("SELECT COALESCE(source,'') AS source, COALESCE(title,'') AS title, COALESCE(severity,'') AS severity FROM vulnerabilities")
+                .fetch_all(&mut *tx)
+                .await
+        } {
+            Ok(v) => v,
+            Err(_) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::report_pdf_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
+        };
         rows.into_iter()
             .filter_map(|r| {
                 Some((
@@ -743,22 +1024,16 @@ async fn api_reports_executive(
                 ))
             })
             .collect()
-    } else {
-        let rows = sqlx::query("SELECT COALESCE(source,'') AS source, COALESCE(title,'') AS title, COALESCE(severity,'') AS severity FROM vulnerabilities")
-            .fetch_all(&mut *tx)
-            .await
-            .unwrap_or_default();
-        rows.into_iter()
-            .filter_map(|r| {
-                Some((
-                    r.try_get::<String, _>("source").ok()?,
-                    r.try_get::<String, _>("title").ok()?,
-                    r.try_get::<String, _>("severity").ok()?,
-                ))
-            })
-            .collect()
     };
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::report_pdf_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    };
 
     let posture = crate::compliance_engine::compute_posture(&mappings, &cloud_rules, &vuln_tuples);
     let soc2 = posture.iter().find(|p| p.framework == "SOC2").map(|p| p.compliance_percent).unwrap_or(100);

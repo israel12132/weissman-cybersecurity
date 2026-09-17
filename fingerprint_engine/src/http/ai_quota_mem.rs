@@ -57,6 +57,93 @@ pub fn evict_stale() -> usize {
     evict_before_day(utc_yyyymmdd())
 }
 
+// --- Pre-call per-tenant daily TOKEN budget gate (OWASP LLM04/LLM10) ---
+//
+// Cost is metered durably (`tenant_llm_usage`) and mirrored here in-process
+// (`used_today`), but historically nothing *blocked* a tenant-scoped AI-heavy LLM
+// call once a daily token budget was blown. These helpers add that pre-call gate.
+// Enforcement is opt-in and fails OPEN by default: a budget of `0` (the default when
+// neither `system_configs` nor the env override is set) means "unlimited", which
+// preserves the platform's historical behavior exactly.
+
+/// Env var naming the default per-tenant daily LLM token budget. `0` / unset = unlimited.
+pub const DAILY_TOKEN_BUDGET_ENV: &str = "WEISSMAN_LLM_DAILY_TOKEN_BUDGET";
+
+/// Default per-tenant daily token budget from the environment.
+/// `0` (also the value for unset/unparseable) means unlimited — no enforcement.
+#[must_use]
+pub fn daily_token_budget_env_default() -> u64 {
+    std::env::var(DAILY_TOKEN_BUDGET_ENV)
+        .ok()
+        .and_then(|s| s.trim().parse::<u64>().ok())
+        .unwrap_or(0)
+}
+
+/// Resolve the effective daily token budget: an explicit per-tenant budget (e.g. a
+/// `system_configs` value) wins when `> 0`; otherwise the env default. `0` = unlimited.
+#[must_use]
+pub fn resolve_daily_token_budget(configured: Option<u64>) -> u64 {
+    match configured {
+        Some(b) if b > 0 => b,
+        _ => daily_token_budget_env_default(),
+    }
+}
+
+/// Typed outcome of a pre-call budget check.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum QuotaError {
+    /// The tenant's per-day LLM token budget is already met or exceeded.
+    DailyTokenBudgetExceeded {
+        tenant_id: i64,
+        used: u64,
+        budget: u64,
+    },
+}
+
+impl std::fmt::Display for QuotaError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            QuotaError::DailyTokenBudgetExceeded {
+                tenant_id,
+                used,
+                budget,
+            } => write!(
+                f,
+                "tenant {tenant_id} daily LLM token budget exceeded: {used}/{budget} tokens used today (UTC)"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for QuotaError {}
+
+/// Pre-call gate: deny a tenant-scoped, AI-heavy LLM call when today's in-process
+/// token usage (`used_today`) has reached `budget`. `budget == 0` disables enforcement
+/// (unlimited) and always returns `Ok(())`, preserving historical behavior.
+pub fn check_daily_token_budget(tenant_id: i64, budget: u64) -> Result<(), QuotaError> {
+    if budget == 0 {
+        return Ok(());
+    }
+    let used = used_today(tenant_id);
+    if used >= budget {
+        return Err(QuotaError::DailyTokenBudgetExceeded {
+            tenant_id,
+            used,
+            budget,
+        });
+    }
+    Ok(())
+}
+
+/// Convenience: resolve the effective budget (per-tenant override or env default) and
+/// enforce it in one call. Call this BEFORE issuing a tenant-scoped AI-heavy LLM request.
+pub fn enforce_daily_token_budget(
+    tenant_id: i64,
+    configured: Option<u64>,
+) -> Result<(), QuotaError> {
+    check_daily_token_budget(tenant_id, resolve_daily_token_budget(configured))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -89,5 +176,39 @@ mod tests {
         assert!(n >= 1);
         assert_eq!(used_today(9_001_340), 3);
         assert!(store().get(&(9_001_340, 19990101)).is_none());
+    }
+
+    #[test]
+    fn zero_budget_is_unlimited() {
+        // Default (budget 0 / unset) preserves historical behavior: never blocks.
+        let tenant = 9_001_341_i64;
+        let _ = add_usage(tenant, 1_000_000, 1_000_000);
+        assert!(check_daily_token_budget(tenant, 0).is_ok());
+        // `enforce` with no per-tenant override falls back to the env default; only assert the
+        // unlimited outcome when the env default is itself unlimited (keeps the test hermetic).
+        if daily_token_budget_env_default() == 0 {
+            assert!(enforce_daily_token_budget(tenant, None).is_ok());
+        }
+    }
+
+    #[test]
+    fn budget_blocks_once_used_reaches_it() {
+        let tenant = 9_001_342_i64;
+        assert!(check_daily_token_budget(tenant, 100).is_ok());
+        let _ = add_usage(tenant, 60, 50); // 110 >= 100
+        match check_daily_token_budget(tenant, 100) {
+            Err(QuotaError::DailyTokenBudgetExceeded { budget, used, .. }) => {
+                assert_eq!(budget, 100);
+                assert!(used >= 100);
+            }
+            other => panic!("expected budget exceeded, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_prefers_configured_over_env_default() {
+        assert_eq!(resolve_daily_token_budget(Some(500)), 500);
+        // Configured 0 falls through to the env default (0 unless overridden).
+        assert_eq!(resolve_daily_token_budget(Some(0)), daily_token_budget_env_default());
     }
 }

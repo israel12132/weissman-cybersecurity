@@ -1,5 +1,5 @@
 /**
- * Master registry of all 592 production attack engines.
+ * Master registry of all 594 production attack engines.
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -14,7 +14,7 @@ import { ENGINE_GROUP_DEFS, ENGINE_GROUPS } from './engineGroupDefs.js'
 
 export { ENGINE_GROUP_DEFS, ENGINE_GROUPS }
 
-/** All 592 production engines in registry order */
+/** All 594 production engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -289,6 +289,14 @@ export const ENGINES_REGISTRY = [
     requiresTarget: false,
   },
   {
+    id: 'admission_signature_enforcement',
+    label: 'Admission Signature Enforcement',
+    group: 'cloud',
+    mitre: 'T1610',
+    description: 'Admission-time cryptographic image-signature verification before pods run: cosign keyed + keyless (Fulcio cert-identity + Rekor transparency log) and DSSE/SLSA attestations, digest-bound and fail-closed across all workload container types. Live admission-webhook posture probes, a cryptographic control self-test, and a ready-to-apply ValidatingWebhookConfiguration + ClusterImagePolicy bundle.',
+    requiresTarget: true,
+  },
+  {
     id: 'iac_misconfig',
     label: 'IaC Security',
     group: 'cloud',
@@ -313,6 +321,22 @@ export const ENGINES_REGISTRY = [
     group: 'ot',
     mitre: 'T1692.001',
     description: 'Modbus, DNP3, IEC 61850 protocol fuzzing and unauthorized command detection',
+    requiresTarget: true,
+  },
+  {
+    id: 'ot_passive_active_safety',
+    label: 'OT Passive/Active Safety Interlock',
+    group: 'ot',
+    mitre: 'T0836',
+    description: 'Fail-closed OT probe interlock: writes, Direct Operate, CPU stop, GOOSE inject, and file-transfer are structurally impossible; live Modbus/S7/DNP3/IEC confirmation only',
+    requiresTarget: true,
+  },
+  {
+    id: 'ot_crown_jewel_path',
+    label: 'OT Crown-Jewel Path',
+    group: 'ot',
+    mitre: 'T0843',
+    description: 'OT protocol confirmation fused with live FAIR crown-jewel value and SOAR isolate recommendation — no process-write, evidence only',
     requiresTarget: true,
   },
   {
@@ -808,6 +832,14 @@ export const ENGINES_REGISTRY = [
     group: 'web',
     mitre: 'T1110.004',
     description: 'Large-scale breach corpus replay, distributed credential stuffing, legacy-protocol MFA bypass (Basic Auth, IMAP, ActiveSync)',
+    requiresTarget: true,
+  },
+  {
+    id: 'credential_ransomware_fusion',
+    label: 'Credential → Ransomware Fusion',
+    group: 'web',
+    mitre: 'T1078',
+    description: 'Fuses breach-corpus credential exposure (HIBP/IntelX) with ransomware-path reachability to rank credential-to-encryption blast-radius chains',
     requiresTarget: true,
   },
   {
@@ -1777,22 +1809,6 @@ export const ENGINES_REGISTRY = [
     group: 'ot',
     mitre: 'T1692.002',
     description: 'IEC 61850 protocol exploitation: GOOSE message injection and spoofing, sampled value (SV) replay, MMS service enumeration, logical node manipulation, substation protection relay bypass',
-    requiresTarget: true,
-  },
-  {
-    id: 'ot_passive_active_safety',
-    label: 'OT Passive/Active Safety Interlock',
-    group: 'ot',
-    mitre: 'T0843',
-    description: 'Safe-read fingerprint of Modbus, Siemens S7, DNP3, and IEC 61850 — writes, Direct Operate, CPU stop, and GOOSE inject are structurally impossible from this worker',
-    requiresTarget: true,
-  },
-  {
-    id: 'ot_crown_jewel_path',
-    label: 'OT Crown-Jewel Path',
-    group: 'ot',
-    mitre: 'T0836',
-    description: 'Live OT protocol confirmation fused with FAIR exposure and SOAR isolate recommendation on crown-jewel industrial paths',
     requiresTarget: true,
   },
   {
@@ -4921,3 +4937,6 @@ export function getEnginesByGroup(groupId) {
 
 /** Quick-lookup map: engineId → engine */
 export const ENGINES_BY_ID = Object.fromEntries(ENGINES_REGISTRY.map((e) => [e.id, e]))
+
+/** Engine IDs that require a deployed Weissman agent (host-resident), derived from the registry. */
+export const AGENT_REQUIRED_ENGINE_IDS = ENGINES_REGISTRY.filter((e) => e.requiresAgent).map((e) => e.id).sort()

@@ -240,6 +240,7 @@ enum RouteGate {
 /// intentionally spans several paths.)
 static PUBLIC_ROUTES: &[(Method, &str, RouteGate)] = &[
     (Method::GET, "/api/health", RouteGate::Always),
+    (Method::GET, "/api/public/platform-pulse", RouteGate::Always),
     (Method::POST, "/api/logout", RouteGate::Always),
     (Method::POST, "/api/auth/refresh", RouteGate::Always),
     (Method::POST, "/api/onboarding/register", RouteGate::Always),
@@ -425,45 +426,77 @@ struct LoginBody {
     tenant_slug: String,
 }
 
-async fn default_tenant_id(auth_pool: &PgPool) -> Option<i64> {
+async fn default_tenant_id(auth_pool: &PgPool) -> Result<Option<i64>, String> {
     sqlx::query_scalar::<_, i64>(
         "SELECT id FROM tenants WHERE slug = 'default' AND active = true LIMIT 1",
     )
     .fetch_optional(auth_pool)
     .await
-    .ok()
-    .flatten()
+    .map_err(|_| "store_down".to_string())
 }
 
-/// Read PoE job from DB (RLS-scoped). Returns None if not found.
-async fn poe_job_from_db(pool: &PgPool, tenant_id: i64, job_id: &str) -> Option<PoEJobState> {
-    let mut tx = db::begin_tenant_tx(pool, tenant_id).await.ok()?;
-    let row = sqlx::query(
-        "SELECT job_id, status, run_id, message, error, COALESCE(findings_json,'[]') AS findings_json FROM poe_jobs WHERE job_id = $1",
+/// Read PoE job from DB (RLS-scoped).
+/// `Ok(None)` is a confirmed miss. `Err` is store-down or corrupt findings JSON — never 404.
+async fn poe_job_from_db(
+    pool: &PgPool,
+    tenant_id: i64,
+    job_id: &str,
+) -> Result<Option<PoEJobState>, &'static str> {
+    let mut tx = db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "database unavailable")?;
+    let row = match sqlx::query(
+        "SELECT job_id, status, run_id, message, error, findings_json FROM poe_jobs WHERE job_id = $1",
     )
     .bind(job_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()??;
-    let _ = tx.commit().await;
-    let findings_json: String = row.try_get("findings_json").ok()?;
-    let findings_count = serde_json::from_str::<Vec<Value>>(&findings_json)
-        .map(|v| v.len())
-        .unwrap_or(0);
-    Some(PoEJobState {
-        job_id: row.try_get("job_id").ok()?,
-        status: row.try_get("status").ok()?,
-        run_id: row.try_get("run_id").ok()?,
-        findings_count: Some(findings_count),
-        message: row.try_get("message").ok()?,
-        error: row.try_get("error").ok()?,
-    })
+    {
+        Ok(row) => row,
+        Err(_) => return Err("database unavailable"),
+    };
+    let Some(row) = row else {
+        return Ok(None);
+    };
+    if tx.commit().await.is_err() {
+        return Err("database unavailable");
+    }
+    let status: String = row.try_get("status").map_err(|_| "database unavailable")?;
+    let findings_json: Option<String> = row.try_get("findings_json").ok();
+    let findings_count = parse_poe_findings_count(&status, findings_json.as_deref())
+        .map_err(|_| "findings JSON corrupt")?;
+    Ok(Some(PoEJobState {
+        job_id: row.try_get("job_id").map_err(|_| "database unavailable")?,
+        status,
+        run_id: row.try_get::<Option<i64>, _>("run_id").unwrap_or(None),
+        findings_count,
+        message: row.try_get::<Option<String>, _>("message").unwrap_or(None),
+        error: row.try_get::<Option<String>, _>("error").unwrap_or(None),
+    }))
 }
 
-async fn poe_job_json_from_db(pool: &PgPool, tenant_id: i64, job_id: &str) -> Option<String> {
-    poe_job_from_db(pool, tenant_id, job_id)
-        .await
-        .map(|s| serde_json::to_string(&s).unwrap_or_default())
+fn poe_status_is_terminal(status: &str) -> bool {
+    matches!(
+        status.trim().to_ascii_lowercase().as_str(),
+        "completed" | "failed" | "error" | "cancelled" | "canceled"
+    )
+}
+
+/// In-flight jobs and missing payloads are `Ok(None)` (not a confirmed 0).
+/// Confirmed empty array is `Ok(Some(0))` only on a terminal status. Corrupt JSON is `Err`.
+fn parse_poe_findings_count(
+    status: &str,
+    findings_json: Option<&str>,
+) -> Result<Option<usize>, ()> {
+    if !poe_status_is_terminal(status) {
+        return Ok(None);
+    }
+    let Some(raw) = findings_json else {
+        return Ok(None);
+    };
+    serde_json::from_str::<Vec<Value>>(raw)
+        .map(|v| Some(v.len()))
+        .map_err(|_| ())
 }
 
 fn escape_html(s: &str) -> String {
@@ -507,6 +540,14 @@ async fn command_center_spa_index(Extension(html): Extension<String>) -> Html<St
     Html(html)
 }
 
+fn dashboard_store_down_html() -> Response {
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Html("<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\"/><title>Weissman</title></head><body>Dashboard store unavailable.</body></html>".to_string()),
+    )
+        .into_response()
+}
+
 /// Dashboard page at / : stats + findings table + clients table (default tenant, legacy HTML view).
 async fn dashboard_page(State(state): State<Arc<AppState>>) -> Response {
     let (vulns, client_count, score, findings_rows, clients_rows) = match default_tenant_id(
@@ -514,41 +555,53 @@ async fn dashboard_page(State(state): State<Arc<AppState>>) -> Response {
     )
     .await
     {
-        Some(tid) => match db::begin_tenant_tx(state.read_pool(), tid).await {
+        Err(_) => return dashboard_store_down_html(),
+        Ok(Some(tid)) => match db::begin_tenant_tx(state.read_pool(), tid).await {
             Ok(mut tx) => {
-                let v: i64 =
-                    sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM vulnerabilities")
-                        .fetch_one(&mut *tx)
-                        .await
-                        .unwrap_or(0);
-                let c: i64 = sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM clients")
+                let v: i64 = match sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM vulnerabilities")
                     .fetch_one(&mut *tx)
                     .await
-                    .unwrap_or(0);
-                let s: i64 = sqlx::query_scalar::<_, String>(
+                {
+                    Ok(n) => n,
+                    Err(_) => return dashboard_store_down_html(),
+                };
+                let c: i64 = match sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM clients")
+                    .fetch_one(&mut *tx)
+                    .await
+                {
+                    Ok(n) => n,
+                    Err(_) => return dashboard_store_down_html(),
+                };
+                let summary: Option<String> = match sqlx::query_scalar::<_, String>(
                     "SELECT summary FROM report_runs ORDER BY created_at DESC LIMIT 1",
                 )
                 .fetch_optional(&mut *tx)
                 .await
-                .ok()
-                .flatten()
-                .and_then(|x| serde_json::from_str::<Value>(&x).ok())
-                .and_then(|j| {
-                    j.get("by_severity").and_then(|b| b.as_object()).map(|by| {
-                        (100i64
-                            - by.get("critical").and_then(Value::as_i64).unwrap_or(0) * 25
-                            - by.get("high").and_then(Value::as_i64).unwrap_or(0) * 15
-                            - by.get("medium").and_then(Value::as_i64).unwrap_or(0) * 5)
-                            .max(0)
+                {
+                    Ok(v) => v,
+                    Err(_) => return dashboard_store_down_html(),
+                };
+                let s: i64 = summary
+                    .and_then(|x| serde_json::from_str::<Value>(&x).ok())
+                    .and_then(|j| {
+                        j.get("by_severity").and_then(|b| b.as_object()).map(|by| {
+                            (100i64
+                                - by.get("critical").and_then(Value::as_i64).unwrap_or(0) * 25
+                                - by.get("high").and_then(Value::as_i64).unwrap_or(0) * 15
+                                - by.get("medium").and_then(Value::as_i64).unwrap_or(0) * 5)
+                                .max(0)
+                        })
                     })
-                })
-                .unwrap_or(0);
-                let findings_data = sqlx::query(
+                    .unwrap_or(0);
+                let findings_data = match sqlx::query(
                     "SELECT id, title, severity, source, client_id::text, discovered_at FROM vulnerabilities ORDER BY discovered_at DESC LIMIT 50",
                 )
                 .fetch_all(&mut *tx)
                 .await
-                .unwrap_or_default();
+                {
+                    Ok(r) => r,
+                    Err(_) => return dashboard_store_down_html(),
+                };
                 let mut findings_rows = String::new();
                 for r in &findings_data {
                     let id: i64 = r.try_get("id").unwrap_or(0);
@@ -577,10 +630,13 @@ async fn dashboard_page(State(state): State<Arc<AppState>>) -> Response {
                         "<tr><td colspan=\"6\">No findings. Data is live from DB.</td></tr>"
                             .to_string();
                 }
-                let last_rows = sqlx::query("SELECT client_id, MAX(discovered_at) AS mx FROM vulnerabilities GROUP BY client_id")
+                let last_rows = match sqlx::query("SELECT client_id, MAX(discovered_at) AS mx FROM vulnerabilities GROUP BY client_id")
                     .fetch_all(&mut *tx)
                     .await
-                    .unwrap_or_default();
+                {
+                    Ok(r) => r,
+                    Err(_) => return dashboard_store_down_html(),
+                };
                 let mut last_scan: HashMap<i64, String> = HashMap::new();
                 for r in last_rows {
                     if let (Ok(cid), Ok(dt)) = (
@@ -590,10 +646,13 @@ async fn dashboard_page(State(state): State<Arc<AppState>>) -> Response {
                         last_scan.insert(cid, dt.format("%Y-%m-%d %H:%M:%S").to_string());
                     }
                 }
-                let clients = sqlx::query("SELECT id, name, domains FROM clients ORDER BY id")
+                let clients = match sqlx::query("SELECT id, name, domains FROM clients ORDER BY id")
                     .fetch_all(&mut *tx)
                     .await
-                    .unwrap_or_default();
+                {
+                    Ok(r) => r,
+                    Err(_) => return dashboard_store_down_html(),
+                };
                 let mut clients_rows = String::new();
                 for r in clients {
                     let id: i64 = r.try_get("id").unwrap_or(0);
@@ -632,18 +691,16 @@ async fn dashboard_page(State(state): State<Arc<AppState>>) -> Response {
                         r#"<tr><td colspan="5">No clients yet. Add one below.</td></tr>"#
                             .to_string();
                 }
-                let _ = tx.commit().await;
+                if tx.commit().await.is_err() {
+                    return dashboard_store_down_html();
+                }
                 (v, c, s, findings_rows, clients_rows)
             }
-            Err(_) => (
-                0,
-                0,
-                0,
-                "<tr><td colspan=\"6\">DB unavailable.</td></tr>".to_string(),
-                r#"<tr><td colspan="5">DB unavailable.</td></tr>"#.to_string(),
-            ),
+            Err(_) => {
+                return dashboard_store_down_html();
+            }
         },
-        None => (
+        Ok(None) => (
             0,
             0,
             0,
@@ -765,20 +822,37 @@ async fn dashboard_page(State(state): State<Arc<AppState>>) -> Response {
     (function() {{
       function setStatus(active) {{
         var el = document.getElementById('scanStatus');
+        if (active === null || typeof active === 'undefined') {{
+          el.textContent = 'Unavailable';
+          el.className = 'status unknown';
+          return;
+        }}
         el.textContent = active ? 'Scanning active' : 'Stopped';
         el.className = 'status ' + (active ? 'active' : 'inactive');
       }}
-      fetch('/api/scan/status').then(function(r) {{ return r.json(); }}).then(function(d) {{ setStatus(d.scanning_active); }}).catch(function() {{ setStatus(false); }});
+      function applyScanPayload(r, d, onOk) {{
+        if (!r.ok || !d || d.ok === false || d.unavailable || d.scanning_active === null) {{
+          setStatus(null);
+          return;
+        }}
+        onOk(d);
+      }}
+      fetch('/api/scan/status').then(function(r) {{ return r.json().then(function(d) {{ applyScanPayload(r, d, function(d) {{ setStatus(d.scanning_active); }}); }}); }}).catch(function() {{ setStatus(null); }});
       document.getElementById('scanStart').onclick = function() {{
-        fetch('/api/scan/start', {{ method: 'POST' }}).then(function() {{ setStatus(true); }});
+        fetch('/api/scan/start', {{ method: 'POST' }}).then(function(r) {{ return r.json().then(function(d) {{ applyScanPayload(r, d, function() {{ setStatus(true); }}); }}); }}).catch(function() {{ setStatus(null); }});
       }};
       document.getElementById('scanStop').onclick = function() {{
-        fetch('/api/scan/stop', {{ method: 'POST' }}).then(function() {{ setStatus(false); }});
+        fetch('/api/scan/stop', {{ method: 'POST' }}).then(function(r) {{ return r.json().then(function(d) {{ applyScanPayload(r, d, function() {{ setStatus(false); }}); }}); }}).catch(function() {{ setStatus(null); }});
       }};
       document.getElementById('scanRunAll').onclick = function() {{
         var btn = this;
         btn.disabled = true;
-        fetch('/api/scan/run-all', {{ method: 'POST' }}).then(function(r) {{ return r.json(); }}).then(function() {{ btn.disabled = false; setStatus(true); setTimeout(function() {{ location.reload(); }}, 3000); }}).catch(function() {{ btn.disabled = false; }});
+        fetch('/api/scan/run-all', {{ method: 'POST' }}).then(function(r) {{ return r.json().then(function(d) {{
+          btn.disabled = false;
+          if (!r.ok || !d || d.ok === false || d.unavailable) {{ setStatus(null); return; }}
+          setStatus(true);
+          setTimeout(function() {{ location.reload(); }}, 3000);
+        }}); }}).catch(function() {{ btn.disabled = false; setStatus(null); }});
       }};
       document.getElementById('addClientForm').onsubmit = function(e) {{
         e.preventDefault();
@@ -891,6 +965,19 @@ fn stream_lag_notice(dropped: u64) -> String {
     .to_string()
 }
 
+/// Finding-ticker poll failed. Must not look like "no new finding" on a live socket.
+fn cc_ticker_store_down() -> String {
+    json!({
+        "kind": "store_down",
+        "payload": {
+            "message": "Command Center finding ticker unavailable",
+            "severity": "critical",
+        },
+        "ts": chrono::Utc::now().timestamp_millis(),
+    })
+    .to_string()
+}
+
 /// Read the monotonic `_seq` the replay recorder stamped onto a sequenced telemetry event.
 fn cc_extract_seq(raw: &str) -> Option<u64> {
     serde_json::from_str::<Value>(raw)
@@ -938,6 +1025,17 @@ async fn ws_command_center(
     })
 }
 
+async fn ws_command_center_store_down(socket: &mut WebSocket) {
+    let err = json!({
+        "type": "error",
+        "unavailable": true,
+        "message": "database unavailable",
+    });
+    if let Ok(s) = serde_json::to_string(&err) {
+        let _ = socket.send(Message::Text(s)).await;
+    }
+}
+
 async fn handle_ws_command_center(
     mut socket: WebSocket,
     pool: Arc<PgPool>,
@@ -953,40 +1051,67 @@ async fn handle_ws_command_center(
     let Ok(mut tx) =
         weissman_db::begin_tenant_tx_scoped(pool.as_ref(), tenant_id, assigned_client_id).await
     else {
+        ws_command_center_store_down(&mut socket).await;
         return;
     };
     let vuln_count: i64 =
-        sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM vulnerabilities")
+        match sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM vulnerabilities")
             .fetch_one(&mut *tx)
             .await
-            .unwrap_or(0);
-    let client_count: i64 = sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM clients")
+        {
+            Ok(n) => n,
+            Err(_) => {
+                ws_command_center_store_down(&mut socket).await;
+                return;
+            }
+        };
+    let client_count: i64 = match sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM clients")
         .fetch_one(&mut *tx)
         .await
-        .unwrap_or(0);
+    {
+        Ok(n) => n,
+        Err(_) => {
+            ws_command_center_store_down(&mut socket).await;
+            return;
+        }
+    };
     let score: i64 = if assigned_client_id.is_some() {
-        live_security_score_from_vulns(&mut tx).await
+        match live_security_score_from_vulns(&mut tx).await {
+            Ok(s) => s,
+            Err(_) => {
+                ws_command_center_store_down(&mut socket).await;
+                return;
+            }
+        }
     } else {
-        sqlx::query_scalar::<_, String>(
+        match sqlx::query_scalar::<_, String>(
             "SELECT summary FROM report_runs ORDER BY created_at DESC LIMIT 1",
         )
         .fetch_optional(&mut *tx)
         .await
-        .ok()
-        .flatten()
-        .and_then(|s| serde_json::from_str::<Value>(&s).ok())
-        .and_then(|j| {
-            j.get("by_severity").and_then(|b| b.as_object()).map(|by| {
-                (100i64
-                    - by.get("critical").and_then(Value::as_i64).unwrap_or(0) * 25
-                    - by.get("high").and_then(Value::as_i64).unwrap_or(0) * 15
-                    - by.get("medium").and_then(Value::as_i64).unwrap_or(0) * 5)
-                    .max(0)
-            })
-        })
-        .unwrap_or(0)
+        {
+            Ok(opt) => opt
+                .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+                .and_then(|j| {
+                    j.get("by_severity").and_then(|b| b.as_object()).map(|by| {
+                        (100i64
+                            - by.get("critical").and_then(Value::as_i64).unwrap_or(0) * 25
+                            - by.get("high").and_then(Value::as_i64).unwrap_or(0) * 15
+                            - by.get("medium").and_then(Value::as_i64).unwrap_or(0) * 5)
+                            .max(0)
+                    })
+                })
+                .unwrap_or(0),
+            Err(_) => {
+                ws_command_center_store_down(&mut socket).await;
+                return;
+            }
+        }
     };
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        ws_command_center_store_down(&mut socket).await;
+        return;
+    }
     let globe = json!({
         "scanPulses": [],
         "criticalVulns": [],
@@ -1095,20 +1220,53 @@ async fn handle_ws_command_center(
                 }
             }
             _ = ticker.tick() => {
-                let Ok(mut tx) = weissman_db::begin_tenant_tx_scoped(
+                let mut tx = match weissman_db::begin_tenant_tx_scoped(
                     pool.as_ref(),
                     tenant_id,
                     assigned_client_id,
                 )
-                .await else { continue; };
-                let row = sqlx::query(
+                .await
+                {
+                    Ok(t) => t,
+                    Err(_) => {
+                        if socket
+                            .send(Message::Text(cc_ticker_store_down()))
+                            .await
+                            .is_err()
+                        {
+                            break;
+                        }
+                        continue;
+                    }
+                };
+                let row = match sqlx::query(
                     "SELECT id, title, severity, client_id::text AS client_id FROM vulnerabilities ORDER BY discovered_at DESC LIMIT 1",
                 )
                 .fetch_optional(&mut *tx)
                 .await
-                .ok()
-                .flatten();
-                let _ = tx.commit().await;
+                {
+                    Ok(r) => r,
+                    Err(_) => {
+                        if socket
+                            .send(Message::Text(cc_ticker_store_down()))
+                            .await
+                            .is_err()
+                        {
+                            break;
+                        }
+                        continue;
+                    }
+                };
+                if tx.commit().await.is_err() {
+                    if socket
+                        .send(Message::Text(cc_ticker_store_down()))
+                        .await
+                        .is_err()
+                    {
+                        break;
+                    }
+                    continue;
+                }
                 if let Some(r) = row {
                     let title: String = r.try_get("title").unwrap_or_default();
                     let severity: String = r.try_get("severity").unwrap_or_else(|_| "info".into());
@@ -1140,15 +1298,40 @@ async fn api_command_center_ticker(
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(state.read_pool(), auth.tenant_id).await else {
-        return (StatusCode::OK, Json(json!({ "events": [] }))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::command_center_ticker_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         "SELECT id, title, severity, source, client_id::text, discovered_at FROM vulnerabilities ORDER BY discovered_at DESC LIMIT 100",
     )
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let _ = tx.commit().await;
+    {
+        Ok(r) => r,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::command_center_ticker_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::command_center_ticker_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     let mut events = vec![];
     for r in rows {
         let discovered: chrono::DateTime<Utc> =
@@ -1711,6 +1894,10 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>, job_control_pool: Arc<
             app_pool.clone(),
             auth_pool.clone(),
         );
+        // Durable retry worker for the alert-delivery outbox: redelivers pending/failed
+        // notifications with exponential backoff and dead-letters after the max attempts, so a
+        // transient webhook/Slack/PagerDuty 5xx can no longer silently drop a security alert.
+        crate::notification_outbox::spawn_notification_outbox_worker(app_pool.clone());
         crate::soar::worker::spawn_soar_verification_worker(app_pool.clone(), auth_pool.clone());
         crate::threat_intel_ingestor::spawn_ingest_worker(
             app_pool.clone(),
@@ -2018,6 +2205,42 @@ async fn shutdown_signal() {
         () = terminate => {},
     }
     eprintln!("[Weissman] Shutdown signal received — draining connections…");
+}
+
+#[cfg(test)]
+mod poe_job_honesty_tests {
+    use super::parse_poe_findings_count;
+
+    #[test]
+    fn empty_array_is_confirmed_zero() {
+        assert_eq!(parse_poe_findings_count("completed", Some("[]")), Ok(Some(0)));
+        assert_eq!(parse_poe_findings_count("failed", Some("[]")), Ok(Some(0)));
+    }
+
+    #[test]
+    fn two_findings_are_counted() {
+        assert_eq!(
+            parse_poe_findings_count("completed", Some("[{\"a\":1},{}]")),
+            Ok(Some(2))
+        );
+    }
+
+    #[test]
+    fn in_flight_jobs_are_not_confirmed_zero() {
+        assert_eq!(parse_poe_findings_count("running", Some("[]")), Ok(None));
+        assert_eq!(parse_poe_findings_count("pending", Some("[]")), Ok(None));
+        assert_eq!(parse_poe_findings_count("completed", None), Ok(None));
+    }
+
+    #[test]
+    fn object_json_is_corrupt_not_zero() {
+        assert_eq!(parse_poe_findings_count("completed", Some("{}")), Err(()));
+    }
+
+    #[test]
+    fn garbage_json_is_corrupt_not_zero() {
+        assert_eq!(parse_poe_findings_count("completed", Some("not-json")), Err(()));
+    }
 }
 
 #[cfg(test)]

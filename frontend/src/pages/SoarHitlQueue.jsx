@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -153,8 +153,10 @@ function HitlItem({ item, onApprove, onDeny, loading }) {
 export default function SoarHitlQueue() {
   const { t } = useTranslation()
   const [items, setItems] = useState([])
-  const [pendingCount, setPendingCount] = useState(0)
+  const [pendingCount, setPendingCount] = useState(null)
   const [fetchLoading, setFetchLoading] = useState(true)
+  const [unavailable, setUnavailable] = useState(false)
+  const hasLoadedRef = useRef(false)
   const [actionLoading, setActionLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('pending_hitl')
   const [search, setSearch] = useState('')
@@ -173,9 +175,15 @@ export default function SoarHitlQueue() {
     try {
       const data = await apiFetch(`/api/soar/executions?status=${encodeURIComponent(activeTab)}`)
       setItems(Array.isArray(data.items) ? data.items : [])
-      setPendingCount(Number(data.pending_count) || 0)
+      setPendingCount(typeof data.pending_count === 'number' ? data.pending_count : Number(data.pending_count) || 0)
+      setUnavailable(false)
+      hasLoadedRef.current = true
     } catch (e) {
       showToast(t('pages.soarHitlQueue.load_failed', { message: e.message }), false)
+      // Leftover leftover-queue stays in state. Always setUnavailable so
+      // page-header Export CSV unmounts (`onExport={unavailable ? undefined}`).
+      // EmptyState dump stays first-load only (`unavailable && !hasLoadedRef.current`).
+      setUnavailable(true)
     } finally {
       setFetchLoading(false)
     }
@@ -250,6 +258,11 @@ export default function SoarHitlQueue() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (unavailable) return
+    exportQueueCsv(filteredItems)
+  }, [unavailable, filteredItems])
+
   const headerActions = (
     <div className="flex items-center gap-2 flex-wrap">
       <Link
@@ -260,9 +273,9 @@ export default function SoarHitlQueue() {
       </Link>
       <ShellScanActions
         onRefresh={fetchQueue}
-        onExport={() => exportQueueCsv(filteredItems)}
+        onExport={unavailable ? undefined : handleExportCsv}
         refreshLoading={fetchLoading}
-        exportDisabled={!filteredFindings.length}
+        exportDisabled={unavailable || !filteredFindings.length}
       />
     </div>
   )
@@ -272,7 +285,7 @@ export default function SoarHitlQueue() {
       title={t('pages.soarHitlQueue.title')}
       subtitle={t('pages.soarHitlQueue.subtitle')}
       icon={<ShieldAlert className="w-5 h-5 text-rose-400" strokeWidth={1.75} />}
-      badge={pendingCount > 0 ? t('pages.soarHitlQueue.pending_badge', { count: pendingCount }) : undefined}
+      badge={!unavailable && typeof pendingCount === 'number' && pendingCount > 0 ? t('pages.soarHitlQueue.pending_badge', { count: pendingCount }) : undefined}
       badgeColor="#fb7185"
       actions={headerActions}
       maxWidth="max-w-4xl"
@@ -333,7 +346,17 @@ export default function SoarHitlQueue() {
           <SkeletonWidgetGrid count={3} className="lg:grid-cols-1" />
         )}
 
-        {!fetchLoading && filteredItems.length === 0 && (
+        {unavailable && !fetchLoading && !hasLoadedRef.current && (
+          <div data-testid="soar-hitl-unavailable">
+            <EmptyState
+              icon="alert"
+              title={t('pages.soarHitlQueue.unavailable_title')}
+              body={t('pages.soarHitlQueue.unavailable_body')}
+            />
+          </div>
+        )}
+
+        {!unavailable && !fetchLoading && filteredItems.length === 0 && (
           <EmptyState
             icon="shield"
             title={t('pages.soarHitlQueue.empty_title')}

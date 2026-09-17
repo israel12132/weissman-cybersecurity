@@ -13,21 +13,29 @@ pub struct ConnectorPull {
     pub detail: String,
 }
 
-pub async fn load_connector_config(pool: &PgPool, tenant_id: i64) -> Value {
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return json!({});
-    };
+pub async fn load_connector_config(pool: &PgPool, tenant_id: i64) -> Result<Value, String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "database unavailable".to_string())?;
     let raw: Option<String> = sqlx::query_scalar(
         "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'itdr_connectors'",
     )
     .bind(tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
-    raw.and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_else(|| json!({}))
+    .map_err(|_| "database unavailable".to_string())?;
+    tx.commit().await.map_err(|_| "database unavailable".to_string())?;
+    parse_connector_config_raw(raw.as_deref())
+}
+
+/// Missing key → empty object (confirmed tokenless). Garbage JSON is store-down, not `{}`.
+pub(crate) fn parse_connector_config_raw(raw: Option<&str>) -> Result<Value, String> {
+    match raw {
+        None => Ok(json!({})),
+        Some(s) if s.trim().is_empty() => Ok(json!({})),
+        Some(s) => serde_json::from_str(s)
+            .map_err(|e| format!("invalid itdr_connectors json: {e}")),
+    }
 }
 
 pub async fn save_connector_config(
@@ -47,8 +55,8 @@ pub async fn save_connector_config(
     .bind(value.to_string())
     .execute(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
-    tx.commit().await.map_err(|e| e.to_string())?;
+    .map_err(|_| "database unavailable".to_string())?;
+    tx.commit().await.map_err(|_| "database unavailable".to_string())?;
     Ok(())
 }
 
@@ -81,11 +89,15 @@ async fn persist_events(
         .bind(e.mfa_prompted)
         .execute(&mut *tx)
         .await;
-        if res.is_ok() {
-            n += 1;
+        match res {
+            Ok(_) => n += 1,
+            Err(_) => {
+                let _ = tx.rollback().await;
+                return Err("database unavailable".into());
+            }
         }
     }
-    tx.commit().await.map_err(|e| e.to_string())?;
+    tx.commit().await.map_err(|_| "database unavailable".to_string())?;
     Ok(n)
 }
 
@@ -290,6 +302,20 @@ pub async fn pull_provider(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn missing_connector_row_is_empty_object() {
+        let v = parse_connector_config_raw(None).expect("missing row is empty config");
+        assert_eq!(v, json!({}));
+    }
+
+    #[test]
+    fn invalid_connector_json_is_not_empty_object() {
+        let err = parse_connector_config_raw(Some("not-json{"))
+            .expect_err("garbage must not look like no connectors");
+        assert!(err.contains("invalid"));
+    }
 
     #[test]
     fn graph_parser_reads_signins() {

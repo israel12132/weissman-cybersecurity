@@ -83,6 +83,7 @@ export default function RemediationDetail({ finding, onClose }) {
   const [patch, setPatch] = useState('')
   const [briefLoading, setBriefLoading] = useState(false)
   const [briefError, setBriefError] = useState(null)
+  const [briefUnavailable, setBriefUnavailable] = useState(false)
 
   const [channel, setChannel] = useState('github_pr')
   const [repoSlug, setRepoSlug] = useState('')
@@ -128,8 +129,10 @@ export default function RemediationDetail({ finding, onClose }) {
       })
       setBrief(d.brief || null)
       setPatch(d.generated_patch || '')
+      setBriefUnavailable(false)
     } catch (e) {
       setBriefError(e.message || 'failed')
+      if (!refresh) setBriefUnavailable(true)
     } finally {
       setBriefLoading(false)
     }
@@ -312,7 +315,13 @@ export default function RemediationDetail({ finding, onClose }) {
               </Button>
             </div>
 
-            {briefError && (
+            {briefUnavailable && (
+              <div data-testid="remediation-brief-unavailable" className="p-3 rounded-lg border border-rose-500/30 bg-rose-900/20 text-rose-300 text-xs flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                {t('pages.remediationHub.brief_unavailable')}
+              </div>
+            )}
+            {briefError && !briefUnavailable && (
               <div className="p-3 rounded-lg border border-rose-500/30 bg-rose-900/20 text-rose-300 text-xs flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 shrink-0" />
                 {t('pages.remediationHub.brief_error', { error: briefError })}: {briefError}
@@ -323,7 +332,7 @@ export default function RemediationDetail({ finding, onClose }) {
               <div className="text-xs text-white/40 flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t('pages.remediationHub.brief_loading')}</div>
             )}
 
-            {brief && (
+            {brief && !briefUnavailable && (
               <div className="space-y-4 p-4 rounded-xl border border-white/10 bg-black/30">
                 <BilingualBlock title={t('pages.remediationHub.brief_problem')} value={brief.problem} mode={langMode} curLang={curLang} />
                 <BilingualBlock title={t('pages.remediationHub.brief_root_cause')} value={brief.root_cause} mode={langMode} curLang={curLang} />
@@ -334,7 +343,7 @@ export default function RemediationDetail({ finding, onClose }) {
           </section>
 
           {/* Before / after diff */}
-          {patch && (
+          {patch && !briefUnavailable && (
             <section className="space-y-2">
               <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                 <GitPullRequest className="w-4 h-4 text-cyan-400" />
@@ -368,7 +377,7 @@ export default function RemediationDetail({ finding, onClose }) {
               })}
             </div>
 
-            {channelHowTo && (
+            {channelHowTo && !briefUnavailable && (
               <div className="space-y-3 p-3 rounded-lg border border-white/10 bg-black/30">
                 <BilingualBlock title={t('pages.remediationHub.channel_connect')} value={channelHowTo.connect} mode={langMode} curLang={curLang} />
                 <BilingualBlock title={t('pages.remediationHub.channel_apply')} value={channelHowTo.apply} mode={langMode} curLang={curLang} />

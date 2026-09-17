@@ -100,14 +100,14 @@ export default function AttackExposurePanel({ clientId }) {
   const barMax = maxTacticCount(tactics)
 
   const handleRefresh = useCallback(() => load(clientId), [load, clientId])
-  const exportCsv = useCallback(
-    () => downloadCsv(techniqueCsvRows(filteredTechniques), EXPOSURE_CSV_HEADER, 'weissman-attack-exposure'),
-    [filteredTechniques],
-  )
-  const exportPdf = useCallback(
-    () => exportRowsPdf('Weissman ATT&CK Exposure', EXPOSURE_CSV_HEADER, techniqueCsvRows(filteredTechniques), 'weissman-attack-exposure'),
-    [filteredTechniques],
-  )
+  const exportCsv = useCallback(() => {
+    if (error) return
+    downloadCsv(techniqueCsvRows(filteredTechniques), EXPOSURE_CSV_HEADER, 'weissman-attack-exposure')
+  }, [error, filteredTechniques])
+  const exportPdf = useCallback(() => {
+    if (error) return
+    exportRowsPdf('Weissman ATT&CK Exposure', EXPOSURE_CSV_HEADER, techniqueCsvRows(filteredTechniques), 'weissman-attack-exposure')
+  }, [error, filteredTechniques])
 
   return (
     <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
@@ -125,21 +125,23 @@ export default function AttackExposurePanel({ clientId }) {
         <div className="flex items-center gap-3">
           <ShellScanActions
             onRefresh={handleRefresh}
-            onExport={exportCsv}
+            onExport={error ? undefined : exportCsv}
             refreshLoading={loading}
-            exportDisabled={!filteredTechniques.length}
+            exportDisabled={!!error || !filteredTechniques.length}
           />
+          {!error && (
           <Button
             variant="unstyled"
             type="button"
             onClick={exportPdf}
-            disabled={!filteredTechniques.length}
+            disabled={!!error || !filteredTechniques.length}
             title={t('common.export_pdf')}
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-white/15 text-white/70 hover:bg-white/10 disabled:opacity-40 transition-colors"
           >
             <FileText className="w-3.5 h-3.5" />
             {t('common.export_pdf')}
           </Button>
+          )}
         </div>
       </div>
 

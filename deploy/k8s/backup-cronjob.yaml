@@ -1,0 +1,225 @@
+# Encrypted PITR base backup + nightly restore drill for the Weissman platform on Kubernetes.
+#
+# RELATION TO CNPG (postgres-ha.yaml)
+# -----------------------------------
+# CNPG already ships WAL + base backups to S3 with SERVER-SIDE encryption (barman encryption:
+# AES256). These CronJobs add the CLIENT-SIDE age envelope layer as defence in depth and an
+# INDEPENDENT off-site copy: the backup is encrypted with a PUBLIC key before it ever leaves the
+# job, so a compromise of the S3 bucket AND its KMS key still does not reveal the database. The
+# matching PRIVATE key lives only in the restore-drill secret (key separation) — the base-backup
+# job cannot decrypt what it writes.
+#
+# KEY CEREMONY (do this ONCE, offline — see docs/operations/ENCRYPTED-DR-PITR.md)
+#   age-keygen -o dr-identity.txt              # private key — GUARD IT (vault/HSM/offline)
+#   grep 'public key' dr-identity.txt          # → age1... recipient (safe to distribute)
+# Then create the secrets below. The identity is mounted ONLY into the restore-drill job.
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: weissman-dr-recipients
+  namespace: weissman
+  labels: { app.kubernetes.io/part-of: weissman, weissman.io/component: dr }
+type: Opaque
+stringData:
+  # PUBLIC key(s), one per line. Safe to store here — it can only ENCRYPT. Add a second
+  # break-glass recipient held by a different custodian so no single lost key blocks recovery.
+  recipients.txt: |
+    # age1REPLACE_WITH_OPERATIONS_PUBLIC_KEY
+    # age1REPLACE_WITH_BREAKGLASS_PUBLIC_KEY
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: weissman-dr-identity
+  namespace: weissman
+  labels: { app.kubernetes.io/part-of: weissman, weissman.io/component: dr }
+  annotations:
+    # This is the crown-jewel decryption key. Prefer sealing it (Sealed Secrets / SOPS / external
+    # secret from a vault) rather than committing it. It is mounted ONLY into the restore drill.
+    weissman.io/sensitivity: "critical-private-key"
+type: Opaque
+stringData:
+  identity.txt: |
+    # AGE-SECRET-KEY-REPLACE_ONLY_ON_THE_RESTORE_TRUST_ZONE
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: weissman-dr-offsite
+  namespace: weissman
+  labels: { app.kubernetes.io/part-of: weissman, weissman.io/component: dr }
+type: Opaque
+stringData:
+  # Credentials for the INDEPENDENT off-site bucket (a different account/region from the CNPG
+  # bucket, ideally with Object-Lock). Shown for S3; adapt for gcs/rclone/mc.
+  AWS_ACCESS_KEY_ID: "REPLACE"
+  AWS_SECRET_ACCESS_KEY: "REPLACE"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: weissman-dr-scratch
+  namespace: weissman
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 50Gi   # scratch for a base backup + one restore drill; size to your DB
+---
+# ── Encrypted base backup + off-site replication ─────────────────────────────────────────
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: weissman-pitr-base-backup
+  namespace: weissman
+  labels: { app.kubernetes.io/part-of: weissman, weissman.io/component: dr }
+spec:
+  schedule: "15 3 * * *"          # 03:15 UTC daily
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 7
+  failedJobsHistoryLimit: 7
+  startingDeadlineSeconds: 3600
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 7200
+      template:
+        metadata:
+          labels: { app.kubernetes.io/part-of: weissman, weissman.io/component: dr }
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999
+            fsGroup: 999
+            seccompProfile: { type: RuntimeDefault }
+          containers:
+            - name: base-backup
+              image: ghcr.io/your-org/weissman-backup:pg16   # build from deploy/backup.Dockerfile
+              imagePullPolicy: IfNotPresent
+              command: ["/bin/bash", "-lc"]
+              args:
+                - |
+                  set -euo pipefail
+                  cd /opt/weissman
+                  # NOTE: NO identity mounted here — this job encrypts with the public key only and
+                  # provably cannot read back what it writes.
+                  exec scripts/dr_orchestrator.sh cycle
+              env:
+                - name: WEISSMAN_ENV
+                  value: "production"                 # → encryption REQUIRED (fail closed)
+                - name: WEISSMAN_BACKUP_REQUIRE_ENCRYPTION
+                  value: "1"
+                - name: WEISSMAN_BACKUP_AGE_RECIPIENTS_FILE
+                  value: /etc/weissman/dr/recipients.txt
+                - name: WEISSMAN_PITR_BASE_DIR
+                  value: /scratch/base
+                - name: WEISSMAN_PITR_ARCHIVE_DIR
+                  value: /scratch/wal
+                - name: WEISSMAN_DR_OFFSITE_URL
+                  value: "s3://weissman-dr-independent/pitr"   # SEPARATE bucket/region from CNPG
+                - name: WEISSMAN_DR_OFFSITE_IMMUTABLE
+                  value: "1"                          # bucket enforces Object-Lock retention
+                - name: DATABASE_URL
+                  valueFrom: { secretKeyRef: { name: weissman-secrets, key: DATABASE_URL } }
+                - name: WEISSMAN_METRICS_TEXTFILE_DIR
+                  value: /scratch/metrics
+                # Off-site (S3) credentials.
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom: { secretKeyRef: { name: weissman-dr-offsite, key: AWS_ACCESS_KEY_ID } }
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom: { secretKeyRef: { name: weissman-dr-offsite, key: AWS_SECRET_ACCESS_KEY } }
+                # Optional pager for failures.
+                - name: WEISSMAN_DR_ALERT_WEBHOOK
+                  valueFrom:
+                    secretKeyRef: { name: weissman-dr-offsite, key: ALERT_WEBHOOK, optional: true }
+              volumeMounts:
+                - { name: recipients, mountPath: /etc/weissman/dr, readOnly: true }
+                - { name: scratch, mountPath: /scratch }
+              resources:
+                requests: { cpu: "250m", memory: "256Mi" }
+                limits:   { cpu: "1",    memory: "1Gi" }
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: { drop: ["ALL"] }
+          volumes:
+            - { name: recipients, secret: { secretName: weissman-dr-recipients } }
+            - { name: scratch, persistentVolumeClaim: { claimName: weissman-dr-scratch } }
+---
+# ── Nightly restore drill — proves the encrypted backup DECRYPTS and RECOVERS ─────────────
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: weissman-pitr-restore-drill
+  namespace: weissman
+  labels: { app.kubernetes.io/part-of: weissman, weissman.io/component: dr }
+spec:
+  schedule: "45 4 * * *"          # 04:45 UTC daily (after the backup)
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 7
+  failedJobsHistoryLimit: 7
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 3600
+      template:
+        metadata:
+          labels: { app.kubernetes.io/part-of: weissman, weissman.io/component: dr }
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999
+            fsGroup: 999
+            seccompProfile: { type: RuntimeDefault }
+          containers:
+            - name: restore-drill
+              image: ghcr.io/your-org/weissman-backup:pg16
+              imagePullPolicy: IfNotPresent
+              command: ["/bin/bash", "-lc"]
+              args:
+                - |
+                  set -euo pipefail
+                  cd /opt/weissman
+                  # This IS the trust zone that holds the identity: pull the latest encrypted base
+                  # from off-site, decrypt, and restore into a throwaway local cluster (pg_ctl).
+                  export WEISSMAN_RESTORE_USE_LOCAL=1
+                  # Stage the newest off-site base locally, then prove it restores.
+                  scripts/dr_offsite_sync.sh pull /scratch/pull
+                  ln -sfn "$(ls -d /scratch/pull/base_* | sort | tail -1)" /scratch/base/latest
+                  exec scripts/backup_restore_verify.sh
+              env:
+                - name: WEISSMAN_ENV
+                  value: "production"
+                - name: WEISSMAN_BACKUP_AGE_IDENTITY_FILE      # the PRIVATE key — only here
+                  value: /etc/weissman/dr-identity/identity.txt
+                - name: WEISSMAN_PITR_BASE_DIR
+                  value: /scratch/base
+                - name: WEISSMAN_DR_OFFSITE_URL
+                  value: "s3://weissman-dr-independent/pitr"
+                - name: WEISSMAN_RESTORE_USE_LOCAL
+                  value: "1"
+                - name: WEISSMAN_METRICS_TEXTFILE_DIR
+                  value: /scratch/metrics
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom: { secretKeyRef: { name: weissman-dr-offsite, key: AWS_ACCESS_KEY_ID } }
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom: { secretKeyRef: { name: weissman-dr-offsite, key: AWS_SECRET_ACCESS_KEY } }
+                - name: WEISSMAN_DR_ALERT_WEBHOOK
+                  valueFrom:
+                    secretKeyRef: { name: weissman-dr-offsite, key: ALERT_WEBHOOK, optional: true }
+              volumeMounts:
+                - { name: identity, mountPath: /etc/weissman/dr-identity, readOnly: true }
+                - { name: scratch, mountPath: /scratch }
+              resources:
+                requests: { cpu: "500m", memory: "512Mi" }
+                limits:   { cpu: "2",    memory: "2Gi" }
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: { drop: ["ALL"] }
+          volumes:
+            - { name: identity, secret: { secretName: weissman-dr-identity, defaultMode: 0400 } }
+            - { name: scratch, persistentVolumeClaim: { claimName: weissman-dr-scratch } }

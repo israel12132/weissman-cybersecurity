@@ -36,15 +36,16 @@ mkdir -p "$TMPDIR"
 stamp() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 echo "=== [$(stamp)] weissman nightly backup ==="
 
-echo "--- base backup ---"
-bash scripts/backup_pitr_setup.sh base
+# One encrypted DR cycle = base backup (encrypted) → local prune → off-site replication → off-site
+# prune. The orchestrator fails closed if encryption is required but unavailable, and pages via
+# WEISSMAN_DR_ALERT_WEBHOOK on any failure, so a broken nightly is loud instead of silent.
+echo "--- encrypted DR cycle (base + off-site) ---"
+bash scripts/dr_orchestrator.sh cycle
 
-echo "--- prune (retention ${WEISSMAN_PITR_RETENTION_DAYS:-14}d) ---"
-bash scripts/backup_pitr_setup.sh prune || echo "WARN: prune failed (non-fatal)"
-
-# The point of the whole job. A base backup that cannot be restored is not a backup, and the only
-# way to know is to restore it.
-echo "--- restore verification ---"
-bash scripts/backup_restore_verify.sh
+# The point of the whole job. A base backup that cannot be restored — or cannot be DECRYPTED — is
+# not a backup, and the only way to know is to restore it. Runs as a separate step because the
+# drill restores into a throwaway cluster and is slow.
+echo "--- restore verification (decrypt + recover) ---"
+bash scripts/dr_orchestrator.sh drill
 
 echo "=== [$(stamp)] nightly backup OK ==="

@@ -84,6 +84,7 @@ const LABELS = {
     m365Title: 'Entra / M365 tenant',
     noFindings: 'No spray/stuffing weaknesses observed — strong identity hygiene.',
     runToPopulate: 'Configure target/domain and run the assessment.',
+    historyUnavailable: 'Engine history API unavailable — run-to-populate is not a quiet empty trail.',
     filterAll: 'all',
     related: 'Related identity engines',
     relatedIdentity: 'Identity & SSO Command Center',
@@ -174,6 +175,7 @@ const LABELS = {
     m365Title: 'דייר Entra / M365',
     noFindings: 'לא נצפו חולשות spray/stuffing — היגיינת זהויות חזקה.',
     runToPopulate: 'הגדר יעד/דומיין והרץ הערכה.',
+    historyUnavailable: 'API היסטוריית המנוע אינו זמין — מוכן-למילוי אינו מאושר.',
     filterAll: 'הכל',
     related: 'מנועי זהות קשורים',
     relatedIdentity: 'מרכז Identity & SSO',
@@ -290,15 +292,17 @@ function CategoryScoresPanel({ scores, L }) {
       <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest mb-3">{L.categoryScores}</p>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {axes.map(([k, label]) => {
-          const v = Number(scores[k] ?? 0)
+          const raw = scores[k]
+          const hasScore = raw != null && Number.isFinite(Number(raw))
+          const v = hasScore ? Number(raw) : 0
           return (
             <div key={k}>
               <div className="flex justify-between text-[10px] font-mono text-[var(--text-muted)] mb-1">
                 <span>{label}</span>
-                <span style={{ color: v >= 80 ? '#4ade80' : v >= 50 ? '#fbbf24' : '#f87171' }}>{v}</span>
+                <span style={{ color: !hasScore ? 'rgba(255,255,255,0.12)' : v >= 80 ? '#4ade80' : v >= 50 ? '#fbbf24' : '#f87171' }}>{hasScore ? v : '—'}</span>
               </div>
               <div className="h-1.5 rounded-full bg-[var(--row-hover-bg)] overflow-hidden">
-                <div className="h-full rounded-full transition-all" style={{ width: `${v}%`, backgroundColor: v >= 80 ? '#4ade80' : v >= 50 ? '#fbbf24' : '#f87171' }} />
+                <div className="h-full rounded-full transition-all" style={{ width: hasScore ? `${v}%` : '0%', backgroundColor: !hasScore ? 'rgba(255,255,255,0.12)' : v >= 80 ? '#4ade80' : v >= 50 ? '#fbbf24' : '#f87171' }} />
               </div>
             </div>
           )
@@ -499,11 +503,6 @@ export default function PasswordSprayCommandCenter() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, target, buildBody, showToastMsg, L])
 
-  const handleExport = useCallback(() => {
-    const payload = { engine: ENGINE_ID, exported_at: new Date().toISOString(), target, params, findings }
-    downloadBytes(new TextEncoder().encode(JSON.stringify(payload, null, 2)), `spray-posture-${Date.now()}.json`, 'application/json')
-  }, [target, params, findings])
-
   const { posture, paths, regular, m365, lockoutCurves, ropc, entra, remediation, subdomains, toxic, roadmap, agentGaps, categoryScores } = useMemo(() => {
     const postureF = findings.find((f) => f.category === 'posture_score') || null
     const toxicF = findings.find((f) => f.category === 'toxic_combination') || null
@@ -538,7 +537,19 @@ export default function PasswordSprayCommandCenter() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE_ID, regular)
+
+  const handleExport = useCallback(() => {
+    if (historyUnavailable) return
+    const payload = { engine: ENGINE_ID, exported_at: new Date().toISOString(), target, params, findings }
+    downloadBytes(new TextEncoder().encode(JSON.stringify(payload, null, 2)), `spray-posture-${Date.now()}.json`, 'application/json')
+  }, [target, params, findings, historyUnavailable])
+
+  const handleExportCsv = useCallback(() => {
+    if (historyUnavailable) return
+    exportCsv()
+  }, [historyUnavailable, exportCsv])
 
   useEffect(() => {
     refreshFromHistory().then((run) => {
@@ -577,10 +588,10 @@ export default function PasswordSprayCommandCenter() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={exportCsv}
+          onExport={historyUnavailable ? undefined : handleExportCsv}
           refreshLoading={historyLoading}
           refreshDisabled={status === 'running'}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={historyUnavailable || !filteredFindings.length}
         />
       )}
     >
@@ -673,7 +684,7 @@ export default function PasswordSprayCommandCenter() {
             {showAdvanced ? '▾' : '▸'} {L.advanced}
           </Button>
           <div className="flex gap-2">
-            {findings.length > 0 && (
+            {!historyUnavailable && findings.length > 0 && (
               <Button variant="unstyled" type="button" onClick={handleExport} className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)]">{L.export}</Button>
             )}
             <Button variant="unstyled" type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
@@ -724,15 +735,20 @@ export default function PasswordSprayCommandCenter() {
         <Link to={`/engines/${ENGINE_ID}`} className="text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]">{L.relatedEngine}</Link>
       </div>
 
-      {findings.length === 0 && status !== 'running' && (
+      {historyUnavailable && (
+        <p data-testid="password-spray-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+          {L.historyUnavailable}
+        </p>
+      )}
+      {findings.length === 0 && status !== 'running' && !historyUnavailable && (
         <p className="text-sm font-mono text-[var(--text-muted)] text-center py-12">{L.runToPopulate}</p>
       )}
 
-      {posture && <PostureCard finding={posture} L={L} pathCount={paths.length} />}
-      {posture && <PostureRadarWrap finding={posture} L={L} />}
-      {categoryScores && <CategoryScoresPanel scores={categoryScores} L={L} />}
+      {posture && !historyUnavailable && <PostureCard finding={posture} L={L} pathCount={paths.length} />}
+      {posture && !historyUnavailable && <PostureRadarWrap finding={posture} L={L} />}
+      {categoryScores && !historyUnavailable && <CategoryScoresPanel scores={categoryScores} L={L} />}
 
-      {toxic && (
+      {toxic && !historyUnavailable && (
         <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
           className="rounded-2xl border border-red-500/50 bg-red-950/25 p-5 mb-6">
           <p className="text-[10px] font-mono text-red-300/80 uppercase tracking-widest mb-2">{L.toxicTitle}</p>
@@ -748,7 +764,7 @@ export default function PasswordSprayCommandCenter() {
         </motion.div>
       )}
 
-      {roadmap && (
+      {roadmap && !historyUnavailable && (
         <div className="rounded-xl border border-amber-500/30 bg-amber-950/15 p-4 mb-4">
           <p className="text-[10px] font-mono text-amber-300/70 uppercase mb-2">{L.roadmapTitle}</p>
           {Array.isArray(roadmap.evidence?.roadmap) && (
@@ -765,7 +781,7 @@ export default function PasswordSprayCommandCenter() {
         </div>
       )}
 
-      {agentGaps.length > 0 && (
+      {!historyUnavailable && agentGaps.length > 0 && (
         <div className="rounded-xl border border-violet-500/25 bg-violet-950/10 p-4 mb-4">
           <p className="text-[10px] font-mono text-violet-300/70 uppercase mb-2">{L.agentGapTitle}</p>
           <ul className="space-y-1">
@@ -776,7 +792,7 @@ export default function PasswordSprayCommandCenter() {
         </div>
       )}
 
-      {entra.length > 0 && (
+      {!historyUnavailable && entra.length > 0 && (
         <div className="rounded-xl border border-violet-500/35 bg-violet-950/15 p-4 mb-4">
           <p className="text-[10px] font-mono text-violet-300/70 uppercase mb-2">{L.entra}</p>
           {entra.map((f, i) => (
@@ -785,7 +801,7 @@ export default function PasswordSprayCommandCenter() {
         </div>
       )}
 
-      {subdomains.length > 0 && (
+      {!historyUnavailable && subdomains.length > 0 && (
         <div className="rounded-xl border border-sky-500/25 bg-sky-950/10 p-4 mb-4">
           <p className="text-[10px] font-mono text-sky-300/70 uppercase mb-2">{L.subdomains} ({subdomains.length})</p>
           <div className="flex flex-wrap gap-2">
@@ -796,7 +812,7 @@ export default function PasswordSprayCommandCenter() {
         </div>
       )}
 
-      {remediation && (
+      {remediation && !historyUnavailable && (
         <div className="rounded-xl border border-emerald-500/25 bg-emerald-950/10 p-4 mb-4">
           <p className="text-[10px] font-mono text-emerald-300/70 uppercase mb-2">{L.remediation}</p>
           <p className="text-xs font-mono text-[var(--text-tertiary)]">{remediation.description}</p>
@@ -812,13 +828,13 @@ export default function PasswordSprayCommandCenter() {
         </div>
       )}
 
-      {ropc.length > 0 && (
+      {!historyUnavailable && ropc.length > 0 && (
         <div className="rounded-xl border border-red-500/40 bg-red-950/20 p-4 mb-4 text-sm font-mono text-red-200">
           <strong>ROPC:</strong> {ropc[0].title}
         </div>
       )}
 
-      {m365.length > 0 && (
+      {!historyUnavailable && m365.length > 0 && (
         <div className="rounded-xl border border-sky-500/30 bg-sky-950/15 p-4 mb-4">
           <p className="text-[10px] font-mono text-sky-300/70 uppercase mb-2">{L.m365Title}</p>
           <p className="text-sm font-mono text-[var(--text-secondary)]">{m365[0].title}</p>
@@ -826,7 +842,7 @@ export default function PasswordSprayCommandCenter() {
         </div>
       )}
 
-      {lockoutCurves.length > 0 && (
+      {!historyUnavailable && lockoutCurves.length > 0 && (
         <div className="rounded-xl border border-amber-500/25 bg-amber-950/10 p-4 mb-4">
           <p className="text-[10px] font-mono text-amber-300/70 uppercase mb-2">{L.lockoutTitle}</p>
           <div className="flex flex-wrap gap-2">
@@ -837,7 +853,7 @@ export default function PasswordSprayCommandCenter() {
         </div>
       )}
 
-      {paths.length > 0 && (
+      {!historyUnavailable && paths.length > 0 && (
         <div className="mb-6">
           <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest mb-2">{L.pathsTitle}</p>
           <div className="space-y-2">
@@ -863,7 +879,10 @@ export default function PasswordSprayCommandCenter() {
         jobId={pendingJobId || lastJobId}
         accent={ACCENT}
         title={L.findingsTitle}
-        showEmptyReady={status !== 'running' && regular.length === 0 && findings.length === 0}
+        unavailable={historyUnavailable}
+        unavailableTitle={L.historyUnavailable}
+        unavailableBody={L.historyUnavailable}
+        showEmptyReady={status !== 'running' && regular.length === 0 && findings.length === 0 && !historyUnavailable}
         emptyReadyTitle={L.runToPopulate}
         emptyReadyBody={L.runToPopulate}
         emptyTitle={L.noFindings}

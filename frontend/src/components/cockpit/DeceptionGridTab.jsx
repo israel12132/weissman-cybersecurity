@@ -26,6 +26,7 @@ export default function DeceptionGridTab() {
   const { selectedClientId } = useClient()
   const { lastTelemetry } = useWarRoom?.() || {}
   const [assets, setAssets] = useState([])
+  const [assetsUnavailable, setAssetsUnavailable] = useState(false)
   const [loading, setLoading] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [deploying, setDeploying] = useState(false)
@@ -47,15 +48,20 @@ export default function DeceptionGridTab() {
   const fetchAssets = useCallback(async () => {
     if (!selectedClientId) {
       setAssets([])
+      setAssetsUnavailable(false)
       return
     }
     setLoading(true)
     try {
       const d = await apiFetch(`/api/clients/${selectedClientId}/deception`)
+      if (d == null || (typeof d === 'object' && (d.ok === false || d.unavailable))) {
+        throw new Error(d?.detail || 'unavailable')
+      }
       const list = Array.isArray(d) ? d : (d.assets ?? [])
-      setAssets(list)
+      setAssets(Array.isArray(list) ? list : [])
+      setAssetsUnavailable(false)
     } catch (_) {
-      setAssets([])
+      setAssetsUnavailable(true)
     } finally {
       setLoading(false)
     }
@@ -146,7 +152,7 @@ export default function DeceptionGridTab() {
         <h2 className="text-lg font-semibold text-white">{t(`${NS}.title`)}</h2>
       </div>
 
-      {triggered.length > 0 && (
+      {!assetsUnavailable && triggered.length > 0 && (
         <div className="rounded-xl border border-red-500/50 bg-red-500/10 px-4 py-3 flex items-center gap-2 text-red-400">
           <AlertTriangle className="w-5 h-5 shrink-0" />
           <span className="font-medium">{t(`${NS}.triggeredAlert`, { count: triggered.length })}</span>
@@ -221,7 +227,7 @@ export default function DeceptionGridTab() {
         )}
       </div>
 
-      {injected.length > 0 && (
+      {!assetsUnavailable && injected.length > 0 && (
         <div className="rounded-2xl border border-sky-500/20 bg-sky-500/5 p-4">
           <h4 className="text-xs font-medium text-sky-300 mb-2 flex items-center gap-2">
             <MapPin className="w-4 h-4" /> {t(`${NS}.cloudInjectionMap`)}
@@ -274,6 +280,13 @@ export default function DeceptionGridTab() {
         </div>
         {loading ? (
           <div className="p-6 text-center text-white/50 text-sm">{t(`${NS}.loading`)}</div>
+        ) : assetsUnavailable ? (
+          <div
+            data-testid="deception-grid-unavailable"
+            className="p-6 text-center text-amber-300/90 text-sm"
+          >
+            {t(`${NS}.assetsUnavailable`)}
+          </div>
         ) : assets.length === 0 ? (
           <div className="p-6 text-center text-white/50 text-sm">{t(`${NS}.noAssets`)}</div>
         ) : (

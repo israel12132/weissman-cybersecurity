@@ -287,6 +287,52 @@ pub fn correlation_alert_payload(
     })
 }
 
+/// Map a newly-persisted correlation incident onto a SOAR
+/// [`crate::soar_playbook::PlaybookEvent`] so the kill-chain hit reaches the
+/// playbook trigger bus. Carries the correlated severity and the contributing
+/// kill-chain stages (in the title); `source` is the correlation engine so
+/// `engines:["correlation"]` triggers can target these incidents. The stable
+/// per-incident `incident_key` is used as `signature_hash` so SOAR cooldowns
+/// dedup rescans of the same incident.
+fn correlation_playbook_event(
+    tenant_id: i64,
+    client_id: Option<i64>,
+    hit: &CorrelationHit,
+) -> crate::soar_playbook::PlaybookEvent {
+    // Distinct contributing kill-chain stages, in first-seen order.
+    let mut stages: Vec<String> = Vec::new();
+    for e in &hit.matched {
+        if !e.category.is_empty() && !stages.iter().any(|s| s == &e.category) {
+            stages.push(e.category.clone());
+        }
+    }
+    let contributing = stages.join(" -> ");
+    let title = if contributing.is_empty() {
+        hit.rule_name.clone()
+    } else {
+        format!("{} [{}]", hit.rule_name, contributing)
+    };
+    crate::soar_playbook::PlaybookEvent {
+        kind: "correlation_incident".to_string(),
+        tenant_id,
+        client_id,
+        finding_id: None,
+        cluster_id: None,
+        title,
+        severity: hit.severity.clone(),
+        source: "correlation".to_string(),
+        target: hit.target.clone(),
+        status: "OPEN".to_string(),
+        cvss: None,
+        epss: None,
+        kev: false,
+        kev_known_ransomware: false,
+        cve: None,
+        signature_hash: Some(hit.incident_key()),
+        internet_exposed: false,
+    }
+}
+
 /// Persist new incidents and fire tenant alert channels for high/critical ones.
 pub async fn persist_and_alert(
     pool: &sqlx::PgPool,
@@ -301,6 +347,19 @@ pub async fn persist_and_alert(
             let payload = correlation_alert_payload(tenant_id, client_id, hit);
             crate::alert_delivery::notify_correlation_incident(pool, tenant_id, &payload).await;
         }
+        // ── SOAR playbook dispatch (fire-and-forget, off the persist tx) ──────
+        // Kill-chain correlation hits used to only land in
+        // `weissman_correlation_incidents`; they now also reach the SOAR trigger
+        // bus so multi-stage detections can drive automated response. Mirrors
+        // findings_persist. Idempotency is doubly safe: persist_new_incidents only
+        // returns genuinely new incidents (ON CONFLICT (tenant_id, incident_key) DO
+        // NOTHING), and dispatch_event applies its own cooldown window. client_id is
+        // forwarded as-is (dispatch_event accepts None), so nothing is fabricated.
+        let event = correlation_playbook_event(tenant_id, client_id, hit);
+        let pool_for_dispatch: sqlx::PgPool = (*pool).clone();
+        crate::findings_persist::spawn_bounded_db_task(async move {
+            let _ = crate::soar_playbook::dispatch_event(&pool_for_dispatch, event, false).await;
+        });
     }
     Ok(n)
 }

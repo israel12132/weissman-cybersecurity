@@ -24,7 +24,9 @@ pub async fn record_post_persist_dispatch(
 
     let failures: Vec<&PlaybookRunResult> = results
         .iter()
-        .filter(|r| r.status == "failed" || r.status == "partial")
+        .filter(|r| {
+            r.status == "failed" || r.status == "partial" || r.status == "skipped_store_down"
+        })
         .collect();
 
     if failures.is_empty() {
@@ -62,7 +64,9 @@ async fn merge_soar_metadata(
         "soar_dispatch": {
             "at": chrono::Utc::now().to_rfc3339(),
             "playbooks_evaluated": results.len(),
-            "status": if results.iter().any(|r| r.status == "failed") {
+            "status": if results.iter().any(|r| r.status == "skipped_store_down") {
+                "store_down"
+            } else if results.iter().any(|r| r.status == "failed") {
                 "failed"
             } else if results.iter().any(|r| r.status == "partial") {
                 "partial"

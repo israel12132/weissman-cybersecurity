@@ -118,9 +118,17 @@ CREATE INDEX IF NOT EXISTS ix_ioc_sightings_value ON ioc_sightings (tenant_id, v
 ALTER TABLE ioc_sightings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ioc_sightings FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS ioc_sightings_tenant ON ioc_sightings;
+-- Customer-isolation invariant: every public table carrying a client_id must
+-- gate on weissman_client_row_visible(client_id) in addition to tenant_id, so a
+-- customer-portal (role='client') session cannot read/write another client's
+-- rows within the same tenant. (client_id is nullable here; the predicate
+-- returns TRUE for unscoped staff/owner sessions and FALSE for a NULL client_id
+-- under a scoped session — the correct fail-closed behavior.)
 CREATE POLICY ioc_sightings_tenant ON ioc_sightings FOR ALL
-    USING       (tenant_id = current_setting('app.current_tenant_id', true)::bigint)
-    WITH CHECK  (tenant_id = current_setting('app.current_tenant_id', true)::bigint);
+    USING       (tenant_id = current_setting('app.current_tenant_id', true)::bigint
+                 AND public.weissman_client_row_visible(client_id))
+    WITH CHECK  (tenant_id = current_setting('app.current_tenant_id', true)::bigint
+                 AND public.weissman_client_row_visible(client_id));
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON ioc_sightings TO weissman_app;
 GRANT USAGE, SELECT, UPDATE ON SEQUENCE ioc_sightings_id_seq TO weissman_app;
@@ -218,8 +226,11 @@ CREATE INDEX IF NOT EXISTS ix_uer_updated ON ueba_entity_risk (tenant_id, update
 ALTER TABLE ueba_entity_risk ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ueba_entity_risk FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS ueba_entity_risk_tenant ON ueba_entity_risk;
+-- Same customer-isolation invariant as ioc_sightings (client_id present here).
 CREATE POLICY ueba_entity_risk_tenant ON ueba_entity_risk FOR ALL
-    USING       (tenant_id = current_setting('app.current_tenant_id', true)::bigint)
-    WITH CHECK  (tenant_id = current_setting('app.current_tenant_id', true)::bigint);
+    USING       (tenant_id = current_setting('app.current_tenant_id', true)::bigint
+                 AND public.weissman_client_row_visible(client_id))
+    WITH CHECK  (tenant_id = current_setting('app.current_tenant_id', true)::bigint
+                 AND public.weissman_client_row_visible(client_id));
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON ueba_entity_risk TO weissman_app;

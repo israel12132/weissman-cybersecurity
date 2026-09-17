@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Settings, Database, Shield, Zap, Globe, Lock, AlertTriangle, Save, RefreshCw, CheckCircle2, XCircle } from 'lucide-react';
 import PageShell from './PageShell';
@@ -86,6 +86,7 @@ export default function SystemConfiguration() {
   const [activeTab, setActiveTab] = useState('general');
   const [unsavedChanges, setUnsavedChanges] = useState(false);
   const [saveMessage, setSaveMessage] = useState(null);
+  const [configUnavailable, setConfigUnavailable] = useState(false);
 
   const tabs = [
     { id: 'general', label: t(`${NS}.tab_general`), icon: <Settings /> },
@@ -105,8 +106,13 @@ export default function SystemConfiguration() {
     try {
       setLoading(true);
       const data = await api.get('/api/system/config');
+      if (data?.ok === false || data?.unavailable) {
+        throw new Error(data.detail || t(`${NS}.load_failed`));
+      }
+      setConfigUnavailable(false);
       setConfig(data);
     } catch (error) {
+      setConfigUnavailable(true);
       console.error('Failed to fetch config:', error);
     } finally {
       setLoading(false);
@@ -164,6 +170,11 @@ export default function SystemConfiguration() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (configUnavailable) return
+    exportCsv()
+  }, [configUnavailable, exportCsv])
+
   return (
     <PageShell
       title={t(`${NS}.title`)}
@@ -172,14 +183,24 @@ export default function SystemConfiguration() {
       actions={(
         <ShellScanActions
           onRefresh={fetchConfig}
-          onExport={exportCsv}
+          onExport={configUnavailable ? undefined : handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={configUnavailable || !filteredFindings.length}
         />
       )}
     >
       <div className="space-y-6">
         <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>
+
+        {!loading && configUnavailable && (
+          <div
+            className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400 flex items-center gap-2"
+            role="alert"
+          >
+            <XCircle className="w-4 h-4 shrink-0" />
+            <span>{t(`${NS}.config_unavailable`)}</span>
+          </div>
+        )}
 
         {saveMessage && (
           <div
@@ -220,7 +241,7 @@ export default function SystemConfiguration() {
             </div>
             <Button variant="unstyled"
               onClick={saveConfig}
-              disabled={saving}
+              disabled={saving || configUnavailable}
               className="flex items-center gap-2 px-4 py-2 bg-yellow-500 text-black rounded-lg text-sm font-medium hover:bg-yellow-600 transition-colors disabled:opacity-50"
             >
               <Save className="w-4 h-4" />
@@ -250,6 +271,10 @@ export default function SystemConfiguration() {
           <div className="p-6">
             {loading ? (
               <ConfigLoadingSkeleton />
+            ) : configUnavailable ? (
+              <div className="text-sm text-[var(--text-muted)]" role="status">
+                {t(`${NS}.load_failed`)}
+              </div>
             ) : (
               <>
                 <WeissmanListToolbar
@@ -284,7 +309,11 @@ export default function SystemConfiguration() {
                   <GeneralSettings config={config.general} onChange={(key, value) => updateConfig('general', key, value)} />
                 )}
                 {activeTab === 'security' && (
-                  <SecuritySettings config={config.security} onChange={(key, value) => updateConfig('security', key, value)} />
+                  <SecuritySettings
+                    config={config.security}
+                    configUnavailable={configUnavailable}
+                    onChange={(key, value) => updateConfig('security', key, value)}
+                  />
                 )}
                 {activeTab === 'scanning' && (
                   <ScanningSettings config={config.scanning} onChange={(key, value) => updateConfig('scanning', key, value)} />
@@ -311,7 +340,7 @@ export default function SystemConfiguration() {
         <div className="flex justify-end">
           <Button variant="unstyled"
             onClick={saveConfig}
-            disabled={!unsavedChanges || saving}
+            disabled={!unsavedChanges || saving || configUnavailable}
             className="flex items-center gap-2 px-6 py-3 bg-cyan-500 text-white rounded-lg font-medium hover:bg-cyan-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Save className="w-4 h-4" />
@@ -395,7 +424,7 @@ function GeneralSettings({ config, onChange }) {
   );
 }
 
-function SecuritySettings({ config, onChange }) {
+function SecuritySettings({ config, onChange, configUnavailable = false }) {
   const { t } = useTranslation();
 
   return (
@@ -501,9 +530,11 @@ function SecuritySettings({ config, onChange }) {
               id="cfg-security-mfa_required"
               aria-label={t(`${NS}.fields.security.mfa_required`)}
               type="checkbox"
-              checked={config.mfa_required || false}
+              checked={configUnavailable ? false : Boolean(config.mfa_required)}
+              disabled={configUnavailable}
+              aria-invalid={configUnavailable || undefined}
               onChange={(e) => onChange('mfa_required', e.target.checked)}
-              className="rounded"
+              className="rounded disabled:opacity-40"
             />
             {t(`${NS}.fields.security.mfa_required`)}
           </label>
@@ -517,6 +548,7 @@ function SecuritySettings({ config, onChange }) {
 function MfaSelfServicePanel() {
   const { t } = useTranslation();
   const [status, setStatus] = React.useState(null);
+  const [statusUnavailable, setStatusUnavailable] = React.useState(false);
   const [setup, setSetup] = React.useState(null);
   const [code, setCode] = React.useState('');
   const [busy, setBusy] = React.useState(false);
@@ -525,8 +557,13 @@ function MfaSelfServicePanel() {
   const refresh = React.useCallback(async () => {
     try {
       const d = await api.get('/api/auth/mfa/status');
+      if (d?.ok === false || d?.unavailable) {
+        throw new Error(d.detail || t(`${NS}.mfa.errors.status_fetch_failed`));
+      }
+      setStatusUnavailable(false);
       setStatus(d);
     } catch (e) {
+      setStatusUnavailable(true);
       setErr(e?.message || t(`${NS}.mfa.errors.status_fetch_failed`));
     }
   }, [t]);
@@ -578,11 +615,19 @@ function MfaSelfServicePanel() {
   };
 
   if (!status) {
+    if (err) {
+      return (
+        <p className="text-[11px] text-rose-400" role="alert">
+          {err}
+        </p>
+      );
+    }
     return <p className="text-[11px] text-[var(--text-muted)]">{t(`${NS}.mfa.loading_status`)}</p>;
   }
 
   return (
     <div className="mt-3 space-y-2 border-t border-[var(--border-default)] pt-3">
+      {!statusUnavailable && (
       <div className="text-[11px] font-mono text-[var(--text-tertiary)]">
         {t(`${NS}.mfa.account_label`)}{' '}
         {status.mfa_enabled ? (
@@ -594,8 +639,14 @@ function MfaSelfServicePanel() {
           <span className="text-cyan-400 ml-2">{t(`${NS}.mfa.provisioning_in_progress`)}</span>
         )}
       </div>
-      {err && <div className="text-[11px] text-rose-400">{err}</div>}
-      {!status.mfa_enabled && !setup && (
+      )}
+      {statusUnavailable && (
+        <p data-testid="mfa-status-unavailable" className="text-[11px] text-rose-400" role="alert">
+          {err || t(`${NS}.mfa.errors.status_fetch_failed`)}
+        </p>
+      )}
+      {err && !statusUnavailable && <div className="text-[11px] text-rose-400">{err}</div>}
+      {!statusUnavailable && !status.mfa_enabled && !setup && (
         <Button variant="unstyled"
           type="button"
           disabled={busy}
@@ -633,7 +684,7 @@ function MfaSelfServicePanel() {
           </div>
         </div>
       )}
-      {status.mfa_enabled && (
+      {!statusUnavailable && status.mfa_enabled && (
         <div className="flex items-center gap-2 mt-2">
           <input
             type="text"

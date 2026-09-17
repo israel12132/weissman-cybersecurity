@@ -1,7 +1,7 @@
 import { firstClientTarget } from '../lib/clientTarget'
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'
@@ -11,6 +11,8 @@ import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissma
 import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import Button from '../components/ui/Button'
+import FirstSeenHitsPanel from '../components/intel/FirstSeenHitsPanel'
+import { useVisiblePolling } from '../hooks/useVisiblePolling'
 
 const ENGINE = 'asm'
 const DELTA_ENGINE = 'first_mover_surface_delta'
@@ -138,6 +140,10 @@ function Toggle({ checked, onChange, disabled }) {
   )
 }
 
+function metricOrDash(value) {
+  return value == null ? '—' : value
+}
+
 function MetricCard({ label, value, sub, accent = '#22d3ee', icon }) {
   return (
     <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-br from-white/[0.06] to-black/50 p-4">
@@ -156,17 +162,18 @@ function MetricCard({ label, value, sub, accent = '#22d3ee', icon }) {
 
 function ScoreRing({ score, grade }) {
   const { t } = useTranslation()
-  const color = gradeColor(grade)
-  const deg = Math.round((Math.max(0, Math.min(100, score)) / 100) * 360)
+  const missing = score == null || Number.isNaN(Number(score))
+  const color = missing ? '#6b7280' : gradeColor(grade)
+  const deg = missing ? 0 : Math.round((Math.max(0, Math.min(100, Number(score))) / 100) * 360)
   return (
-    <div className="relative w-36 h-36 shrink-0" title={t('pages.attackSurfaceManagement.score_ring_tooltip', { score })}>
+    <div className="relative w-36 h-36 shrink-0" title={missing ? '—' : t('pages.attackSurfaceManagement.score_ring_tooltip', { score })}>
       <div
         className="absolute inset-0 rounded-full"
         style={{ background: `conic-gradient(${color} ${deg}deg, rgba(255,255,255,0.06) ${deg}deg)` }}
       />
       <div className="absolute inset-[10px] rounded-full bg-[#0a0f1c] border border-[var(--border-default)] flex flex-col items-center justify-center">
-        <span className="text-4xl font-black" style={{ color }}>{grade}</span>
-        <span className="text-[11px] font-mono text-[var(--text-tertiary)]">{score}/100</span>
+        <span className="text-4xl font-black" style={{ color }}>{missing ? '—' : grade}</span>
+        <span className="text-[11px] font-mono text-[var(--text-tertiary)]">{missing ? '—' : `${score}/100`}</span>
       </div>
     </div>
   )
@@ -312,7 +319,43 @@ export function FirstMoverDeltaPanel({
   const cs = nerve?.certstream || {}
   const oast = nerve?.oast || {}
   const nvd = nerve?.nvd || {}
-  const chain = ctKillChain(nerve)
+  const nervePending = nerve == null
+  const nerveDown = !nervePending && (nerve.unavailable === true || nerve.ok === false)
+  const nerveChips = nerveDown || nervePending
+    ? []
+    : [
+        [
+          t('pages.attackSurfaceManagement.nerve_certstream'),
+          cs.connected
+            ? t('pages.attackSurfaceManagement.nerve_live')
+            : (cs.enabled ? t('pages.attackSurfaceManagement.nerve_reconnect') : t('pages.attackSurfaceManagement.nerve_off')),
+          cs.connected ? '#34d399' : '#fbbf24',
+        ],
+        [
+          t('pages.attackSurfaceManagement.nerve_oast'),
+          oast.configured && oast.last_callback_at
+            ? t('pages.attackSurfaceManagement.nerve_live')
+            : oast.configured
+              ? t('pages.attackSurfaceManagement.nerve_oast_idle')
+              : t('pages.attackSurfaceManagement.nerve_off'),
+          oast.configured && oast.last_callback_at ? '#34d399' : '#f97316',
+        ],
+        [
+          t('pages.attackSurfaceManagement.nerve_nvd'),
+          nvd.api_key_configured
+            ? t('pages.attackSurfaceManagement.nerve_live')
+            : t('pages.attackSurfaceManagement.nerve_nvd_osv_only'),
+          nvd.api_key_configured ? '#34d399' : '#22d3ee',
+        ],
+        [
+          t('pages.attackSurfaceManagement.nerve_oast_last'),
+          oast.last_callback_at
+            ? oast.last_callback_at
+            : t('pages.attackSurfaceManagement.nerve_oast_none'),
+          oast.last_callback_at ? '#34d399' : '#f97316',
+        ],
+      ]
+  const chain = nerveDown || nervePending ? null : ctKillChain(nerve)
 
   return (
     <div className="rounded-2xl border border-amber-500/25 bg-gradient-to-br from-amber-950/40 via-black/40 to-cyan-950/30 p-4 mb-5">
@@ -384,44 +427,28 @@ export function FirstMoverDeltaPanel({
         </div>
       </div>
       <div className="flex flex-wrap gap-2 mb-3">
-        {[
-          [
-            t('pages.attackSurfaceManagement.nerve_certstream'),
-            cs.connected
-              ? t('pages.attackSurfaceManagement.nerve_live')
-              : (cs.enabled ? t('pages.attackSurfaceManagement.nerve_reconnect') : t('pages.attackSurfaceManagement.nerve_off')),
-            cs.connected ? '#34d399' : '#fbbf24',
-          ],
-          [
-            t('pages.attackSurfaceManagement.nerve_oast'),
-            oast.configured
-              ? t('pages.attackSurfaceManagement.nerve_live')
-              : t('pages.attackSurfaceManagement.nerve_off'),
-            oast.configured ? '#34d399' : '#f97316',
-          ],
-          [
-            t('pages.attackSurfaceManagement.nerve_nvd'),
-            nvd.api_key_configured
-              ? t('pages.attackSurfaceManagement.nerve_live')
-              : t('pages.attackSurfaceManagement.nerve_nvd_osv_only'),
-            nvd.api_key_configured ? '#34d399' : '#22d3ee',
-          ],
-          [
-            t('pages.attackSurfaceManagement.nerve_kill_chain'),
-            t('pages.attackSurfaceManagement.nerve_hunts', { count: chain.hunts }),
-            chain.oastLive ? '#34d399' : '#fbbf24',
-          ],
-        ].map(([label, value, color]) => (
+        {nerveDown ? (
           <span
-            key={label}
-            className="text-[10px] font-mono px-2 py-1 rounded-lg border border-white/[0.08] bg-black/30"
-            style={{ color }}
+            className="text-[10px] font-mono px-2 py-1 rounded-lg border border-amber-400/30 bg-amber-950/40 text-amber-200"
+            data-testid="first-mover-nerve-unavailable"
+            data-live="false"
+            role="alert"
           >
-            {label}: {value}
+            {t('pages.attackSurfaceManagement.nerve_unavailable')}
           </span>
-        ))}
+        ) : (
+          nerveChips.map(([label, value, color]) => (
+            <span
+              key={label}
+              className="text-[10px] font-mono px-2 py-1 rounded-lg border border-white/[0.08] bg-black/30"
+              style={{ color }}
+            >
+              {label}: {value}
+            </span>
+          ))
+        )}
       </div>
-      {chain.followOn.length > 0 && (
+      {chain && chain.followOn.length > 0 && (
         <p
           data-testid="ct-kill-chain"
           className="text-[10px] font-mono text-fuchsia-200/80 mb-3"
@@ -433,27 +460,29 @@ export function FirstMoverDeltaPanel({
           })}
         </p>
       )}
+      {diff?.unavailable && (
+        <p className="text-[12px] font-mono text-amber-200/80">{t('pages.attackSurfaceManagement.first_mover_unavailable')}</p>
+      )}
+      {!diff?.unavailable && (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
         {[
           [t('pages.attackSurfaceManagement.first_mover_added'), added.length, '#22d3ee'],
           [t('pages.attackSurfaceManagement.first_mover_changed'), changed.length, '#fbbf24'],
           [t('pages.attackSurfaceManagement.first_mover_removed'), removed.length, '#94a3b8'],
-          [t('pages.attackSurfaceManagement.first_mover_assets'), Number(diff?.current_count ?? 0), '#34d399'],
-        ].map(([label, value, color]) => (
+          [t('pages.attackSurfaceManagement.first_mover_assets'), metricOrDash(diff?.current_count), '#34d399', 'first-mover-asset-count'],
+        ].map(([label, value, color, testId]) => (
           <div key={label} className="rounded-lg border border-white/[0.07] bg-black/30 px-3 py-2">
             <p className="text-[9px] font-mono uppercase tracking-wider text-[var(--text-muted)] truncate">{label}</p>
-            <p className="text-xl font-bold tabular-nums" style={{ color }}>{value}</p>
+            <p className="text-xl font-bold tabular-nums" style={{ color }} data-testid={testId}>{value}</p>
           </div>
         ))}
       </div>
+      )}
       {diff?.current_at && (
         <p className="text-[10px] font-mono text-[var(--text-muted)] mb-2">
           {t('pages.attackSurfaceManagement.first_mover_last_snapshot')}: {diff.current_at}
           {diff.baseline_only ? ` · ${t('pages.attackSurfaceManagement.first_mover_baseline')}` : ''}
         </p>
-      )}
-      {diff?.unavailable && (
-        <p className="text-[12px] font-mono text-amber-200/80">{t('pages.attackSurfaceManagement.first_mover_unavailable')}</p>
       )}
       {loading && !diff && (
         <p className="text-[12px] font-mono text-[var(--text-muted)]">{t('pages.attackSurfaceManagement.empty_running')}</p>
@@ -541,6 +570,7 @@ function FindingCard({ f }) {
 export default function AttackSurfaceManagement() {
   const { t } = useTranslation()
   const [clients, setClients] = useState([])
+  const [clientsError, setClientsError] = useState('')
   const [selectedClientId, setSelectedClientId] = useState(null)
   const { postScan } = useCommandCenterScan(selectedClientId)
   const [target, setTarget] = useState('')
@@ -552,6 +582,7 @@ export default function AttackSurfaceManagement() {
   const [findings, setFindings] = useState([])
   const [toast, setToast] = useState(null)
   const [corpus, setCorpus] = useState(null)
+  const [corpusUnavailable, setCorpusUnavailable] = useState(false)
   const [assetFilter, setAssetFilter] = useState('all')
   const [surfaceDiff, setSurfaceDiff] = useState(null)
   const [deltaLoading, setDeltaLoading] = useState(false)
@@ -561,11 +592,24 @@ export default function AttackSurfaceManagement() {
   const [skipJobId, setSkipJobId] = useState(null)
   const [prepJobId, setPrepJobId] = useState(null)
   const [nerve, setNerve] = useState(null)
+  const nerveAbortRef = useRef(null)
+  const nerveInflightRef = useRef(false)
+  const deltaAbortRef = useRef(null)
 
   const refreshCorpus = useCallback(() => {
     apiFetch('/api/discovery-knowledge/stats')
-      .then((d) => { if (d && typeof d === 'object') setCorpus(d) })
+      .then((d) => {
+        if (d?.ok === false || d?.unavailable) {
+          throw new Error(d.detail || 'corpus unavailable')
+        }
+        if (d && typeof d === 'object') {
+          setCorpus(d)
+          setCorpusUnavailable(false)
+        }
+      })
       .catch((err) => {
+        if (err?.name === 'AbortError') return
+        setCorpusUnavailable(true)
         if (import.meta.env.DEV) {
           console.debug('discovery-knowledge stats skipped', err)
         }
@@ -595,6 +639,7 @@ export default function AttackSurfaceManagement() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE, issues)
 
   useEffect(() => {
@@ -606,32 +651,56 @@ export default function AttackSurfaceManagement() {
   }, [refreshFromHistory, setLastUpdated, setLastJobId])
 
   const loadSurfaceDiff = useCallback(async (clientId) => {
+    deltaAbortRef.current?.abort()
     if (!clientId) {
       setSurfaceDiff(null)
+      setDeltaLoading(false)
       return
     }
+    const ac = new AbortController()
+    deltaAbortRef.current = ac
     setDeltaLoading(true)
     try {
-      const d = await apiFetch(`/api/clients/${clientId}/surface-diff`)
-      if (d && typeof d === 'object') setSurfaceDiff(d)
+      const d = await apiFetch(`/api/clients/${clientId}/surface-diff`, { signal: ac.signal })
+      if (ac.signal.aborted) return
+      if (!d || typeof d !== 'object' || d.ok === false || d.unavailable) {
+        setSurfaceDiff({ unavailable: true })
+        return
+      }
+      setSurfaceDiff(d)
     } catch (err) {
+      if (err?.name === 'AbortError' || ac.signal.aborted) return
       if (import.meta.env.DEV) {
         console.debug('surface-diff skipped', err)
       }
-      setSurfaceDiff(null)
+      setSurfaceDiff({ unavailable: true })
     } finally {
-      setDeltaLoading(false)
+      if (deltaAbortRef.current === ac) setDeltaLoading(false)
     }
   }, [])
 
-  const loadNerve = useCallback(async () => {
+  const loadNerve = useCallback(async ({ silent = false } = {}) => {
+    if (silent && nerveInflightRef.current) return
+    if (!silent) nerveAbortRef.current?.abort()
+    const ac = new AbortController()
+    nerveAbortRef.current = ac
+    nerveInflightRef.current = true
     try {
-      const d = await apiFetch('/api/first-mover/nerve')
-      if (d && typeof d === 'object') setNerve(d)
+      const d = await apiFetch('/api/first-mover/nerve', { signal: ac.signal })
+      if (ac.signal.aborted) return
+      if (!d || typeof d !== 'object' || d.ok === false || d.unavailable) {
+        setNerve({ unavailable: true })
+        return
+      }
+      setNerve(d)
     } catch (err) {
+      if (err?.name === 'AbortError' || ac.signal.aborted) return
       if (import.meta.env.DEV) {
         console.debug('first-mover nerve skipped', err)
       }
+      setNerve({ unavailable: true })
+    } finally {
+      if (nerveAbortRef.current === ac) nerveInflightRef.current = false
     }
   }, [])
 
@@ -642,18 +711,34 @@ export default function AttackSurfaceManagement() {
   }, [refreshFromHistory, setLastUpdated, setLastJobId, loadSurfaceDiff, selectedClientId])
 
   useEffect(() => {
-    apiFetch('/api/clients').then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
+    const ac = new AbortController()
+    apiFetch('/api/clients', { signal: ac.signal })
+      .then((d) => {
+        if (ac.signal.aborted) return
+        if (d?.ok === false || d?.unavailable) {
+          throw new Error(d.detail || 'clients unavailable')
+        }
+        setClients(Array.isArray(d) ? d : [])
+        setClientsError('')
+      })
+      .catch((e) => {
+        if (e?.name === 'AbortError' || ac.signal.aborted) return
+        setClients([])
+        setClientsError(e?.message || 'clients unavailable')
+      })
+    return () => ac.abort()
   }, [])
 
   useEffect(() => {
     loadSurfaceDiff(selectedClientId)
+    return () => deltaAbortRef.current?.abort()
   }, [selectedClientId, loadSurfaceDiff])
 
   useEffect(() => {
     loadNerve()
-    const id = setInterval(loadNerve, 20000)
-    return () => clearInterval(id)
+    return () => nerveAbortRef.current?.abort()
   }, [loadNerve])
+  useVisiblePolling(() => loadNerve({ silent: true }), 20000)
 
   useEffect(() => {
     refreshCorpus()
@@ -765,7 +850,7 @@ export default function AttackSurfaceManagement() {
       showToast('error', e?.message ?? t('pages.attackSurfaceManagement.toast_network_error'))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedClientId, target, params, showToast, t])
+  }, [selectedClientId, target, params, showToast])
 
   const launchNamed = useCallback(async (engine, setter) => {
     if (!selectedClientId) { showToast('error', t('pages.attackSurfaceManagement.toast_select_client')); return }
@@ -777,7 +862,6 @@ export default function AttackSurfaceManagement() {
         target: target.trim(),
         include_ct: true,
         include_http: true,
-        chain_web_engines: false,
       })
       if (!ok) {
         showToast('error', d.detail || d.error || t('pages.attackSurfaceManagement.toast_scan_failed', { status }))
@@ -789,7 +873,8 @@ export default function AttackSurfaceManagement() {
     } catch (e) {
       showToast('error', e?.message ?? t('pages.attackSurfaceManagement.toast_network_error'))
     }
-  }, [selectedClientId, target, postScan, showToast, t])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedClientId, target, postScan, showToast])
 
   const handleFirstMoverHunt = useCallback(async () => {
     await launchNamed(DELTA_ENGINE, setDeltaJobId)
@@ -829,7 +914,13 @@ export default function AttackSurfaceManagement() {
   const remediationQueue = report?.remediation_queue ?? []
   const subdomainInventory = report?.subdomain_inventory ?? []
 
+  const handleExportCsv = useCallback(() => {
+    if (historyUnavailable) return
+    exportCsv()
+  }, [historyUnavailable, exportCsv])
+
   const handleExport = useCallback(() => {
+    if (historyUnavailable) return
     if (!report) return
     const blob = new Blob([JSON.stringify({ report, findings: issues }, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -839,7 +930,8 @@ export default function AttackSurfaceManagement() {
     a.click()
     URL.revokeObjectURL(url)
     showToast('info', t('pages.attackSurfaceManagement.toast_exported'))
-  }, [report, issues, target, showToast, t])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historyUnavailable, report, issues, target, showToast])
 
   const statusBadge = {
     idle: { c: '#6b7280', t: t('pages.attackSurfaceManagement.status_idle') },
@@ -858,10 +950,10 @@ export default function AttackSurfaceManagement() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={exportCsv}
+          onExport={historyUnavailable ? undefined : handleExportCsv}
           refreshLoading={historyLoading}
           refreshDisabled={status === 'running'}
-          exportDisabled={!assetFilteredFindings.length}
+          exportDisabled={historyUnavailable || !assetFilteredFindings.length}
         />
       )}
     >
@@ -870,7 +962,7 @@ export default function AttackSurfaceManagement() {
           <motion.div
             key={toast.id}
             initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-            className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl backdrop-blur-md ${
+            className={`fixed top-16 end-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl backdrop-blur-md ${
               toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-cyan-500/30 text-cyan-200'
             }`}
           >
@@ -880,6 +972,11 @@ export default function AttackSurfaceManagement() {
       </AnimatePresence>
 
       {/* ── Control bar ─────────────────────────────────────────────── */}
+      {clientsError && (
+        <p className="text-sm text-amber-200/90 mb-4" data-testid="asm-clients-unavailable" role="alert">
+          {t('pages.attackSurfaceManagement.clients_unavailable')}
+        </p>
+      )}
       <div className="rounded-2xl border border-white/[0.08] bg-[var(--bg-2)] p-4 mb-5">
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1">
@@ -887,6 +984,7 @@ export default function AttackSurfaceManagement() {
             <select
               value={selectedClientId ?? ''}
               onChange={(e) => setSelectedClientId(e.target.value || null)}
+              disabled={Boolean(clientsError)}
               className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono focus:outline-none focus:border-cyan-500/40 min-w-[180px]"
             >
               <option value="">{t('pages.attackSurfaceManagement.select_client_placeholder')}</option>
@@ -922,7 +1020,12 @@ export default function AttackSurfaceManagement() {
           </span>
         </div>
 
-        {corpus && (
+        {corpusUnavailable && (
+          <p className="mt-4 text-sm text-amber-200/90" data-testid="asm-corpus-unavailable" role="alert">
+            {t('pages.attackSurfaceManagement.corpus_unavailable')}
+          </p>
+        )}
+        {corpus && !corpusUnavailable && (
           <div className="mt-4 rounded-xl border border-cyan-500/20 bg-gradient-to-br from-cyan-950/30 to-black/40 p-3">
             <div className="flex items-center justify-between gap-2 mb-2">
               <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-cyan-300/80">{t('pages.attackSurfaceManagement.corpus_title')}</p>
@@ -939,7 +1042,7 @@ export default function AttackSurfaceManagement() {
               ].map(([label, value]) => (
                 <div key={label} className="rounded-lg border border-white/[0.06] bg-black/30 px-2.5 py-2">
                   <p className="text-[9px] font-mono uppercase tracking-wider text-[var(--text-muted)] truncate">{label}</p>
-                  <p className="text-lg font-bold text-white tabular-nums">{Number(value ?? 0).toLocaleString()}</p>
+                  <p className="text-lg font-bold text-white tabular-nums">{metricOrDash(value)}</p>
                 </div>
               ))}
             </div>
@@ -1031,6 +1134,7 @@ export default function AttackSurfaceManagement() {
         huntDisabled={!selectedClientId || status === 'running'}
         nerve={nerve}
       />
+      <FirstSeenHitsPanel clientId={selectedClientId} />
 
       {/* ── Results ─────────────────────────────────────────────────── */}
       {status === 'running' && findings.length === 0 && (
@@ -1042,7 +1146,7 @@ export default function AttackSurfaceManagement() {
         </div>
       )}
 
-      {report && (
+      {report && !historyUnavailable && (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
           <div className="flex justify-end">
             <Button variant="unstyled"
@@ -1056,7 +1160,7 @@ export default function AttackSurfaceManagement() {
           {/* Hero */}
           <div className="rounded-2xl border border-white/[0.08] bg-gradient-to-br from-white/[0.06] via-black/40 to-black/60 p-6">
             <div className="flex flex-col md:flex-row items-center gap-6">
-              <ScoreRing score={score ?? 0} grade={grade} />
+              <ScoreRing score={score} grade={grade} />
               <div className="flex-1 w-full space-y-3">
                 <div>
                   <h2 className="text-lg font-bold text-white">{t('pages.attackSurfaceManagement.hero_score_title')} — {report.host}</h2>
@@ -1069,12 +1173,12 @@ export default function AttackSurfaceManagement() {
 
           {/* Metrics */}
           <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-            <MetricCard label={t('pages.attackSurfaceManagement.metric_subdomain_assets')} value={report.subdomain_count ?? 0} accent="#22d3ee" icon="🗂" />
-            <MetricCard label={t('pages.attackSurfaceManagement.metric_exposed_services')} value={report.exposed_services ?? 0} accent="#f97316" icon="🔌" />
-            <MetricCard label={t('pages.attackSurfaceManagement.metric_takeover_risks')} value={report.takeover_risks ?? 0} accent="#ef4444" icon="🎯" />
-            <MetricCard label={t('pages.attackSurfaceManagement.metric_attack_paths')} value={report.attack_paths ?? 0} accent="#f43f5e" icon="⛓" />
-            <MetricCard label={t('pages.attackSurfaceManagement.metric_shadow_it')} value={report.shadow_it_signals ?? 0} accent="#a78bfa" icon="👻" />
-            <MetricCard label={t('pages.attackSurfaceManagement.metric_service_banners')} value={report.service_banners ?? 0} accent="#84cc16" icon="📡" />
+            <MetricCard label={t('pages.attackSurfaceManagement.metric_subdomain_assets')} value={metricOrDash(report.subdomain_count)} accent="#22d3ee" icon="🗂" />
+            <MetricCard label={t('pages.attackSurfaceManagement.metric_exposed_services')} value={metricOrDash(report.exposed_services)} accent="#f97316" icon="🔌" />
+            <MetricCard label={t('pages.attackSurfaceManagement.metric_takeover_risks')} value={metricOrDash(report.takeover_risks)} accent="#ef4444" icon="🎯" />
+            <MetricCard label={t('pages.attackSurfaceManagement.metric_attack_paths')} value={metricOrDash(report.attack_paths)} accent="#f43f5e" icon="⛓" />
+            <MetricCard label={t('pages.attackSurfaceManagement.metric_shadow_it')} value={metricOrDash(report.shadow_it_signals)} accent="#a78bfa" icon="👻" />
+            <MetricCard label={t('pages.attackSurfaceManagement.metric_service_banners')} value={metricOrDash(report.service_banners)} accent="#84cc16" icon="📡" />
           </div>
 
           <AttackPathPanel paths={attackPaths} />
@@ -1133,7 +1237,10 @@ export default function AttackSurfaceManagement() {
             lastUpdated={lastUpdated}
             jobId={jobId || lastJobId}
             accent={ACCENT}
-            showEmptyReady={status !== 'running' && issues.length === 0}
+            unavailable={historyUnavailable}
+            unavailableTitle={t('pages.attackSurfaceManagement.history_unavailable')}
+            unavailableBody={t('pages.attackSurfaceManagement.history_unavailable')}
+            showEmptyReady={status !== 'running' && issues.length === 0 && !historyUnavailable}
             emptyReadyTitle={t('pages.attackSurfaceManagement.empty_ready_title')}
             emptyReadyBody={t('pages.attackSurfaceManagement.empty_ready_body')}
             renderFinding={(f, i) => <FindingCard key={i} f={f} />}
@@ -1141,7 +1248,12 @@ export default function AttackSurfaceManagement() {
         </motion.div>
       )}
 
-      {!report && status !== 'running' && (
+      {historyUnavailable && (
+        <p data-testid="attack-surface-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+          {t('pages.attackSurfaceManagement.history_unavailable')}
+        </p>
+      )}
+      {!report && status !== 'running' && !historyUnavailable && (
         <div className="rounded-2xl border border-white/[0.08] bg-[var(--table-surface)] px-6 py-16 text-center">
           <p className="text-4xl mb-3">🛰️</p>
           <p className="text-sm font-mono text-[var(--text-tertiary)]">{t('pages.attackSurfaceManagement.empty_ready_title')}</p>

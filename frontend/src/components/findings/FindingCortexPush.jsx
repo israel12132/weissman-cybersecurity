@@ -6,6 +6,11 @@ import Button from '../ui/Button'
 import { findingVerifyId, liveVerdictFromFinding } from './FindingLiveVerify'
 
 export function canPushFindingToCortex(finding) {
+  // A workflow disposition of false-positive/noise blocks the push outright —
+  // even a CONFIRMED live verdict or proof artifact cannot override an operator
+  // (or triage) marking the row as not real.
+  const workflowStatus = String(finding?.status || '').toUpperCase()
+  if (workflowStatus === 'FALSE_POSITIVE' || workflowStatus === 'NOISE') return false
   const verdict = String(liveVerdictFromFinding(finding) || '').toUpperCase()
   if (verdict === 'NOISE' || verdict === 'FALSE_POSITIVE') return false
   if (verdict === 'CONFIRMED' || verdict === 'LIKELY_VALID') return true

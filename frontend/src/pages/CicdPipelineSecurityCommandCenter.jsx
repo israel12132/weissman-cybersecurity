@@ -299,17 +299,18 @@ function SupplyChainGraphCanvas({ graph, running }) {
 }
 
 function PostureGauge({ score, grade }) {
-  const pct = Math.min(100, Math.max(0, score ?? 0))
-  const color = pct >= 70 ? '#ef4444' : pct >= 40 ? '#f59e0b' : '#84cc16'
+  const hasScore = score != null && Number.isFinite(Number(score))
+  const pct = hasScore ? Math.min(100, Math.max(0, Number(score))) : 0
+  const color = !hasScore ? 'rgba(255,255,255,0.12)' : pct >= 70 ? '#ef4444' : pct >= 40 ? '#f59e0b' : '#84cc16'
   return (
     <div className="relative w-36 h-36 mx-auto">
       <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
         <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="8" />
         <circle cx="50" cy="50" r="42" fill="none" stroke={color} strokeWidth="8"
-          strokeDasharray={`${pct * 2.64} 264`} strokeLinecap="round" style={{ filter: `drop-shadow(0 0 8px ${color}80)` }} />
+          strokeDasharray={hasScore ? `${pct * 2.64} 264` : '0 264'} strokeLinecap="round" style={hasScore ? { filter: `drop-shadow(0 0 8px ${color}80)` } : undefined} />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-3xl font-bold text-white">{pct || '—'}</span>
+        <span className="text-3xl font-bold text-white">{hasScore ? pct : '—'}</span>
         {grade && <span className="text-lg font-mono text-lime-300/80">{grade}</span>}
         <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-widest">Exposure</span>
       </div>
@@ -459,7 +460,14 @@ export default function CicdPipelineSecurityCommandCenter() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE_ID, realFindings)
+
+  const handleExportCsv = useCallback(() => {
+    if (historyUnavailable) return
+    exportCsv()
+  }, [historyUnavailable, exportCsv])
+  const liveMetrics = historyUnavailable ? null : metrics
 
   useEffect(() => {
     refreshFromHistory().then((run) => {
@@ -564,10 +572,10 @@ export default function CicdPipelineSecurityCommandCenter() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={exportCsv}
+          onExport={historyUnavailable ? undefined : handleExportCsv}
           refreshLoading={historyLoading}
           refreshDisabled={running}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={historyUnavailable || !filteredFindings.length}
         />
       )}
     >
@@ -749,7 +757,7 @@ export default function CicdPipelineSecurityCommandCenter() {
                   )}
                 </div>
                 <div className="h-72 md:h-80">
-                  <SupplyChainGraphCanvas graph={metrics?.supply_chain_graph} running={running} />
+                  <SupplyChainGraphCanvas graph={liveMetrics?.supply_chain_graph} running={running} />
                 </div>
               </div>
 
@@ -758,37 +766,37 @@ export default function CicdPipelineSecurityCommandCenter() {
                   <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-3">
                     {t('cicdSec.posture_score', 'DevSecOps Exposure Score')}
                   </p>
-                  <PostureGauge score={metrics?.score} grade={metrics?.grade} />
+                  <PostureGauge score={liveMetrics?.score} grade={liveMetrics?.grade} />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <MetricTile label="Platforms" value={metrics?.platforms?.length ?? 0} accent="#22d3ee" />
-                  <MetricTile label="API Exposed" value={metrics?.api_exposed} accent="#ef4444" />
-                  <MetricTile label="Config Leaks" value={metrics?.config_exposed} accent="#f59e0b" />
-                  <MetricTile label="Policy Violations" value={metrics?.workflow_violations} accent="#a855f7" />
-                  <MetricTile label="Build Logs" value={metrics?.build_logs_exposed} accent="#fb923c" />
-                  <MetricTile label="Artifacts" value={metrics?.artifact_exposed} accent="#f472b6" />
-                  <MetricTile label="SLSA Gaps" value={metrics?.slsa_gaps} accent="#94a3b8" />
-                  <MetricTile label="Secrets in Artifacts" value={metrics?.secrets_in_configs} accent="#ef4444" />
-                  <MetricTile label="Attack Paths" value={attackPaths.length || '—'} accent="#84cc16" />
+                  <MetricTile label="Platforms" value={liveMetrics ? (liveMetrics.platforms?.length ?? 0) : '—'} accent="#22d3ee" />
+                  <MetricTile label="API Exposed" value={liveMetrics?.api_exposed} accent="#ef4444" />
+                  <MetricTile label="Config Leaks" value={liveMetrics?.config_exposed} accent="#f59e0b" />
+                  <MetricTile label="Policy Violations" value={liveMetrics?.workflow_violations} accent="#a855f7" />
+                  <MetricTile label="Build Logs" value={liveMetrics?.build_logs_exposed} accent="#fb923c" />
+                  <MetricTile label="Artifacts" value={liveMetrics?.artifact_exposed} accent="#f472b6" />
+                  <MetricTile label="SLSA Gaps" value={liveMetrics?.slsa_gaps} accent="#94a3b8" />
+                  <MetricTile label="Secrets in Artifacts" value={liveMetrics?.secrets_in_configs} accent="#ef4444" />
+                  <MetricTile label="Attack Paths" value={liveMetrics ? attackPaths.length : '—'} accent="#84cc16" />
                 </div>
-                {metrics?.risk_dimensions && (
+                {liveMetrics?.risk_dimensions && (
                   <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-3 space-y-2.5">
                     <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)]">{t('cicdSec.risk_dimensions', '5-Dimension Risk Model')}</p>
-                    <RiskDimensionBar label="API Exposure" value={metrics.risk_dimensions.api_exposure} accent="#ef4444" />
-                    <RiskDimensionBar label="Pipeline Integrity" value={metrics.risk_dimensions.pipeline_integrity} accent="#f59e0b" />
-                    <RiskDimensionBar label="Secrets Leakage" value={metrics.risk_dimensions.secrets_leakage} accent="#f97316" />
-                    <RiskDimensionBar label="Runner Isolation" value={metrics.risk_dimensions.runner_isolation} accent="#a855f7" />
-                    <RiskDimensionBar label="Supply Chain" value={metrics.risk_dimensions.supply_chain} accent="#84cc16" />
+                    <RiskDimensionBar label="API Exposure" value={liveMetrics.risk_dimensions.api_exposure} accent="#ef4444" />
+                    <RiskDimensionBar label="Pipeline Integrity" value={liveMetrics.risk_dimensions.pipeline_integrity} accent="#f59e0b" />
+                    <RiskDimensionBar label="Secrets Leakage" value={liveMetrics.risk_dimensions.secrets_leakage} accent="#f97316" />
+                    <RiskDimensionBar label="Runner Isolation" value={liveMetrics.risk_dimensions.runner_isolation} accent="#a855f7" />
+                    <RiskDimensionBar label="Supply Chain" value={liveMetrics.risk_dimensions.supply_chain} accent="#84cc16" />
                   </div>
                 )}
-                <PolicyHitsPanel policyHits={metrics?.policy_hits} />
-                <CompliancePosturePanel compliancePosture={metrics?.compliance_posture} />
-                <RemediationPlaybookPanel playbook={metrics?.remediation_playbook} />
-                {metrics?.platforms?.length > 0 && (
+                <PolicyHitsPanel policyHits={liveMetrics?.policy_hits} />
+                <CompliancePosturePanel compliancePosture={liveMetrics?.compliance_posture} />
+                <RemediationPlaybookPanel playbook={liveMetrics?.remediation_playbook} />
+                {liveMetrics?.platforms?.length > 0 && (
                   <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-3">
                     <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-2">Detected Platforms</p>
                     <div className="flex flex-wrap gap-1.5">
-                      {metrics.platforms.map((pid) => {
+                      {liveMetrics.platforms.map((pid) => {
                         const p = PLATFORMS.find((x) => x.id === pid)
                         return (
                           <span key={pid} className="text-[10px] font-mono px-2 py-0.5 rounded border border-lime-500/30 text-lime-200 bg-lime-500/10">
@@ -803,7 +811,7 @@ export default function CicdPipelineSecurityCommandCenter() {
             </div>
 
             <AnimatePresence>
-              {attackPaths.length > 0 && (
+              {!historyUnavailable && attackPaths.length > 0 && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                   className="rounded-2xl border border-lime-500/20 bg-lime-950/10 p-4 space-y-3">
                   <p className="text-[10px] font-mono text-lime-300/70 uppercase tracking-widest">
@@ -841,6 +849,11 @@ export default function CicdPipelineSecurityCommandCenter() {
               </pre>
             </div>
 
+            {historyUnavailable && (
+              <p data-testid="cicd-pipeline-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+                {t('cicdSec.history_unavailable')}
+              </p>
+            )}
             <WeissmanFindingsPanel
               findings={realFindings}
               filteredFindings={filteredFindings}
@@ -855,7 +868,10 @@ export default function CicdPipelineSecurityCommandCenter() {
               lastUpdated={lastUpdated}
               jobId={lastJobId}
               accent="#84cc16"
-              showEmptyReady={!running && realFindings.length === 0}
+              unavailable={historyUnavailable}
+              unavailableTitle={t('cicdSec.history_unavailable')}
+              unavailableBody={t('cicdSec.history_unavailable')}
+              showEmptyReady={!running && realFindings.length === 0 && !historyUnavailable}
               emptyReadyTitle={t('cicdSec.no_findings', 'No findings yet — configure target and run scan.')}
               emptyReadyBody={t('cicdSec.awaiting', 'Awaiting assessment…')}
               renderFinding={(f, i) => (

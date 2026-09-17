@@ -52,11 +52,13 @@ async fn api_heal_verify_steps(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({"error": "DB", "steps": []})),
+            Json(crate::http_unavailable::heal_verify_steps_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT step_label, detail, step_ts FROM heal_verification_steps
            WHERE tenant_id = $1 AND job_id = $2 ORDER BY step_index ASC"#,
     )
@@ -64,8 +66,27 @@ async fn api_heal_verify_steps(
     .bind(job_uuid)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let _ = tx.commit().await;
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::heal_verify_steps_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::heal_verify_steps_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    };
     let steps: Vec<crate::verification_sandbox::VerificationStep> = rows
         .into_iter()
         .filter_map(|r| {
@@ -97,9 +118,15 @@ async fn api_heal_verify_status(
         }
     };
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB"}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::heal_verify_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let spec = sqlx::query(
+    let spec = match sqlx::query(
         r#"SELECT status, COALESCE(channel,'github_pr') AS channel,
                   (result_artifact IS NOT NULL) AS has_artifact
            FROM auto_heal_job_specs WHERE id = $1 AND tenant_id = $2"#,
@@ -108,9 +135,19 @@ async fn api_heal_verify_status(
     .bind(auth.tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let hr = sqlx::query(
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::heal_verify_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    let hr = match sqlx::query(
         r#"SELECT branch_name, pr_url, pr_number, diff_summary, verification_status,
                   COALESCE(verdict,'') AS verdict, COALESCE(channel,'') AS channel,
                   COALESCE(attempts, 1) AS attempts,
@@ -123,9 +160,27 @@ async fn api_heal_verify_status(
     .bind(job_uuid.to_string())
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::heal_verify_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::heal_verify_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
 
     let Some(spec) = spec else {
         return (StatusCode::NOT_FOUND, Json(json!({"error": "job not found"}))).into_response();
@@ -140,10 +195,10 @@ async fn api_heal_verify_status(
         out["verdict"] = json!(r.try_get::<String, _>("verdict").unwrap_or_default());
         out["verification_status"] =
             json!(r.try_get::<String, _>("verification_status").unwrap_or_default());
-        out["branch_name"] = json!(r.try_get::<Option<String>, _>("branch_name").ok().flatten());
-        out["pr_url"] = json!(r.try_get::<Option<String>, _>("pr_url").ok().flatten());
-        out["pr_number"] = json!(r.try_get::<Option<i32>, _>("pr_number").ok().flatten());
-        out["diff_summary"] = json!(r.try_get::<Option<String>, _>("diff_summary").ok().flatten());
+        out["branch_name"] = json!(r.try_get::<Option<String>, _>("branch_name").unwrap_or(None));
+        out["pr_url"] = json!(r.try_get::<Option<String>, _>("pr_url").unwrap_or(None));
+        out["pr_number"] = json!(r.try_get::<Option<i32>, _>("pr_number").unwrap_or(None));
+        out["diff_summary"] = json!(r.try_get::<Option<String>, _>("diff_summary").unwrap_or(None));
         out["attempts"] = json!(r.try_get::<i32, _>("attempts").unwrap_or(1));
         out["attested"] = json!(r.try_get::<bool, _>("attested").unwrap_or(false));
     }
@@ -164,9 +219,15 @@ async fn api_heal_verify_patch(
         }
     };
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, "DB").into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::heal_verify_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let row = sqlx::query(
+    let row = match sqlx::query(
         r#"SELECT result_artifact, COALESCE(patch_text,'') AS patch_text
            FROM auto_heal_job_specs WHERE id = $1 AND tenant_id = $2"#,
     )
@@ -174,17 +235,34 @@ async fn api_heal_verify_patch(
     .bind(auth.tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::heal_verify_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::heal_verify_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
 
     let Some(row) = row else {
         return (StatusCode::NOT_FOUND, "job not found").into_response();
     };
     let artifact = row
         .try_get::<Option<Value>, _>("result_artifact")
-        .ok()
-        .flatten();
+        .unwrap_or(None);
     let (content_type, filename, body): (&str, String, String) = match artifact {
         Some(a) if a.get("kind").and_then(Value::as_str) == Some("virtual_patch") => (
             "text/plain; charset=utf-8",
@@ -238,9 +316,15 @@ async fn api_heal_verify_attestation(
         }
     };
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB"}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::heal_verify_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let row = sqlx::query(
+    let row = match sqlx::query(
         r#"SELECT COALESCE(verification_receipt,'') AS receipt, COALESCE(verification_digest,'') AS digest,
                   COALESCE(verdict,'') AS verdict, verification_status
            FROM heal_requests
@@ -251,9 +335,27 @@ async fn api_heal_verify_attestation(
     .bind(job_uuid.to_string())
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::heal_verify_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::heal_verify_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    };
 
     let Some(r) = row else {
         return (StatusCode::NOT_FOUND, Json(json!({"error": "heal not found"}))).into_response();
@@ -311,7 +413,7 @@ async fn load_heal_report_data(
         .map_err(|_| (StatusCode::SERVICE_UNAVAILABLE, "DB"))?;
 
     // Job spec (keyed by UUID).
-    let spec = sqlx::query(
+    let spec = match sqlx::query(
         r#"SELECT COALESCE(status,'') AS status, COALESCE(channel,'github_pr') AS channel,
                   result_artifact, COALESCE(patch_text,'') AS patch_text,
                   COALESCE(finding_id,'') AS finding_id, client_id::bigint AS client_id
@@ -321,10 +423,12 @@ async fn load_heal_report_data(
     .bind(tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    {
+        Ok(v) => v,
+        Err(_) => return Err((StatusCode::SERVICE_UNAVAILABLE, "DB")),
+    };
     let Some(spec) = spec else {
-        let _ = tx.commit().await;
+        let _ = tx.rollback().await;
         return Err((StatusCode::NOT_FOUND, "job not found"));
     };
     let status: String = spec.try_get("status").unwrap_or_default();
@@ -334,11 +438,10 @@ async fn load_heal_report_data(
     let client_id: i64 = spec.try_get("client_id").unwrap_or_default();
     let artifact = spec
         .try_get::<Option<Value>, _>("result_artifact")
-        .ok()
-        .flatten();
+        .unwrap_or(None);
 
     // Heal request row (keyed by the canonical string verification_job_id).
-    let hr = sqlx::query(
+    let hr = match sqlx::query(
         r#"SELECT COALESCE(verdict,'') AS verdict, COALESCE(verification_status,'') AS verification_status,
                   pr_url, branch_name, COALESCE(attempts,1)::bigint AS attempts,
                   COALESCE(verification_receipt,'') AS receipt, COALESCE(verification_digest,'') AS digest
@@ -352,11 +455,13 @@ async fn load_heal_report_data(
     .bind(job_uuid.to_string())
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    {
+        Ok(v) => v,
+        Err(_) => return Err((StatusCode::SERVICE_UNAVAILABLE, "DB")),
+    };
 
     // Finding title/severity + cached bilingual brief (tenant-scoped as defense-in-depth alongside RLS).
-    let vuln = sqlx::query(
+    let vuln = match sqlx::query(
         r#"SELECT COALESCE(title,'') AS title, COALESCE(severity,'') AS severity, remediation_brief
            FROM vulnerabilities WHERE tenant_id = $1 AND client_id = $2 AND finding_id = $3 LIMIT 1"#,
     )
@@ -365,9 +470,13 @@ async fn load_heal_report_data(
     .bind(&finding_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
+    {
+        Ok(v) => v,
+        Err(_) => return Err((StatusCode::SERVICE_UNAVAILABLE, "DB")),
+    };
+    if tx.commit().await.is_err() {
+        return Err((StatusCode::SERVICE_UNAVAILABLE, "DB"));
+    };
 
     let (verdict, verification_status, pr_url, branch_name, attempts, receipt, digest) = match &hr {
         Some(r) => (
@@ -547,30 +656,55 @@ async fn api_heal_readiness(
 ) -> Response {
     use std::collections::HashMap;
     let mut cfg: HashMap<String, String> = HashMap::new();
-    if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
-        let keys: Vec<String> = vec![
-            "llm_base_url".to_string(),
-            "llm_model".to_string(),
-            "auto_heal_repo_slug".to_string(),
-        ];
-        if let Ok(rows) = sqlx::query(
-            "SELECT key, COALESCE(value,'') AS value FROM system_configs WHERE tenant_id = $1 AND key = ANY($2)",
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::heal_readiness_unavailable_json(
+                "database unavailable",
+            )),
         )
-        .bind(auth.tenant_id)
-        .bind(&keys)
-        .fetch_all(&mut *tx)
-        .await
-        {
-            for r in rows {
-                let k: String = r.try_get("key").unwrap_or_default();
-                let v: String = r.try_get("value").unwrap_or_default();
-                if !v.trim().is_empty() {
-                    cfg.insert(k, v);
-                }
-            }
+            .into_response();
+    };
+    let keys: Vec<String> = vec![
+        "llm_base_url".to_string(),
+        "llm_model".to_string(),
+        "auto_heal_repo_slug".to_string(),
+    ];
+    let rows = match sqlx::query(
+        "SELECT key, COALESCE(value,'') AS value FROM system_configs WHERE tenant_id = $1 AND key = ANY($2)",
+    )
+    .bind(auth.tenant_id)
+    .bind(&keys)
+    .fetch_all(&mut *tx)
+    .await
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::heal_readiness_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
         }
-        let _ = tx.commit().await;
+    };
+    for r in rows {
+        let k: String = r.try_get("key").unwrap_or_default();
+        let v: String = r.try_get("value").unwrap_or_default();
+        if !v.trim().is_empty() {
+            cfg.insert(k, v);
+        }
     }
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::heal_readiness_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    };
 
     let env_nonempty =
         |k: &str| std::env::var(k).map(|v| !v.trim().is_empty()).unwrap_or(false);
@@ -586,13 +720,27 @@ async fn api_heal_readiness(
         // in the UI (Integration Manager → "GitHub PR", stored encrypted). Without the second
         // source this reported "not ready" even though auto-heal would successfully resolve
         // the saved token and open PRs — see auto_heal::github_token_for_tenant.
-        configless_github: crate::auto_heal::github_token_for_tenant(
+        configless_github: match crate::auto_heal::github_token_for_tenant(
             state.app_pool.as_ref(),
             auth.tenant_id,
         )
         .await
-        .is_some()
-            && (cfg.contains_key("auto_heal_repo_slug") || env_nonempty("WEISSMAN_AUTOHEAL_REPO")),
+        {
+            Ok(tok) => {
+                tok.is_some()
+                    && (cfg.contains_key("auto_heal_repo_slug")
+                        || env_nonempty("WEISSMAN_AUTOHEAL_REPO"))
+            }
+            Err(_) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::heal_readiness_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
+        },
     };
     let report = crate::heal_readiness::evaluate_readiness(&signals);
     (StatusCode::OK, Json(report)).into_response()
@@ -612,9 +760,15 @@ async fn api_heal_trends(
         .unwrap_or(30)
         .clamp(1, 365);
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB"}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::heal_trends_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT to_char(created_at, 'YYYY-MM-DD') AS day,
                   COALESCE(verdict,'') AS verdict,
                   COALESCE(attempts,1)::bigint AS attempts
@@ -628,8 +782,27 @@ async fn api_heal_trends(
     .bind(days)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let _ = tx.commit().await;
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::heal_trends_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::heal_trends_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    };
 
     let parsed: Vec<(String, String, i64)> = rows
         .iter()
@@ -664,9 +837,15 @@ async fn api_heal_priorities(
         .unwrap_or(50)
         .clamp(1, 500);
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB"}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::heal_priorities_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT finding_id, COALESCE(title,'') AS title, COALESCE(severity,'') AS severity,
                   COALESCE(description,'') AS description, COALESCE(source,'') AS source,
                   (COALESCE(poc_exploit,'') <> '') AS has_poc,
@@ -683,8 +862,27 @@ async fn api_heal_priorities(
     .bind(client_id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let _ = tx.commit().await;
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::heal_priorities_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::heal_priorities_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    };
 
     let mut scored: Vec<Value> = rows
         .iter()
@@ -740,9 +938,15 @@ async fn api_channel_suggestion(
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(true);
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB"}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::heal_channel_suggestion_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let row = sqlx::query(
+    let row = match sqlx::query(
         "SELECT COALESCE(title,'') AS title, COALESCE(description,'') AS description
            FROM vulnerabilities WHERE tenant_id = $1 AND client_id = $2 AND finding_id = $3 LIMIT 1",
     )
@@ -751,16 +955,36 @@ async fn api_channel_suggestion(
     .bind(&finding_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
-    let (title, desc) = match row {
-        Some(r) => (
-            r.try_get::<String, _>("title").unwrap_or_default(),
-            r.try_get::<String, _>("description").unwrap_or_default(),
-        ),
-        None => (String::new(), String::new()),
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::heal_channel_suggestion_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
     };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::heal_channel_suggestion_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    };
+    let Some(r) = row else {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({"ok": false, "detail": "finding not found"})),
+        )
+            .into_response();
+    };
+    let title = r.try_get::<String, _>("title").unwrap_or_default();
+    let desc = r.try_get::<String, _>("description").unwrap_or_default();
     let text = format!("{title} {desc}");
     let scm = crate::heal_channel_select::scm_from_host(&host);
     let sel = crate::heal_channel_select::select_channel(&text, scm, repo_write);
@@ -789,15 +1013,20 @@ async fn enqueue_heal_from_slack(
     }
     let mut tx = db::begin_tenant_tx(&state.app_pool, tenant_id)
         .await
-        .map_err(|e| e.to_string())?;
-    let repo_cfg: Option<String> = sqlx::query_scalar(
+        .map_err(|_| "store_down".to_string())?;
+    let repo_cfg: Option<String> = match sqlx::query_scalar(
         "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'auto_heal_repo_slug'",
     )
     .bind(tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    {
+        Ok(v) => v,
+        Err(_) => {
+            let _ = tx.rollback().await;
+            return Err("store_down".into());
+        }
+    };
     let repo = repo_cfg
         .filter(|s| !s.trim().is_empty())
         .or_else(|| std::env::var("WEISSMAN_AUTOHEAL_REPO").ok())
@@ -813,7 +1042,7 @@ async fn enqueue_heal_from_slack(
     .bind(finding_id)
     .fetch_optional(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|_| "store_down".to_string())?;
     let Some(r) = row else {
         let _ = tx.rollback().await;
         return Err("finding not found".into());
@@ -864,7 +1093,7 @@ async fn enqueue_heal_from_slack(
         let _ = tx.rollback().await;
         return Err("failed to record heal approval".into());
     }
-    tx.commit().await.map_err(|e| e.to_string())?;
+    tx.commit().await.map_err(|_| "store_down".to_string())?;
     db::job_queue::enqueue_with_max_attempts(
         state.app_pool.as_ref(),
         tenant_id,
@@ -874,7 +1103,7 @@ async fn enqueue_heal_from_slack(
         5,
     )
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|_| "failed to enqueue heal".to_string())?;
     Ok(spec_id.to_string())
 }
 
@@ -1032,16 +1261,32 @@ async fn api_deception_deploy_cloud(
             .into_response();
     }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::client_lookup_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let row = sqlx::query(
+    let row = match sqlx::query(
         "SELECT COALESCE(trim(aws_cross_account_role_arn),'') AS arn, COALESCE(trim(aws_external_id),'') AS ext FROM clients WHERE id = $1",
     )
     .bind(client_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::client_lookup_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
     let (role_arn, _ext) = match row {
         Some(r) => (
             r.try_get::<String, _>("arn").unwrap_or_default(),
@@ -1052,7 +1297,15 @@ async fn api_deception_deploy_cloud(
             return (StatusCode::NOT_FOUND, Json(json!({"ok": false}))).into_response();
         }
     };
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::client_lookup_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    };
     if role_arn.is_empty() {
         return (
             StatusCode::BAD_REQUEST,
@@ -1074,7 +1327,13 @@ async fn api_deception_deploy_cloud(
     };
 
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::deception_deploy_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
     let ins = sqlx::query(
         r#"INSERT INTO deception_cloud_deployments (id, tenant_id, client_id, status, request_json)
@@ -1089,8 +1348,10 @@ async fn api_deception_deploy_cloud(
     if ins.is_err() {
         let _ = tx.rollback().await;
         return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false, "detail": "failed to record deployment"})),
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::deception_deploy_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response();
     }
@@ -1107,7 +1368,15 @@ async fn api_deception_deploy_cloud(
         .await;
         let _ = tx2.commit().await;
     }
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::deception_deploy_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
 
     let queue_payload = json!({ "deployment_id": deployment_id.to_string() });
     match crate::async_jobs::enqueue(

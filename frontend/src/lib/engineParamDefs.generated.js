@@ -475,6 +475,63 @@ export const GENERATED_PARAM_DEFS = {
       ]
     }
   ],
+  "admission_signature_enforcement": [
+    {
+      "key": "aws_cross_account_role_arn",
+      "label": "AWS Cross-Account Role ARN",
+      "type": "text",
+      "defaultVal": "",
+      "placeholder": "arn:aws:iam::123:role/WeissmanReadOnly"
+    },
+    {
+      "key": "aws_external_id",
+      "label": "AWS External ID",
+      "type": "password",
+      "defaultVal": "",
+      "placeholder": "external-id"
+    },
+    {
+      "key": "gcp_project",
+      "label": "GCP Project ID",
+      "type": "text",
+      "defaultVal": "",
+      "placeholder": "my-project"
+    },
+    {
+      "key": "azure_subscription_id",
+      "label": "Azure Subscription ID",
+      "type": "text",
+      "defaultVal": ""
+    },
+    {
+      "key": "azure_tenant_id",
+      "label": "Azure Tenant ID",
+      "type": "text",
+      "defaultVal": ""
+    },
+    {
+      "key": "intensity",
+      "label": "Scan Intensity",
+      "type": "select",
+      "defaultVal": "normal",
+      "options": [
+        "light",
+        "normal",
+        "aggressive"
+      ]
+    },
+    {
+      "key": "stealth_mode",
+      "label": "Stealth Mode",
+      "type": "select",
+      "defaultVal": "low",
+      "options": [
+        "off",
+        "low",
+        "high"
+      ]
+    }
+  ],
   "serverless_attack": [
     {
       "key": "aws_cross_account_role_arn",
@@ -4537,6 +4594,70 @@ export const GENERATED_PARAM_DEFS = {
     }
   ],
   "credential_stuffing": [
+    {
+      "key": "intensity",
+      "label": "Scan Intensity",
+      "type": "select",
+      "defaultVal": "normal",
+      "options": [
+        "light",
+        "normal",
+        "aggressive"
+      ]
+    },
+    {
+      "key": "cookies",
+      "label": "Session Cookies",
+      "type": "password",
+      "defaultVal": "",
+      "placeholder": "session=..."
+    },
+    {
+      "key": "auth_header",
+      "label": "Authorization Header",
+      "type": "password",
+      "defaultVal": "",
+      "placeholder": "Bearer eyJ..."
+    },
+    {
+      "key": "timeout_ms",
+      "label": "Probe Timeout (ms)",
+      "type": "number",
+      "defaultVal": "8000",
+      "min": 500,
+      "max": 60000
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    },
+    {
+      "key": "stealth_mode",
+      "label": "Stealth Mode",
+      "type": "select",
+      "defaultVal": "low",
+      "options": [
+        "off",
+        "low",
+        "high"
+      ]
+    }
+  ],
+  "credential_ransomware_fusion": [
+    {
+      "key": "safe_mode",
+      "label": "Safe Mode (no destructive exec)",
+      "type": "select",
+      "defaultVal": "true",
+      "options": [
+        "true",
+        "false"
+      ]
+    },
     {
       "key": "intensity",
       "label": "Scan Intensity",

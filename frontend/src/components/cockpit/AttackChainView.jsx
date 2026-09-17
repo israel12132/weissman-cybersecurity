@@ -28,11 +28,19 @@ function normalizeSteps(raw, t) {
 
 function parseAttackChainPayload(json, t) {
   if (json == null || typeof json !== 'object' || Array.isArray(json)) {
-    return { steps: [], run_id: null }
+    return { steps: [], run_id: null, unavailable: false }
+  }
+  if (json.ok === false || json.unavailable) {
+    return {
+      steps: [],
+      run_id: null,
+      unavailable: true,
+      detail: json.detail != null ? String(json.detail) : '',
+    }
   }
   const run_id = json.run_id != null ? json.run_id : null
   const steps = normalizeSteps(json.steps, t)
-  return { steps, run_id }
+  return { steps, run_id, unavailable: false }
 }
 
 export default function AttackChainView() {
@@ -53,20 +61,22 @@ export default function AttackChainView() {
     apiFetch(`/api/clients/${clientId}/attack-chain`)
       .then((d) => {
         if (cancelled) return
-        try {
-          setData(parseAttackChainPayload(d, t))
-        } catch {
+        const parsed = parseAttackChainPayload(d, t)
+        if (parsed.unavailable) {
+          setError(parsed.detail || t(`${NS}.unavailable`))
           setData({ steps: [], run_id: null })
+          return
         }
+        setData(parsed)
       })
       .catch((e) => {
-        if (!cancelled) setError(e?.message || String(e))
+        if (!cancelled) setError(e?.message || t(`${NS}.unavailable`))
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
       })
     return () => { cancelled = true }
-  }, [clientId, t])
+  }, [clientId])
 
   const steps = useMemo(() => (Array.isArray(data?.steps) ? data.steps : []), [data])
   const runId = data?.run_id
@@ -90,7 +100,9 @@ export default function AttackChainView() {
   if (error) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] gap-4">
-        <div className="text-red-400">{error}</div>
+        <div className="text-red-400" data-testid="attack-chain-unavailable" data-live="false" role="alert">
+          {t(`${NS}.unavailable`)}
+        </div>
         <Link to="/" className="text-sm text-cyan-400/90 hover:text-cyan-300">{t(`${NS}.back_war_room`)}</Link>
       </div>
     )

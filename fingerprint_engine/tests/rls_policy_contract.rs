@@ -131,7 +131,9 @@ fn pgvector_hnsw_params_and_hermetic_roles_migrations_exist() {
         .unwrap_or_default();
     assert!(roles.contains("NOBYPASSRLS"));
     assert!(roles.contains("statement_timeout = '15s'"));
-    assert_eq!(weissman_db::role_guard::RO_SELECT_TABLES.len(), 13);
+    // 13 core read tables + 4 ot_ics_* telemetry tables granted to weissman_ro by
+    // the 20260827160000_ot_ics_hardening_safety migration.
+    assert_eq!(weissman_db::role_guard::RO_SELECT_TABLES.len(), 17);
 }
 
 #[test]

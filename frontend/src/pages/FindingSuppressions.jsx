@@ -216,6 +216,11 @@ export default function FindingSuppressions() {
     [t, canManage, handleDelete, deletingId],
   )
 
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    suppressionsCsv(filtered)
+  }, [error, filtered])
+
   return (
     <PageShell
       title={t(`${NS}.title`)}
@@ -226,9 +231,9 @@ export default function FindingSuppressions() {
       actions={
         <ShellScanActions
           onRefresh={load}
-          onExport={() => suppressionsCsv(filtered)}
+          onExport={error ? undefined : handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filtered.length}
+          exportDisabled={!!error || !filtered.length}
         />
       }
     >
@@ -238,7 +243,11 @@ export default function FindingSuppressions() {
         {loading && <SkeletonWidgetGrid count={4} />}
 
         {error && (
-          <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-4 py-3 text-sm text-rose-300 font-mono">
+          <div
+            role="alert"
+            data-testid="finding-suppressions-unavailable"
+            className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-4 py-3 text-sm text-rose-300 font-mono"
+          >
             {error}
           </div>
         )}

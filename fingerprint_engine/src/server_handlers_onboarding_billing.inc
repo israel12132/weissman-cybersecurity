@@ -44,6 +44,25 @@ fn billing_unavailable(detail: &str) -> Response {
         .into_response()
 }
 
+fn billing_store_down(detail: &str) -> Response {
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(crate::http_unavailable::billing_store_down_unavailable_json(detail)),
+    )
+        .into_response()
+}
+
+fn payment_or_store_down(detail: String) -> Response {
+    if detail == "store_down" {
+        return billing_store_down("database unavailable");
+    }
+    (
+        StatusCode::PAYMENT_REQUIRED,
+        Json(json!({"ok": false, "detail": detail})),
+    )
+        .into_response()
+}
+
 fn paddle_webhook_error_response(err: crate::billing::PaddleWebhookError) -> Response {
     use crate::billing::PaddleWebhookError;
     match err {
@@ -69,6 +88,9 @@ fn paddle_webhook_error_response(err: crate::billing::PaddleWebhookError) -> Res
             .into_response(),
         PaddleWebhookError::Apply(msg) => {
             tracing::warn!(target: "paddle_webhook", error = %msg, "webhook apply failed");
+            if msg == "store_down" {
+                return billing_store_down("database unavailable");
+            }
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({ "ok": false, "detail": msg })),
@@ -77,11 +99,7 @@ fn paddle_webhook_error_response(err: crate::billing::PaddleWebhookError) -> Res
         }
         PaddleWebhookError::Sql(e) => {
             tracing::warn!(target: "paddle_webhook", error = %e, "webhook db error");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "ok": false, "detail": "database error processing webhook" })),
-            )
-                .into_response()
+            billing_store_down("database unavailable")
         }
     }
 }
@@ -105,6 +123,7 @@ async fn api_billing_usage(
             }
             (StatusCode::OK, Json(body)).into_response()
         }
+        Err(e) if e == "store_down" => billing_store_down("database unavailable"),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({ "ok": false, "detail": e })),
@@ -153,6 +172,7 @@ async fn api_billing_checkout_session(
         )
             .into_response(),
         Err(e) if e.contains("PADDLE_API_KEY not configured") => billing_unavailable(&e),
+        Err(e) if e == "store_down" => billing_store_down("database unavailable"),
         Err(e) => (
             StatusCode::BAD_REQUEST,
             Json(json!({ "ok": false, "detail": e })),
@@ -183,6 +203,7 @@ async fn api_billing_sync_paddle(
         )
             .into_response(),
         Err(e) if e.contains("PADDLE_API_KEY not configured") => billing_unavailable(&e),
+        Err(e) if e == "store_down" => billing_store_down("database unavailable"),
         Err(e) => (
             StatusCode::BAD_REQUEST,
             Json(json!({ "ok": false, "detail": e })),
@@ -280,19 +301,47 @@ async fn api_onboarding_register(
     {
         Ok((tenant_id, user_id)) => {
             let ip = extract_client_ip(&headers, addr);
-            if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, tenant_id).await {
-                let actor = body.email.trim();
-                let _ = audit_log::insert_audit(
-                    &mut tx,
-                    tenant_id,
-                    Some(user_id),
-                    actor,
-                    "onboarding_register",
-                    "self-serve tenant provisioned",
-                    &ip,
+            let mut tx = match db::begin_tenant_tx(&state.app_pool, tenant_id).await {
+                Ok(t) => t,
+                Err(_) => {
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                            "tenant created but login audit unavailable; sign in manually",
+                        )),
+                    )
+                        .into_response();
+                }
+            };
+            let actor = body.email.trim();
+            if audit_log::insert_audit(
+                &mut tx,
+                tenant_id,
+                Some(user_id),
+                actor,
+                "onboarding_register",
+                "self-serve tenant provisioned",
+                &ip,
+            )
+            .await
+            .is_err()
+            {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                        "tenant created but login audit unavailable; sign in manually",
+                    )),
                 )
-                .await;
-                let _ = tx.commit().await;
+                    .into_response();
+            }
+            if tx.commit().await.is_err() {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                        "tenant created but login audit unavailable; sign in manually",
+                    )),
+                )
+                    .into_response();
             }
 
             let binding = crate::auth_jwt::StreamBinding::from_http(&headers, addr);
@@ -344,17 +393,16 @@ async fn api_onboarding_register(
             append_set_cookie(response.headers_mut(), &refresh_cookie);
             response
         }
-        Err(e) => {
-            let status = if e.contains("already registered") {
-                StatusCode::CONFLICT
-            } else {
-                StatusCode::BAD_REQUEST
-            };
-            (
-                status,
-                Json(json!({ "ok": false, "detail": e })),
-            )
-                .into_response()
-        }
+        Err(e) if e == "store_down" => billing_store_down("database unavailable"),
+        Err(e) if e.contains("already registered") => (
+            StatusCode::CONFLICT,
+            Json(json!({ "ok": false, "detail": e })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "ok": false, "detail": e })),
+        )
+            .into_response(),
     }
 }

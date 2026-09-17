@@ -126,14 +126,14 @@ export default function PostureScoreCard() {
   useEffect(() => { load(clientId) }, [clientId, load])
 
   const handleRefresh = useCallback(() => load(clientId), [load, clientId])
-  const exportCsv = useCallback(
-    () => exportRowsCsv(POSTURE_CSV_HEADER, postureRows(data), 'weissman-posture-score'),
-    [data],
-  )
-  const exportPdf = useCallback(
-    () => exportRowsPdf('Weissman Security Posture', POSTURE_CSV_HEADER, postureRows(data), 'weissman-posture-score'),
-    [data],
-  )
+  const exportCsv = useCallback(() => {
+    if (error) return
+    exportRowsCsv(POSTURE_CSV_HEADER, postureRows(data), 'weissman-posture-score')
+  }, [error, data])
+  const exportPdf = useCallback(() => {
+    if (error) return
+    exportRowsPdf('Weissman Security Posture', POSTURE_CSV_HEADER, postureRows(data), 'weissman-posture-score')
+  }, [error, data])
 
   if (clientId == null) return null
 
@@ -153,21 +153,23 @@ export default function PostureScoreCard() {
         <div className="flex items-center gap-3">
           <ShellScanActions
             onRefresh={handleRefresh}
-            onExport={exportCsv}
+            onExport={error ? undefined : exportCsv}
             refreshLoading={loading}
-            exportDisabled={!data}
+            exportDisabled={!!error || !data}
           />
+          {!error && (
           <Button
             variant="unstyled"
             type="button"
             onClick={exportPdf}
-            disabled={!data}
+            disabled={!!error || !data}
             title={t('common.export_pdf')}
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-white/15 text-white/70 hover:bg-white/10 disabled:opacity-40 transition-colors"
           >
             <FileText className="w-3.5 h-3.5" />
             {t('common.export_pdf')}
           </Button>
+          )}
         </div>
       </div>
 

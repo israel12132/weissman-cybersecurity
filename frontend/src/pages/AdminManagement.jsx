@@ -29,6 +29,7 @@ export default function AdminManagement() {
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [usersUnavailable, setUsersUnavailable] = useState(false)
   const [successMsg, setSuccessMsg] = useState(null)
 
   // New user form state
@@ -46,16 +47,22 @@ export default function AdminManagement() {
   const [editIsSuperadmin, setEditIsSuperadmin] = useState(false)
   const [editAssignedClientId, setEditAssignedClientId] = useState('')
   const editModalRef = useRef(null)
-  useFocusTrap(editModalRef, !!editingUser)
+  useFocusTrap(editModalRef, !!editingUser && !usersUnavailable)
 
   const loadUsers = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
       const data = await apiFetch('/api/admin/users')
-      setUsers(Array.isArray(data) ? data : data.users || [])
+      if (data == null || data.ok === false || data.unavailable) {
+        throw new Error(data?.detail || t('pages.adminManagement.load_failed'))
+      }
+      setUsers(Array.isArray(data) ? data : (Array.isArray(data.users) ? data.users : []))
       setLastUpdated(new Date())
+      setUsersUnavailable(false)
+      setError(null)
     } catch (err) {
+      setUsersUnavailable(true)
       setError(err.message || t('pages.adminManagement.load_failed'))
     } finally {
       setLoading(false)
@@ -198,6 +205,22 @@ export default function AdminManagement() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (usersUnavailable) return
+    exportCsv()
+  }, [usersUnavailable, exportCsv])
+
+  const handleExportUsersCsv = useCallback(() => {
+    if (usersUnavailable) return
+    const rows = users.map((u) => [
+      u.email,
+      u.role || 'viewer',
+      u.is_superadmin ? 'yes' : 'no',
+      u.is_active !== false ? 'yes' : 'no',
+    ])
+    downloadCsv(rows, ['Email', 'Role', 'Superadmin', 'Active'], 'weissman-users')
+  }, [usersUnavailable, users])
+
   const visibleUsers = useMemo(() => {
     if (!searchQuery.trim()) return users
     const emails = new Set(filteredFindings.map((f) => f.title))
@@ -330,9 +353,9 @@ export default function AdminManagement() {
       actions={(
         <ShellScanActions
           onRefresh={loadUsers}
-          onExport={exportCsv}
+          onExport={usersUnavailable ? undefined : handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={usersUnavailable || !filteredFindings.length}
         />
       )}
     >
@@ -491,14 +514,21 @@ export default function AdminManagement() {
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
               searchPlaceholder={t('pages.adminManagement.search_placeholder')}
-              lastUpdated={lastUpdated}
-              resultCount={visibleUsers.length}
-              totalCount={users.length}
+              lastUpdated={usersUnavailable ? null : lastUpdated}
+              resultCount={usersUnavailable ? undefined : visibleUsers.length}
+              totalCount={usersUnavailable ? undefined : users.length}
             />
           </div>
 
           {loading && users.length === 0 ? (
             <div className="text-center py-8 text-[var(--text-muted)]">{t('pages.adminManagement.loading')}</div>
+          ) : usersUnavailable ? (
+            <div
+              data-testid="admin-users-unavailable"
+              className="text-center py-8 text-amber-300/90"
+            >
+              {t('pages.adminManagement.users_unavailable')}
+            </div>
           ) : users.length === 0 ? (
             <div className="text-center py-8 text-[var(--text-muted)]">{t('pages.adminManagement.no_users')}</div>
           ) : visibleUsers.length === 0 ? (
@@ -519,7 +549,7 @@ export default function AdminManagement() {
         </section>
 
         {/* Edit User Modal */}
-        {editingUser && (
+        {editingUser && !usersUnavailable && (
           // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- backdrop Escape-key handler; button semantics inappropriate for a modal overlay
           <div
             className="fixed inset-0 bg-[var(--scrim)] backdrop-blur-sm flex items-center justify-center z-50 p-4"
@@ -620,22 +650,16 @@ export default function AdminManagement() {
             <span className="text-emerald-400">⚡</span> Quick Actions
           </h2>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {!usersUnavailable && (
             <Button variant="unstyled"
               id="adminmgmt-export-users-btn"
               type="button"
-              onClick={() => {
-                const rows = users.map((u) => [
-                  u.email,
-                  u.role || 'viewer',
-                  u.is_superadmin ? 'yes' : 'no',
-                  u.is_active !== false ? 'yes' : 'no',
-                ])
-                downloadCsv(rows, ['Email', 'Role', 'Superadmin', 'Active'], 'weissman-users')
-              }}
+              onClick={handleExportUsersCsv}
               className="px-4 py-3 rounded-xl text-sm font-medium border border-[var(--border-strong)] bg-[var(--row-hover-bg)] text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] text-left"
             >
               📄 Export Users (CSV)
             </Button>
+            )}
             <Button variant="unstyled"
               id="adminmgmt-audit-log-btn"
               type="button"

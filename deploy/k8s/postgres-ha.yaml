@@ -45,8 +45,22 @@ spec:
         secretAccessKey:
           name: weissman-pg-backup
           key: SECRET_ACCESS_KEY
+      # Server-side encryption at the object store. AES256 = SSE-S3 (bucket-managed keys). For a
+      # customer-managed key set encryption: "aws:kms" and add `kmsKeyId` via the bucket policy —
+      # the key then lives in KMS, not the cluster. This protects the barman WAL/base objects at
+      # rest independently of bucket ACLs.
+      #
+      # NOTE: this is the CNPG/barman path. Self-managed hosts get a STRONGER guarantee from the
+      # client-side age envelope in scripts/backup_pitr_setup.sh — there the DB host never holds a
+      # decryption key at all. See docs/operations/ENCRYPTED-DR-PITR.md for how the two relate and
+      # when to run which. Do not disable one assuming the other; they cover different threats.
+      encryption: AES256
       wal:
         compression: gzip
+        encryption: AES256
+      data:
+        compression: gzip
+        encryption: AES256
     retentionPolicy: "30d"
   affinity:
     podAntiAffinityType: preferred

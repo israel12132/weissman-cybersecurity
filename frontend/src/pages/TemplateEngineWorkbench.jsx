@@ -47,15 +47,20 @@ function TemplateEngineWorkbenchBody() {
   const { t } = useTranslation()
   const { selectedClient } = useClient()
   const [templates, setTemplates] = useState([])
-  const [selectedId, setSelectedId] = useState('http_baseline')
+  const [templatesUnavailable, setTemplatesUnavailable] = useState(false)
+  const [selectedId, setSelectedId] = useState('')
   const [targetUrl, setTargetUrl] = useState('')
   const [yaml, setYaml] = useState('')
+  const [yamlUnavailable, setYamlUnavailable] = useState(false)
   const [runResult, setRunResult] = useState(null)
   const [loadingYaml, setLoadingYaml] = useState(false)
   const [running, setRunning] = useState(false)
   const [error, setError] = useState('')
 
-  const canRun = useMemo(() => !!String(targetUrl || '').trim() && !!String(yaml || '').trim(), [targetUrl, yaml])
+  const canRun = useMemo(
+    () => !!String(targetUrl || '').trim() && !!String(yaml || '').trim() && !yamlUnavailable,
+    [targetUrl, yaml, yamlUnavailable],
+  )
 
   const stepCount = Array.isArray(runResult?.steps) ? runResult.steps.length : 0
   const matchedSteps = Array.isArray(runResult?.steps)
@@ -63,25 +68,26 @@ function TemplateEngineWorkbenchBody() {
     : 0
 
   useEffect(() => {
-    apiFetch('/api/template-engine/templates')
-      .then((d) => { if (Array.isArray(d)) setTemplates(d) })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {})
-  }, [])
-
-  useEffect(() => {
     const url = clientPrimaryTargetUrl(selectedClient)
     if (url) setTargetUrl((prev) => prev || url)
   }, [selectedClient])
 
   useEffect(() => {
+    if (!selectedId) {
+      setLoadingYaml(false)
+      return
+    }
     setLoadingYaml(true)
     setError('')
     apiFetch(`/api/template-engine/templates/${encodeURIComponent(selectedId)}`)
       .then((d) => {
+        setYamlUnavailable(false)
         setYaml(String(d?.yaml || ''))
       })
-      .catch((e) => setError(e?.message || t(`${NS}.load_failed`)))
+      .catch((e) => {
+        setYamlUnavailable(true)
+        setError(e?.message || t(`${NS}.load_failed`))
+      })
       .finally(() => setLoadingYaml(false))
   }, [selectedId, t])
 
@@ -110,10 +116,24 @@ function TemplateEngineWorkbenchBody() {
 
   const loadTemplates = useCallback(() => {
     apiFetch('/api/template-engine/templates')
-      .then((d) => { if (Array.isArray(d)) setTemplates(d) })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {})
+      .then((d) => {
+        if (!Array.isArray(d)) {
+          setTemplatesUnavailable(true)
+          return
+        }
+        setTemplatesUnavailable(false)
+        setTemplates(d)
+        setSelectedId((prev) => {
+          if (prev && d.some((tpl) => tpl.id === prev)) return prev
+          return d[0]?.id || ''
+        })
+      })
+      .catch(() => setTemplatesUnavailable(true))
   }, [])
+
+  useEffect(() => {
+    loadTemplates()
+  }, [loadTemplates])
 
   const listFindings = useMemo(() => [
     ...templates.map((tpl) => ({
@@ -142,6 +162,11 @@ function TemplateEngineWorkbenchBody() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (templatesUnavailable) return
+    exportCsv()
+  }, [templatesUnavailable, exportCsv])
+
   const visibleTemplates = useMemo(() => {
     if (!searchQuery.trim()) return templates
     const ids = new Set(filteredFindings.map((f) => String(f.id)))
@@ -160,9 +185,9 @@ function TemplateEngineWorkbenchBody() {
       <div className="flex justify-end mb-4">
         <ShellScanActions
           onRefresh={loadTemplates}
-          onExport={exportCsv}
+          onExport={templatesUnavailable ? undefined : handleExportCsv}
           refreshLoading={loadingYaml}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={templatesUnavailable || !filteredFindings.length}
         />
       </div>
       <div className="mb-6">
@@ -171,13 +196,22 @@ function TemplateEngineWorkbenchBody() {
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
         <div className="space-y-4">
-          {templates.length > 0 && (
+          {templates.length > 0 && !templatesUnavailable && (
             <WeissmanListToolbar
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
               resultCount={visibleTemplates.length + (runResult ? visibleRunSteps.length : 0)}
               totalCount={listFindings.length}
             />
+          )}
+          {templatesUnavailable && (
+            <div data-testid="template-engine-templates-unavailable">
+              <EmptyState
+                icon="alert"
+                title={t(`${NS}.templates_unavailable`)}
+                body={t(`${NS}.templates_unavailable_body`)}
+              />
+            </div>
           )}
           <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-5 space-y-3">
             <h3 className="text-xs font-mono text-[var(--text-tertiary)] uppercase tracking-widest">
@@ -191,17 +225,19 @@ function TemplateEngineWorkbenchBody() {
             />
             <div className="flex items-center gap-3 flex-wrap">
               <select
-                value={selectedId}
+                value={templatesUnavailable ? '' : selectedId}
                 onChange={(e) => setSelectedId(e.target.value)}
                 className="rounded-xl bg-[var(--scrim)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] focus:outline-none focus:border-blue-500/40"
               >
-                {visibleTemplates.map((tpl) => (
+                {(!templatesUnavailable ? visibleTemplates : []).map((tpl) => (
                   <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
                 ))}
-                {visibleTemplates.length === 0 && templates.length > 0 && (
+                {!templatesUnavailable && visibleTemplates.length === 0 && templates.length > 0 && (
                   <option value="" disabled>{t('weissmanFindings.filtered_title')}</option>
                 )}
-                {templates.length === 0 && <option value="http_baseline">http_baseline</option>}
+                {templatesUnavailable && (
+                  <option value="" disabled>{t(`${NS}.templates_unavailable`)}</option>
+                )}
               </select>
               <Button variant="unstyled"
                 type="button"
@@ -228,11 +264,19 @@ function TemplateEngineWorkbenchBody() {
                 {loadingYaml ? t(`${NS}.loading`) : t(`${NS}.editable`)}
               </span>
             </div>
-            {loadingYaml && !yaml ? (
+            {loadingYaml ? (
               <div className="space-y-2">
                 <SkeletonBar className="h-3 w-full" />
                 <SkeletonBar className="h-3 w-5/6" />
                 <SkeletonBar className="h-3 w-4/6" />
+              </div>
+            ) : yamlUnavailable ? (
+              <div data-testid="template-engine-yaml-unavailable">
+                <EmptyState
+                  icon="alert"
+                  title={t(`${NS}.load_failed`)}
+                  body={t(`${NS}.yaml_unavailable_body`)}
+                />
               </div>
             ) : (
               <textarea

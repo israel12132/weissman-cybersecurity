@@ -75,12 +75,15 @@ export default function BusinessEngineProfile() {
   const [history, setHistory] = useState(null)
   const [profileLoading, setProfileLoading] = useState(false)
   const [clients, setClients] = useState([])
+  const [clientsUnavailable, setClientsUnavailable] = useState(false)
   const [clientId, setClientId] = useState('')
   const [target, setTarget] = useState('')
   const [runState, setRunState] = useState({ running: false, msg: '' })
   const [activeJobId, setActiveJobId] = useState('')
   const [liveJob, setLiveJob] = useState(null)
   const [clientIntegrations, setClientIntegrations] = useState(null)
+  const [integrationsUnavailable, setIntegrationsUnavailable] = useState(false)
+  const [historyUnavailable, setHistoryUnavailable] = useState(false)
   const { schema: paramSchema, extraParams, setParam } = useEngineScanParams(engineId, clientIntegrations)
   useSyncHubScanParams(engineId, extraParams)
   const { postScan } = useCommandCenterScan(clientId)
@@ -98,9 +101,18 @@ export default function BusinessEngineProfile() {
     setProfileLoading(true)
     try {
       const d = await apiFetch(`/api/engines/history/${encodeURIComponent(engineId)}?limit=100`)
+      if (d?.ok === false || d?.unavailable || !d || typeof d !== 'object') {
+        setHistoryUnavailable(true)
+        return
+      }
+      if (!Array.isArray(d.jobs) && d.jobs != null) {
+        setHistoryUnavailable(true)
+        return
+      }
+      setHistoryUnavailable(false)
       setHistory(d)
     } catch {
-      // history load failed — keep prior state
+      setHistoryUnavailable(true)
     } finally {
       setProfileLoading(false)
     }
@@ -115,9 +127,13 @@ export default function BusinessEngineProfile() {
     async function loadClients() {
       try {
         const d = await apiFetch('/api/clients')
-        if (!cancelled && Array.isArray(d)) setClients(d)
+        const list = Array.isArray(d) ? d : Array.isArray(d?.clients) ? d.clients : null
+        if (cancelled) return
+        if (!list) { setClientsUnavailable(true); return }
+        setClientsUnavailable(false)
+        setClients(list)
       } catch {
-        // clients load failed — leave list unchanged
+        if (!cancelled) setClientsUnavailable(true)
       }
     }
     loadClients()
@@ -127,13 +143,27 @@ export default function BusinessEngineProfile() {
   useEffect(() => {
     if (!clientId) {
       setClientIntegrations(null)
+      setIntegrationsUnavailable(false)
       return
     }
     let cancelled = false
     ;(async () => {
-      const d = await apiFetch(`/api/clients/${clientId}/integrations`).catch(() => null)
-      if (cancelled) return
-      setClientIntegrations(normalizeIntegrations(d))
+      try {
+        const d = await apiFetch(`/api/clients/${clientId}/integrations`)
+        if (cancelled) return
+        if (!d || d.ok === false || d.unavailable) {
+          setIntegrationsUnavailable(true)
+          setClientIntegrations(null)
+          return
+        }
+        setIntegrationsUnavailable(false)
+        setClientIntegrations(normalizeIntegrations(d))
+      } catch {
+        if (!cancelled) {
+          setIntegrationsUnavailable(true)
+          setClientIntegrations(null)
+        }
+      }
     })()
     return () => { cancelled = true }
   }, [clientId])
@@ -253,6 +283,7 @@ export default function BusinessEngineProfile() {
   }
 
   async function exportJson() {
+    if (historyUnavailable) return
     try {
       const d = await apiFetch(`/api/engines/export/${encodeURIComponent(engineId)}?limit=140${activeJobId ? `&job_id=${encodeURIComponent(activeJobId)}` : ''}`)
       const bytes = new TextEncoder().encode(JSON.stringify(d, null, 2))
@@ -263,14 +294,16 @@ export default function BusinessEngineProfile() {
   }
 
   function exportPdf() {
+    if (historyUnavailable) return
     const lines = []
     lines.push(`${t('pages.businessEngineProfile.pdf_business_engine')}: ${reg?.label || engineId} (${engineId})`)
     lines.push(`${t('pages.businessEngineProfile.pdf_generated')}: ${new Date().toISOString()}`)
-    lines.push(`${t('pages.businessEngineProfile.pdf_jobs_tracked')}: ${jobs.length}`)
-    lines.push(`${t('pages.businessEngineProfile.pdf_findings_tracked')}: ${findings.length}`)
     lines.push('')
     lines.push(t('pages.businessEngineProfile.pdf_mission_heading'))
     lines.push(mission)
+    lines.push('')
+    lines.push(`${t('pages.businessEngineProfile.pdf_jobs_tracked')}: ${jobs.length}`)
+    lines.push(`${t('pages.businessEngineProfile.pdf_findings_tracked')}: ${findings.length}`)
     lines.push('')
     lines.push(t('pages.businessEngineProfile.recent_jobs'))
     for (const j of jobs.slice(0, 12)) {
@@ -311,8 +344,9 @@ export default function BusinessEngineProfile() {
           <div className="ms-auto">
             <ShellScanActions
               onRefresh={reloadProfile}
-              onExport={exportJson}
+              onExport={historyUnavailable ? undefined : exportJson}
               refreshLoading={profileLoading}
+              exportDisabled={historyUnavailable}
             />
           </div>
         </div>
@@ -326,11 +360,16 @@ export default function BusinessEngineProfile() {
         />
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <ExecutiveWidget label={t('pages.businessEngineProfile.kpi_jobs')} value={kpi.jobs.toLocaleString()} accent="#22d3ee" />
-          <ExecutiveWidget label={t('pages.businessEngineProfile.kpi_findings')} value={kpi.findings.toLocaleString()} accent="#a78bfa" />
-          <ExecutiveWidget label={t('pages.businessEngineProfile.kpi_completed')} value={kpi.completed.toLocaleString()} accent="#34d399" />
-          <ExecutiveWidget label={t('pages.businessEngineProfile.kpi_failed')} value={kpi.failed.toLocaleString()} accent="#f87171" />
+          <ExecutiveWidget label={t('pages.businessEngineProfile.kpi_jobs')} value={profileLoading || historyUnavailable ? '—' : kpi.jobs.toLocaleString()} accent="#22d3ee" />
+          <ExecutiveWidget label={t('pages.businessEngineProfile.kpi_findings')} value={profileLoading || historyUnavailable ? '—' : kpi.findings.toLocaleString()} accent="#a78bfa" />
+          <ExecutiveWidget label={t('pages.businessEngineProfile.kpi_completed')} value={profileLoading || historyUnavailable ? '—' : kpi.completed.toLocaleString()} accent="#34d399" />
+          <ExecutiveWidget label={t('pages.businessEngineProfile.kpi_failed')} value={profileLoading || historyUnavailable ? '—' : kpi.failed.toLocaleString()} accent="#f87171" />
         </div>
+        {historyUnavailable && (
+          <p data-testid="business-engine-profile-history-unavailable" className="text-xs text-amber-300/80 font-mono">
+            {t('pages.businessEngineProfile.history_unavailable')}
+          </p>
+        )}
 
         <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] p-5 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -355,6 +394,16 @@ export default function BusinessEngineProfile() {
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
+            {clientsUnavailable && (
+              <p data-testid="business-engine-profile-clients-unavailable" className="text-xs text-amber-300/80 font-mono md:col-span-3">
+                {t('pages.businessEngineProfile.clients_unavailable')}
+              </p>
+            )}
+            {integrationsUnavailable && (
+              <p data-testid="business-engine-profile-integrations-unavailable" className="text-xs text-amber-300/80 font-mono md:col-span-3">
+                {t('pages.businessEngineProfile.integrations_unavailable')}
+              </p>
+            )}
             <input
               value={target}
               onChange={(e) => setTarget(e.target.value)}
@@ -381,8 +430,12 @@ export default function BusinessEngineProfile() {
             />
           )}
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="unstyled" type="button" onClick={exportJson} className="rounded-lg px-3 py-1.5 text-xs font-mono border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10">{t('pages.businessEngineProfile.export_json')}</Button>
-            <Button variant="unstyled" type="button" onClick={exportPdf} className="rounded-lg px-3 py-1.5 text-xs font-mono border border-amber-500/40 text-amber-300 hover:bg-amber-500/10">{t('pages.businessEngineProfile.export_pdf')}</Button>
+            {!historyUnavailable && (
+              <Button variant="unstyled" type="button" onClick={exportJson} className="rounded-lg px-3 py-1.5 text-xs font-mono border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10">{t('pages.businessEngineProfile.export_json')}</Button>
+            )}
+            {!historyUnavailable && (
+              <Button variant="unstyled" type="button" onClick={exportPdf} className="rounded-lg px-3 py-1.5 text-xs font-mono border border-amber-500/40 text-amber-300 hover:bg-amber-500/10">{t('pages.businessEngineProfile.export_pdf')}</Button>
+            )}
             <span className="text-xs font-mono text-[var(--text-tertiary)]">{runState.msg || t('pages.businessEngineProfile.ready')}</span>
           </div>
           {liveJob && (
@@ -392,6 +445,7 @@ export default function BusinessEngineProfile() {
           )}
         </section>
 
+        {!historyUnavailable && (
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 h-[280px]">
             <h3 className="text-sm font-semibold text-white mb-2">{t('pages.businessEngineProfile.job_status_dist')}</h3>
@@ -418,7 +472,9 @@ export default function BusinessEngineProfile() {
             </ResponsiveContainer>
           </article>
         </section>
+        )}
 
+        {!historyUnavailable && (
         <WeissmanListToolbar
           className="mb-2"
           searchQuery={searchQuery}
@@ -427,19 +483,20 @@ export default function BusinessEngineProfile() {
           resultCount={filteredFindings.length}
           totalCount={listFindings.length}
         />
+        )}
 
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
             <h3 className="text-sm font-semibold text-white mb-2">{t('pages.businessEngineProfile.recent_jobs')}</h3>
             <div className="space-y-2 max-h-[280px] overflow-auto pr-1">
-              {visibleJobs.map((j) => (
+              {!historyUnavailable && visibleJobs.map((j) => (
                 <div key={`${j.job_id}-${j.created_at}`} className="text-xs rounded border border-[var(--border-default)] bg-[var(--table-surface)] p-2 text-[var(--text-secondary)] font-mono">
                   <div>{j.created_at || '-'} | {j.status || '-'} | findings={j.findings_count || 0}</div>
                   <div className="text-[var(--text-muted)]">kind={j.kind || '-'} source={j.source || '-'}</div>
                 </div>
               ))}
-              {!jobs.length && <div className="text-xs text-[var(--text-muted)]">{t('pages.businessEngineProfile.no_jobs')}</div>}
-              {jobs.length > 0 && !visibleJobs.length && searchQuery.trim() && (
+              {!historyUnavailable && !jobs.length && <div className="text-xs text-[var(--text-muted)]">{t('pages.businessEngineProfile.no_jobs')}</div>}
+              {!historyUnavailable && jobs.length > 0 && !visibleJobs.length && searchQuery.trim() && (
                 <div className="text-xs text-[var(--text-muted)]">{t('weissmanFindings.filtered_title')}</div>
               )}
             </div>
@@ -447,14 +504,14 @@ export default function BusinessEngineProfile() {
           <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
             <h3 className="text-sm font-semibold text-white mb-2">{t('pages.businessEngineProfile.live_findings')}</h3>
             <div className="space-y-2 max-h-[280px] overflow-auto pr-1">
-              {visibleFindings.map((f) => (
+              {!historyUnavailable && visibleFindings.map((f) => (
                 <div key={`${f.id}-${f.discovered_at}`} className="text-xs rounded border border-[var(--border-default)] bg-[var(--table-surface)] p-2 text-[var(--text-secondary)]">
                   <div className="font-medium text-white">{f.title || t('pages.businessEngineProfile.finding_fallback')}</div>
                   <div className="font-mono text-[var(--text-muted)]">{f.discovered_at || '-'} | {f.severity || '-'} | {f.source || '-'}</div>
                 </div>
               ))}
-              {!findings.length && <div className="text-xs text-[var(--text-muted)]">{t('pages.businessEngineProfile.no_findings')}</div>}
-              {findings.length > 0 && !visibleFindings.length && searchQuery.trim() && (
+              {!historyUnavailable && !findings.length && <div className="text-xs text-[var(--text-muted)]">{t('pages.businessEngineProfile.no_findings')}</div>}
+              {!historyUnavailable && findings.length > 0 && !visibleFindings.length && searchQuery.trim() && (
                 <div className="text-xs text-[var(--text-muted)]">{t('weissmanFindings.filtered_title')}</div>
               )}
             </div>

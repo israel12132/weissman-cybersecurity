@@ -73,6 +73,21 @@ describe('useWeissmanSocket', () => {
     expect(result.current.events.length).toBe(1)
   })
 
+  it('surfaces ticker store_down as an event, not a silent miss', () => {
+    const { result } = renderHook(() => useWeissmanSocket())
+    deliver({
+      kind: 'store_down',
+      payload: {
+        message: 'Command Center finding ticker unavailable',
+        severity: 'critical',
+      },
+    })
+    expect(result.current.resyncSignal).toBe(0)
+    expect(result.current.events.length).toBe(1)
+    expect(result.current.events[0].message).toMatch(/unavailable/i)
+    expect(result.current.events[0].severity).toBe('critical')
+  })
+
   it('reconnects with last_event_id after receiving sequenced events', () => {
     vi.useFakeTimers()
     try {

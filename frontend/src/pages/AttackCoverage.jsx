@@ -90,19 +90,24 @@ export default function AttackCoverage() {
     [filteredTactics],
   )
 
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    coverageCsv(tactics)
+  }, [error, tactics])
+
   return (
     <PageShell
       title={t(`${NS}.title`)}
       subtitle={t(`${NS}.subtitle`)}
-      badge={data?.framework || 'MITRE ATT&CK'}
+      badge={error ? 'MITRE ATT&CK' : (data?.framework || 'MITRE ATT&CK')}
       badgeColor="#f43f5e"
       icon={<Grid3x3 className="w-5 h-5" />}
       actions={
         <ShellScanActions
           onRefresh={load}
-          onExport={() => coverageCsv(tactics)}
+          onExport={error ? undefined : handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!tactics.length}
+          exportDisabled={!!error || !tactics.length}
         />
       }
     >

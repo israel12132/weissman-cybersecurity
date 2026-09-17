@@ -40,6 +40,7 @@ export function ClientProvider({ children }) {
   const [poeJobId, setPoeJobId] = useState(null)
   const [clientIntegrations, setClientIntegrations] = useState(null)
   const [integrationsLoading, setIntegrationsLoading] = useState(false)
+  const [integrationsUnavailable, setIntegrationsUnavailable] = useState(false)
   const [roePending, setRoePending] = useState(null)
   const selectedClientIdRef = useRef(null)
   // Monotonic request sequences: a response from a superseded selection must not
@@ -131,6 +132,7 @@ export function ClientProvider({ children }) {
     const seq = ++integrationsSeqRef.current
     if (clientId == null) {
       setClientIntegrations(null)
+      setIntegrationsUnavailable(false)
       setIntegrationsLoading(false)
       return null
     }
@@ -139,11 +141,16 @@ export function ClientProvider({ children }) {
       const data = normalizeIntegrations(await apiFetch(`/api/clients/${clientId}/integrations`))
       if (integrationsSeqRef.current === seq) {
         setClientIntegrations(data)
+        setIntegrationsUnavailable(false)
       }
       return data
     } catch {
       if (integrationsSeqRef.current === seq) {
+        // Leftover leftover-integrations stay catch-cleared (Billing-class). Always
+        // setIntegrationsUnavailable so Integration Readiness cannot paint
+        // unconfirmed 0% from null leftover leftover-integrations.
         setClientIntegrations(null)
+        setIntegrationsUnavailable(true)
       }
       return null
     } finally {
@@ -264,6 +271,7 @@ export function ClientProvider({ children }) {
       setPoeJobId,
       clientIntegrations,
       integrationsLoading,
+      integrationsUnavailable,
       refreshIntegrations: refreshSelectedIntegrations,
       roePending,
       submitRoeApproval,
@@ -287,6 +295,7 @@ export function ClientProvider({ children }) {
       poeJobId,
       clientIntegrations,
       integrationsLoading,
+      integrationsUnavailable,
       refreshSelectedIntegrations,
       roePending,
       submitRoeApproval,

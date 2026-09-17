@@ -58,6 +58,7 @@ const LABELS = {
     findingsTitle: 'Failed controls',
     noFindings: 'No failed privilege/credential controls on this host — strong posture.',
     runToPopulate: 'Select a client and run the live 500-check audit.',
+    historyUnavailable: 'Engine history API unavailable — run-to-populate is not a quiet empty trail.',
     related: 'Related identity engines',
     lastRun: 'Last completed',
     evaluated: 'evaluated',
@@ -91,6 +92,7 @@ const LABELS = {
     findingsTitle: 'בקרות שנכשלו',
     noFindings: 'לא נכשלו בקרות הרשאות/אישורים במארח זה — תנוחה חזקה.',
     runToPopulate: 'בחר לקוח והרץ את ביקורת 500 הבדיקות החיה.',
+    historyUnavailable: 'API היסטוריית המנוע אינו זמין — מוכן-למילוי אינו מאושר.',
     related: 'מנועי זהות קשורים',
     lastRun: 'הושלם לאחרונה',
     evaluated: 'הוערכו',
@@ -207,11 +209,6 @@ export default function PrivilegeEscalationCommandCenter() {
     }
   }, [clientId, target, buildBody, showToastMsg, L, postScan])
 
-  const handleExport = useCallback(() => {
-    const payload = { engine: ENGINE_ID, exported_at: new Date().toISOString(), target, params, findings }
-    downloadBytes(new TextEncoder().encode(JSON.stringify(payload, null, 2)), `pac500-${Date.now()}.json`, 'application/json')
-  }, [target, params, findings])
-
   const { posture, regular } = useMemo(() => {
     const postureF = findings.find((f) => f.category === 'posture_summary') || null
     const regularF = findings
@@ -234,7 +231,19 @@ export default function PrivilegeEscalationCommandCenter() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE_ID, regular)
+
+  const handleExport = useCallback(() => {
+    if (historyUnavailable) return
+    const payload = { engine: ENGINE_ID, exported_at: new Date().toISOString(), target, params, findings }
+    downloadBytes(new TextEncoder().encode(JSON.stringify(payload, null, 2)), `pac500-${Date.now()}.json`, 'application/json')
+  }, [target, params, findings, historyUnavailable])
+
+  const handleExportCsv = useCallback(() => {
+    if (historyUnavailable) return
+    exportCsv()
+  }, [historyUnavailable, exportCsv])
 
   useEffect(() => {
     refreshFromHistory().then((run) => {
@@ -262,7 +271,9 @@ export default function PrivilegeEscalationCommandCenter() {
   })
 
   const ev = posture?.evidence || {}
-  const score = Number(ev.score ?? 0)
+  const rawScore = ev.score
+  const hasScore = rawScore != null && Number.isFinite(Number(rawScore))
+  const score = hasScore ? Number(rawScore) : 0
   const grade = ev.grade || '—'
   const covCounts = ev.counts || {}
   const domainScores = ev.domain_scores || {}
@@ -279,10 +290,10 @@ export default function PrivilegeEscalationCommandCenter() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={exportCsv}
+          onExport={historyUnavailable ? undefined : handleExportCsv}
           refreshLoading={historyLoading}
           refreshDisabled={status === 'running'}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={historyUnavailable || !filteredFindings.length}
         />
       )}
     >
@@ -319,7 +330,7 @@ export default function PrivilegeEscalationCommandCenter() {
               <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{status}</span>
             </div>
             <div className="flex gap-2">
-              {findings.length > 0 && (
+              {!historyUnavailable && findings.length > 0 && (
                 <Button variant="unstyled" type="button" onClick={handleExport} className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)]">
                   {L.export}
                 </Button>
@@ -354,12 +365,12 @@ export default function PrivilegeEscalationCommandCenter() {
         </div>
       </div>
 
-      {posture && (
+      {posture && !historyUnavailable && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
           <div className="rounded-2xl border border-rose-500/25 bg-[var(--bg-2)] p-5 flex flex-col items-center justify-center">
             <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-disabled)] mb-2">{L.posture}</div>
-            <div className="text-5xl font-black" style={{ color: score >= 80 ? ACCENT2 : ACCENT }}>{grade}</div>
-            <div className="text-sm font-mono text-[var(--text-secondary)] mt-1">{score}/100</div>
+            <div className="text-5xl font-black" style={{ color: hasScore ? (score >= 80 ? ACCENT2 : ACCENT) : 'rgba(255,255,255,0.12)' }}>{hasScore ? grade : '—'}</div>
+            <div className="text-sm font-mono text-[var(--text-secondary)] mt-1">{hasScore ? `${score}/100` : '—'}</div>
             <div className="text-[10px] font-mono text-[var(--text-muted)] mt-2">{L.host}: {host.hostname || '—'} · {L.kernel}: {host.kernel || '—'}</div>
             {lastRun && <div className="text-[10px] font-mono text-[var(--text-disabled)] mt-1">{L.lastRun} {lastRun}</div>}
           </div>
@@ -373,7 +384,7 @@ export default function PrivilegeEscalationCommandCenter() {
                 [L.notObserved, covCounts.not_observed, '#64748b'],
               ].map(([lab, n, col]) => (
                 <div key={lab} className="rounded-lg border border-[var(--border-subtle)] px-2 py-2">
-                  <div className="text-lg font-mono font-bold" style={{ color: col }}>{n ?? 0}</div>
+                  <div className="text-lg font-mono font-bold" style={{ color: col }}>{n != null ? n : '—'}</div>
                   <div className="text-[10px] font-mono text-[var(--text-muted)]">{lab}</div>
                 </div>
               ))}
@@ -381,14 +392,16 @@ export default function PrivilegeEscalationCommandCenter() {
             <div className="space-y-1.5">
               {DOMAINS.map((d) => {
                 const ds = domainScores[d.slug] || {}
-                const sc = Number(ds.score ?? 0)
+                const raw = ds.score
+                const hasDomainScore = raw != null && Number.isFinite(Number(raw))
+                const sc = hasDomainScore ? Number(raw) : 0
                 return (
                   <div key={d.slug} className="flex items-center gap-2 text-[10px] font-mono">
                     <span className="w-40 truncate text-[var(--text-tertiary)]">{he ? d.he : d.en}</span>
                     <div className="flex-1 h-1.5 rounded-full bg-[var(--bg-3)] overflow-hidden">
-                      <div className="h-full rounded-full" style={{ width: `${sc}%`, backgroundColor: sc >= 80 ? ACCENT2 : ACCENT }} />
+                      <div className="h-full rounded-full" style={{ width: hasDomainScore ? `${sc}%` : '0%', backgroundColor: hasDomainScore ? (sc >= 80 ? ACCENT2 : ACCENT) : 'rgba(255,255,255,0.12)' }} />
                     </div>
-                    <span className="w-16 text-right text-[var(--text-muted)]">{ds.fail ?? 0} fail</span>
+                    <span className="w-16 text-right text-[var(--text-muted)]">{hasDomainScore ? `${ds.fail ?? 0} fail` : '—'}</span>
                   </div>
                 )
               })}
@@ -397,6 +410,11 @@ export default function PrivilegeEscalationCommandCenter() {
         </div>
       )}
 
+      {historyUnavailable && (
+        <p data-testid="privilege-escalation-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+          {L.historyUnavailable}
+        </p>
+      )}
       <WeissmanFindingsPanel
         title={L.findingsTitle}
         findings={regular}
@@ -412,7 +430,10 @@ export default function PrivilegeEscalationCommandCenter() {
         lastUpdated={lastUpdated}
         jobId={pendingJobId || lastJobId}
         accent={ACCENT}
-        showEmptyReady={status !== 'running' && regular.length === 0 && findings.length === 0}
+        unavailable={historyUnavailable}
+        unavailableTitle={L.historyUnavailable}
+        unavailableBody={L.historyUnavailable}
+        showEmptyReady={status !== 'running' && regular.length === 0 && findings.length === 0 && !historyUnavailable}
         emptyReadyTitle={L.runToPopulate}
         emptyReadyBody={L.runToPopulate}
         emptyTitle={L.noFindings}

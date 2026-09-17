@@ -1,9 +1,9 @@
 /**
  * CASB / DLP / continuous CNAPP — live findings + CNAPP graph refresh.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Cloud, Search } from 'lucide-react'
+import { Cloud } from 'lucide-react'
 import PageShell from './PageShell'
 import EmptyState from '../components/ui/EmptyState'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
@@ -27,23 +27,35 @@ export default function CasbDlpCenter() {
   const [error, setError] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [refreshing, setRefreshing] = useState(false)
+  const abortRef = useRef(null)
 
   const load = useCallback(async () => {
+    abortRef.current?.abort()
+    const ac = new AbortController()
+    abortRef.current = ac
     setLoading(true)
     setError('')
     try {
-      const d = await apiFetch('/api/findings?limit=500')
-      if (d?.ok === false) throw new Error(d.detail || 'load failed')
-      const all = Array.isArray(d.findings) ? d.findings : []
+      const d = await apiFetch('/api/findings?limit=500', { signal: ac.signal })
+      if (d?.ok === false || d?.unavailable) {
+        throw new Error(d.detail || 'findings unavailable')
+      }
+      const all = Array.isArray(d) ? d : (Array.isArray(d.findings) ? d.findings : [])
+      if (ac.signal.aborted) return
       setFindings(all.filter((f) => ENGINES.includes(f.source || f.type || f.engine)))
     } catch (e) {
-      setError(e.message || t(`${NS}.load_failed`))
+      if (e?.name === 'AbortError' || ac.signal.aborted) return
+      setFindings([])
+      setError(e.message || 'load failed')
     } finally {
-      setLoading(false)
+      if (abortRef.current === ac && !ac.signal.aborted) setLoading(false)
     }
-  }, [t])
+  }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    load()
+    return () => abortRef.current?.abort()
+  }, [load])
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
@@ -51,20 +63,28 @@ export default function CasbDlpCenter() {
     return findings.filter((f) => `${f.title} ${f.source} ${f.description}`.toLowerCase().includes(q))
   }, [findings, searchQuery])
 
+  const liveEngineCount = useMemo(
+    () => new Set(findings.map((f) => f.source || f.engine || f.type).filter(Boolean)).size,
+    [findings],
+  )
+
   const exportCsv = useCallback(() => {
+    if (error) return
     downloadCsv(
       filtered.map((f) => [f.source, f.title, f.severity, f.discovered_at]),
       ['engine', 'title', 'severity', 'discovered'],
       'weissman-casb-dlp',
     )
-  }, [filtered])
+  }, [error, filtered])
 
   const refreshGraph = async () => {
     setRefreshing(true)
     try {
       const d = await apiFetch('/api/cnapp/refresh', { method: 'POST' })
-      if (d?.ok === false) throw new Error(d.detail || 'refresh failed')
-      toast.success(t(`${NS}.refreshed`, { n: d.jobs_queued ?? 0 }))
+      if (d?.ok === false || d?.unavailable || d.jobs_queued == null) {
+        throw new Error(d.detail || t(`${NS}.refresh_failed`))
+      }
+      toast.success(t(`${NS}.refreshed`, { n: d.jobs_queued }))
       await load()
     } catch (e) {
       toast.error(e.message || t(`${NS}.refresh_failed`))
@@ -79,17 +99,19 @@ export default function CasbDlpCenter() {
       subtitle={t(`${NS}.subtitle`)}
       icon={<Cloud />}
       actions={(
-        <ShellScanActions onRefresh={load} onExport={exportCsv} refreshLoading={loading} exportDisabled={!filtered.length} />
+        <ShellScanActions onRefresh={load} onExport={error ? undefined : exportCsv} refreshLoading={loading} exportDisabled={!!error || !filtered.length} />
       )}
     >
       <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>
       {loading ? <SkeletonWidgetGrid count={3} /> : error ? (
-        <EmptyState title={t(`${NS}.load_failed`)} body={error} />
+        <p className="text-sm text-amber-200/90" data-testid="casb-dlp-unavailable" role="alert">
+          {t(`${NS}.unavailable`)}
+        </p>
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <ExecutiveWidget label={t(`${NS}.kpi_findings`)} value={findings.length} />
-            <ExecutiveWidget label={t(`${NS}.kpi_engines`)} value={ENGINES.length} />
+            <ExecutiveWidget label={t(`${NS}.kpi_engines`)} value={findings.length ? liveEngineCount : '—'} />
           </div>
           <Button type="button" onClick={refreshGraph} disabled={refreshing}>
             {refreshing ? t(`${NS}.refreshing`) : t(`${NS}.refresh_graph`)}

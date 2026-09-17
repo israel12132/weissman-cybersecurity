@@ -154,7 +154,7 @@ async fn cfg_string_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     tenant_id: i64,
     key: &str,
-) -> Option<String> {
+) -> Result<Option<String>, String> {
     sqlx::query_scalar::<_, String>(
         "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = $2",
     )
@@ -162,9 +162,8 @@ async fn cfg_string_tx(
     .bind(key)
     .fetch_optional(&mut **tx)
     .await
-    .ok()
-    .flatten()
-    .filter(|s| !s.is_empty())
+    .map_err(|_| "store_down".to_string())
+    .map(|opt| opt.filter(|s| !s.is_empty()))
 }
 
 #[derive(Clone, Default)]
@@ -185,12 +184,12 @@ async fn load_tenant_runtime_config(
         .await
         .map_err(|e| format!("tenant tx: {e}"))?;
     let cfg = TenantRuntimeConfig {
-        github_token: cfg_string_tx(&mut tx, tenant_id, "github_token").await,
-        llm_base_url: cfg_string_tx(&mut tx, tenant_id, "llm_base_url").await,
-        llm_model: cfg_string_tx(&mut tx, tenant_id, "llm_model").await,
-        oast_listener_url: cfg_string_tx(&mut tx, tenant_id, "oast_listener_url").await,
-        oast_domain: cfg_string_tx(&mut tx, tenant_id, "oast_domain").await,
-        oast_api_key: cfg_string_tx(&mut tx, tenant_id, "oast_api_key").await,
+        github_token: cfg_string_tx(&mut tx, tenant_id, "github_token").await?,
+        llm_base_url: cfg_string_tx(&mut tx, tenant_id, "llm_base_url").await?,
+        llm_model: cfg_string_tx(&mut tx, tenant_id, "llm_model").await?,
+        oast_listener_url: cfg_string_tx(&mut tx, tenant_id, "oast_listener_url").await?,
+        oast_domain: cfg_string_tx(&mut tx, tenant_id, "oast_domain").await?,
+        oast_api_key: cfg_string_tx(&mut tx, tenant_id, "oast_api_key").await?,
     };
     tx.commit()
         .await
@@ -246,24 +245,56 @@ async fn persist_findings_best_effort(
     engine: &str,
     target: &str,
     findings: &[Value],
-) -> u64 {
-    if findings.is_empty() || client_id.is_none() {
-        return 0;
+) -> Result<u64, String> {
+    // A genuinely empty scan persists nothing — the one case where "0 persisted" is honest
+    // and can stay silent.
+    if findings.is_empty() {
+        return Ok(0);
     }
-    let persisted = crate::findings_persist::persist_engine_findings(
-        app_pool, tenant_id, client_id, engine, target, findings,
-    )
-    .await
-    .unwrap_or_else(|e| {
+    // Findings WERE produced but there is no client to attribute them to. `persist_engine_findings`
+    // is client-scoped, so it cannot store them — and silently returning 0 here makes a
+    // real-but-dropped result indistinguishable from a clean empty scan. Never fabricate a
+    // client_id; instead make the loss LOUD (error log) and observable (metric) so it is triaged.
+    if client_id.is_none() {
+        let dropped = findings.len() as u64;
         tracing::error!(
             target: "findings_persist",
             tenant_id,
             engine = %engine,
-            error = %e,
-            "failed to persist findings"
+            target = %target,
+            findings_dropped = dropped,
+            "findings produced but no client_id — NOT persisted (would be lost); refusing to fabricate a client_id"
         );
-        0
-    });
+        metrics::counter!(
+            "weissman_findings_dropped_no_client_total",
+            "engine" => engine.to_string()
+        )
+        .increment(dropped);
+        return Ok(0);
+    }
+    let attempted = findings.len() as u64;
+    let persisted = crate::findings_persist::persist_engine_findings(
+        app_pool, tenant_id, client_id, engine, target, findings,
+    )
+    .await
+    .map_err(|e| {
+        tracing::error!(
+            target: "findings_persist",
+            tenant_id,
+            engine = %engine,
+            target = %target,
+            attempted,
+            persisted = 0u64,
+            error = %e,
+            "failed to persist findings (DB error) — attempted findings NOT persisted"
+        );
+        metrics::counter!(
+            "weissman_findings_persist_errors_total",
+            "engine" => engine.to_string()
+        )
+        .increment(1);
+        "store_down".to_string()
+    })?;
     if persisted > 0 {
         if let Some(cid) = client_id {
             let pool = app_pool.clone();
@@ -290,7 +321,34 @@ async fn persist_findings_best_effort(
             });
         }
     }
-    persisted
+    Ok(persisted)
+}
+
+async fn persist_semantic_fuzz_log(
+    app_pool: &PgPool,
+    tenant_id: i64,
+    client_id: i64,
+    log: &str,
+) -> Result<(), String> {
+    if log.is_empty() {
+        return Ok(());
+    }
+    let mut tx = db::begin_tenant_tx(app_pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
+    sqlx::query(
+        "INSERT INTO semantic_fuzz_log (tenant_id, client_id, run_id, log_text) VALUES ($1, $2, NULL, $3)",
+    )
+    .bind(tenant_id)
+    .bind(client_id)
+    .bind(log)
+    .execute(&mut *tx)
+    .await
+    .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
+    Ok(())
 }
 
 async fn persist_findings_grouped_by_client_field(
@@ -299,7 +357,7 @@ async fn persist_findings_grouped_by_client_field(
     engine: &str,
     default_target: &str,
     findings: &[Value],
-) -> u64 {
+) -> Result<u64, String> {
     use std::collections::HashMap;
     let mut groups: HashMap<i64, Vec<Value>> = HashMap::new();
     for f in findings {
@@ -319,9 +377,9 @@ async fn persist_findings_grouped_by_client_field(
             .unwrap_or(default_target);
         total +=
             persist_findings_best_effort(app_pool, tenant_id, Some(cid), engine, target, &group)
-                .await;
+                .await?;
     }
-    total
+    Ok(total)
 }
 
 fn feedback_fuzz_anomaly_to_finding(v: &fuzz_core::ValidatedAnomaly) -> Value {
@@ -458,20 +516,12 @@ async fn execute_job_unscoped(
             });
             let runtime_cfg = load_tenant_runtime_config(app_pool.clone(), tid).await?;
             let mut job_payload = p.clone();
-            if let Err(e) = crate::scan_routing::hydrate_stored_job_payload(
+            crate::scan_routing::hydrate_stored_job_payload(
                 app_pool.as_ref(),
                 tid,
                 &mut job_payload,
             )
-            .await
-            {
-                tracing::warn!(
-                    target: "async_jobs",
-                    tenant_id = tid,
-                    error = %e,
-                    "hydrate_stored_job_payload failed; continuing with stripped payload"
-                );
-            }
+            .await?;
             let job_params = job_payload;
             let discovered_paths: Vec<String> = p
                 .get("discovered_paths")
@@ -635,7 +685,7 @@ async fn execute_job_unscoped(
                 target,
                 &result.findings,
             )
-            .await;
+            .await?;
 
             if crate::engine_resilience::should_retry_status(&result.status) {
                 let failure_ctx = json!({
@@ -687,7 +737,7 @@ async fn execute_job_unscoped(
                 intel_pool.clone(),
             )
             .await
-            .ok();
+            .map_err(|_| "store_down".to_string())?;
 
             channels.emit_telemetry(tid, &
                 json!({
@@ -703,44 +753,35 @@ async fn execute_job_unscoped(
                 let canonical = weissman_core::models::engine::resolve_engine_id(engine_id);
                 let (probe_status, findings_count, message, raw_status) =
                     if *engine_id == "poe_synthesis" {
-                        if let Some(cfg) = poe_cfg.as_ref() {
-                            let run = tokio::time::timeout(
-                                Duration::from_secs(180),
-                                crate::exploit_synthesis_engine::run_exploit_synthesis_async(
-                                    &target,
-                                    cfg,
-                                    None,
-                                    None,
-                                    Some(tid),
-                                    None,
-                                ),
-                            )
-                            .await;
-                            match run {
-                                Ok(result) => {
-                                    let st = result.status.clone();
-                                    let msg = result.message.clone();
-                                    let fc = result.findings.len();
-                                    if st == "ok" {
-                                        ("pass", fc, msg, st)
-                                    } else {
-                                        ("fail", fc, msg, st)
-                                    }
+                        let run = tokio::time::timeout(
+                            Duration::from_secs(180),
+                            crate::exploit_synthesis_engine::run_exploit_synthesis_async(
+                                &target,
+                                &poe_cfg,
+                                None,
+                                None,
+                                Some(tid),
+                                None,
+                            ),
+                        )
+                        .await;
+                        match run {
+                            Ok(result) => {
+                                let st = result.status.clone();
+                                let msg = result.message.clone();
+                                let fc = result.findings.len();
+                                if st == "ok" {
+                                    ("pass", fc, msg, st)
+                                } else {
+                                    ("fail", fc, msg, st)
                                 }
-                                Err(_) => (
-                                    "fail",
-                                    0,
-                                    "poe_synthesis timed out (180s)".to_string(),
-                                    "timeout".to_string(),
-                                ),
                             }
-                        } else {
-                            (
+                            Err(_) => (
                                 "fail",
                                 0,
-                                "poe_synthesis config unavailable".to_string(),
-                                "error".to_string(),
-                            )
+                                "poe_synthesis timed out (180s)".to_string(),
+                                "timeout".to_string(),
+                            ),
                         }
                     } else if !weissman_core::models::engine::is_production_engine_id(engine_id) {
                         (
@@ -1078,7 +1119,7 @@ async fn execute_job_unscoped(
                     "resilience": telem.to_json(),
                 }));
 
-                let _ = persist_findings_best_effort(
+                persist_findings_best_effort(
                     app.as_ref(),
                     tid,
                     Some(client_id),
@@ -1086,7 +1127,7 @@ async fn execute_job_unscoped(
                     &target,
                     &result.findings,
                 )
-                .await;
+                .await?;
 
                 completed_engines.push(engine_id.clone());
                 let progress = json!({
@@ -1114,14 +1155,14 @@ async fn execute_job_unscoped(
             let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Scan-all-engines completed: {}/{} succeeded","status":"completed"}}"#, job.id, succeeded, ordered_engines.len()));
 
             if !target.trim().is_empty() {
-                let _ = crate::superposition_followup::enqueue_after_batch(
+                crate::superposition_followup::enqueue_after_batch(
                     app.as_ref(),
                     tid,
                     client_id,
                     &target,
                     "scan_all_engines",
                 )
-                .await;
+                .await?;
             }
 
             Ok(json!({
@@ -1211,7 +1252,7 @@ async fn execute_job_unscoped(
 
                     total_findings += result.findings.len();
 
-                    let _ = persist_findings_best_effort(
+                    persist_findings_best_effort(
                         app.as_ref(),
                         tid,
                         Some(client_id),
@@ -1219,7 +1260,7 @@ async fn execute_job_unscoped(
                         &target,
                         &result.findings,
                     )
-                    .await;
+                    .await?;
                 }
             }
 
@@ -1451,17 +1492,17 @@ async fn execute_job_unscoped(
                 .await
                 .map_err(|e| e.to_string())?;
             let llm_base_url = cfg_string_tx(&mut tx, tid, "llm_base_url")
-                .await
+                .await?
                 .unwrap_or_else(|| "http://127.0.0.1:8000/v1".to_string());
             let llm_temperature: f64 = cfg_string_tx(&mut tx, tid, "llm_temperature")
-                .await
+                .await?
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(0.2);
             let llm_model = cfg_string_tx(&mut tx, tid, "llm_model")
-                .await
+                .await?
                 .unwrap_or_default();
             let mut max_depth: usize = cfg_string_tx(&mut tx, tid, "semantic_max_sequence_depth")
-                .await
+                .await?
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(4);
             let _ = tx.commit().await;
@@ -1527,22 +1568,12 @@ async fn execute_job_unscoped(
                 .await;
             }
             if let Some(cid) = client_id {
-                if let Ok(mut tx) = db::begin_tenant_tx(app_pool.as_ref(), tid).await {
-                    let log = fuzzy
-                        .reasoning_log
-                        .chars()
-                        .take(120_000)
-                        .collect::<String>();
-                    let _ = sqlx::query(
-                        "INSERT INTO semantic_fuzz_log (tenant_id, client_id, run_id, log_text) VALUES ($1, $2, NULL, $3)",
-                    )
-                    .bind(tid)
-                    .bind(cid)
-                    .bind(&log)
-                    .execute(&mut *tx)
-                    .await;
-                    let _ = tx.commit().await;
-                }
+                let log = crate::semantic_log::encode_semantic_fuzz_log(
+                    &fuzzy.reasoning_log,
+                    &fuzzy.state_nodes,
+                    &fuzzy.state_edges,
+                );
+                persist_semantic_fuzz_log(app_pool.as_ref(), tid, cid, &log).await?;
             }
             let persisted = persist_findings_best_effort(
                 app_pool.as_ref(),
@@ -1552,7 +1583,7 @@ async fn execute_job_unscoped(
                 &target,
                 &fuzzy.result.findings,
             )
-            .await;
+            .await?;
             Ok(json!({
                 "status": fuzzy.result.status,
                 "findings": fuzzy.result.findings,
@@ -1596,7 +1627,12 @@ async fn execute_job_unscoped(
         "genesis_eternal_fuzz" => {
             crate::hpc_runtime::bind_current_thread_genesis_research();
             let genesis_params =
-                crate::ceo::strategy::load_genesis_runtime_params(app_pool.as_ref(), tid).await;
+                match crate::ceo::strategy::load_genesis_runtime_params(app_pool.as_ref(), tid)
+                    .await
+                {
+                    Ok(p) => p,
+                    Err(_) => crate::ceo::strategy::load_env_fallback(),
+                };
             if genesis_params.kill_switch {
                 return Ok(json!({
                     "ok": true,
@@ -1721,13 +1757,13 @@ async fn execute_job_unscoped(
                 .await
                 .map_err(|e| e.to_string())?;
             let n = cfg_string_tx(&mut tx, tid, "timing_sample_size")
-                .await
+                .await?
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(100)
                 .max(50)
                 .min(500);
             let z: f64 = cfg_string_tx(&mut tx, tid, "z_score_sensitivity")
-                .await
+                .await?
                 .and_then(|s| s.parse::<f64>().ok())
                 .unwrap_or(3.0)
                 .clamp(2.0, 5.0);
@@ -1759,7 +1795,7 @@ async fn execute_job_unscoped(
                 &target,
                 &result.findings,
             )
-            .await;
+            .await?;
             Ok(json!({
                 "status": result.status,
                 "findings": result.findings,
@@ -1783,20 +1819,20 @@ async fn execute_job_unscoped(
                 .await
                 .map_err(|e| e.to_string())?;
             let llm_base_url = cfg_string_tx(&mut tx, tid, "llm_base_url")
-                .await
+                .await?
                 .unwrap_or_else(|| "http://127.0.0.1:8000/v1".to_string());
             let llm_temperature: f64 = cfg_string_tx(&mut tx, tid, "llm_temperature")
-                .await
+                .await?
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(0.3);
             let llm_model = cfg_string_tx(&mut tx, tid, "llm_model")
-                .await
+                .await?
                 .unwrap_or_default();
             let ai_redteam_endpoint = cfg_string_tx(&mut tx, tid, "ai_redteam_endpoint")
-                .await
+                .await?
                 .unwrap_or_default();
             let adversarial_strategy = cfg_string_tx(&mut tx, tid, "adversarial_strategy")
-                .await
+                .await?
                 .unwrap_or_else(|| "data_leak".to_string());
             let _ = tx.commit().await;
             let cfg = crate::ai_redteam_engine::AiRedteamConfig {
@@ -1837,7 +1873,7 @@ async fn execute_job_unscoped(
                 &target,
                 &result.findings,
             )
-            .await;
+            .await?;
             Ok(json!({
                 "status": result.status,
                 "findings": result.findings,
@@ -1882,16 +1918,16 @@ async fn execute_job_unscoped(
                 .await
                 .map_err(|e| e.to_string())?;
             let mut config = crate::threat_intel_engine::ThreatIntelConfig::default();
-            if let Some(u) = cfg_string_tx(&mut tx, tid, "llm_base_url").await {
+            if let Some(u) = cfg_string_tx(&mut tx, tid, "llm_base_url").await? {
                 config.llm_base_url = u;
             }
-            if let Some(m) = cfg_string_tx(&mut tx, tid, "llm_model").await {
+            if let Some(m) = cfg_string_tx(&mut tx, tid, "llm_model").await? {
                 config.llm_model = m;
             }
-            if let Some(s) = cfg_string_tx(&mut tx, tid, "enable_zero_day_probing").await {
+            if let Some(s) = cfg_string_tx(&mut tx, tid, "enable_zero_day_probing").await? {
                 config.enable_zero_day_probing = s.to_lowercase() == "true" || s == "1";
             }
-            if let Some(s) = cfg_string_tx(&mut tx, tid, "threat_intel_custom_feed_urls").await {
+            if let Some(s) = cfg_string_tx(&mut tx, tid, "threat_intel_custom_feed_urls").await? {
                 if let Ok(arr) = serde_json::from_str::<Vec<String>>(&s) {
                     config.custom_feed_urls = arr;
                 }
@@ -1950,7 +1986,7 @@ async fn execute_job_unscoped(
                 "tenant-wide radar scan",
                 &result.findings,
             )
-            .await;
+            .await?;
             Ok(json!({
                 "status": result.status,
                 "findings": result.findings,
@@ -1968,19 +2004,19 @@ async fn execute_job_unscoped(
                 .await
                 .map_err(|e| e.to_string())?;
             let llm_base_url = cfg_string_tx(&mut tx, tid, "llm_base_url")
-                .await
+                .await?
                 .unwrap_or_else(|| "http://127.0.0.1:8000/v1".to_string());
             let llm_model = cfg_string_tx(&mut tx, tid, "llm_model")
-                .await
+                .await?
                 .unwrap_or_default();
             let github_token = cfg_string_tx(&mut tx, tid, "github_token")
-                .await
+                .await?
                 .unwrap_or_default();
             let gitlab_api_url = cfg_string_tx(&mut tx, tid, "gitlab_api_url")
-                .await
+                .await?
                 .unwrap_or_default();
             let gitlab_token = cfg_string_tx(&mut tx, tid, "gitlab_token")
-                .await
+                .await?
                 .unwrap_or_default();
             let _ = tx.commit().await;
             let config = crate::pipeline_engine::PipelineConfig {
@@ -2004,7 +2040,7 @@ async fn execute_job_unscoped(
                 repo,
                 &res.findings,
             )
-            .await;
+            .await?;
             Ok(json!({
                 "status": res.status,
                 "findings": res.findings,
@@ -2028,7 +2064,7 @@ async fn execute_job_unscoped(
             .bind(tid)
             .fetch_one(&mut *tx)
             .await
-            .unwrap_or(false);
+            .map_err(|_| "store_down".to_string())?;
             let _ = tx.commit().await;
             if !ok {
                 return Err("client not found".into());
@@ -2155,7 +2191,7 @@ async fn execute_job_unscoped(
                 &target,
                 &res.findings,
             )
-            .await;
+            .await?;
             Ok(json!({
                 "status": res.status,
                 "findings": res.findings,
@@ -2210,7 +2246,9 @@ async fn execute_job_unscoped(
                 crate::llm_fuzzer_engine::run_and_persist(&mut tx, tid, client_id, &llm_cfg)
                     .await
                     .map_err(|e| e.to_string())?;
-            let _ = tx.commit().await;
+            if tx.commit().await.is_err() {
+                return Err("store_down".into());
+            }
             Ok(json!({"ok": true, "summary": summary}))
         }
         "cloud_scan_run" => {
@@ -2251,13 +2289,14 @@ async fn execute_job_unscoped(
             let mut tx = db::begin_tenant_tx(app_pool.as_ref(), tid)
                 .await
                 .map_err(|e| e.to_string())?;
-            let _ = sqlx::query("DELETE FROM cloud_scan_findings WHERE client_id = $1")
+            sqlx::query("DELETE FROM cloud_scan_findings WHERE client_id = $1")
                 .bind(client_id)
                 .execute(&mut *tx)
-                .await;
+                .await
+                .map_err(|_| "store_down".to_string())?;
             for f in &findings {
                 let detail = serde_json::to_string(&f.detail).unwrap_or_else(|_| "{}".to_string());
-                let _ = sqlx::query(
+                sqlx::query(
                     r#"INSERT INTO cloud_scan_findings (tenant_id, client_id, resource_type, resource_id, region, rule_id, severity, title, detail_json)
                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"#,
                 )
@@ -2271,9 +2310,12 @@ async fn execute_job_unscoped(
                 .bind(&f.title)
                 .bind(&detail)
                 .execute(&mut *tx)
-                .await;
+                .await
+                .map_err(|_| "store_down".to_string())?;
             }
-            let _ = tx.commit().await;
+            if tx.commit().await.is_err() {
+                return Err("store_down".into());
+            }
             Ok(json!({"ok": true, "findings_count": findings.len()}))
         }
         "payload_sync" => {
@@ -2312,7 +2354,7 @@ async fn execute_job_unscoped(
             .bind(tid)
             .fetch_one(&mut *tx)
             .await
-            .unwrap_or(false);
+            .map_err(|_| "store_down".to_string())?;
             let _ = tx.commit().await;
             if !ok {
                 return Err("client not found".into());
@@ -2351,7 +2393,7 @@ async fn execute_job_unscoped(
                 &target,
                 &finding_values,
             )
-            .await;
+            .await?;
 
             if findings.iter().any(|v| v.llm_user_prompt.is_some()) {
                 if let Ok(mut tx2) = db::begin_tenant_tx(app_pool.as_ref(), tid).await {

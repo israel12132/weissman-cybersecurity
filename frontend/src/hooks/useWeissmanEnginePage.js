@@ -24,9 +24,9 @@ export function useWeissmanEnginePage(engineId, findings, options = {}) {
   }
 }
 
-/** Apply a history run payload to parent setters. */
+/** Apply a history run payload to parent setters. Unavailable is not never-run. */
 export function applyHistoryFindings(run, setFindings, extras = {}) {
-  if (!run) return false
+  if (!run || run.unavailable) return false
   setFindings(run.findings || [])
   if (extras.setLastUpdated && run.completedAt) extras.setLastUpdated(run.completedAt)
   if (extras.setJobId && run.jobId) extras.setJobId(run.jobId)

@@ -41,6 +41,7 @@ export default function ShellScanActions({
           {xlsxLabel || t('common.export_xlsx')}
         </Button>
       )}
+      {typeof onExport === 'function' && (
       <Button variant="unstyled"
         type="button"
         onClick={onExport}
@@ -50,6 +51,7 @@ export default function ShellScanActions({
         <Download className="w-3.5 h-3.5" />
         {exportLabel || t('weissmanFindings.export_csv')}
       </Button>
+      )}
     </div>
   )
 }

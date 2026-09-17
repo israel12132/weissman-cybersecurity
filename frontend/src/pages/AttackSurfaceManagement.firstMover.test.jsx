@@ -1,6 +1,9 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
-import { FirstMoverDeltaPanel, ctKillChain } from './AttackSurfaceManagement.jsx'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { render, screen, cleanup } from '@testing-library/react'
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { FirstMoverDeltaPanel } from './AttackSurfaceManagement.jsx'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k) => k, i18n: { language: 'en' } }),
@@ -47,22 +50,8 @@ vi.mock('../lib/useJobPoll', () => ({
 vi.mock('../lib/clientTarget', () => ({ firstClientTarget: () => '' }))
 
 describe('FirstMoverDeltaPanel', () => {
-  it('ctKillChain reads CT fusion + OAST follow-on from nerve', () => {
-    const chain = ctKillChain({
-      certstream: { hunts_enqueued: 4 },
-      oast: { configured: true },
-      fusion: {
-        ct_enqueue_engine: 'first_mover_delta_fusion',
-        follow_on_engines: ['subdomain_takeover', 'jwt_attack'],
-        oast_follow_on_engines: ['oast_oob', 'ssrf_advanced'],
-      },
-    })
-    expect(chain.ctEngine).toBe('first_mover_delta_fusion')
-    expect(chain.hunts).toBe(4)
-    expect(chain.oastLive).toBe(true)
-    expect(chain.followOn).toContain('jwt_attack')
-    expect(chain.oastFollowOn).toContain('oast_oob')
-  })
+  afterEach(cleanup)
+
   it('renders added/changed/removed hosts from live surface-diff payload', () => {
     const diff = {
       current_count: 3,
@@ -105,6 +94,50 @@ describe('FirstMoverDeltaPanel', () => {
     expect(screen.getByTestId('ct-kill-chain')).toBeTruthy()
   })
 
+  it('fail-visibly reports last OAST callback instead of looking live when none exist', () => {
+    render(
+      <FirstMoverDeltaPanel
+        diff={{ current_count: 0, added: [], removed: [], changed: [] }}
+        loading={false}
+        hunting={false}
+        fusionHunting={false}
+        onHunt={() => {}}
+        onFusion={() => {}}
+        huntDisabled
+        nerve={{
+          certstream: { connected: false, enabled: false },
+          oast: { configured: false, last_callback_at: null },
+          nvd: { api_key_configured: false },
+        }}
+      />,
+    )
+    expect(screen.getByText(/pages.attackSurfaceManagement.nerve_oast_last/)).toBeTruthy()
+    expect(screen.getAllByText(/pages.attackSurfaceManagement.nerve_oast_none/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/pages.attackSurfaceManagement.nerve_off/).length).toBeGreaterThan(0)
+    expect(screen.queryByText(/pages.attackSurfaceManagement.nerve_live/)).toBeNull()
+  })
+
+  it('does not label OAST live when the domain is set but no callback exists', () => {
+    render(
+      <FirstMoverDeltaPanel
+        diff={{ current_count: 0, added: [], removed: [], changed: [] }}
+        loading={false}
+        hunting={false}
+        fusionHunting={false}
+        onHunt={() => {}}
+        onFusion={() => {}}
+        huntDisabled
+        nerve={{
+          certstream: { connected: false, enabled: false },
+          oast: { configured: true, last_callback_at: null },
+          nvd: { api_key_configured: false },
+        }}
+      />,
+    )
+    expect(screen.getByText(/pages.attackSurfaceManagement.nerve_oast_idle/)).toBeTruthy()
+    expect(screen.queryByText(/pages.attackSurfaceManagement.nerve_live/)).toBeNull()
+  })
+
   it('shows unavailable copy when the store is down without treating it as empty', () => {
     render(
       <FirstMoverDeltaPanel
@@ -124,6 +157,7 @@ describe('FirstMoverDeltaPanel', () => {
     )
     expect(screen.getByText('pages.attackSurfaceManagement.first_mover_unavailable')).toBeTruthy()
     expect(screen.queryByText('pages.attackSurfaceManagement.first_mover_empty')).toBeNull()
+    expect(screen.queryByText('pages.attackSurfaceManagement.first_mover_added')).toBeNull()
   })
 
   it('shows empty baseline copy when no snapshot exists', () => {
@@ -137,5 +171,55 @@ describe('FirstMoverDeltaPanel', () => {
       />,
     )
     expect(screen.getByText('pages.attackSurfaceManagement.first_mover_empty')).toBeTruthy()
+    expect(screen.queryByTestId('first-mover-nerve-unavailable')).toBeNull()
+  })
+
+  it('does not paint nerve_off when the first-mover nerve API is unavailable', () => {
+    render(
+      <FirstMoverDeltaPanel
+        diff={{ current_count: 0, added: [], removed: [], changed: [] }}
+        loading={false}
+        hunting={false}
+        onHunt={() => {}}
+        huntDisabled
+        nerve={{ unavailable: true, ok: false }}
+      />,
+    )
+    expect(screen.getByTestId('first-mover-nerve-unavailable')).toBeTruthy()
+    expect(screen.queryByText(/pages.attackSurfaceManagement.nerve_off/)).toBeNull()
+    expect(screen.queryByText(/pages.attackSurfaceManagement.nerve_live/)).toBeNull()
+  })
+
+  it('dashes live assets when current_count is missing instead of painting 0', () => {
+    render(
+      <FirstMoverDeltaPanel
+        diff={{ added: [{ fqdn: 'shop.example.com', evidence: 'new' }], removed: [], changed: [] }}
+        loading={false}
+        hunting={false}
+        onHunt={() => {}}
+        huntDisabled
+      />,
+    )
+    expect(screen.getByTestId('first-mover-asset-count').textContent).toBe('—')
+    expect(screen.getByText('shop.example.com')).toBeTruthy()
+  })
+
+  it('treats unavailable surface-diff as store-down and always clears delta loading', () => {
+    const src = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), 'AttackSurfaceManagement.jsx'),
+      'utf8',
+    )
+    expect(src).toMatch(/deltaAbortRef/)
+    expect(src).toMatch(/d\.ok === false \|\| d\.unavailable/)
+    expect(src).toMatch(/deltaAbortRef\.current === ac/)
+  })
+
+  it('silent nerve polls skip while inflight instead of aborting the live request', () => {
+    const src = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), 'AttackSurfaceManagement.jsx'),
+      'utf8',
+    )
+    expect(src).toMatch(/silent && nerveInflightRef/)
+    expect(src).toMatch(/loadNerve\(\{ silent: true \}\)/)
   })
 })

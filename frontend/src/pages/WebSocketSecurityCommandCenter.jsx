@@ -223,8 +223,8 @@ function extractSummary(findings) {
   if (!s) return null
   const ev = s.evidence || {}
   return {
-    posture_score: s.posture_score ?? s.score ?? ev.posture_score ?? ev.score ?? 100,
-    grade: s.grade ?? ev.grade ?? 'A',
+    posture_score: s.posture_score ?? s.score ?? ev.posture_score ?? ev.score,
+    grade: s.grade ?? ev.grade,
     worst_severity: s.worst_severity ?? ev.worst_severity ?? 'info',
     weak_categories: s.weak_categories ?? ev.weak_categories ?? [],
   }
@@ -291,9 +291,12 @@ function FindingCard({ f }) {
 
 function Scorecard({ summary, t }) {
   if (!summary) return null
-  const score = Number(summary.posture_score ?? 100)
-  const grade = summary.grade ?? 'A'
-  const color = gradeColor(grade)
+  const raw = summary.posture_score
+  const hasScore = raw != null && Number.isFinite(Number(raw))
+  const score = hasScore ? Number(raw) : 0
+  const grade = summary.grade
+  const hasGrade = grade != null && String(grade).trim() !== ''
+  const color = hasScore ? gradeColor(grade) : 'rgba(255,255,255,0.12)'
   const worst = summary.worst_severity ?? 'info'
   const st = SEV_STYLE[worst] || SEV_STYLE.info
   const cats = summary.weak_categories || []
@@ -304,16 +307,16 @@ function Scorecard({ summary, t }) {
           <div className="relative w-28 h-28 shrink-0">
             <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
               <circle cx="50" cy="50" r="44" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="8" />
-              <circle cx="50" cy="50" r="44" fill="none" stroke={color} strokeWidth="8" strokeLinecap="round" strokeDasharray={`${(score / 100) * 276.46} 276.46`} />
+              <circle cx="50" cy="50" r="44" fill="none" stroke={color} strokeWidth="8" strokeLinecap="round" strokeDasharray={hasScore ? `${(score / 100) * 276.46} 276.46` : '0 276.46'} />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-3xl font-bold" style={{ color }}>{score}</span>
+              <span className="text-3xl font-bold" style={{ color }}>{hasScore ? score : '—'}</span>
               <span className="text-[10px] font-mono text-[var(--text-muted)]">/ 100</span>
             </div>
           </div>
           <div>
             <div className="text-[10px] font-mono uppercase tracking-widest text-cyan-400/60">{t('pages.websocketSecurity.posture', 'WebSocket Posture')}</div>
-            <div className="text-5xl font-black leading-none" style={{ color }}>{grade}</div>
+            <div className="text-5xl font-black leading-none" style={{ color }}>{hasGrade ? grade : '—'}</div>
             <span className={`inline-block mt-1.5 text-[10px] font-mono px-2 py-0.5 rounded-full border ${st.bd} ${st.text}`}>
               {t('pages.websocketSecurity.worst', 'Worst: {{sev}}', { sev: worst })}
             </span>
@@ -394,7 +397,13 @@ export default function WebSocketSecurityCommandCenter() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE, detailFindings)
+
+  const handleExportCsv = useCallback(() => {
+    if (historyUnavailable) return
+    exportCsv()
+  }, [historyUnavailable, exportCsv])
 
   useEffect(() => {
     refreshFromHistory().then((run) => {
@@ -488,10 +497,10 @@ export default function WebSocketSecurityCommandCenter() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={exportCsv}
+          onExport={historyUnavailable ? undefined : handleExportCsv}
           refreshLoading={historyLoading}
           refreshDisabled={status === 'running'}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={historyUnavailable || !filteredFindings.length}
         />
       )}
     >
@@ -654,8 +663,13 @@ export default function WebSocketSecurityCommandCenter() {
         <p className="text-xs font-mono text-[var(--text-muted)] mb-6">{t('pages.websocketSecurity.select_client_hint', 'Select an in-scope client — Weissman WebSocket assessment requires explicit client authorization.')}</p>
       )}
 
-      {detailFindings.length > 0 && <Scorecard summary={summary} t={t} />}
+      {detailFindings.length > 0 && !historyUnavailable && <Scorecard summary={summary} t={t} />}
 
+      {historyUnavailable && (
+        <p data-testid="websocket-security-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+          {t('pages.websocketSecurity.history_unavailable')}
+        </p>
+      )}
       <WeissmanFindingsPanel
         findings={detailFindings}
         filteredFindings={filteredFindings}
@@ -670,7 +684,10 @@ export default function WebSocketSecurityCommandCenter() {
         lastUpdated={lastUpdated}
         jobId={pendingJobId || lastJobId}
         accent={ACCENT}
-        showEmptyReady={status !== 'running' && detailFindings.length === 0}
+        unavailable={historyUnavailable}
+        unavailableTitle={t('pages.websocketSecurity.history_unavailable')}
+        unavailableBody={t('pages.websocketSecurity.history_unavailable')}
+        showEmptyReady={status !== 'running' && detailFindings.length === 0 && !historyUnavailable}
         emptyReadyTitle={t('pages.websocketSecurity.empty_hint', 'Run a scan to assess CSWSH, live message auth, real-time stack chains and WebSocket posture.')}
         emptyReadyBody={t('pages.websocketSecurity.empty_hint', 'Run a scan to assess CSWSH, live message auth, real-time stack chains and WebSocket posture.')}
         renderFinding={(f, i) => <FindingCard key={i} f={f} />}

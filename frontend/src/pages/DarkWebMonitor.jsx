@@ -56,6 +56,141 @@ function parseFindings(data) {
     )
 }
 
+// ─── Underground war room (adversary exposure delta) ─────────────────────────
+// Closed-source underground exposure: normalize the live delta payload, map
+// per-source health to an honest chip state, and never invent a source that the
+// backend did not report.
+
+export const ADVERSARY_PLAYBOOK = [
+  {
+    id: 'closed_source_search',
+    mitre: 'T1597',
+    label: 'pages.darkWebMonitor.play_closed_source',
+    engines: ['leak_hunter', 'darkweb_intel'],
+  },
+  {
+    id: 'credential_leak',
+    mitre: 'T1589',
+    label: 'pages.darkWebMonitor.play_credential_leak',
+    engines: ['leak_hunter'],
+  },
+  {
+    id: 'ioc_correlation',
+    mitre: 'T1596',
+    label: 'pages.darkWebMonitor.play_ioc',
+    engines: ['threat_intel_fusion', 'dark_web_monitor'],
+  },
+]
+
+export function parseUndergroundPayload(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return {
+      unavailable: true,
+      message: '',
+      current_count: 0,
+      previous_count: 0,
+      added: [],
+      removed: [],
+      hits: [],
+      sources: [],
+      health: [],
+    }
+  }
+  return {
+    unavailable: payload.unavailable === true,
+    message: typeof payload.message === 'string' ? payload.message : '',
+    current_count: Number(payload.current_count) || 0,
+    previous_count: Number(payload.previous_count) || 0,
+    added: Array.isArray(payload.added) ? payload.added : [],
+    removed: Array.isArray(payload.removed) ? payload.removed : [],
+    hits: Array.isArray(payload.hits) ? payload.hits : [],
+    sources: Array.isArray(payload.sources) ? payload.sources : [],
+    health: Array.isArray(payload.health) ? payload.health : [],
+  }
+}
+
+// hit = source reachable with matches; quiet = reachable, no matches;
+// failed = source unreachable/errored; unknown = backend never reported it.
+export function sourceChipState(id, parsed) {
+  const entry = (parsed?.health || []).find((s) => s && s.id === id)
+  if (!entry) return 'unknown'
+  if (entry.ok === false) return 'failed'
+  return (Number(entry.hit_count) || 0) > 0 ? 'hit' : 'quiet'
+}
+
+export function UndergroundWarRoom({
+  exposure,
+  loading = false,
+  hunting = false,
+  onHunt,
+  huntDisabled = false,
+  playbookCoverage = {},
+}) {
+  const { t } = useTranslation()
+  const parsed = parseUndergroundPayload(exposure)
+  const sources = parsed.health.length ? parsed.health.map((h) => h.id) : parsed.sources
+  const chipLabel = (state) =>
+    ({
+      hit: t('pages.darkWebMonitor.source_hit'),
+      quiet: t('pages.darkWebMonitor.source_quiet'),
+      failed: t('pages.darkWebMonitor.source_failed'),
+      unknown: t('pages.darkWebMonitor.source_unknown'),
+    }[state] || state)
+  return (
+    <section className="rounded-2xl border border-fuchsia-500/25 bg-gradient-to-br from-fuchsia-950/30 via-black/40 to-cyan-950/20 p-4 mb-5">
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-fuchsia-100">{t('pages.darkWebMonitor.war_title')}</h3>
+          {parsed.message && (
+            <p className="text-[12px] text-[var(--text-tertiary)] font-mono mt-1 max-w-2xl">{parsed.message}</p>
+          )}
+        </div>
+        <Button
+          type="button"
+          onClick={onHunt}
+          disabled={huntDisabled || hunting || loading}
+          className="px-4 py-2 rounded-lg text-sm font-mono font-semibold bg-fuchsia-500/20 border border-fuchsia-400/40 text-fuchsia-100 hover:bg-fuchsia-500/30 disabled:opacity-40"
+        >
+          {hunting ? t('pages.darkWebMonitor.hunting') : t('pages.darkWebMonitor.hunt')}
+        </Button>
+      </div>
+      <div className="flex flex-wrap gap-4 mb-3">
+        <div className="rounded-lg border border-white/[0.07] bg-black/30 px-3 py-2">
+          <p className="text-[9px] font-mono uppercase tracking-wider text-[var(--text-muted)]">
+            {t('pages.darkWebMonitor.war_current')}
+          </p>
+          <span className="text-xl font-bold tabular-nums text-cyan-300">{parsed.current_count}</span>
+        </div>
+        <div className="rounded-lg border border-white/[0.07] bg-black/30 px-3 py-2">
+          <p className="text-[9px] font-mono uppercase tracking-wider text-[var(--text-muted)]">
+            {t('pages.darkWebMonitor.war_previous')}
+          </p>
+          <span className="text-xl font-bold tabular-nums text-white/70">{parsed.previous_count}</span>
+        </div>
+      </div>
+      <ul className="flex flex-wrap gap-2 mb-3">
+        {sources.map((id) => (
+          <li key={id} className="text-[10px] font-mono px-2 py-1 rounded-lg border border-white/[0.08] bg-black/30">
+            {String(id).toUpperCase()} <span>{chipLabel(sourceChipState(id, parsed))}</span>
+          </li>
+        ))}
+      </ul>
+      <ul className="space-y-1">
+        {ADVERSARY_PLAYBOOK.map((row) => (
+          <li key={row.id} className="text-[11px] font-mono text-[var(--text-tertiary)]">
+            <span>{t(row.label)}</span> · {row.mitre} ·{' '}
+            <span>
+              {playbookCoverage[row.mitre]
+                ? t('pages.darkWebMonitor.play_proven')
+                : t('pages.darkWebMonitor.play_pending')}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
 export default function DarkWebMonitor() {
   const { t } = useTranslation()
   const [findings, setFindings] = useState([])
@@ -76,7 +211,6 @@ export default function DarkWebMonitor() {
       setLastRefresh(new Date())
     } catch (e) {
       setError(e.message || t('pages.darkWebMonitor.load_error', { error: '' }))
-      setFindings([])
     } finally {
       setLoading(false)
     }
@@ -122,7 +256,8 @@ export default function DarkWebMonitor() {
   const { exportCsv: exportWorkbenchCsv } = useFindingsWorkbench(filtered, { csvPrefix: 'dark-web-findings' })
 
   const exportCsv = () => {
-    if (filtered.length) exportWorkbenchCsv()
+    if (error || !filtered.length) return
+    exportWorkbenchCsv()
   }
 
   const xlsxPath = useMemo(() => {
@@ -207,11 +342,11 @@ export default function DarkWebMonitor() {
           </Button>
           <ShellScanActions
             onRefresh={load}
-            onExport={exportCsv}
-            onExportXlsx={exportXlsx}
+            onExport={error ? undefined : exportCsv}
+            onExportXlsx={error ? undefined : exportXlsx}
             refreshLoading={loading}
-            exportDisabled={filtered.length === 0}
-            exportXlsxDisabled={filtered.length === 0}
+            exportDisabled={!!error || filtered.length === 0}
+            exportXlsxDisabled={!!error || filtered.length === 0}
           />
         </div>
       )}
@@ -222,7 +357,7 @@ export default function DarkWebMonitor() {
           <p className="text-xs text-rose-100/70 leading-relaxed">{t('pages.darkWebMonitor.evidence_notice')}</p>
         </div>
 
-        {lastRefresh && (
+        {lastRefresh && !error && (
           <p className="text-[10px] font-mono text-[var(--text-disabled)]">
             {t('pages.darkWebMonitor.last_updated', { time: lastRefresh.toLocaleTimeString() })}
           </p>
@@ -230,6 +365,14 @@ export default function DarkWebMonitor() {
 
         {loading && findings.length === 0 ? (
           <SkeletonWidgetGrid count={5} />
+        ) : error ? (
+          <div data-testid="dark-web-unavailable">
+            <EmptyState
+              icon="alert"
+              title={t('pages.darkWebMonitor.unavailable_title')}
+              body={t('pages.darkWebMonitor.unavailable_body')}
+            />
+          </div>
         ) : (
           <>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -300,7 +443,7 @@ export default function DarkWebMonitor() {
               </Button>
             ))}
           </div>
-          {sources.length > 1 && (
+          {sources.length > 1 && !error && (
             <select
               value={sourceFilter}
               onChange={(e) => setSourceFilter(e.target.value)}
@@ -319,7 +462,9 @@ export default function DarkWebMonitor() {
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Filter className="w-4 h-4 text-rose-400" />
               {t('pages.darkWebMonitor.findings_heading')}
-              <span className="text-[var(--text-muted)] font-mono text-xs">({filtered.length})</span>
+              {!error && (
+                <span className="text-[var(--text-muted)] font-mono text-xs">({filtered.length})</span>
+              )}
             </h3>
             <Link to="/findings" className="text-xs text-cyan-300 hover:text-cyan-200">
               {t('pages.darkWebMonitor.open_findings')}
@@ -328,6 +473,14 @@ export default function DarkWebMonitor() {
 
           {loading && findings.length === 0 ? (
             <div className="p-6"><SkeletonTable rows={6} cols={5} /></div>
+          ) : error ? (
+            <div className="p-8">
+              <EmptyState
+                icon="alert"
+                title={t('pages.darkWebMonitor.unavailable_title')}
+                body={t('pages.darkWebMonitor.unavailable_body')}
+              />
+            </div>
           ) : findings.length === 0 ? (
             <div className="p-8">
               <EmptyState

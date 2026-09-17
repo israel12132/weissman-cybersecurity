@@ -247,7 +247,9 @@ async fn drain_once(pool: &PgPool, tenant_id: i64, limit: i64) -> Result<u64, St
     .map_err(|e| format!("cluster ingest claim: {e}"))?;
 
     if rows.is_empty() {
-        let _ = tx.commit().await;
+        if tx.commit().await.is_err() {
+            return Err("store_down".to_string());
+        }
         return Ok(0);
     }
 

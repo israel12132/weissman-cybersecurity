@@ -56,7 +56,9 @@ export default function MobileSecurity() {
   const [searchTerm, setSearchTerm] = useState('');
   const [scanningAppId, setScanningAppId] = useState(null);
   const [pendingJobId, setPendingJobId] = useState(null);
-  const [scanError, setScanError] = useState(null);
+  const [appsUnavailable, setAppsUnavailable] = useState(false)
+  const [clientsUnavailable, setClientsUnavailable] = useState(false)
+  const [scanError, setScanError] = useState(null)
 
   const fetchMobileApps = useCallback(async () => {
     setLoading(true);
@@ -64,8 +66,9 @@ export default function MobileSecurity() {
       const data = await apiFetch('/api/mobile-security/apps');
       setApps(Array.isArray(data.apps) ? data.apps : []);
       setFindings(Array.isArray(data.findings) ? data.findings : []);
+      setAppsUnavailable(false);
     } catch {
-      // non-critical: list stays empty and the empty-state explains next steps
+      setAppsUnavailable(true);
     } finally {
       setLoading(false);
     }
@@ -79,7 +82,7 @@ export default function MobileSecurity() {
         setClients(d)
         if (d.length) setSelectedClientId(String(d[0].id))
       })
-      .catch(() => setClients([]));
+      .catch(() => setClientsUnavailable(true));
   }, [fetchMobileApps]);
 
   const platformFindings = useMemo(
@@ -101,7 +104,13 @@ export default function MobileSecurity() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(MOBILE_ENGINE, platformFindings);
+
+  const handleExportCsv = useCallback(() => {
+    if (historyUnavailable || appsUnavailable) return
+    exportCsv()
+  }, [historyUnavailable, appsUnavailable, exportCsv])
 
   useEffect(() => {
     refreshFromHistory().then((run) => {
@@ -198,10 +207,10 @@ export default function MobileSecurity() {
   const refreshAction = (
     <ShellScanActions
       onRefresh={handleRefresh}
-      onExport={exportCsv}
+      onExport={historyUnavailable || appsUnavailable ? undefined : handleExportCsv}
       refreshLoading={historyLoading || loading}
       refreshDisabled={Boolean(pendingJobId)}
-      exportDisabled={!filteredFindings.length}
+      exportDisabled={historyUnavailable || appsUnavailable || !filteredFindings.length}
     />
   );
 
@@ -215,6 +224,11 @@ export default function MobileSecurity() {
       actions={refreshAction}
     >
       <div className="space-y-6">
+        {clientsUnavailable && (
+          <p data-testid="mobile-security-clients-unavailable" className="text-xs text-amber-300/80 font-mono">
+            {t('pages.mobileSecurity.clients_unavailable')}
+          </p>
+        )}
         {clients.length > 0 && (
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-mono text-[var(--text-muted)]">{t('pages.mobileSecurity.client_label')}</span>
@@ -235,13 +249,21 @@ export default function MobileSecurity() {
           </div>
         )}
 
-        {/* KPIs — all derived from the real API response */}
+        {appsUnavailable ? (
+          <div data-testid="mobile-security-unavailable">
+            <EmptyState
+              icon="alert"
+              title={t('pages.mobileSecurity.unavailable_title')}
+              body={t('pages.mobileSecurity.unavailable_body')}
+            />
+          </div>
+        ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[
             { key: 'stat_total_apps', value: apps.length, color: '#22d3ee', Icon: Smartphone },
             { key: 'stat_ios', value: apps.filter((a) => a.platform === 'ios').length, color: '#a78bfa', Icon: Shield },
             { key: 'stat_android', value: apps.filter((a) => a.platform === 'android').length, color: '#34d399', Icon: Shield },
-            { key: 'stat_findings', value: findings.length, color: '#fb923c', Icon: AlertTriangle },
+            { key: 'stat_findings', value: historyUnavailable ? '—' : findings.length, color: '#fb923c', Icon: AlertTriangle },
           ].map(({ key, value, color, Icon }) => (
             <div key={key} className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] backdrop-blur-md p-4">
               <div className="flex items-start justify-between">
@@ -258,9 +280,10 @@ export default function MobileSecurity() {
             </div>
           ))}
         </div>
+        )}
 
         {/* Severity distribution from the real findings list */}
-        {findings.length > 0 && (
+        {!appsUnavailable && !historyUnavailable && findings.length > 0 && (
           <div className="flex flex-wrap items-center gap-2">
             {SEVERITY_KEYS.filter((k) => sevCounts[k] > 0).map((k) => (
               <span
@@ -316,6 +339,15 @@ export default function MobileSecurity() {
 
           {loading ? (
             <div className="p-4"><SkeletonTable rows={4} cols={4} /></div>
+          ) : appsUnavailable ? (
+            <div className="p-4">
+              <EmptyState
+                compact
+                icon="alert"
+                title={t('pages.mobileSecurity.unavailable_title')}
+                body={t('pages.mobileSecurity.unavailable_body')}
+              />
+            </div>
           ) : filteredApps.length === 0 ? (
             <div className="p-4">
               <EmptyState
@@ -347,12 +379,12 @@ export default function MobileSecurity() {
                         <h4 className="text-sm font-semibold text-white truncate">
                           {app.name || app.package_id || '—'}
                         </h4>
-                        {app.max_severity && <SeverityBadge severity={app.max_severity} t={t} />}
+                        {!historyUnavailable && app.max_severity && <SeverityBadge severity={app.max_severity} t={t} />}
                       </div>
                       <div className="flex items-center gap-3 text-xs text-[var(--text-muted)] font-mono flex-wrap">
                         <span className="truncate">{t('pages.mobileSecurity.package_label')} {app.package_id || '—'}</span>
                         <span>•</span>
-                        <span>{t('pages.mobileSecurity.findings_count_badge', { count: app.findings_count ?? 0 })}</span>
+                        <span>{historyUnavailable ? '—' : t('pages.mobileSecurity.findings_count_badge', { count: app.findings_count ?? 0 })}</span>
                       </div>
                     </div>
 
@@ -382,6 +414,11 @@ export default function MobileSecurity() {
         </div>
 
         {/* Recent mobile findings (real list) */}
+        {historyUnavailable && (
+          <p data-testid="mobile-security-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+            {t('pages.mobileSecurity.history_unavailable')}
+          </p>
+        )}
         <WeissmanFindingsPanel
           findings={platformFindings}
           filteredFindings={filteredFindings}
@@ -397,7 +434,10 @@ export default function MobileSecurity() {
           jobId={pendingJobId || lastJobId}
           accent="#22d3ee"
           title={t('pages.mobileSecurity.recent_findings_heading')}
-          showEmptyReady={!loading && platformFindings.length === 0}
+          unavailable={historyUnavailable || appsUnavailable}
+          unavailableTitle={t('pages.mobileSecurity.history_unavailable')}
+          unavailableBody={t('pages.mobileSecurity.history_unavailable')}
+          showEmptyReady={!loading && !historyUnavailable && !appsUnavailable && platformFindings.length === 0}
           emptyReadyTitle={t('pages.mobileSecurity.findings_empty_title')}
           renderFinding={(f) => (
             <div key={f.id} className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2 flex items-start gap-3">

@@ -45,8 +45,10 @@ fn non_empty(s: Option<String>) -> Option<String> {
     s.filter(|x| !x.trim().is_empty())
 }
 
-async fn config_value(pool: &PgPool, tenant_id: i64, key: &str) -> Option<String> {
-    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await.ok()?;
+async fn config_value(pool: &PgPool, tenant_id: i64, key: &str) -> Result<Option<String>, String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let val = sqlx::query_scalar::<_, String>(
         "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = $2",
     )
@@ -54,43 +56,45 @@ async fn config_value(pool: &PgPool, tenant_id: i64, key: &str) -> Option<String
     .bind(key)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
-    non_empty(val)
+    .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
+    Ok(non_empty(val))
 }
 
-async fn load_delivery_config(pool: &PgPool, tenant_id: i64) -> DeliveryConfig {
+async fn load_delivery_config(pool: &PgPool, tenant_id: i64) -> Result<DeliveryConfig, String> {
     let alert_webhook_url = config_value(pool, tenant_id, "alert_webhook_url")
-        .await
+        .await?
         .or_else(|| non_empty(std::env::var("WEISSMAN_ALERT_WEBHOOK_URL").ok()));
     let slack_webhook_url = config_value(pool, tenant_id, "slack_webhook_url")
-        .await
+        .await?
         .or_else(|| non_empty(std::env::var("SLACK_WEBHOOK_URL").ok()));
     let teams_webhook_url = config_value(pool, tenant_id, "teams_webhook_url")
-        .await
+        .await?
         .or_else(|| non_empty(std::env::var("TEAMS_WEBHOOK_URL").ok()))
         .or_else(|| non_empty(std::env::var("WEISSMAN_TEAMS_WEBHOOK_URL").ok()));
     let pagerduty_routing_key = config_value(pool, tenant_id, "pagerduty_routing_key")
-        .await
+        .await?
         .or_else(|| non_empty(std::env::var("PAGERDUTY_ROUTING_KEY").ok()));
     let alert_email_to = config_value(pool, tenant_id, "alert_email_to")
-        .await
+        .await?
         .or_else(|| non_empty(std::env::var("WEISSMAN_SMTP_TO").ok()));
 
-    let integrations = config_value(pool, tenant_id, "integrations_registry")
-        .await
-        .and_then(|raw| serde_json::from_str::<Vec<Value>>(&raw).ok())
-        .unwrap_or_default();
+    let integrations = match config_value(pool, tenant_id, "integrations_registry").await? {
+        None => Vec::new(),
+        Some(raw) => serde_json::from_str::<Vec<Value>>(&raw)
+            .map_err(|_| "store_down".to_string())?,
+    };
 
-    DeliveryConfig {
+    Ok(DeliveryConfig {
         alert_webhook_url,
         slack_webhook_url,
         teams_webhook_url,
         pagerduty_routing_key,
         alert_email_to,
         integrations,
-    }
+    })
 }
 
 fn integration_config<'a>(integrations: &'a [Value], id: &str) -> Option<&'a Value> {
@@ -505,29 +509,151 @@ async fn deliver_channel(
     }
 }
 
+/// Self-contained snapshot persisted to the notification outbox so a retry can rebuild the exact
+/// alert without re-reading the (possibly-mutated) finding row and without persisting any endpoint
+/// secret. Mirrors the shape of [`alert_payload`]'s `rule`/`finding` keys.
+fn outbox_envelope(rule: &AlertRuleInfo, finding: &AlertFindingInfo) -> Value {
+    json!({
+        "rule": { "id": rule.id, "name": rule.name },
+        "finding": finding_evidence(finding),
+    })
+}
+
+fn rule_from_envelope(env: &Value) -> AlertRuleInfo {
+    let r = env.get("rule");
+    AlertRuleInfo {
+        id: r.and_then(|v| v.get("id")).and_then(Value::as_i64).unwrap_or(0),
+        name: r
+            .and_then(|v| v.get("name"))
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string(),
+    }
+}
+
+fn finding_from_envelope(env: &Value) -> AlertFindingInfo {
+    let f = env.get("finding").cloned().unwrap_or(Value::Null);
+    let s = |k: &str| f.get(k).and_then(Value::as_str).unwrap_or("").to_string();
+    let flt = |k: &str| f.get(k).and_then(Value::as_f64).unwrap_or(0.0);
+    let boolean = |k: &str| f.get(k).and_then(Value::as_bool).unwrap_or(false);
+    AlertFindingInfo {
+        id: f.get("id").and_then(Value::as_i64).unwrap_or(0),
+        severity: s("severity"),
+        title: s("title"),
+        description: s("description"),
+        source: s("source"),
+        cve: s("cve"),
+        epss: flt("epss"),
+        kev: boolean("kev"),
+        cvss: flt("cvss"),
+        client_id: f.get("client_id").and_then(Value::as_i64).unwrap_or(0),
+        proof: s("proof"),
+        target: s("target"),
+        crown_jewel: boolean("crown_jewel"),
+        oast_confirmed: boolean("oast_confirmed"),
+        path_hops: f.get("path_hops").and_then(Value::as_u64).map(|n| n as u32),
+        path_jewel: s("path_jewel"),
+        deep_link: s("deep_link"),
+    }
+}
+
+/// Rebuild the rule + finding from a stored outbox envelope and (re)send them on `channel`, reusing
+/// the exact same live-config resolution, SSRF guard and signing as [`deliver_channel`]. Returns
+/// whether the send succeeded. Called only by the durable retry worker in
+/// [`crate::notification_outbox`].
+pub(crate) async fn redeliver_envelope(
+    pool: &PgPool,
+    tenant_id: i64,
+    channel: &str,
+    envelope: &Value,
+) -> bool {
+    let rule = rule_from_envelope(envelope);
+    let finding = finding_from_envelope(envelope);
+    let Ok(config) = load_delivery_config(pool, tenant_id).await else {
+        // Delivery config store is down — cannot resolve channels; report not-delivered so the
+        // outbox keeps the row for a later retry instead of marking it sent.
+        return false;
+    };
+    let client = Client::builder()
+        .timeout(Duration::from_secs(15))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .unwrap_or_else(|_| Client::new());
+    deliver_channel(&client, &config, channel, &rule, &finding).await
+}
+
 /// Attempt delivery on configured channels. Returns true if at least one channel succeeds.
+/// `Err` is store-down on delivery config — never look like "no channels configured".
+///
+/// Delivery is now durable: each channel attempt is first persisted to `notification_outbox`
+/// (status `pending`) BEFORE it is tried, so a crash or a transient webhook/Slack/PagerDuty 5xx can
+/// no longer silently DROP a security alert. On success the row is marked `delivered`; on failure it
+/// is scheduled for exponential-backoff retry by [`crate::notification_outbox`], which dead-letters
+/// it (loudly) after the max attempts. The persisted per-channel rows ARE the per-channel delivery
+/// status — the old single boolean OR across channels no longer hides a partial failure.
 pub async fn deliver_alert(
     pool: &PgPool,
     tenant_id: i64,
     rule: &AlertRuleInfo,
     finding: &AlertFindingInfo,
     channels: &[String],
-) -> bool {
+) -> Result<bool, String> {
     if channels.is_empty() {
-        return false;
+        return Ok(false);
     }
 
-    let config = load_delivery_config(pool, tenant_id).await;
+    let config = load_delivery_config(pool, tenant_id).await?;
     let client = Client::builder()
         .timeout(Duration::from_secs(15))
         .redirect(reqwest::redirect::Policy::none())
         .build()
         .unwrap_or_else(|_| Client::new());
 
+    // One snapshot; every per-channel row stores the same self-contained envelope so the retry
+    // worker can rebuild the alert independently.
+    let envelope = outbox_envelope(rule, finding);
+
     let mut any_ok = false;
     for channel in channels {
         let ch = channel.to_ascii_lowercase();
-        if deliver_channel(&client, &config, &ch, rule, finding).await {
+
+        // Persist FIRST (status=pending) so the durable row survives even if the attempt below (or
+        // the whole process) dies — the retry worker later picks it up. `None` means the outbox
+        // itself was unreachable; the immediate attempt result still stands.
+        let outbox_id = crate::notification_outbox::enqueue(pool, tenant_id, &ch, &envelope).await;
+
+        let ok = deliver_channel(&client, &config, &ch, rule, finding).await;
+
+        match outbox_id {
+            Some(id) if ok => crate::notification_outbox::mark_delivered(pool, tenant_id, id).await,
+            Some(id) => {
+                // Row was just enqueued (attempts_before = 0); schedule the first backoff retry.
+                crate::notification_outbox::mark_failed(
+                    pool,
+                    tenant_id,
+                    id,
+                    &ch,
+                    0,
+                    "initial delivery attempt failed",
+                )
+                .await;
+            }
+            None if !ok => {
+                // Outbox unreachable AND the live attempt failed — this is exactly the drop we are
+                // eliminating, so make it loud rather than a silent WARN.
+                tracing::error!(
+                    target: "alert_delivery",
+                    tenant_id,
+                    rule_id = rule.id,
+                    finding_id = finding.id,
+                    channel = %ch,
+                    "alert delivery failed and could not be persisted to the outbox for retry"
+                );
+            }
+            None => {}
+        }
+
+        if ok {
             any_ok = true;
             tracing::info!(
                 target: "alert_delivery",
@@ -539,7 +665,7 @@ pub async fn deliver_alert(
             );
         }
     }
-    any_ok
+    Ok(any_ok)
 }
 
 /// Fire tenant alert channels when SOAR playbook dispatch fails after finding persist.
@@ -550,7 +676,17 @@ pub async fn notify_soar_dispatch_failure(
     summary: &str,
     results: &[crate::soar_playbook::PlaybookRunResult],
 ) {
-    let config = load_delivery_config(pool, tenant_id).await;
+    let config = match load_delivery_config(pool, tenant_id).await {
+        Ok(c) => c,
+        Err(_) => {
+            tracing::warn!(
+                target: "alert_delivery",
+                tenant_id,
+                "SOAR dispatch failure delivery config store_down"
+            );
+            return;
+        }
+    };
     let client = Client::builder()
         .timeout(Duration::from_secs(15))
         .redirect(reqwest::redirect::Policy::none())
@@ -602,7 +738,10 @@ pub async fn notify_soar_dispatch_failure(
 
 /// Fire tenant alert channels when a new multi-stage correlation incident is persisted.
 pub async fn notify_correlation_incident(pool: &PgPool, tenant_id: i64, payload: &Value) {
-    let config = load_delivery_config(pool, tenant_id).await;
+    let Ok(config) = load_delivery_config(pool, tenant_id).await else {
+        tracing::warn!(target: "alert_delivery", tenant_id, "delivery config store_down; skipping correlation notify");
+        return;
+    };
     let client = Client::builder()
         .timeout(Duration::from_secs(15))
         .redirect(reqwest::redirect::Policy::none())
@@ -663,7 +802,17 @@ pub async fn notify_heal_completed(
     pr_url: Option<&str>,
     ok: bool,
 ) {
-    let config = load_delivery_config(pool, tenant_id).await;
+    let config = match load_delivery_config(pool, tenant_id).await {
+        Ok(c) => c,
+        Err(_) => {
+            tracing::warn!(
+                target: "alert_delivery",
+                tenant_id,
+                "heal completion delivery config store_down"
+            );
+            return;
+        }
+    };
     let client = Client::builder()
         .timeout(Duration::from_secs(15))
         .redirect(reqwest::redirect::Policy::none())
@@ -733,7 +882,17 @@ pub async fn notify_regression(
     engine: &str,
     target: &str,
 ) {
-    let config = load_delivery_config(pool, tenant_id).await;
+    let config = match load_delivery_config(pool, tenant_id).await {
+        Ok(c) => c,
+        Err(_) => {
+            tracing::warn!(
+                target: "alert_delivery",
+                tenant_id,
+                "regression delivery config store_down"
+            );
+            return;
+        }
+    };
     let client = Client::builder()
         .timeout(Duration::from_secs(15))
         .redirect(reqwest::redirect::Policy::none())
@@ -811,8 +970,10 @@ async fn heal_finding_title(
     tenant_id: i64,
     client_id: i64,
     finding_id: &str,
-) -> Option<String> {
-    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await.ok()?;
+) -> Result<Option<String>, String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let title = sqlx::query_scalar::<_, String>(
         "SELECT title FROM vulnerabilities WHERE client_id = $1 AND finding_id = $2 LIMIT 1",
     )
@@ -820,10 +981,11 @@ async fn heal_finding_title(
     .bind(finding_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
-    non_empty(title)
+    .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
+    Ok(non_empty(title))
 }
 
 /// Plain (non-interactive) Block Kit summary for a terminal heal outcome.
@@ -897,17 +1059,37 @@ pub async fn post_heal_slack(
     if !heal_slack_notify_enabled() {
         return;
     }
-    let config = load_delivery_config(pool, tenant_id).await;
+    let config = match load_delivery_config(pool, tenant_id).await {
+        Ok(c) => c,
+        Err(_) => {
+            tracing::warn!(
+                target: "alert_delivery",
+                tenant_id,
+                "heal Slack delivery config store_down"
+            );
+            return;
+        }
+    };
     let Some(dest) = resolve_slack_post(&config) else {
         return;
     };
 
     let title_owned;
     let title = if title.trim().is_empty() {
-        title_owned = heal_finding_title(pool, tenant_id, client_id, finding_id)
-            .await
-            .unwrap_or_else(|| finding_id.to_string());
-        title_owned.as_str()
+        match heal_finding_title(pool, tenant_id, client_id, finding_id).await {
+            Ok(t) => {
+                title_owned = t.unwrap_or_else(|| finding_id.to_string());
+                title_owned.as_str()
+            }
+            Err(_) => {
+                tracing::warn!(
+                    target: "alert_delivery",
+                    tenant_id,
+                    "heal finding title store_down"
+                );
+                return;
+            }
+        }
     } else {
         title
     };

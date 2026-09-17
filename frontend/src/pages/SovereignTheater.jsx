@@ -157,6 +157,7 @@ export default function SovereignTheater() {
   }, [messages])
 
   const handleExport = useCallback(async () => {
+    if (error) return
     setExporting(true)
     try {
       const bundle = {
@@ -180,7 +181,7 @@ export default function SovereignTheater() {
     } finally {
       setExporting(false)
     }
-  }, [sessionId, messages, windows, logs, knowledge, memory, forge, scripts])
+  }, [error, sessionId, messages, windows, logs, knowledge, memory, forge, scripts])
 
   const send = useCallback(async () => {
     const q = question.trim()
@@ -313,7 +314,7 @@ export default function SovereignTheater() {
           <ShellScanActions
             onRefresh={refresh}
             onExport={handleExport}
-            exportDisabled={exporting}
+            exportDisabled={!!error || exporting}
             exportLabel={t(`${NS}.export_json`)}
           />
         </div>
@@ -361,7 +362,7 @@ export default function SovereignTheater() {
           <Button type="button" variant="secondary" disabled={sending} onClick={runTune}>
             {t(`${NS}.tune_now`)}
           </Button>
-          {knowledge?.production_engine_count != null ? (
+          {!error && knowledge?.production_engine_count != null ? (
             <span className="text-[10px] font-mono text-[var(--text-muted)]">
               {t(`${NS}.engine_count`, { n: knowledge.production_engine_count })}
             </span>

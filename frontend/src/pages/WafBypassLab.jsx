@@ -135,7 +135,13 @@ export default function WafBypassLab() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE, detailFindings)
+
+  const handleExportCsv = useCallback(() => {
+    if (historyUnavailable) return
+    exportCsv()
+  }, [historyUnavailable, exportCsv])
 
   useJobPoll(pendingJobId, {
     enabled: Boolean(pendingJobId),
@@ -214,10 +220,10 @@ export default function WafBypassLab() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={exportCsv}
+          onExport={historyUnavailable ? undefined : handleExportCsv}
           refreshLoading={historyLoading}
           refreshDisabled={scanning}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={historyUnavailable || !filteredFindings.length}
         />
       )}
     >
@@ -258,12 +264,17 @@ export default function WafBypassLab() {
           <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-6 flex flex-wrap items-center gap-8">
             <div className="text-center min-w-[120px]">
               <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase mb-2">{t('pages.wafBypass.hardening_score')}</p>
-              <p className="text-5xl font-bold font-mono" style={{ color: scoreColor(score ?? 0) }}>{score ?? '—'}</p>
+              <p className="text-5xl font-bold font-mono" style={{ color: (historyUnavailable || score == null) ? 'rgba(255,255,255,0.35)' : scoreColor(score) }}>{(historyUnavailable || score == null) ? '—' : score}</p>
               <p className="text-[10px] font-mono text-[var(--text-muted)] mt-1">{t('pages.wafBypass.score_hint')}</p>
             </div>
             <div className="flex-1 min-w-[200px] text-[11px] font-mono text-[var(--text-tertiary)] leading-relaxed">{t('pages.wafBypass.score_explainer')}</div>
           </motion.section>
 
+          {historyUnavailable && (
+            <p data-testid="waf-bypass-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+              {t('pages.wafBypass.history_unavailable')}
+            </p>
+          )}
           <WeissmanFindingsPanel
             findings={detailFindings}
             filteredFindings={filteredFindings}
@@ -278,7 +289,10 @@ export default function WafBypassLab() {
             lastUpdated={lastUpdated}
             jobId={pendingJobId || lastJobId}
             accent={ACCENT}
-            showEmptyReady={!scanning && detailFindings.length === 0}
+            unavailable={historyUnavailable}
+            unavailableTitle={t('pages.wafBypass.history_unavailable')}
+            unavailableBody={t('pages.wafBypass.history_unavailable')}
+            showEmptyReady={!scanning && detailFindings.length === 0 && !historyUnavailable}
             emptyReadyTitle={t('pages.wafBypass.empty_ready')}
             emptyReadyBody={t('pages.wafBypass.empty_ready')}
             renderFinding={(f, i) => <FindingCard key={i} f={f} />}

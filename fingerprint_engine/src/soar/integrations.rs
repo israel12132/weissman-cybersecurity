@@ -10,26 +10,26 @@ pub struct IntegrationRecord {
     pub config: Value,
 }
 
-pub async fn load_integrations(pool: &PgPool, tenant_id: i64) -> Vec<IntegrationRecord> {
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return Vec::new();
-    };
+pub async fn load_integrations(pool: &PgPool, tenant_id: i64) -> Result<Vec<IntegrationRecord>, String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let raw: Option<String> = sqlx::query_scalar(
         "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'integrations_registry'",
     )
     .bind(tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
+    .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
     let Some(s) = raw.filter(|x| !x.trim().is_empty()) else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
-    let Ok(arr) = serde_json::from_str::<Vec<Value>>(&s) else {
-        return Vec::new();
-    };
-    arr.into_iter()
+    let arr = serde_json::from_str::<Vec<Value>>(&s).map_err(|_| "store_down".to_string())?;
+    let out = arr
+        .into_iter()
         .filter_map(|item| {
             let id = item.get("id").and_then(Value::as_str)?.to_string();
             let provider_type = item
@@ -49,7 +49,8 @@ pub async fn load_integrations(pool: &PgPool, tenant_id: i64) -> Vec<Integration
                 config: decrypted,
             })
         })
-        .collect()
+        .collect();
+    Ok(out)
 }
 
 #[must_use]

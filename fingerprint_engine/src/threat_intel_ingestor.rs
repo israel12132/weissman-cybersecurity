@@ -274,7 +274,7 @@ async fn sbom_clients_matching(
             }
         }
     }
-    let _ = tx.commit().await;
+    tx.commit().await?;
     hits.sort_by_key(|x| x.0);
     hits.dedup_by(|a, b| a.0 == b.0 && a.1 == b.1);
     Ok(hits)
@@ -432,10 +432,20 @@ pub async fn run_ingest_cycle(
     items.extend(threat_intel_engine::fetch_nvd_recent(3).await);
 
     let tenant_ids: Vec<i64> =
-        sqlx::query_scalar::<_, i64>("SELECT id FROM tenants WHERE active = true ORDER BY id")
+        match sqlx::query_scalar::<_, i64>("SELECT id FROM tenants WHERE active = true ORDER BY id")
             .fetch_all(auth_pool.as_ref())
             .await
-            .unwrap_or_default();
+        {
+            Ok(ids) => ids,
+            Err(e) => {
+                tracing::warn!(
+                    target: "threat_ingest",
+                    error = %e,
+                    "tenant list store_down"
+                );
+                return;
+            }
+        };
 
     for item in items {
         let mut chatter = format!("{}\n{}", item.title, item.description);
@@ -466,7 +476,15 @@ pub async fn run_ingest_cycle(
         for &tid in &tenant_ids {
             let hits = match sbom_clients_matching(app_pool.as_ref(), tid, &pkgs).await {
                 Ok(h) => h,
-                Err(_) => continue,
+                Err(e) => {
+                    tracing::warn!(
+                        target: "threat_ingest",
+                        tenant_id = tid,
+                        error = %e,
+                        "sbom match store_down"
+                    );
+                    continue;
+                }
             };
             if hits.is_empty() {
                 continue;

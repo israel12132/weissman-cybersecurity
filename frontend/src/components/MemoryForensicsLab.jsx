@@ -102,34 +102,54 @@ export default function MemoryForensicsLab() {
   const [findings, setFindings] = useState([])
   const [selected, setSelected] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [findingsError, setFindingsError] = useState('')
   const [targetUrl, setTargetUrl] = useState('')
   const [running, setRunning] = useState(false)
   const [jobId, setJobId] = useState(null)
   const [jobStatus, setJobStatus] = useState(null)
   const [client, setClient] = useState(null)
+  const [clientsError, setClientsError] = useState('')
   const [hoveredSlot, setHoveredSlot] = useState(null) // 'Buffer' | 'Padding' | 'RBP' | 'RIP' | 'Shellcode' for hex hover
   const esRef = useRef(null)
 
   // Close the self-healing PoE SSE stream on unmount so it does not reconnect forever.
   useEffect(() => () => { esRef.current?.close() }, [])
 
-  const fetchFindings = useCallback(() => {
+  const fetchFindings = useCallback((requestInit = {}) => {
     if (!clientId) return
     setLoading(true)
-    apiFetch(`/api/clients/${clientId}/poe-findings`)
-      .then((data) => setFindings(data?.findings ?? []))
-      .catch(() => setFindings([]))
-      .finally(() => setLoading(false))
+    setFindingsError('')
+    apiFetch(`/api/clients/${clientId}/poe-findings`, requestInit)
+      .then((data) => {
+        if (data?.ok === false || data?.unavailable) {
+          throw new Error(data.detail || t(`${NS}.fetch_failed`))
+        }
+        setFindings(data?.findings ?? [])
+      })
+      .catch((e) => {
+        if (e?.name === 'AbortError') return
+        setFindingsError(e?.message || t(`${NS}.fetch_failed`))
+      })
+      .finally(() => {
+        if (!requestInit?.signal?.aborted) setLoading(false)
+      })
   }, [clientId])
 
   useEffect(() => {
-    fetchFindings()
+    const ac = new AbortController()
+    fetchFindings({ signal: ac.signal })
+    return () => ac.abort()
   }, [fetchFindings])
 
   useEffect(() => {
-    if (!clientId) return
-    apiFetch('/api/clients')
+    if (!clientId) return undefined
+    const ac = new AbortController()
+    setClientsError('')
+    apiFetch('/api/clients', { signal: ac.signal })
       .then((list) => {
+        if (list?.ok === false || list?.unavailable) {
+          throw new Error(list.detail || t(`${NS}.unavailable`))
+        }
         const c = Array.isArray(list) ? list.find((x) => String(x.id) === String(clientId)) : null
         setClient(c || null)
         if (c?.domains) {
@@ -140,7 +160,12 @@ export default function MemoryForensicsLab() {
           } catch (_) { /* best-effort; non-fatal */ }
         }
       })
-      .catch(() => setClient(null))
+      .catch((e) => {
+        if (e?.name === 'AbortError') return
+        setClient(null)
+        setClientsError(e?.message || t(`${NS}.unavailable`))
+      })
+    return () => ac.abort()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId])
 
@@ -334,6 +359,11 @@ export default function MemoryForensicsLab() {
       title={t(`${NS}.title`)}
       subtitle={clientId && client ? t(`${NS}.client_meta`, { name: client.name, id: clientId }) : undefined}
     >
+        {clientsError && (
+          <p className="text-amber-200/90 mb-4" data-testid="memory-clients-unavailable" data-live="false" role="alert">
+            {t(`${NS}.unavailable`)}
+          </p>
+        )}
         <div className="mb-6 flex flex-wrap gap-2 items-center">
           <input
             type="text"
@@ -388,7 +418,7 @@ export default function MemoryForensicsLab() {
                 </div>
               ))}
             </div>
-            {selected && (
+            {selected && !findingsError && (
               <div className="mt-4 p-3 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-200 text-xs">
                 {t(`${NS}.payload_overwrite`)}
               </div>
@@ -405,7 +435,7 @@ export default function MemoryForensicsLab() {
             <p className="text-sm text-[var(--text-tertiary)] mb-4">
               {t(`${NS}.weaponization_body`)}
             </p>
-            {selected ? (
+            {selected && !findingsError ? (
               <div className="space-y-4 text-sm">
                 {isMemoryLeakFinding && (
                   <>
@@ -442,10 +472,15 @@ export default function MemoryForensicsLab() {
         <div className="rounded-xl bg-[var(--bg-1)]/80 border border-[var(--border-default)]/60 p-6 mb-6">
           <h2 className="text-lg font-semibold text-[var(--text-secondary)] mb-4">{t(`${NS}.poe_findings`)}</h2>
           {loading && <p className="text-[var(--text-muted)]">{t(`${NS}.loading`)}</p>}
-          {!loading && findings.length === 0 && (
+          {!loading && findingsError && (
+            <p className="text-amber-200/90" data-testid="memory-lab-unavailable" data-live="false" role="alert">
+              {t(`${NS}.fetch_failed`)} {findingsError}
+            </p>
+          )}
+          {!loading && !findingsError && findings.length === 0 && (
             <p className="text-[var(--text-muted)]">{t(`${NS}.no_findings`)}</p>
           )}
-          {!loading && findings.length > 0 && (
+          {!loading && !findingsError && findings.length > 0 && (
             <ul className="space-y-2">
               {findings.map((f) => (
                 <li key={f.id}>
@@ -475,7 +510,7 @@ export default function MemoryForensicsLab() {
           )}
         </div>
 
-        {selected && (
+        {selected && !findingsError && (
           <div className="rounded-xl bg-[var(--bg-1)]/80 border border-[var(--border-default)]/60 p-6">
             <h2 className="text-lg font-semibold text-[var(--text-secondary)] mb-2">
               {hasEntropyMap || bleedStartOffset != null ? t(`${NS}.hex_heatmap`) : t(`${NS}.hex_viewer`)} {t(`${NS}.hex_stack_hint`)}

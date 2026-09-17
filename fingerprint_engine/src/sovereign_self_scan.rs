@@ -8,6 +8,16 @@ use sqlx::PgPool;
 use std::sync::Arc;
 use tokio::sync::broadcast::Sender;
 
+/// Internal ultra-guard enforcement toggle for the platform's OWN LLM calls that ingest
+/// attacker-influenced scanned content. OFF by default (historical behavior: basic
+/// `llm_sanitize` nonce-fence only). Set `WEISSMAN_INTERNAL_LLM_GUARD=1` to enforce.
+fn internal_llm_guard_enabled() -> bool {
+    matches!(
+        std::env::var("WEISSMAN_INTERNAL_LLM_GUARD").as_deref(),
+        Ok("1") | Ok("true") | Ok("yes")
+    )
+}
+
 pub fn spawn_sovereign_self_scan_loop(app_pool: Arc<PgPool>, telemetry: Arc<Sender<String>>) {
     let secs: u64 = std::env::var("WEISSMAN_SOVEREIGN_SELF_SCAN_INTERVAL_SECS")
         .ok()
@@ -59,6 +69,14 @@ async fn run_sovereign_self_scan(pool: &PgPool, telemetry: &Sender<String>) -> R
     .await
     .map_err(|e| e.to_string())?
     .unwrap_or_default();
+    let configured_budget: Option<u64> = sqlx::query_scalar::<_, String>(
+        "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'llm_daily_token_budget'",
+    )
+    .bind(tenant_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?
+    .and_then(|s| s.trim().parse::<u64>().ok());
     let lines: Vec<String> = sqlx::query_scalar(
         r#"SELECT action_type || ' | ' || COALESCE(details,'') || ' | ' || COALESCE(ip_address,'')
            FROM audit_logs WHERE tenant_id = $1 ORDER BY id DESC LIMIT 50"#,
@@ -74,10 +92,60 @@ async fn run_sovereign_self_scan(pool: &PgPool, telemetry: &Sender<String>) -> R
     }
 
     let excerpt = lines.join("\n");
+
+    // OWASP LLM04/LLM10: skip the self-scan LLM call for a tenant that has exhausted its
+    // daily LLM token budget. Budget `0`/unset = unlimited (default preserves prior behavior).
+    if let Err(e) =
+        crate::http::ai_quota_mem::enforce_daily_token_budget(tenant_id, configured_budget)
+    {
+        let _ = telemetry.send(
+            json!({
+                "event": "sovereign_self_scan",
+                "severity": "warning",
+                "skipped": "daily_token_budget_exceeded",
+                "detail": e.to_string(),
+            })
+            .to_string(),
+        );
+        tracing::warn!(target: "sovereign_self_scan", detail = %e, "skipping self-scan LLM call: daily token budget exceeded");
+        return Ok(());
+    }
+
+    // OWASP LLM01/LLM10: audit_logs rows are attacker-influenced (an attacker's own probe
+    // actions are logged with attacker-controlled details/ip). When internal ultra-guard
+    // enforcement is enabled, refuse to feed a Block/Quarantine excerpt to the LLM.
+    if internal_llm_guard_enabled() {
+        let gctx = crate::llm_ultra_guard::GuardContext {
+            tenant_id: Some(tenant_id),
+            source: "sovereign_self_scan",
+            ..crate::llm_ultra_guard::GuardContext::default()
+        };
+        let report = crate::llm_ultra_guard::inspect_prompt_async(excerpt.clone(), gctx).await;
+        if report.holds_from_generation() {
+            let _ = telemetry.send(
+                json!({
+                    "event": "sovereign_self_scan",
+                    "severity": "warning",
+                    "skipped": "llm_ultra_guard_hold",
+                    "verdict": report.verdict.as_str(),
+                })
+                .to_string(),
+            );
+            tracing::warn!(
+                target: "sovereign_self_scan",
+                verdict = report.verdict.as_str(),
+                injection = report.injection_score as f64,
+                jailbreak = report.jailbreak_score as f64,
+                "self-scan audit excerpt held by llm_ultra_guard — neutralizing (poisoned audit data not sent to the LLM)"
+            );
+            return Ok(());
+        }
+    }
+
     let client = weissman_engines::openai_chat::llm_http_client(90);
     let model = weissman_engines::openai_chat::resolve_llm_model(&llm_model);
     let (system, user) = self_scan_prompts(&excerpt);
-    let text = weissman_engines::openai_chat::chat_completion_text(
+    let out = weissman_engines::openai_chat::chat_completion_detailed(
         &client,
         &llm_base,
         &model,
@@ -91,6 +159,9 @@ async fn run_sovereign_self_scan(pool: &PgPool, telemetry: &Sender<String>) -> R
     )
     .await
     .map_err(|e| e.to_string())?;
+    // Feed the in-process daily counter so the pre-call token-budget gate is live.
+    crate::http::ai_quota_mem::add_usage(tenant_id, out.prompt_tokens, out.completion_tokens);
+    let text = out.text;
 
     let _ = telemetry.send(
         json!({

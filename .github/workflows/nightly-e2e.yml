@@ -76,7 +76,7 @@ jobs:
           --health-timeout 3s
           --health-retries 20
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -245,7 +245,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install nightly toolchain + cargo-fuzz
         run: |
           rustup toolchain install nightly --profile minimal --component llvm-tools-preview
@@ -269,12 +269,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install age
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends age
+
+      # Fast, database-free proof of the whole encrypted DR pipeline: real age keypair, real
+      # ciphertext + tar round-trips, integrity/tamper detection, off-site round-trip, and
+      # recovery-dir preparation. Guards the crypto so a regression fails CI, not a real disaster.
+      - name: Encrypted DR crypto self-test
+        run: ./scripts/tests/dr_crypto_selftest.sh
 
       # Prove a pg_basebackup can actually be RESTORED, not just that files exist. Fully
       # self-contained: create a source cluster, back it up with the image's own
       # (version-matched) pg_basebackup, then run the production restore-verify script.
-      - name: Backup → restore round-trip
+      - name: Backup → restore round-trip (cleartext, back-compat)
         run: |
           set -euo pipefail
           IMG=pgvector/pgvector:pg16
@@ -300,3 +309,44 @@ jobs:
           docker rm -f bkp-src
 
           WEISSMAN_PITR_BASE_DIR="$BASE_DIR" ./scripts/backup_restore_verify.sh
+
+      # The real thing: encrypt a base backup with age, then prove restore-verify DECRYPTS it and
+      # recovers a live cluster — the production path, exercised with a database, in CI.
+      - name: Backup → restore round-trip (ENCRYPTED, production path)
+        run: |
+          set -euo pipefail
+          source scripts/lib/backup_crypto.sh
+          IMG=pgvector/pgvector:pg16
+          BASE_DIR=/tmp/weissman-enc-backups/base
+          mkdir -p "$BASE_DIR/base_ci"
+
+          age-keygen -o /tmp/dr-id.txt 2>/tmp/kg.err
+          PUB=$(grep -oE 'age1[a-z0-9]+' /tmp/kg.err | head -1)
+          export WEISSMAN_BACKUP_AGE_RECIPIENTS="$PUB"
+          export WEISSMAN_BACKUP_AGE_IDENTITY_FILE=/tmp/dr-id.txt
+          export WEISSMAN_BACKUP_REQUIRE_ENCRYPTION=1
+
+          docker run -d --name bkp-enc \
+            -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=weissman "$IMG"
+          for _ in $(seq 1 30); do docker exec bkp-enc pg_isready -U postgres -q && break; sleep 2; done
+          docker exec bkp-enc psql -U postgres -d weissman -c \
+            "CREATE TABLE IF NOT EXISTS _sqlx_migrations(version bigint primary key, description text); \
+             INSERT INTO _sqlx_migrations VALUES (1,'ci-seed') ON CONFLICT DO NOTHING;"
+          docker exec bkp-enc bash -lc 'rm -rf /tmp/bb && mkdir -p /tmp/bb && \
+            pg_basebackup -U postgres -D /tmp/bb -Ft -z -X stream'
+
+          # Encrypt the physical backup with age, then write the integrity sidecars.
+          docker cp bkp-enc:/tmp/bb/base.tar.gz /tmp/base.tar.gz
+          docker cp bkp-enc:/tmp/bb/pg_wal.tar.gz /tmp/pg_wal.tar.gz || true
+          wz_encrypt_stream < /tmp/base.tar.gz > "$BASE_DIR/base_ci/base.tar.gz.age"
+          [ -f /tmp/pg_wal.tar.gz ] && wz_encrypt_stream < /tmp/pg_wal.tar.gz > "$BASE_DIR/base_ci/pg_wal.tar.gz.age"
+          wz_write_manifest "$BASE_DIR/base_ci" pg_version=16
+          ln -sfn "$BASE_DIR/base_ci" "$BASE_DIR/latest"
+          docker rm -f bkp-enc
+
+          # No cleartext payload must remain in the backup dir.
+          test ! -f "$BASE_DIR/base_ci/base.tar.gz" || { echo "cleartext base leaked"; exit 1; }
+          # Restore-verify must DECRYPT and recover, and record the encrypted-drill marker.
+          WEISSMAN_PITR_BASE_DIR="$BASE_DIR" ./scripts/backup_restore_verify.sh
+          test -f "$BASE_DIR/.last_encrypted_restore_verify_ok" || { echo "encrypted drill marker missing"; exit 1; }
+          echo "ENCRYPTED restore round-trip verified."

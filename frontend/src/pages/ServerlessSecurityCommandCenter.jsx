@@ -266,7 +266,14 @@ export default function ServerlessSecurityCommandCenter() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE_ID, realFindings)
+
+  const handleExportCsv = useCallback(() => {
+    if (historyUnavailable) return
+    exportCsv()
+  }, [historyUnavailable, exportCsv])
+  const liveMetrics = historyUnavailable ? null : metrics
 
   useEffect(() => {
     refreshFromHistory().then((run) => {
@@ -363,10 +370,10 @@ export default function ServerlessSecurityCommandCenter() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={exportCsv}
+          onExport={historyUnavailable ? undefined : handleExportCsv}
           refreshLoading={historyLoading}
           refreshDisabled={running}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={historyUnavailable || !filteredFindings.length}
         />
       )}
     >
@@ -481,21 +488,21 @@ export default function ServerlessSecurityCommandCenter() {
           </div>
 
           <div className="space-y-4">
-            {metrics && (
+            {liveMetrics && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="rounded-2xl border border-pink-500/30 bg-[var(--bg-2)] p-4">
                 <h3 className="text-sm font-mono text-pink-300 uppercase tracking-widest mb-3">Posture Score</h3>
                 <div className="flex items-end gap-4">
-                  <span className="text-5xl font-bold text-white">{metrics.score}<span className="text-2xl text-[var(--text-muted)]">/100</span></span>
-                  <span className="text-3xl font-mono text-pink-400 mb-1">Grade {metrics.grade}</span>
+                  <span className="text-5xl font-bold text-white">{liveMetrics.score}<span className="text-2xl text-[var(--text-muted)]">/100</span></span>
+                  <span className="text-3xl font-mono text-pink-400 mb-1">Grade {liveMetrics.grade}</span>
                 </div>
                 <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] font-mono">
                   {[
-                    ['Functions', metrics.functions_exposed],
-                    ['Config leaks', metrics.config_exposed],
-                    ['Env leak', metrics.env_leak ? 'YES' : 'no'],
-                    ['CORS issue', metrics.cors_wildcard ? 'YES' : 'no'],
-                    ['Admin open', metrics.unauthenticated_admin ? 'YES' : 'no'],
-                    ['Cold start', metrics.cold_start_confirmed ? 'YES' : 'no'],
+                    ['Functions', liveMetrics.functions_exposed],
+                    ['Config leaks', liveMetrics.config_exposed],
+                    ['Env leak', liveMetrics.env_leak ? 'YES' : 'no'],
+                    ['CORS issue', liveMetrics.cors_wildcard ? 'YES' : 'no'],
+                    ['Admin open', liveMetrics.unauthenticated_admin ? 'YES' : 'no'],
+                    ['Cold start', liveMetrics.cold_start_confirmed ? 'YES' : 'no'],
                   ].map(([k, v]) => (
                     <div key={k} className="rounded-lg bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-2 py-1.5">
                       <span className="text-[var(--text-muted)] block">{k}</span>
@@ -503,21 +510,26 @@ export default function ServerlessSecurityCommandCenter() {
                     </div>
                   ))}
                 </div>
-                {Array.isArray(metrics.platforms) && metrics.platforms.length > 0 && (
+                {Array.isArray(liveMetrics.platforms) && liveMetrics.platforms.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1">
-                    {metrics.platforms.map((p) => <span key={p} className="text-[9px] font-mono px-2 py-0.5 rounded-full border border-pink-400/30 text-pink-300">{p}</span>)}
+                    {liveMetrics.platforms.map((p) => <span key={p} className="text-[9px] font-mono px-2 py-0.5 rounded-full border border-pink-400/30 text-pink-300">{p}</span>)}
                   </div>
                 )}
               </motion.div>
             )}
 
-            {attackPaths.length > 0 && (
+            {!historyUnavailable && attackPaths.length > 0 && (
               <div className="rounded-2xl border border-red-500/30 bg-red-950/10 p-4 space-y-2">
                 <h3 className="text-sm font-mono text-red-300 uppercase tracking-widest">Attack Paths ({attackPaths.length})</h3>
                 {attackPaths.map((f, i) => <FindingRow key={i} f={f} />)}
               </div>
             )}
 
+            {historyUnavailable && (
+              <p data-testid="serverless-security-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+                {t('serverlessSec.history_unavailable')}
+              </p>
+            )}
             <WeissmanFindingsPanel
               findings={realFindings}
               filteredFindings={filteredFindings}
@@ -532,7 +544,10 @@ export default function ServerlessSecurityCommandCenter() {
               lastUpdated={lastUpdated}
               jobId={lastJobId}
               accent={ACCENT}
-              showEmptyReady={!running && realFindings.length === 0}
+              unavailable={historyUnavailable}
+              unavailableTitle={t('serverlessSec.history_unavailable')}
+              unavailableBody={t('serverlessSec.history_unavailable')}
+              showEmptyReady={!running && realFindings.length === 0 && !historyUnavailable}
               emptyReadyTitle={t('serverlessSec.no_findings', 'No findings yet — configure target and run scan.')}
               renderFinding={(f, i) => <FindingRow key={i} f={f} />}
             />

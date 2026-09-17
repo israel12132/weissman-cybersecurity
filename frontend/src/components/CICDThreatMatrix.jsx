@@ -18,15 +18,17 @@ export default function CICDThreatMatrix() {
   const { clientId } = useParams()
   const [findings, setFindings] = useState([])
   const [loading, setLoading] = useState(true)
+  const [findingsError, setFindingsError] = useState('')
   const [modalFinding, setModalFinding] = useState(null)
   const [runRepoUrl, setRunRepoUrl] = useState('')
   const [running, setRunning] = useState(false)
   const [client, setClient] = useState(null)
+  const [clientsError, setClientsError] = useState('')
 
   // Dialog a11y for the Attacker's Playbook modal: focus trap + Escape-to-close.
   const modalRef = useRef(null)
   const modalTitleId = useId()
-  useFocusTrap(modalRef, !!modalFinding)
+  useFocusTrap(modalRef, !!modalFinding && !findingsError)
   useEffect(() => {
     if (!modalFinding) return undefined
     const onKey = (e) => { if (e.key === 'Escape') setModalFinding(null) }
@@ -40,27 +42,52 @@ export default function CICDThreatMatrix() {
     apiName: key.charAt(0).toUpperCase() + key.slice(1),
   }))
 
-  const fetchFindings = useCallback(() => {
+  const fetchFindings = useCallback((requestInit = {}) => {
     if (!clientId) return
     setLoading(true)
-    apiFetch(`/api/clients/${clientId}/cicd-findings`)
-      .then((data) => setFindings(data?.findings ?? []))
-      .catch(() => setFindings([]))
-      .finally(() => setLoading(false))
+    setFindingsError('')
+    apiFetch(`/api/clients/${clientId}/cicd-findings`, requestInit)
+      .then((data) => {
+        if (data?.ok === false || data?.unavailable) {
+          throw new Error(data.detail || t(`${NS}.fetch_failed`))
+        }
+        setFindings(data?.findings ?? [])
+      })
+      .catch((e) => {
+        if (e?.name === 'AbortError') return
+        setFindings([])
+        setFindingsError(e?.message || t(`${NS}.fetch_failed`))
+      })
+      .finally(() => {
+        if (!requestInit?.signal?.aborted) setLoading(false)
+      })
   }, [clientId])
 
   useEffect(() => {
-    fetchFindings()
+    const ac = new AbortController()
+    fetchFindings({ signal: ac.signal })
+    return () => ac.abort()
   }, [fetchFindings])
 
   useEffect(() => {
-    if (!clientId) return
-    apiFetch('/api/clients')
+    if (!clientId) return undefined
+    const ac = new AbortController()
+    setClientsError('')
+    apiFetch('/api/clients', { signal: ac.signal })
       .then((list) => {
+        if (list?.ok === false || list?.unavailable) {
+          throw new Error(list.detail || t(`${NS}.unavailable`))
+        }
         const c = Array.isArray(list) ? list.find((x) => String(x.id) === String(clientId)) : null
         setClient(c || null)
       })
-      .catch(() => setClient(null))
+      .catch((e) => {
+        if (e?.name === 'AbortError') return
+        setClient(null)
+        setClientsError(e?.message || t(`${NS}.unavailable`))
+      })
+    return () => ac.abort()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId])
 
   const findingsByStage = STAGES.reduce((acc, stage) => {
@@ -107,15 +134,19 @@ export default function CICDThreatMatrix() {
           <div className="flex flex-wrap items-center justify-between gap-4">
             {STAGES.map((stage, idx) => {
               const count = (findingsByStage[stage.apiName] || []).length
-              const isRed = count > 0
+              const unconfirmed = Boolean(findingsError)
+              const isRed = !unconfirmed && count > 0
               return (
                 <div key={stage.key} className="flex items-center gap-2">
                   <Button variant="unstyled"
                     type="button"
                     onClick={() => count > 0 && setModalFinding(findingsByStage[stage.apiName][0])}
                     title={count > 0 ? t(`${NS}.view_findings`, { count }) : ''}
+                    data-testid={unconfirmed ? 'cicd-stage-unconfirmed' : undefined}
                     className={`rounded-xl px-6 py-4 font-bold text-sm transition-all ${
-                      isRed
+                      unconfirmed
+                        ? 'bg-amber-500/20 border-2 border-amber-500/50 text-amber-200'
+                        : isRed
                         ? 'bg-red-500/30 border-2 border-red-500 text-red-200 hover:bg-red-500/50'
                         : 'bg-[var(--bg-3)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:border-[var(--border-strong)]'
                     }`}
@@ -132,12 +163,22 @@ export default function CICDThreatMatrix() {
           </div>
         </div>
 
+        {clientsError && (
+          <p className="text-amber-200/90 mt-4" data-testid="cicd-clients-unavailable" data-live="false" role="alert">
+            {t(`${NS}.unavailable`)}
+          </p>
+        )}
         {loading && <p className="text-[var(--text-muted)] mt-4">{t(`${NS}.loading_findings`)}</p>}
-        {!loading && findings.length === 0 && (
+        {!loading && findingsError && (
+          <p className="text-amber-200/90 mt-4" data-testid="cicd-lab-unavailable" data-live="false" role="alert">
+            {t(`${NS}.fetch_failed`)} {findingsError}
+          </p>
+        )}
+        {!loading && !findingsError && findings.length === 0 && (
           <p className="text-[var(--text-muted)] mt-4">{t(`${NS}.no_findings`)}</p>
         )}
 
-        {modalFinding && (
+        {modalFinding && !findingsError && (
           // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- modal backdrop click-to-dismiss; contains interactive children
           <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"

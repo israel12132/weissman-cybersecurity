@@ -87,32 +87,34 @@ pub fn apply_ghost_escalation(stealth: &mut Option<StealthConfig>) {
 pub async fn load_tenant_oast_configs(
     pool: &sqlx::PgPool,
     tenant_id: i64,
-) -> (Option<String>, Option<String>, Option<String>) {
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return (None, None, None);
-    };
+) -> Result<(Option<String>, Option<String>, Option<String>), String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     async fn cfg(
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         tenant_id: i64,
         key: &str,
-    ) -> Option<String> {
-        sqlx::query_scalar::<_, String>(
+    ) -> Result<Option<String>, String> {
+        let val = sqlx::query_scalar::<_, String>(
             "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = $2",
         )
         .bind(tenant_id)
         .bind(key)
         .fetch_optional(&mut **tx)
         .await
-        .ok()
-        .flatten()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
+        .map_err(|_| "store_down".to_string())?;
+        Ok(val
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty()))
     }
-    let listener = cfg(&mut tx, tenant_id, "oast_listener_url").await;
-    let domain = cfg(&mut tx, tenant_id, "oast_domain").await;
-    let api_key = cfg(&mut tx, tenant_id, "oast_api_key").await;
-    let _ = tx.commit().await;
-    (listener, domain, api_key)
+    let listener = cfg(&mut tx, tenant_id, "oast_listener_url").await?;
+    let domain = cfg(&mut tx, tenant_id, "oast_domain").await?;
+    let api_key = cfg(&mut tx, tenant_id, "oast_api_key").await?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
+    Ok((listener, domain, api_key))
 }
 
 pub fn production_ids_json() -> Vec<serde_json::Value> {
@@ -171,7 +173,17 @@ pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -
     let mut ctx_live = ctx.clone();
     let slice = match (ctx.app_pool.as_ref(), ctx.tenant_id) {
         (Some(pool), Some(tid)) if tid > 0 => {
-            crate::sovereign_operator::memory::hydrate(pool.as_ref(), tid, engine_id, target).await
+            match crate::sovereign_operator::memory::hydrate(
+                pool.as_ref(),
+                tid,
+                engine_id,
+                target,
+            )
+            .await
+            {
+                Ok(s) => s,
+                Err(_) => return EngineResult::error("store_down"),
+            }
         }
         _ => crate::live_knowledge_bus::LiveSlice::default(),
     };
@@ -283,6 +295,9 @@ async fn run_engine_inner(engine_id: &str, target: &str, ctx: &EngineRunContext)
                     violation,
                 )
                 .await;
+                if violation == crate::critical_infra::roe::RoeViolation::StoreDown {
+                    return EngineResult::error("store_down");
+                }
                 return EngineResult::error(format!(
                     "RoE VIOLATION: {violation} — critical infrastructure engine '{canonical}' blocked for target '{target}'"
                 ));
@@ -314,14 +329,18 @@ async fn run_engine_inner(engine_id: &str, target: &str, ctx: &EngineRunContext)
     let mut ctx = ctx.clone();
     if crate::pentest_memory::is_http_offensive_engine(canonical) {
         if let (Some(pool), Some(tid)) = (ctx.app_pool.as_ref(), ctx.tenant_id) {
-            let winners = crate::pentest_memory::load_memory_for_engine(
+            let winners = match crate::pentest_memory::load_memory_for_engine(
                 pool.as_ref(),
                 tid,
                 canonical,
                 target,
                 12,
             )
-            .await;
+            .await
+            {
+                Ok(w) => w,
+                Err(_) => return EngineResult::error("store_down"),
+            };
             ctx.memory_path_ids = winners.iter().map(|w| w.id).collect();
             let winner_payloads: Vec<String> = winners.into_iter().map(|w| w.payload).collect();
             ctx.memory_payloads = crate::live_knowledge_bus::merge_live_first(
@@ -341,7 +360,9 @@ async fn run_engine_inner(engine_id: &str, target: &str, ctx: &EngineRunContext)
         let extra = trie.payloads_for_target(target);
         crate::pentest_memory::prepend_memory_payloads(&mut ctx.memory_payloads, &extra);
     }
-    let mut result = dispatch_engine_match(canonical, target, &ctx).await;
+    // `dispatch_engine_match` is a 350+-arm async match; its future is large enough to
+    // overflow the default 2 MB test-thread stack in debug builds. Box it onto the heap.
+    let mut result = Box::pin(dispatch_engine_match(canonical, target, &ctx)).await;
     if raw != canonical || !result.findings.is_empty() {
         for f in &mut result.findings {
             if let Some(obj) = f.as_object_mut() {
@@ -370,7 +391,8 @@ pub(crate) async fn dispatch_canonical_engine(
     target: &str,
     ctx: &EngineRunContext,
 ) -> EngineResult {
-    dispatch_engine_match(canonical, target, ctx).await
+    // Boxed for the same large-future stack reason as in `run_engine`.
+    Box::pin(dispatch_engine_match(canonical, target, ctx)).await
 }
 
 async fn run_poe_synthesis_dispatch(target: &str, ctx: &EngineRunContext) -> EngineResult {
@@ -560,6 +582,12 @@ async fn dispatch_engine_match(
         "azure_attack" => crate::azure_attack_engine::run_azure_attack_result_ctx(target, ctx).await,
         "gcp_attack" => crate::gcp_attack_engine::run_gcp_attack_result(target).await,
         "k8s_container" => crate::k8s_container_engine::run_k8s_container_result(target, ctx).await,
+        "admission_signature_enforcement" => {
+            crate::admission_signature_enforcement::run_admission_signature_enforcement_result(
+                target, ctx,
+            )
+            .await
+        }
         "iac_misconfig" => crate::iac_misconfig_engine::run_iac_misconfig_result(target, ctx).await,
         "serverless_attack" => crate::serverless_attack_engine::run_serverless_attack_result_ctx(target, ctx).await,
         "scada_ics" => crate::scada_ics_engine::run_scada_ics_result(target).await,
@@ -776,6 +804,7 @@ async fn dispatch_engine_match(
         "rsa_timing_attack" => crate::advanced_crypto_engines::run_rsa_timing_attack_result(target).await,
         "mfa_bypass_engine" => crate::advanced_crypto_engines::run_mfa_bypass_engine_result(target).await,
         "credential_stuffing" => crate::advanced_crypto_engines::run_credential_stuffing_result(target).await,
+        "credential_ransomware_fusion" => crate::credential_ransomware_fusion::run_credential_ransomware_fusion_result(target).await,
         "kerberos_attack_suite" => crate::advanced_crypto_engines::run_kerberos_attack_suite_result(target).await,
         "pki_hierarchy_attack" => crate::advanced_crypto_engines::run_pki_hierarchy_attack_result(target).await,
         "session_fixation_adv" => crate::advanced_crypto_engines::run_session_fixation_adv_result(target).await,
@@ -877,6 +906,9 @@ async fn dispatch_engine_match(
         }
         "first_mover_delta_fusion" => {
             crate::first_mover_delta_fusion::run_first_mover_delta_fusion_result(target, ctx).await
+        }
+        "adversary_exposure_delta" => {
+            crate::adversary_exposure_delta::run_adversary_exposure_delta_result(target, ctx).await
         }
         "first_seen_osv_nvd" => {
             crate::first_seen_osv_nvd_engine::run_first_seen_osv_nvd_result(target, ctx).await
