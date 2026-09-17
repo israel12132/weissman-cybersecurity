@@ -7,7 +7,7 @@ export const en = {
     home: {
       title: 'Weissman Cybersecurity — Live evidence. Clearer response.',
       description:
-        'Weissman continuously probes authorised attack surfaces with 586 production engines, verifies findings with live evidence, and helps SOC teams prioritise and respond.',
+        'Weissman continuously probes authorised attack surfaces with 595 production engines, verifies findings with live evidence, and helps SOC teams prioritise and respond.',
     },
     platform: {
       title: 'Platform — Weissman Cybersecurity',
@@ -22,7 +22,7 @@ export const en = {
     'vulnerability-research': {
       title: 'Vulnerability Research — Weissman Cybersecurity',
       description:
-        '324 live probes across web, cloud, OT, identity, and supply chain — every finding from a real network or host check.',
+        '329 live probes across web, cloud, OT, identity, and supply chain — every finding from a real network or host check.',
     },
     'detection-response': {
       title: 'Detection and Response — Weissman Cybersecurity',
@@ -544,11 +544,11 @@ export const en = {
       eyebrow: 'Research',
       title: 'Vulnerability research with a live-probe bar',
       summary:
-        '324 live probes — web, API, cloud, OT/ICS, identity, supply chain, AI/LLM, and more. Aliases resolve to a real implementation. CI fails if they do not.',
+        '329 live probes — web, API, cloud, OT/ICS, identity, supply chain, AI/LLM, and more. Aliases resolve to a real implementation. CI fails if they do not.',
       ctaLabel: 'Explore research engines',
       outcomes: [
-        '586 production IDs, every one wired to a runner',
-        '226 MITRE ATT&CK techniques against the current v19.1 Enterprise, Mobile, and ICS set',
+        '595 production IDs, every one wired to a runner',
+        '239 MITRE ATT&CK techniques against the current v19.1 Enterprise, Mobile, and ICS set',
         'No fabricated or randomised findings in the persist path',
       ],
       capabilities: [
@@ -721,11 +721,11 @@ export const en = {
       },
       'mitre-coverage': {
         title: 'ATT&CK coverage against v19.1',
-        summary: '226 techniques: 192 primary mappings plus 34 code-grounded secondary tags.',
+        summary: '239 techniques: 200 primary mappings plus 39 code-grounded secondary tags.',
       },
       'engine-integrity': {
         title: 'Engine integrity accounting',
-        summary: '586 IDs classified as live probe, alias, or agent-required — CI-gated, no silent catalog entries.',
+        summary: '595 IDs classified as live probe, alias, or agent-required — CI-gated, no silent catalog entries.',
       },
       'platform-overview': {
         title: 'Platform technical overview',
@@ -775,7 +775,8 @@ export const en = {
       'React Command Center for operators; public site and product share no third-party analytics.',
       'Cloud SaaS or self-hosted — same product, different where the data lives.',
     ],
-    registered: 'Registered address: {location}. Company number: {id} — filled after incorporation; not invented here.',
+    registered: 'Registered address: {location}. Company registration number: {id}.',
+    registeredPending: 'Registered address: {location}. Company registration number available on request.',
     roles: {
       sales: 'sales',
       security: 'security',
@@ -881,7 +882,7 @@ export const en = {
     privacy: 'Privacy Policy',
     creating: 'Creating…',
     submit: 'Create workspace',
-    verify: 'Dev verify link →',
+    verify: 'Confirm your workspace →',
     errWorkspace: 'Workspace name must be 2–80 characters.',
     errEmail: 'Enter a valid work email.',
     errPasswordLen: 'Use at least 12 characters with letters and numbers or symbols.',
