@@ -16,8 +16,8 @@ describe('ClientSaasIdpDiscovery live-only truth', () => {
   })
 
   it('does not dump leftover leftover-discovery CSV after a failed discovery GET', () => {
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
-    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(error\) return/)
+    expect(src).toMatch(/exportDisabled=\{!!error \|\| !filteredFindings\.length\}/)
   })
 
   it('mutes leftover client name in the title after a failed discovery GET', () => {
@@ -29,9 +29,9 @@ describe('ClientSaasIdpDiscovery live-only truth', () => {
 
   it('mutes leftover leftover-GET Export CSV after a failed discovery GET', () => {
     expect(src).toMatch(/apiFetch\(`\/api\/clients\/\$\{clientId\}\/discovery\/saas-idp`\)/)
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(error\) return/)
     expect(src).toMatch(/onExport=\{error \? undefined : handleExportCsv\}/)
-    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/exportDisabled=\{!!error \|\| !filteredFindings\.length\}/)
     expect(src).toMatch(/onRefresh=\{runDiscovery\}/)
     expect(src).not.toMatch(/catch \(e\) \{\s*setReport\(null\)/)
   })

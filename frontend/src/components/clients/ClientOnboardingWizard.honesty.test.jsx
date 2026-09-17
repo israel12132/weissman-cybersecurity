@@ -12,7 +12,7 @@ describe('ClientOnboardingWizard live-only truth', () => {
   it('does not paint unconfirmed 0% when leftover leftover-GET catalog stays initial null', () => {
     expect(hook).toMatch(/apiFetch\('\/api\/engines\/requirements'\)/)
     expect(hook).toMatch(/apiFetch\('\/api\/onboarding\/tenant-status'\)/)
-    expect(hook).toMatch(/} catch \(e\) \{\n      setError\(e\.message \|\| 'Failed to load requirements'\)\n    }/)
+    expect(hook).toMatch(/} catch \(e\) \{\n {6}setError\(e\.message \|\| 'Failed to load requirements'\)\n {4}}/)
     expect(hook).not.toMatch(/catch \(e\) \{\s*setError\([^)]+\)\s*setCatalog\(null\)/)
     expect(src).toMatch(/const catalogUnavailable = !catalog && !!loadError/)
     expect(src).toMatch(/\{catalogUnavailable \? '—' : `\$\{readiness\.percent\}%`\}/)
@@ -23,7 +23,7 @@ describe('ClientOnboardingWizard live-only truth', () => {
   })
 
   it('does not latch catalog unavailable from POST /api/clients create fail', () => {
-    expect(host).toMatch(/apiFetch\('\/api\/clients', \{\n        method: 'POST',/)
+    expect(host).toMatch(/apiFetch\('\/api\/clients', \{\n {8}method: 'POST',/)
     expect(host).toMatch(/setError\(t\('pages\.clientNew\.create_failed', \{ detail \}\)\)/)
     expect(host).not.toMatch(/create_failed[\s\S]{0,200}setCatalog/)
     expect(src).not.toMatch(/create_failed[\s\S]{0,200}catalogUnavailable/)

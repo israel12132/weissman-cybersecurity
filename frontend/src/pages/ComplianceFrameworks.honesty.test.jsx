@@ -22,10 +22,10 @@ describe('ComplianceFrameworks live-only truth', () => {
   it('does not dump leftover leftover-controls after a failed frameworks GET', () => {
     expect(src).toMatch(/selectedFramework && !error && \(/)
     expect(src).toMatch(/controlsUnavailable \? '—' : filteredControls\.length/)
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error \|\| controlsUnavailable\) return/)
-    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| controlsUnavailable \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(error \|\| controlsUnavailable\) return/)
+    expect(src).toMatch(/exportDisabled=\{!!error \|\| controlsUnavailable \|\| !filteredFindings\.length\}/)
     expect(src).toMatch(/disabled=\{exporting \|\| controlsUnavailable \|\| !!error \|\| controls\.length === 0\}/)
-    expect(src).toMatch(/const generateReport = async \(frameworkId\) => \{\n    if \(error \|\| controlsUnavailable\) return/)
+    expect(src).toMatch(/const generateReport = async \(frameworkId\) => \{\n {4}if \(error \|\| controlsUnavailable\) return/)
     expect(src).toMatch(/selectedFramework && !error && !controlsUnavailable && stats\.nonCompliant > 0 && \(/)
     expect(src).toMatch(/isSelected && !controlsUnavailable && controls\.length > 0/)
   })

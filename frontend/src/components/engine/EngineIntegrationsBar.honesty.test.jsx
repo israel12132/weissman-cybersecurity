@@ -19,14 +19,14 @@ describe('EngineIntegrationsBar live-only truth', () => {
 
   it('latches GET-only unavailable on leftover leftover-GET catch-clear without dropping catch-clear', () => {
     expect(hook).toMatch(/fetchClientIntegrations\(clientId\)/)
-    expect(hook).toMatch(/setLocalIntegrations\(null\)\n          setLocalUnavailable\(true\)/)
+    expect(hook).toMatch(/setLocalIntegrations\(null\)\n {10}setLocalUnavailable\(true\)/)
     expect(ctx).toMatch(/apiFetch\(`\/api\/clients\/\$\{clientId\}\/integrations`\)/)
-    expect(ctx).toMatch(/setClientIntegrations\(null\)\n        setIntegrationsUnavailable\(true\)/)
+    expect(ctx).toMatch(/setClientIntegrations\(null\)\n {8}setIntegrationsUnavailable\(true\)/)
     expect(ctx).toMatch(/integrationsUnavailable,/)
   })
 
   it('latches unavailable when hub leftover leftover-GET resolves null without throw', () => {
-    expect(hook).toMatch(/if \(d == null\) \{\n            setLocalIntegrations\(null\)\n            setLocalUnavailable\(true\)/)
-    expect(hook).not.toMatch(/\.then\(\(d\) => \{\n        if \(!cancelled\) \{\n          setLocalIntegrations\(d\)\n          setLocalUnavailable\(false\)/)
+    expect(hook).toMatch(/if \(d == null\) \{\n {12}setLocalIntegrations\(null\)\n {12}setLocalUnavailable\(true\)/)
+    expect(hook).not.toMatch(/\.then\(\(d\) => \{\n {8}if \(!cancelled\) \{\n {10}setLocalIntegrations\(d\)\n {10}setLocalUnavailable\(false\)/)
   })
 })

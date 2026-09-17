@@ -18,19 +18,19 @@ describe('IntegrationManager live-only truth', () => {
 
   it('does not dump leftover leftover-integrations after a failed catalog GET', () => {
     expect(src).toMatch(/vaultEnabled && !loadError && \(/)
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(loadError\) return/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(loadError\) return/)
     expect(src).toMatch(/exportDisabled=\{loadError \|\| !filteredFindings\.length\}/)
   })
 
   it('mutes leftover leftover-configure modal after a failed integrations GET', () => {
     expect(src).toMatch(/\{configureTarget && !loadError && \(/)
     expect(src).toMatch(/setLoadError\(true\);/)
-    expect(src).not.toMatch(/setLoadError\(true\);\n      setConfigureTarget/)
+    expect(src).not.toMatch(/setLoadError\(true\);\n {6}setConfigureTarget/)
   })
 
   it('mutes leftover leftover-GET Export CSV after a failed integrations GET', () => {
     expect(src).toMatch(/api\.get\('\/api\/integrations'\)/)
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(loadError\) return/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(loadError\) return/)
     expect(src).toMatch(/onExport=\{loadError \? undefined : handleExportCsv\}/)
     expect(src).toMatch(/exportDisabled=\{loadError \|\| !filteredFindings\.length\}/)
     expect(src).toMatch(/onRefresh=\{fetchIntegrations\}/)

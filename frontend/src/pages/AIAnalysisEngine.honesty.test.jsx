@@ -20,20 +20,20 @@ describe('AIAnalysisEngine live-only truth', () => {
 
   it('does not paint leftover leftover-last-updated after a failed intel GET', () => {
     expect(src).toMatch(/\{lastUpdated && !error && \(/)
-    expect(src).toMatch(/\{!error && \(\n      <div className="rounded-xl border border-violet-500\/20/)
+    expect(src).toMatch(/\{!error && \(\n {6}<div className="rounded-xl border border-violet-500\/20/)
     expect(src).toMatch(/\{evidenceNotice\}/)
     expect(src).not.toMatch(/error \? t\('pages\.aiAnalysisEngine\.evidence_soc'\)/)
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return\n    exportPatternsCsv\(filtered\)/)
-    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(error\) return\n {4}exportPatternsCsv\(filtered\)/)
+    expect(src).toMatch(/exportDisabled=\{!!error \|\| !filteredFindings\.length\}/)
   })
 
   it('mutes leftover leftover-GET Export CSV after a failed findings GET', () => {
     expect(src).toMatch(/apiFetch\('\/api\/findings\?limit=2000'\)/)
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return\n    exportPatternsCsv\(filtered\)/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(error\) return\n {4}exportPatternsCsv\(filtered\)/)
     expect(src).toMatch(/onExport=\{error \? undefined : handleExportCsv\}/)
-    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/exportDisabled=\{!!error \|\| !filteredFindings\.length\}/)
     expect(src).toMatch(/onRefresh=\{load\}/)
-    expect(src).toMatch(/\} catch \(e\) \{\n      setError\(e\.message \|\| t\('pages\.aiAnalysisEngine\.load_error'\)\)/)
-    expect(src).not.toMatch(/\} catch \(e\) \{\n      setError[\s\S]{0,160}setPatterns\(/)
+    expect(src).toMatch(/\} catch \(e\) \{\n {6}setError\(e\.message \|\| t\('pages\.aiAnalysisEngine\.load_error'\)\)/)
+    expect(src).not.toMatch(/\} catch \(e\) \{\n {6}setError[\s\S]{0,160}setPatterns\(/)
   })
 })

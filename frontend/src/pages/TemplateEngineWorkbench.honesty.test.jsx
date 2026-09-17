@@ -19,7 +19,7 @@ describe('TemplateEngineWorkbench live-only truth', () => {
 
   it('does not dump leftover leftover-templates after a failed catalog GET', () => {
     expect(src).toMatch(/templates\.length > 0 && !templatesUnavailable && \(/)
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(templatesUnavailable\) return/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(templatesUnavailable\) return/)
     expect(src).toMatch(/exportDisabled=\{templatesUnavailable \|\| !filteredFindings\.length\}/)
   })
 
@@ -54,7 +54,7 @@ describe('TemplateEngineWorkbench live-only truth', () => {
     expect(src).toMatch(/setYamlUnavailable\(true\)/)
     expect(src).toMatch(/data-testid="template-engine-yaml-unavailable"/)
     expect(src).toMatch(/!!String\(yaml \|\| ''\)\.trim\(\) && !yamlUnavailable/)
-    expect(src).toMatch(/\.catch\(\(e\) => \{\n        setYamlUnavailable\(true\)\n        setError\(e\?\.message \|\| t\(`\$\{NS\}\.load_failed`\)\)/)
+    expect(src).toMatch(/\.catch\(\(e\) => \{\n {8}setYamlUnavailable\(true\)\n {8}setError\(e\?\.message \|\| t\(`\$\{NS\}\.load_failed`\)\)/)
     expect(src).toMatch(/setError\(e\?\.message \|\| t\(`\$\{NS\}\.run_failed`\)\)/)
     expect(src).not.toMatch(/setYaml\(''\)/)
     expect(src).not.toMatch(/yamlUnavailable \|\| error/)

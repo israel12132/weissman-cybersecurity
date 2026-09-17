@@ -10,11 +10,11 @@ const src = readFileSync(
 
 describe('MemoryForensicsLab live-only truth', () => {
   it('mutes leftover leftover-selected hex and weaponization after a failed poe-findings GET', () => {
-    expect(src).toMatch(/\{selected && !findingsError && \(\n              <div className="mt-4 p-3 rounded-lg bg-cyan-500\/10/)
+    expect(src).toMatch(/\{selected && !findingsError && \(\n {14}<div className="mt-4 p-3 rounded-lg bg-cyan-500\/10/)
     expect(src).toMatch(/\{selected && !findingsError \? \(/)
-    expect(src).toMatch(/\{selected && !findingsError && \(\n          <div className="rounded-xl bg-\[var\(--bg-1\)\]\/80 border border-\[var\(--border-default\)\]\/60 p-6">/)
+    expect(src).toMatch(/\{selected && !findingsError && \(\n {10}<div className="rounded-xl bg-\[var\(--bg-1\)\]\/80 border border-\[var\(--border-default\)\]\/60 p-6">/)
     expect(src).toMatch(/setFindingsError\(e\?\.message \|\| t\(`\$\{NS\}\.fetch_failed`\)\)/)
-    expect(src).not.toMatch(/setFindingsError\(e\?\.message \|\| t\(`\$\{NS\}\.fetch_failed`\)\)\n        setFindings\(\[\]\)/)
-    expect(src).not.toMatch(/setFindingsError\(e\?\.message \|\| t\(`\$\{NS\}\.fetch_failed`\)\)\n        setSelected\(null\)/)
+    expect(src).not.toMatch(/setFindingsError\(e\?\.message \|\| t\(`\$\{NS\}\.fetch_failed`\)\)\n {8}setFindings\(\[\]\)/)
+    expect(src).not.toMatch(/setFindingsError\(e\?\.message \|\| t\(`\$\{NS\}\.fetch_failed`\)\)\n {8}setSelected\(null\)/)
   })
 })

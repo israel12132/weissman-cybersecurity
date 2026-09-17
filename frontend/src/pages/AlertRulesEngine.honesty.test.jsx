@@ -18,19 +18,19 @@ describe('AlertRulesEngine live-only truth', () => {
   it('does not paint leftover leftover-rule counts after a failed rules GET', () => {
     expect(src).toMatch(/count: unavailable \? '—' : filteredRules\.length/)
     expect(src).toMatch(/resultCount=\{unavailable \? undefined : visibleRules\.length\}/)
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(unavailable\) return/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(unavailable\) return/)
     expect(src).toMatch(/exportDisabled=\{unavailable \|\| !filteredFindings\.length\}/)
   })
 
   it('mutes leftover leftover-edit rule modal after a failed rules GET', () => {
     expect(src).toMatch(/\{\(createModal \|\| \(editModal && !unavailable\)\) && \(/)
-    expect(src).toMatch(/setUnavailable\(true\);\n      toast\.error\(t\('pages\.alertRulesEngine\.load_failed'\)\)/)
-    expect(src).not.toMatch(/setUnavailable\(true\);\n      setEditModal/)
+    expect(src).toMatch(/setUnavailable\(true\);\n {6}toast\.error\(t\('pages\.alertRulesEngine\.load_failed'\)\)/)
+    expect(src).not.toMatch(/setUnavailable\(true\);\n {6}setEditModal/)
   })
 
   it('mutes leftover leftover-GET Export CSV after a failed rules GET', () => {
     expect(src).toMatch(/api\.get\('\/api\/alerts\/rules'\)/)
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(unavailable\) return/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(unavailable\) return/)
     expect(src).toMatch(/onExport=\{unavailable \? undefined : handleExportCsv\}/)
     expect(src).toMatch(/exportDisabled=\{unavailable \|\| !filteredFindings\.length\}/)
     expect(src).toMatch(/onRefresh=\{fetchRules\}/)

@@ -18,13 +18,13 @@ describe('RemediationHub live-only truth', () => {
 
   it('does not dump leftover leftover-families after a failed findings GET', () => {
     expect(src).toMatch(/families_heading', \{ count: error \? '—' : workflows\.length \}/)
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
-    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(error\) return/)
+    expect(src).toMatch(/exportDisabled=\{!!error \|\| !filteredFindings\.length\}/)
     expect(src).toMatch(/healStats && !error && \(/)
   })
 
   it('mutes leftover leftover-fix drawer after a failed findings GET', () => {
-    expect(src).toMatch(/\{selectedFinding && !error && \(\n        <RemediationDetail finding=\{selectedFinding\}/)
+    expect(src).toMatch(/\{selectedFinding && !error && \(\n {8}<RemediationDetail finding=\{selectedFinding\}/)
     expect(src).toMatch(/setError\(e\.message \|\| 'Failed to load findings'\)/)
     expect(src).not.toMatch(/catch \(e\) \{\s*setSelectedFinding\(null\)/)
     expect(src).not.toMatch(/catch \(e\) \{\s*setFindings\(\[\]\)/)
@@ -32,9 +32,9 @@ describe('RemediationHub live-only truth', () => {
 
   it('mutes leftover leftover-GET Export CSV after a failed findings GET', () => {
     expect(src).toMatch(/apiFetch\('\/api\/findings\?limit=2000'\)/)
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(error\) return/)
     expect(src).toMatch(/onExport=\{error \? undefined : handleExportCsv\}/)
-    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/exportDisabled=\{!!error \|\| !filteredFindings\.length\}/)
     expect(src).toMatch(/setError\(e\.message \|\| 'Failed to load findings'\)/)
     expect(src).not.toMatch(/catch \(e\) \{\s*setFindings\(\[\]\)/)
   })

@@ -19,7 +19,7 @@ describe('CouncilHitlQueue live-only truth', () => {
 
   it('mutes leftover leftover-GET Export CSV after a failed queue GET', () => {
     expect(src).toMatch(/api\.get\(`\/api\/council\/hitl\/queue\$\{qs\}`\)/)
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(unavailable\) return\n    exportQueueCsv\(filteredItems\)/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(unavailable\) return\n {4}exportQueueCsv\(filteredItems\)/)
     expect(src).toMatch(/onExport=\{unavailable \? undefined : handleExportCsv\}/)
     expect(src).toMatch(/exportDisabled=\{unavailable \|\| !filteredFindings\.length\}/)
     expect(src).toMatch(/onRefresh=\{fetchQueue\}/)

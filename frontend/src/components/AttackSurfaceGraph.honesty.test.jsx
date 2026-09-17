@@ -11,8 +11,8 @@ const src = readFileSync(
 describe('AttackSurfaceGraph live-only truth', () => {
   it('does not paint leftover leftover-graph after a failed attack-surface-graph GET', () => {
     expect(src).toMatch(/subtitle=\{error \|\| graph\.run_id == null \? undefined : t\(/)
-    expect(src).toMatch(/\{\!error && graph\.message && !graph\.nodes\?\.length && \(/)
-    expect(src).toMatch(/\{\/\* Leftover graph stays in React state; mute paint on failed attack-surface-graph GET \*\/\}\n      \{\!error && \(/)
+    expect(src).toMatch(/\{!error && graph\.message && !graph\.nodes\?\.length && \(/)
+    expect(src).toMatch(/\{\/\* Leftover graph stays in React state; mute paint on failed attack-surface-graph GET \*\/\}\n {6}\{!error && \(/)
     expect(src).toMatch(/data-testid="asm-graph-unavailable"/)
     expect(src).toMatch(/setError\(e\?\.message \|\| t\(`\$\{NS\}\.load_failed`\)\)/)
     expect(src).not.toMatch(/setGraph\(\{ nodes: \[\], edges: \[\], run_id: null/)

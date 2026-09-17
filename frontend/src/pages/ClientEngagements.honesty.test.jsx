@@ -11,14 +11,14 @@ const src = readFileSync(
 describe('ClientEngagements live-only truth', () => {
   it('does not dump leftover leftover-engagements CSV after a failed engagements GET', () => {
     expect(src).toMatch(/data-testid="engagements-empty-suppressed"/)
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
-    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(error\) return/)
+    expect(src).toMatch(/exportDisabled=\{!!error \|\| !filteredFindings\.length\}/)
   })
 
   it('mutes leftover client name in the title after a failed client GET', () => {
-    expect(src).toMatch(/title=\{!error && client\?\.name\n        \? t\('pages\.clientEngagements\.title_with_client', \{ name: client\.name \}\)\n        : t\('pages\.clientEngagements\.title'\)\}/)
+    expect(src).toMatch(/title=\{!error && client\?\.name\n {8}\? t\('pages\.clientEngagements\.title_with_client', \{ name: client\.name \}\)\n {8}: t\('pages\.clientEngagements\.title'\)\}/)
     expect(src).toMatch(/setError\(e\?\.message \|\| t\('pages\.clientEngagements\.network_error'\)\)/)
-    expect(src).toMatch(/if \(clientR\.error\) \{\n        setError\(t\('pages\.clientEngagements\.load_client_failed', \{ status: clientR\.error\.status \}\)\)\n        setEngagementsUnavailable\(true\)\n        setLoading\(false\)\n        return/)
+    expect(src).toMatch(/if \(clientR\.error\) \{\n {8}setError\(t\('pages\.clientEngagements\.load_client_failed', \{ status: clientR\.error\.status \}\)\)\n {8}setEngagementsUnavailable\(true\)\n {8}setLoading\(false\)\n {8}return/)
     expect(src).not.toMatch(/catch \(e\) \{\s*setClient\(null\)/)
   })
 

@@ -10,11 +10,11 @@ const src = readFileSync(
 
 describe('WhiteLabelBrand live-only truth', () => {
   it('does not dump leftover leftover-brand CSV after a failed brand GET', () => {
-    expect(src).toMatch(/const exportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
-    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !rows\.length\}/)
-    expect(src).toMatch(/\{\!error && \(/)
-    expect(src).toMatch(/\} catch \(e\) \{\n      setError/)
-    expect(src).not.toMatch(/\} catch \(e\) \{\n      setRaw\(/)
+    expect(src).toMatch(/const exportCsv = useCallback\(\(\) => \{\n {4}if \(error\) return/)
+    expect(src).toMatch(/exportDisabled=\{!!error \|\| !rows\.length\}/)
+    expect(src).toMatch(/\{!error && \(/)
+    expect(src).toMatch(/\} catch \(e\) \{\n {6}setError/)
+    expect(src).not.toMatch(/\} catch \(e\) \{\n {6}setRaw\(/)
   })
 
   it('mutes leftover leftover-GET Export CSV after a failed brand GET', () => {
@@ -25,6 +25,6 @@ describe('WhiteLabelBrand live-only truth', () => {
     expect(src).toMatch(/method: 'PUT'/)
     expect(src).toMatch(/toast\.error\(e\.message \|\| t\(`\$\{NS\}\.save_failed`\)\)/)
     expect(src).not.toMatch(/save_failed[\s\S]{0,80}setError/)
-    expect(src).not.toMatch(/\} catch \(e\) \{\n      setRaw\(/)
+    expect(src).not.toMatch(/\} catch \(e\) \{\n {6}setRaw\(/)
   })
 })

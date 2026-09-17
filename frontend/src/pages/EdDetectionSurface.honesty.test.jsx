@@ -20,7 +20,7 @@ describe('EdDetectionSurface live-only truth', () => {
   })
 
   it('does not dump leftover leftover-findings CSV after a failed history GET', () => {
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(historyUnavailable\) return/)
     expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| !filteredFindings\.length\}/)
   })
 
@@ -30,7 +30,7 @@ describe('EdDetectionSurface live-only truth', () => {
     expect(src).toMatch(/onRefresh=\{handleRefresh\}/)
     expect(src).toMatch(/data-testid="ed-detection-history-unavailable"/)
     expect(src).toMatch(/if \(!ok\) \{ setScanning\(false\); return \}/)
-    expect(src).toMatch(/\} catch \{\n      setScanning\(false\)\n    \}/)
+    expect(src).toMatch(/\} catch \{\n {6}setScanning\(false\)\n {4}\}/)
     expect(src).not.toMatch(/setHistoryUnavailable/)
   })
 })

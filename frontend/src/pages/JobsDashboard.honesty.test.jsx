@@ -18,7 +18,7 @@ describe('JobsDashboard live-only truth', () => {
 
   it('mutes leftover leftover-GET Export CSV after a failed jobs GET', () => {
     expect(src).toMatch(/apiFetch\(`\/api\/jobs\?\$\{qs\.toString\(\)\}`\)/)
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(error\) return/)
     expect(src).toMatch(/onExport=\{error \? undefined : handleExportCsv\}/)
     expect(src).toMatch(/exportDisabled=\{!filteredFindings\.length\}/)
     expect(src).toMatch(/error && !hasLoadedRef\.current/)

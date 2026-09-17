@@ -17,8 +17,8 @@ describe('SupremeNerveCenter live-only truth', () => {
   })
 
   it('does not dump leftover leftover-nerve JSON after a failed nerve-center GET', () => {
-    expect(src).toMatch(/const handleExport = useCallback\(async \(\) => \{\n    if \(error \|\| !snap\) return/)
-    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !snap\}/)
+    expect(src).toMatch(/const handleExport = useCallback\(async \(\) => \{\n {4}if \(error \|\| !snap\) return/)
+    expect(src).toMatch(/exportDisabled=\{!!error \|\| !snap\}/)
     expect(src).toMatch(/stuckEngines\.length > 0 && !error/)
     expect(src).toMatch(/lastRefresh && !error \? lastRefresh\.toLocaleTimeString/)
     expect(src).not.toMatch(/setSnap\(null\)/)
@@ -26,9 +26,9 @@ describe('SupremeNerveCenter live-only truth', () => {
 
   it('mutes leftover leftover-GET Export CSV after a failed nerve-center GET', () => {
     expect(src).toMatch(/apiFetch\('\/api\/ceo\/supreme\/nerve-center'\)/)
-    expect(src).toMatch(/const handleExport = useCallback\(async \(\) => \{\n    if \(error \|\| !snap\) return/)
+    expect(src).toMatch(/const handleExport = useCallback\(async \(\) => \{\n {4}if \(error \|\| !snap\) return/)
     expect(src).toMatch(/onExport=\{error \? undefined : handleExport\}/)
-    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !snap\}/)
+    expect(src).toMatch(/exportDisabled=\{!!error \|\| !snap\}/)
     expect(src).toMatch(/onRefresh=\{load\}/)
     expect(src).toMatch(/data-testid="supreme-nerve-unavailable"/)
     expect(src).not.toMatch(/setSnap\(null\)/)

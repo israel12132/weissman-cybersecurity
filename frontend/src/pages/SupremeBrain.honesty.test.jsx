@@ -10,10 +10,10 @@ const src = readFileSync(
 
 describe('SupremeBrain live-only truth', () => {
   it('does not dump leftover leftover-brain JSON after a failed supreme-brain GET', () => {
-    expect(src).toMatch(/const handleExportJson = useCallback\(\(\) => \{\n    if \(error\) return/)
-    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !payload\}/)
-    expect(src).toMatch(/\} catch \(e\) \{\n        setError/)
-    expect(src).not.toMatch(/\} catch \(e\) \{\n        setPayload\(null\)/)
+    expect(src).toMatch(/const handleExportJson = useCallback\(\(\) => \{\n {4}if \(error\) return/)
+    expect(src).toMatch(/exportDisabled=\{!!error \|\| !payload\}/)
+    expect(src).toMatch(/\} catch \(e\) \{\n {8}setError/)
+    expect(src).not.toMatch(/\} catch \(e\) \{\n {8}setPayload\(null\)/)
   })
 
   it('mutes leftover leftover-GET Export CSV after a failed supreme-brain GET', () => {

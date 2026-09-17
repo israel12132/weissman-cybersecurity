@@ -25,7 +25,7 @@ describe('JwtAttackLab live-only truth', () => {
   })
 
   it('does not dump leftover leftover-findings CSV after a failed history GET', () => {
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(historyUnavailable\) return/)
     expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| !filteredDisplayFindings\.length\}/)
   })
 
@@ -36,7 +36,7 @@ describe('JwtAttackLab live-only truth', () => {
     expect(src).toMatch(/data-testid="jwt-attack-lab-history-unavailable"/)
     expect(src).toMatch(/showToast\('error', d\.detail \|\| t\('pages\.jwtLab\.scan_failed'\)\)/)
     expect(src).not.toMatch(/scan_failed[\s\S]{0,80}setHistoryUnavailable/)
-    expect(src).toMatch(/\} catch \{\n      setHistoryUnavailable\(true\)\n    \} finally \{/)
-    expect(src).not.toMatch(/setHistoryUnavailable\(true\)\n      setScanResult/)
+    expect(src).toMatch(/\} catch \{\n {6}setHistoryUnavailable\(true\)\n {4}\} finally \{/)
+    expect(src).not.toMatch(/setHistoryUnavailable\(true\)\n {6}setScanResult/)
   })
 })

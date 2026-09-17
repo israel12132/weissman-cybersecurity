@@ -12,9 +12,9 @@ describe('ContainmentRulesTab live-only truth', () => {
   it('does not paint leftover leftover-rules in the execute select after a failed rules GET', () => {
     expect(src).toMatch(/\{\(!loadError \? rules : \[\]\)\.map\(r => \(/)
     expect(src).toMatch(/if \(loadError\) return/)
-    expect(src).toMatch(/disabled=\{\!\!loadError\}/)
+    expect(src).toMatch(/disabled=\{!!loadError\}/)
     expect(src).toMatch(/data-testid="containment-rules-unavailable"/)
     expect(src).toMatch(/setLoadError\(e\?\.message \|\| t\(`\$\{NS\}\.unavailable`\)\)/)
-    expect(src).not.toMatch(/\} catch \(e\) \{\n      setLoadError\(e\?\.message \|\| t\(`\$\{NS\}\.unavailable`\)\)\n      setRules\(\[\]\)/)
+    expect(src).not.toMatch(/\} catch \(e\) \{\n {6}setLoadError\(e\?\.message \|\| t\(`\$\{NS\}\.unavailable`\)\)\n {6}setRules\(\[\]\)/)
   })
 })

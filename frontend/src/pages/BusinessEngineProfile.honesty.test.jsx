@@ -41,13 +41,13 @@ describe('BusinessEngineProfile live-only truth', () => {
   })
 
   it('does not dump leftover leftover-history JSON after a failed history GET', () => {
-    expect(src).toMatch(/async function exportJson\(\) \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/async function exportJson\(\) \{\n {4}if \(historyUnavailable\) return/)
     expect(src).toMatch(/exportDisabled=\{historyUnavailable\}/)
   })
 
   it('mutes leftover leftover-GET Export PDF after a failed history GET', () => {
     expect(src).toMatch(/apiFetch\(`\/api\/engines\/history\/\$\{encodeURIComponent\(engineId\)\}\?limit=100`\)/)
-    expect(src).toMatch(/function exportPdf\(\) \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/function exportPdf\(\) \{\n {4}if \(historyUnavailable\) return/)
     expect(src).toMatch(/\{!historyUnavailable && \(\s*<Button variant="unstyled" type="button" onClick=\{exportPdf\}/)
     expect(src).toMatch(/pages\.businessEngineProfile\.export_pdf/)
     expect(src).toMatch(/setHistoryUnavailable\(true\)/)

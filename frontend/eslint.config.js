@@ -39,7 +39,9 @@ export default [
   },
   js.configs.recommended,
   {
-    files: ['src/**/*.{js,jsx}'],
+    // Main Command Center app (src/**) and the marketing site (www/**) are both
+    // browser React apps with their own Vite entry — same environment and rules.
+    files: ['src/**/*.{js,jsx}', 'www/**/*.{js,jsx}'],
     languageOptions: {
       // 'latest' so the parser understands import attributes (`with { type: 'json' }`),
       // which some engine-manifest modules use; older ecmaVersions error on it.

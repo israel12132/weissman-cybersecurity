@@ -17,10 +17,10 @@ describe('SelfImprovementConsole live-only truth', () => {
   })
 
   it('does not dump leftover leftover-proposals CSV after a failed queue GET', () => {
-    expect(src).toMatch(/const exportCsv = useCallback\(\(\) => \{\n    if \(queueUnavailable\) return/)
-    expect(src).toMatch(/const exportPdf = useCallback\(\(\) => \{\n    if \(queueUnavailable\) return/)
+    expect(src).toMatch(/const exportCsv = useCallback\(\(\) => \{\n {4}if \(queueUnavailable\) return/)
+    expect(src).toMatch(/const exportPdf = useCallback\(\(\) => \{\n {4}if \(queueUnavailable\) return/)
     expect(src).toMatch(/exportDisabled=\{queueUnavailable \|\| !filteredItems\.length\}/)
-    expect(src).toMatch(/\{\!queueUnavailable && \(/)
+    expect(src).toMatch(/\{!queueUnavailable && \(/)
     expect(src).not.toMatch(/setItems\(\[\]\)/)
   })
 

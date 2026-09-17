@@ -11,21 +11,21 @@ const src = readFileSync(
 describe('SystemConfiguration live-only truth', () => {
   it('does not dump leftover leftover-config CSV after a failed config GET', () => {
     expect(src).toMatch(/configUnavailable/)
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(configUnavailable\) return/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(configUnavailable\) return/)
     expect(src).toMatch(/exportDisabled=\{configUnavailable \|\| !filteredFindings\.length\}/)
   })
 
   it('mutes leftover leftover-MFA status after a failed MFA status GET', () => {
-    expect(src).toMatch(/\{\!statusUnavailable && \(\n      <div className="text-\[11px\] font-mono text-\[var\(--text-tertiary\)\]">\n        \{t\(`\$\{NS\}\.mfa\.account_label`\)\}{' '\}\n        \{status\.mfa_enabled \? \(/)
-    expect(src).toMatch(/\{\!statusUnavailable && status\.mfa_enabled && \(/)
+    expect(src).toMatch(/\{!statusUnavailable && \(\n {6}<div className="text-\[11px\] font-mono text-\[var\(--text-tertiary\)\]">\n {8}\{t\(`\$\{NS\}\.mfa\.account_label`\)\}{' '\}\n {8}\{status\.mfa_enabled \? \(/)
+    expect(src).toMatch(/\{!statusUnavailable && status\.mfa_enabled && \(/)
     expect(src).toMatch(/setStatusUnavailable\(true\)/)
     expect(src).toMatch(/setErr\(e\?\.message \|\| t\(`\$\{NS\}\.mfa\.errors\.status_fetch_failed`\)\)/)
-    expect(src).not.toMatch(/setStatusUnavailable\(true\)\n      setStatus\(null\)/)
+    expect(src).not.toMatch(/setStatusUnavailable\(true\)\n {6}setStatus\(null\)/)
   })
 
   it('mutes leftover leftover-GET Export CSV after a failed config GET', () => {
     expect(src).toMatch(/api\.get\('\/api\/system\/config'\)/)
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(configUnavailable\) return/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(configUnavailable\) return/)
     expect(src).toMatch(/onExport=\{configUnavailable \? undefined : handleExportCsv\}/)
     expect(src).toMatch(/exportDisabled=\{configUnavailable \|\| !filteredFindings\.length\}/)
     expect(src).toMatch(/onRefresh=\{fetchConfig\}/)

@@ -34,14 +34,14 @@ describe('OsintEngineProfile live-only truth', () => {
   })
 
   it('does not dump leftover leftover-findings CSV after a failed history GET', () => {
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(historyUnavailable\) return/)
     expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| !filteredFindings\.length\}/)
   })
 
   it('mutes leftover leftover-GET Export CSV chrome after a failed history GET', () => {
     expect(src).toMatch(/apiFetch\(`\/api\/engines\/history\/\$\{ENGINE_ID\}\?limit=100`\)/)
     expect(src).toMatch(/onExport=\{historyUnavailable \? undefined : handleExportCsv\}/)
-    expect(src).toMatch(/\} catch \{\n      setHistoryUnavailable\(true\)/)
+    expect(src).toMatch(/\} catch \{\n {6}setHistoryUnavailable\(true\)/)
     expect(src).not.toMatch(/catch \{\s*setHistoryUnavailable\(true\)\s*setHistory\(/)
   })
 })
