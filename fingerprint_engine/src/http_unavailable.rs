@@ -3830,7 +3830,7 @@ mod tests {
         );
         let persist = include_str!("findings_persist.rs");
         assert!(persist.contains(
-            "fp_feedback::active_suppressions_for_engine(pool, tenant_id, engine)\n            .await\n            .map_err(|_| \"store_down\".to_string())?"
+            "fp_feedback::active_suppressions_for_engine(pool, tenant_id, engine)\n        .await\n        .map_err(|_| \"store_down\".to_string())?"
         ));
         assert!(persist.contains(
             "fp_feedback::confidence_multiplier_tx(&mut tx, tenant_id, engine, &signature_hash)\n                .await\n                .map_err(|_| \"store_down\".to_string())?"
@@ -3985,7 +3985,7 @@ mod tests {
     fn ueba_epss_fair_verify_heal_store_down_is_not_live_miss() {
         let ingest = named_fn_src(
             include_str!("ueba_detector.rs"),
-            "pub async fn ingest_sample",
+            "pub async fn analyze_sample_in_tx",
         );
         assert!(ingest.contains("SELECT enrolled_at FROM endpoint_agents"));
         assert!(!compact_src(ingest).contains("fetch_optional(&mut*tx).await.ok().flatten()"));
@@ -4085,8 +4085,9 @@ mod tests {
         assert!(rec.contains("store_down"));
         let dispatch = named_fn_src(pb, "pub async fn dispatch_event");
         assert!(dispatch.contains("skipped_store_down"));
-        assert!(dispatch
-            .contains("record_run(pool, &pb, &event, &dedup, &actions, &status).await.is_err()"));
+        assert!(dispatch.contains(
+            "record_run(pool, &pb, &event, &dedup, &actions, &status)\n                .await\n                .is_err()"
+        ));
         let act = named_fn_src(pb, "async fn execute_action");
         assert!(
             !act.contains("WEISSMAN_ALERT_WEBHOOK_URL"),
@@ -5914,7 +5915,7 @@ mod tests {
             "pub async fn run_engine",
         );
         assert!(compact_src(dispatch).contains(
-            "matchcrate::sovereign_operator::memory::hydrate(pool.as_ref(),tid,engine_id,target,).await{Ok(s)=>s,Err(_)=>returnEngineResult::error(\"store_down\"),}"
+            "matchcrate::sovereign_operator::memory::hydrate(pool.as_ref(),tid,engine_id,target).await{Ok(s)=>s,Err(_)=>returnEngineResult::error(\"store_down\"),}"
         ));
     }
 

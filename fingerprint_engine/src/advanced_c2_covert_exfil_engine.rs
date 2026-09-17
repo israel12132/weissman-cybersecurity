@@ -327,7 +327,15 @@ async fn fetch_bytes(client: &reqwest::Client, url: &str, max: usize) -> Option<
 /// run **alongside** Z-score. `beacon_samples=3` cannot disable the periodogram.
 #[must_use]
 pub(crate) fn beacon_sample_count(cfg: &ArsenalConfig) -> usize {
-    cfg.usize_or("beacon_samples", MIN_BEACON_SAMPLES)
+    // Explicit operator `beacon_samples` wins (clamped to a spectral-safe range).
+    // Otherwise the default follows intensity: aggressive runs need the full sample
+    // budget so Lomb–Scargle / FFT have resolution; light/normal floor at the minimum.
+    let default = if cfg.intensity() == Intensity::Aggressive {
+        MAX_BEACON_SAMPLES
+    } else {
+        MIN_BEACON_SAMPLES
+    };
+    cfg.usize_or("beacon_samples", default)
         .clamp(MIN_BEACON_SAMPLES, MAX_BEACON_SAMPLES)
 }
 
