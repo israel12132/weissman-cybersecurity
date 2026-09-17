@@ -22,6 +22,11 @@ export default function AIModelRiskTab() {
   const [msg, setMsg] = useState(null)
   const [endpoints, setEndpoints] = useState([{ url: '', model: '', authorization: '' }])
   const [endpointsUnavailable, setEndpointsUnavailable] = useState(false)
+  const updateEndpoint = (i, patch) => {
+    const next = [...endpoints]
+    next[i] = { ...next[i], ...patch }
+    setEndpoints(next)
+  }
 
   const vectorLabel = (key) => t(`${NS}.vectors.${key}`, key)
 
@@ -191,21 +196,13 @@ export default function AIModelRiskTab() {
                 className="md:col-span-5 px-3 py-2 rounded-lg bg-black/50 border border-white/10 text-sm text-white font-mono"
                 placeholder="https://api.example.com/v1/chat/completions"
                 value={ep.url}
-                onChange={(e) => {
-                  const next = [...endpoints]
-                  next[i] = { ...next[i], url: e.target.value }
-                  setEndpoints(next)
-                }}
+                onChange={(e) => updateEndpoint(i, { url: e.target.value })}
               />
               <input
                 className="md:col-span-3 px-3 py-2 rounded-lg bg-black/50 border border-white/10 text-sm text-white"
                 placeholder="gpt-4o-mini"
                 value={ep.model}
-                onChange={(e) => {
-                  const next = [...endpoints]
-                  next[i] = { ...next[i], model: e.target.value }
-                  setEndpoints(next)
-                }}
+                onChange={(e) => updateEndpoint(i, { model: e.target.value })}
               />
               <input
                 type="password"
@@ -213,11 +210,7 @@ export default function AIModelRiskTab() {
                 className="md:col-span-4 px-3 py-2 rounded-lg bg-black/50 border border-white/10 text-sm text-white font-mono"
                 placeholder="Bearer sk-…"
                 value={ep.authorization}
-                onChange={(e) => {
-                  const next = [...endpoints]
-                  next[i] = { ...next[i], authorization: e.target.value }
-                  setEndpoints(next)
-                }}
+                onChange={(e) => updateEndpoint(i, { authorization: e.target.value })}
               />
             </div>
               ))}

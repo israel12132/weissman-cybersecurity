@@ -200,9 +200,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
     const sections = [
       {
         id: 'command',
-        title: t('nav.groups.command'),
-        defaultOpen: true,
-        items: [
+        title: t('nav.groups.command'),        items: [
           { to: '/', label: t('nav.dashboard'), icon: LayoutDashboard, id: 'nav-dashboard', matchPaths: ['/', '/operations'] },
           { to: '/findings', label: t('nav.findings'), icon: ShieldAlert, id: 'nav-findings-c2' },
           { to: '/jobs', label: t('nav.jobs'), icon: Clock, id: 'nav-jobs' },
@@ -210,9 +208,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
       },
       {
         id: 'intelligence',
-        title: t('nav.groups.intelligence'),
-        defaultOpen: true,
-        items: [
+        title: t('nav.groups.intelligence'),        items: [
           { to: '/threat-intel', label: t('nav.threat_intel'), icon: Radar, id: 'nav-threat-intel' },
           { to: '/risk-graph', label: t('nav.attack_paths'), icon: GitBranch, id: 'nav-attack-paths' },
         ],
@@ -227,9 +223,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
       },
       {
         id: 'clients_agents',
-        title: t('nav.groups.clients_agents'),
-        defaultOpen: true,
-        items: [
+        title: t('nav.groups.clients_agents'),        items: [
           { to: '/agents', label: t('nav.agent_management'), icon: Server, id: 'nav-agents' },
           { to: '/nexus-swarm', label: t('nav.nexus_swarm'), icon: Zap, id: 'nav-nexus-swarm' },
         ],
@@ -334,7 +328,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
             key={section.id}
             id={section.id}
             title={section.title}
-            open={sectionOpen[section.id] ?? section.defaultOpen ?? false}
+            open={sectionOpen[section.id] ?? false}
             onToggle={toggleSection}
           >
             {section.items

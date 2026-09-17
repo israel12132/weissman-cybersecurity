@@ -22,7 +22,6 @@ function formatSseLine(data, t) {
   const b = data.bytes_ingested
   const c = data.chunks_ingested
   if (b != null && c != null) return t(`${NS}.terminalLive`, { bytes: b, chunks: c })
-  if (data.status === 'running' && data.message) return data.message
   if (data.status === 'completed') return t(`${NS}.terminalCompleted`, { message: data.message || '' }).trim()
   if (data.status === 'failed') return data.error ? t(`${NS}.terminalError`, { error: data.error }) : t(`${NS}.terminalFailed`)
   return null

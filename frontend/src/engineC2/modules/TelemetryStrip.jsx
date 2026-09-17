@@ -35,7 +35,7 @@ export default function TelemetryStrip({ engineId, live = true, memory = false }
       </div>
       <ul className="space-y-1 max-h-24 overflow-y-auto">
         {engineEvents.map((ev, i) => (
-          <li key={i} className="text-[10px] font-mono text-white/55 truncate">
+          <li key={i} className="text-[10px] font-mono text-[var(--text-secondary)] truncate">
             {ev?.message || JSON.stringify(ev)}
           </li>
         ))}

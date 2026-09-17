@@ -57,13 +57,13 @@ export default function FindingsTab() {
       columnHelper.accessor((f) => severityToCvss(f.severity), {
         id: 'cvss',
         header: t(`${FT}.table.cvss`),
-        cell: (info) => <span className="text-[#9ca3af] font-mono text-xs">{info.getValue()}</span>,
+        cell: (info) => <span className="text-[var(--text-muted)] font-mono text-xs">{info.getValue()}</span>,
       }),
       columnHelper.accessor((f) => sanitizeFindingPlainText(f.title, 2000), {
         id: 'title',
         header: t(`${FT}.table.title`),
         cell: (info) => (
-          <span className="text-white max-w-md truncate block" title={info.getValue()}>
+          <span className="text-[var(--text-primary)] max-w-md truncate block" title={info.getValue()}>
             {info.getValue() || '—'}
           </span>
         ),

@@ -92,7 +92,7 @@ export default function MorphingEngineChrome({
         />
       )}
       {syncAt && (
-        <p className="text-[10px] font-mono text-white/35 -mt-3 mb-5">
+        <p className="text-[10px] font-mono text-[var(--text-tertiary)] -mt-3 mb-5">
           {t('weissmanFindings.last_updated', { time: new Date(syncAt).toLocaleString() })}
         </p>
       )}
