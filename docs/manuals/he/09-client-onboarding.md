@@ -103,7 +103,7 @@ API: `POST /api/command-center/scan` עם `{ engine, client_id, target }`.
 
 ### 7. Agent (אם ב-scope)
 
-~45 מנועי `agent_required`:
+59 מנועי `agent_required`:
 
 1. Token ב-**Agent Management**
 2. `GET /install/agent.sh` / `GET /install/agent.ps1`

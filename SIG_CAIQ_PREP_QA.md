@@ -1,6 +1,6 @@
 # Weissman Cybersecurity — SIG / CAIQ Preparation Q&A
 
-Last updated: 2026-07-08 (563 engine IDs, JWT ≥48 chars production minimum)
+Last updated: 2026-09-17 (595 engine IDs, JWT ≥48 chars production minimum)
 
 This is a practical response bank for SIG / CAIQ-style customer security
 questionnaires. Answers reflect repository-implemented controls; finalise with
@@ -23,13 +23,14 @@ by the operating entity. Automated evidence for auditors is produced by
 framework mapping) and validated by `bash scripts/full_audit_gate.sh`.
 
 ### Q2b. How many security engines are production-wired?
-**Answer:** **563** engine IDs in `PRODUCTION_ENGINE_IDS`, mirrored 1:1 in the
+**Answer:** **595** engine IDs in `PRODUCTION_ENGINE_IDS`, mirrored 1:1 in the
 frontend catalog (`enginesRegistry.js`). CI gate `verify_engine_wiring.mjs`
 enforces zero gaps; `engine_reality_audit.mjs` reports **0 no_path**. Breakdown:
-**303 real_probe** (295 distinct implementations — 8 IDs are delegates sharing an
-impl), **212 alias** (marketing/vertical IDs that resolve to a real probe via
-`resolve_engine_id`), **48 agent_required** (host-level techniques, labelled
-`info`/advisory when no endpoint agent is enrolled). Command Center exposes
+**329 real_probe** (321 distinct implementations — 8 IDs are delegates sharing an
+impl), **204 alias** (marketing/vertical IDs that resolve to a real probe via
+`resolve_engine_id`), **59 agent_required** (host-level techniques, labelled
+`info`/advisory when no endpoint agent is enrolled), **3 advisory-only**
+(reference IDs with no live probe). Command Center exposes
 **112 routes** with live API evidence banners (`weissman-ui-audit.mjs`).
 
 ## Data security & privacy
