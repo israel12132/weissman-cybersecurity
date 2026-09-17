@@ -69,6 +69,7 @@
     "export_pdf": "ייצוא PDF",
     "reset": "איפוס",
     "running": "רץ…",
+    "run": "הפעל",
     "export_xlsx": "ייצוא Excel"
   },
   "a11y": {
@@ -4418,6 +4419,9 @@
       "emergency_title": "בידוד רשת חירום",
       "emergency_body": "בודד מיד את כל הנכסים שנפגעו מהרשת",
       "kill_switch": "הפעל Kill Switch",
+      "kill_switch_confirm": "להפעיל בידוד חירום? ייווצר כלל בידוד פעיל שמבודד מיידית מארחים חשודים. אפשר לכבות אותו מרשימת הכללים.",
+      "kill_switch_rule_name": "בידוד חירום (Kill Switch)",
+      "kill_switch_created": "כלל בידוד החירום הופעל",
       "edit_rule": "ערוך כלל",
       "create_containment_rule": "צור כלל Containment",
       "rule_name": "שם הכלל",

@@ -1500,8 +1500,8 @@ function PciReportPanel({ report }) {
         {report.requirements.slice(0, 10).map((r) => (
           <div key={r.requirement} className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-2 py-1.5">
             <p className="text-[9px] font-mono text-rose-200/90">Req {r.requirement}</p>
-            <p className={`text-[10px] font-mono mt-0.5 ${status === 'pass' ? 'text-emerald-400/80' : 'text-rose-400/80'}`}>
-              {r.findings_linked ?? 0} · {status}
+            <p className={`text-[10px] font-mono mt-0.5 ${r.status === 'pass' ? 'text-emerald-400/80' : 'text-rose-400/80'}`}>
+              {r.findings_linked ?? 0} · {r.status}
             </p>
           </div>
         ))}

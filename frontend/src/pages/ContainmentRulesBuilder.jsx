@@ -22,6 +22,7 @@ export default function ContainmentRulesBuilder() {
   const [unavailable, setUnavailable] = useState(false);
   const [createModal, setCreateModal] = useState(false);
   const [editModal, setEditModal] = useState(null);
+  const [killSwitching, setKillSwitching] = useState(false);
 
   useEffect(() => {
     if (clientLoading) return;
@@ -84,6 +85,30 @@ export default function ContainmentRulesBuilder() {
     } catch (error) {
       console.error('Failed to delete rule:', error);
       toast.error(t('common.error'));
+    }
+  };
+
+  // Emergency kill switch: create an always-on isolation containment rule via the
+  // existing verified endpoint. Reversible — it appears in the list and can be
+  // toggled off — so an emergency action never becomes an irreversible surprise.
+  const handleKillSwitch = async () => {
+    if (clientId == null) return;
+    if (!(await confirmDialog(t('pages.containmentRulesBuilder.kill_switch_confirm')))) return;
+    setKillSwitching(true);
+    try {
+      await api.post(withClientId('/api/containment/rules', clientId), {
+        name: t('pages.containmentRulesBuilder.kill_switch_rule_name'),
+        action: 'isolate',
+        enabled: true,
+        auto_trigger: true,
+      });
+      toast.success(t('pages.containmentRulesBuilder.kill_switch_created'));
+      await fetchRules(clientId);
+    } catch (error) {
+      console.error('Kill switch failed:', error);
+      toast.error(t('common.error'));
+    } finally {
+      setKillSwitching(false);
     }
   };
 
@@ -338,8 +363,14 @@ export default function ContainmentRulesBuilder() {
                 {t('pages.containmentRulesBuilder.emergency_body')}
               </p>
             </div>
-            <Button variant="unstyled" className="px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-medium hover:bg-red-600 transition-colors">
-              {t('pages.containmentRulesBuilder.kill_switch')}
+            <Button
+              variant="unstyled"
+              type="button"
+              onClick={handleKillSwitch}
+              disabled={killSwitching || clientId == null}
+              className="px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-medium hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {killSwitching ? t('common.running') : t('pages.containmentRulesBuilder.kill_switch')}
             </Button>
           </div>
         </div>

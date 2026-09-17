@@ -69,6 +69,7 @@
     "export_pdf": "Export PDF",
     "reset": "Reset",
     "running": "Running…",
+    "run": "Run",
     "export_xlsx": "Export Excel"
   },
   "a11y": {
@@ -4418,6 +4419,9 @@
       "emergency_title": "Emergency Network Isolation",
       "emergency_body": "Immediately isolate all compromised assets from the network",
       "kill_switch": "Activate Kill Switch",
+      "kill_switch_confirm": "Activate emergency containment? This creates an active isolation rule that immediately isolates suspicious hosts. You can turn it off from the rules list.",
+      "kill_switch_rule_name": "Emergency isolation (Kill Switch)",
+      "kill_switch_created": "Emergency isolation rule activated",
       "edit_rule": "Edit Rule",
       "create_containment_rule": "Create Containment Rule",
       "rule_name": "Rule Name",
