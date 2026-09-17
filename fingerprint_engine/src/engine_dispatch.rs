@@ -900,6 +900,9 @@ async fn dispatch_engine_match(
         "first_mover_delta_fusion" => {
             crate::first_mover_delta_fusion::run_first_mover_delta_fusion_result(target, ctx).await
         }
+        "adversary_exposure_delta" => {
+            crate::adversary_exposure_delta::run_adversary_exposure_delta_result(target, ctx).await
+        }
         "first_seen_osv_nvd" => {
             crate::first_seen_osv_nvd_engine::run_first_seen_osv_nvd_result(target, ctx).await
         }
