@@ -8,6 +8,7 @@ import { openCommandPalette } from '../GlobalSearch'
 import RateLimitStatus from '../RateLimitStatus'
 import NotificationBell from './NotificationBell'
 import ScanStatusIndicator from './ScanStatusIndicator'
+import LanguageSwitcher from '../LanguageSwitcher'
 import { buildBreadcrumbs } from '../../lib/appNav'
 import Button from '../ui/Button'
 
@@ -86,7 +87,7 @@ export default function AppShell({
       <div className="flex-1 flex flex-col min-w-0 lg:pl-0">
         <header className="print:hidden sticky top-0 z-30 border-b border-[var(--border-default)] bg-[var(--header-surface)] backdrop-blur-xl">
           <div className={`${maxWidth} mx-auto px-4 pt-14 lg:pt-0`}>
-            <div className="flex items-center justify-end gap-2 py-2 border-b border-[var(--border-subtle)] min-h-[40px]">
+            <div className="flex flex-wrap items-center justify-end gap-2 py-2 border-b border-[var(--border-subtle)] min-h-[40px]">
               <div className="flex-1 min-w-0 mr-4">
                 <BreadcrumbTrail crumbs={breadcrumbs} />
               </div>
@@ -111,6 +112,7 @@ export default function AppShell({
               </Button>
               <ScanStatusIndicator />
               <RateLimitStatus compact />
+              <LanguageSwitcher className="shrink-0" />
               <NotificationBell />
               <ProfileMenu />
             </div>
