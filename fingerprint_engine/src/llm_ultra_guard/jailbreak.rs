@@ -149,9 +149,7 @@ pub fn score_output(text: &str) -> (f32, u32) {
 }
 
 fn dan_graph(hay: &str) -> bool {
-    let dan = has_token(hay, "dan")
-        || hay.contains("do anything now")
-        || hay.contains("jailbreak");
+    let dan = has_token(hay, "dan") || hay.contains("do anything now") || hay.contains("jailbreak");
     let unbound = hay.contains("no restriction")
         || hay.contains("without restriction")
         || hay.contains("no rules")
@@ -192,7 +190,8 @@ fn roleplay_boundary_shift(hay: &str) -> bool {
     } else {
         ""
     };
-    let polite = first.contains("please") || first.contains("could you") || first.contains("thanks");
+    let polite =
+        first.contains("please") || first.contains("could you") || first.contains("thanks");
     let jail = last.contains("ignore") || last.contains("dan") || last.contains("no rules");
     polite && jail
 }

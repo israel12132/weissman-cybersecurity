@@ -142,7 +142,8 @@ pub fn spawn_cnapp_scheduler(app_pool: Arc<PgPool>, auth_pool: Arc<PgPool>) {
             let app_pool = app_pool.clone();
             let auth_pool = auth_pool.clone();
             async move {
-                let mut ticker = tokio::time::interval(StdDuration::from_secs(poll_interval_secs()));
+                let mut ticker =
+                    tokio::time::interval(StdDuration::from_secs(poll_interval_secs()));
                 ticker.tick().await;
                 loop {
                     ticker.tick().await;

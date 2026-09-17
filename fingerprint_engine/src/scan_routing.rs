@@ -455,8 +455,8 @@ async fn load_client_credentials(
     let config_str: String = r
         .try_get("client_configs")
         .map_err(|_| "store_down".to_string())?;
-    let config_val: Value = serde_json::from_str(&config_str)
-        .map_err(|_| "store_down".to_string())?;
+    let config_val: Value =
+        serde_json::from_str(&config_str).map_err(|_| "store_down".to_string())?;
     let onboarding = config_val.get("onboarding").cloned().unwrap_or(json!({}));
     let azure_subscription_id = onboarding
         .get("azure_subscription_id")

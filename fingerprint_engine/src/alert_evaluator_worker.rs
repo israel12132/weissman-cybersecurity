@@ -61,10 +61,10 @@ fn engine_matches(condition: &Value, source: &str) -> bool {
 }
 
 fn epss_matches(condition: &Value, epss: f64) -> bool {
-    let Some(min) = condition
-        .get("min_epss")
-        .and_then(|v| v.as_f64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
-    else {
+    let Some(min) = condition.get("min_epss").and_then(|v| {
+        v.as_f64()
+            .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+    }) else {
         return true;
     };
     epss + f64::EPSILON >= min
@@ -79,10 +79,10 @@ fn kev_matches(condition: &Value, kev: bool) -> bool {
 }
 
 fn cvss_matches(condition: &Value, cvss: f64) -> bool {
-    let Some(min) = condition
-        .get("min_cvss")
-        .and_then(|v| v.as_f64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
-    else {
+    let Some(min) = condition.get("min_cvss").and_then(|v| {
+        v.as_f64()
+            .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+    }) else {
         return true;
     };
     cvss + f64::EPSILON >= min
@@ -433,7 +433,12 @@ mod tests {
     #[test]
     fn cve_matches_searches_title_and_description() {
         let cond = json!({ "cve_pattern": "CVE-2021-44228" });
-        assert!(cve_matches(&cond, "Log4Shell cve-2021-44228", "unrelated", ""));
+        assert!(cve_matches(
+            &cond,
+            "Log4Shell cve-2021-44228",
+            "unrelated",
+            ""
+        ));
         assert!(cve_matches(
             &cond,
             "unrelated",
@@ -474,7 +479,8 @@ mod tests {
 
     #[test]
     fn cvss_and_cve_from_raw_data() {
-        let raw = json!({ "cvss_score": 9.8, "cve": "CVE-2024-1234", "target": "https://app.example" });
+        let raw =
+            json!({ "cvss_score": 9.8, "cve": "CVE-2024-1234", "target": "https://app.example" });
         assert!((cvss_from_raw(&raw) - 9.8).abs() < f64::EPSILON);
         assert_eq!(cve_from_raw(&raw, "", ""), "CVE-2024-1234");
         assert_eq!(target_from_raw(&raw), "https://app.example");

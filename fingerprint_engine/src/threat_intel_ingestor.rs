@@ -431,21 +431,22 @@ pub async fn run_ingest_cycle(
     };
     items.extend(threat_intel_engine::fetch_nvd_recent(3).await);
 
-    let tenant_ids: Vec<i64> =
-        match sqlx::query_scalar::<_, i64>("SELECT id FROM tenants WHERE active = true ORDER BY id")
-            .fetch_all(auth_pool.as_ref())
-            .await
-        {
-            Ok(ids) => ids,
-            Err(e) => {
-                tracing::warn!(
-                    target: "threat_ingest",
-                    error = %e,
-                    "tenant list store_down"
-                );
-                return;
-            }
-        };
+    let tenant_ids: Vec<i64> = match sqlx::query_scalar::<_, i64>(
+        "SELECT id FROM tenants WHERE active = true ORDER BY id",
+    )
+    .fetch_all(auth_pool.as_ref())
+    .await
+    {
+        Ok(ids) => ids,
+        Err(e) => {
+            tracing::warn!(
+                target: "threat_ingest",
+                error = %e,
+                "tenant list store_down"
+            );
+            return;
+        }
+    };
 
     for item in items {
         let mut chatter = format!("{}\n{}", item.title, item.description);

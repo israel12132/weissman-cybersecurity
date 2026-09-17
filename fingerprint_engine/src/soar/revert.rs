@@ -73,8 +73,8 @@ pub async fn execute_revert(
     let steps: Value = r.try_get("steps").unwrap_or(json!([]));
     let _ = tx.commit().await;
 
-    let steps_vec: Vec<RevertStep> = serde_json::from_value(steps)
-        .map_err(|_| "store_down".to_string())?;
+    let steps_vec: Vec<RevertStep> =
+        serde_json::from_value(steps).map_err(|_| "store_down".to_string())?;
     let integrations = load_integrations(pool, tenant_id).await?;
     let mut details = Vec::new();
     for step in &steps_vec {

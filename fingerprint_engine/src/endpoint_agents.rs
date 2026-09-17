@@ -578,8 +578,10 @@ pub async fn bridge_nssi_fleet(
             "fleet_slot": i + 1,
             "fleet_size": agents.len(),
         });
-        enqueue_and_dispatch_fleet(pool, registry, tenant_id, client_id, engine, target, &params)
-            .await?;
+        enqueue_and_dispatch_fleet(
+            pool, registry, tenant_id, client_id, engine, target, &params,
+        )
+        .await?;
         bridged += 1;
     }
     Ok(bridged)
@@ -840,35 +842,35 @@ pub async fn push_pending_tasks_to_online(
             .await
             .map_err(|_| "store_down".to_string())?;
         for task in pending {
-                // Capture the id before the frame is moved into send().
-                let task_uuid = match &task {
-                    ServerToAgent::Task { task_id, .. } => task_id.parse::<Uuid>().ok(),
-                    _ => None,
-                };
-                if registry.send(&uuid, task).await.is_ok() {
-                    pushed += 1;
-                    // Flip to `running` so this tick's delivery is the LAST one. The schema
-                    // defined this state and nothing ever set it, so a task stayed `pending`
-                    // until the agent reported back — and this pusher re-sent it every 5
-                    // seconds, to every online agent of the client. A 30s detection was
-                    // therefore delivered ~6 times and ran ~6 times concurrently on the same
-                    // host, each run persisting duplicate findings and, for chronos,
-                    // independently SIGSTOPping a live process.
-                    //
-                    // reclaim_stale_dispatched_tasks below returns a task to `pending` if the
-                    // agent never reports, so a delivery lost to a dropped socket is still
-                    // retried — just not six times a minute.
-                    if let Some(tu) = task_uuid {
-                        if let Err(e) = mark_task_dispatched(pool, tenant_id, &tu).await {
-                            tracing::warn!(
-                                target: "agents", task_uuid = %tu, error = %e,
-                                "could not mark task dispatched; it may be re-pushed"
-                            );
-                        }
+            // Capture the id before the frame is moved into send().
+            let task_uuid = match &task {
+                ServerToAgent::Task { task_id, .. } => task_id.parse::<Uuid>().ok(),
+                _ => None,
+            };
+            if registry.send(&uuid, task).await.is_ok() {
+                pushed += 1;
+                // Flip to `running` so this tick's delivery is the LAST one. The schema
+                // defined this state and nothing ever set it, so a task stayed `pending`
+                // until the agent reported back — and this pusher re-sent it every 5
+                // seconds, to every online agent of the client. A 30s detection was
+                // therefore delivered ~6 times and ran ~6 times concurrently on the same
+                // host, each run persisting duplicate findings and, for chronos,
+                // independently SIGSTOPping a live process.
+                //
+                // reclaim_stale_dispatched_tasks below returns a task to `pending` if the
+                // agent never reports, so a delivery lost to a dropped socket is still
+                // retried — just not six times a minute.
+                if let Some(tu) = task_uuid {
+                    if let Err(e) = mark_task_dispatched(pool, tenant_id, &tu).await {
+                        tracing::warn!(
+                            target: "agents", task_uuid = %tu, error = %e,
+                            "could not mark task dispatched; it may be re-pushed"
+                        );
                     }
                 }
             }
         }
+    }
     Ok(pushed)
 }
 

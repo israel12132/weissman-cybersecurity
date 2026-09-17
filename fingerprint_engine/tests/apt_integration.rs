@@ -2,9 +2,9 @@
 //! accuracy (0 fabricated findings), and NL-query / RAG injection blocking.
 
 use fingerprint_engine::attack_chain_planner::{default_technique_library, plan};
+use fingerprint_engine::elite_hardening::nl_guard::reject_unsafe_sql;
 use fingerprint_engine::engine_probes::empty_ok;
 use fingerprint_engine::identity_engine::run_autonomous_privilege_escalation;
-use fingerprint_engine::elite_hardening::nl_guard::reject_unsafe_sql;
 use fingerprint_engine::nl_query::{compile_plan, Filter, QueryPlan};
 use serde_json::{json, Value};
 use std::collections::HashSet;
@@ -144,7 +144,9 @@ fn nl_query_blocks_sql_and_code_injection() {
         assert!(!err.to_ascii_lowercase().contains("from vulnerabilities"));
     }
     assert!(reject_unsafe_sql("SELECT 1; DROP TABLE vulnerabilities").is_err());
-    assert!(reject_unsafe_sql("SELECT id FROM vulnerabilities WHERE tenant_id = $1 LIMIT 50").is_ok());
+    assert!(
+        reject_unsafe_sql("SELECT id FROM vulnerabilities WHERE tenant_id = $1 LIMIT 50").is_ok()
+    );
 }
 
 #[test]

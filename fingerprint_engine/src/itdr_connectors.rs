@@ -24,7 +24,9 @@ pub async fn load_connector_config(pool: &PgPool, tenant_id: i64) -> Result<Valu
     .fetch_optional(&mut *tx)
     .await
     .map_err(|_| "database unavailable".to_string())?;
-    tx.commit().await.map_err(|_| "database unavailable".to_string())?;
+    tx.commit()
+        .await
+        .map_err(|_| "database unavailable".to_string())?;
     parse_connector_config_raw(raw.as_deref())
 }
 
@@ -33,8 +35,9 @@ pub(crate) fn parse_connector_config_raw(raw: Option<&str>) -> Result<Value, Str
     match raw {
         None => Ok(json!({})),
         Some(s) if s.trim().is_empty() => Ok(json!({})),
-        Some(s) => serde_json::from_str(s)
-            .map_err(|e| format!("invalid itdr_connectors json: {e}")),
+        Some(s) => {
+            serde_json::from_str(s).map_err(|e| format!("invalid itdr_connectors json: {e}"))
+        }
     }
 }
 
@@ -56,7 +59,9 @@ pub async fn save_connector_config(
     .execute(&mut *tx)
     .await
     .map_err(|_| "database unavailable".to_string())?;
-    tx.commit().await.map_err(|_| "database unavailable".to_string())?;
+    tx.commit()
+        .await
+        .map_err(|_| "database unavailable".to_string())?;
     Ok(())
 }
 
@@ -97,7 +102,9 @@ async fn persist_events(
             }
         }
     }
-    tx.commit().await.map_err(|_| "database unavailable".to_string())?;
+    tx.commit()
+        .await
+        .map_err(|_| "database unavailable".to_string())?;
     Ok(n)
 }
 
@@ -282,7 +289,11 @@ pub async fn pull_provider(
                         .pointer("/ipAddress")
                         .and_then(Value::as_str)
                         .unwrap_or("");
-                    let ts = chrono_ts(item.get("id").and_then(|v| v.get("time")).and_then(Value::as_str));
+                    let ts = chrono_ts(
+                        item.get("id")
+                            .and_then(|v| v.get("time"))
+                            .and_then(Value::as_str),
+                    );
                     if !user.is_empty() && !ip.is_empty() {
                         events.push(AuthEvent::new(ts, user, ip, "", true, false));
                     }
