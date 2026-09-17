@@ -1,0 +1,38 @@
+import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const src = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), 'TransportSecurityCommandCenter.jsx'),
+  'utf8',
+)
+
+describe('TransportSecurityCommandCenter live-only truth', () => {
+  it('does not paint ready-to-scan when GET /api/engines/history fails', () => {
+    expect(src).toMatch(/data-testid="transport-security-history-unavailable"/)
+    expect(src).toMatch(/history_unavailable/)
+    expect(src).toMatch(/unavailable=\{historyUnavailable\}/)
+    expect(src).toMatch(/!historyUnavailable/)
+  })
+
+  it('does not paint leftover leftover-scorecards after a failed history GET', () => {
+    expect(src).toMatch(/findings\.length > 0 && !historyUnavailable && <Scorecard/)
+    expect(src).toMatch(/detailFindings\.length > 0 && !historyUnavailable && <CategoryBreakdown/)
+  })
+
+  it('does not dump leftover leftover-findings CSV after a failed history GET', () => {
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| !filteredFindings\.length\}/)
+  })
+
+  it('mutes leftover leftover-GET Export CSV after a failed history GET', () => {
+    expect(src).toMatch(/useWeissmanEnginePage\(ENGINE, detailFindings\)/)
+    expect(src).toMatch(/onExport=\{historyUnavailable \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/onRefresh=\{handleRefresh\}/)
+    expect(src).toMatch(/data-testid="transport-security-history-unavailable"/)
+    expect(src).toMatch(/if \(!ok\) \{ setStatus\('error'\); showToast\('error', d\.detail \|\| 'Scan failed'\); return \}/)
+    expect(src).toMatch(/setStatus\('error'\); showToast\('error', e\?\.message \?\? 'Scan failed'\)/)
+    expect(src).not.toMatch(/setHistoryUnavailable/)
+  })
+})

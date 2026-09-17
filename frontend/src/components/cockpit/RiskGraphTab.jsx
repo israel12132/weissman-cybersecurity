@@ -53,15 +53,19 @@ function layoutFromApi(nodes, edges) {
     })
     if (list.length) y += Math.ceil(list.length / 4) * (NODE_HEIGHT + 40) + 60
   })
-  const flowEdges = (edges || []).map(e => ({
-    id: `e-${e.source}-${e.target}`,
-    source: String(e.source),
-    target: String(e.target),
-    type: 'smoothstep',
-    label: e.edge_type,
-    labelBgStyle: { fill: 'rgba(10,10,10,0.95)' },
-    labelStyle: { fill: '#22d3ee', fontSize: 10 },
-  }))
+  const flowEdges = (edges || []).map(e => {
+    const source = e.source ?? e.from_node_id
+    const target = e.target ?? e.to_node_id
+    return {
+      id: `e-${source}-${target}`,
+      source: String(source),
+      target: String(target),
+      type: 'smoothstep',
+      label: e.edge_type,
+      labelBgStyle: { fill: 'rgba(10,10,10,0.95)' },
+      labelStyle: { fill: '#22d3ee', fontSize: 10 },
+    }
+  })
   return { nodes: flowNodes, edges: flowEdges }
 }
 
@@ -73,33 +77,50 @@ export default function RiskGraphTab() {
   const [loading, setLoading] = useState(false)
   const [building, setBuilding] = useState(false)
   const [error, setError] = useState(null)
+  const [truncated, setTruncated] = useState(false)
 
-  const fetchGraph = useCallback(async () => {
+  const fetchGraph = useCallback(async ({ clear = false, signal } = {}) => {
     if (!selectedClientId) {
       setNodes([])
       setEdges([])
+      setError(null)
+      setTruncated(false)
       return
     }
     setLoading(true)
     setError(null)
+    if (clear) {
+      setNodes([])
+      setEdges([])
+      setTruncated(false)
+    }
     try {
-      const d = await apiFetch(`/api/clients/${selectedClientId}/risk-graph`)
+      const d = await apiFetch(
+        `/api/clients/${selectedClientId}/risk-graph`,
+        signal ? { signal } : {},
+      )
+      if (signal?.aborted) return
+      if (d?.ok === false || d?.unavailable) {
+        throw new Error(d.detail || t('components.cockpitTabs.riskGraph.unavailable'))
+      }
       const { nodes: n, edges: e } = layoutFromApi(d.nodes || [], d.edges || [])
       setNodes(n)
       setEdges(e)
+      setTruncated(Boolean(d.truncated))
     } catch (err) {
-      setError(
-        err?.status
-          ? t('components.cockpitTabs.riskGraph.load_failed')
-          : t('components.cockpitTabs.riskGraph.network_error'),
-      )
+      if (err?.name === 'AbortError' || signal?.aborted) return
+      setError(err?.message || t('components.cockpitTabs.riskGraph.unavailable'))
+      setTruncated(false)
     } finally {
-      setLoading(false)
+      if (!signal?.aborted) setLoading(false)
     }
-  }, [selectedClientId, setNodes, setEdges, t])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedClientId, setNodes, setEdges])
 
   useEffect(() => {
-    fetchGraph()
+    const ac = new AbortController()
+    fetchGraph({ clear: true, signal: ac.signal })
+    return () => ac.abort()
   }, [fetchGraph])
 
   const buildGraph = async () => {
@@ -152,15 +173,32 @@ export default function RiskGraphTab() {
         </Button>
       </div>
       {error && (
-        <div className="flex items-center gap-2 mb-4 px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+        <div
+          className="flex items-center gap-2 mb-4 px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm"
+          data-testid="risk-graph-unavailable"
+          role="alert"
+        >
           <AlertCircle className="w-4 h-4 shrink-0" />
-          {error}
+          {t('components.cockpitTabs.riskGraph.unavailable')}
+        </div>
+      )}
+      {!error && truncated && (
+        <div
+          className="mb-4 px-4 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-sm"
+          data-testid="risk-graph-truncated"
+          role="status"
+        >
+          {t('components.cockpitTabs.riskGraph.truncated')}
         </div>
       )}
       <div className="flex-1 rounded-2xl bg-black/60 backdrop-blur-md border border-white/10 overflow-hidden min-h-[400px]">
         {loading ? (
           <div className="flex items-center justify-center h-full text-white/50">
             {t('components.cockpitTabs.riskGraph.loading_graph')}
+          </div>
+        ) : error ? (
+          <div className="flex items-center justify-center h-full text-red-300/80 text-sm px-6 text-center">
+            {t('components.cockpitTabs.riskGraph.unavailable')}
           </div>
         ) : nodes.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-white/50 gap-2">

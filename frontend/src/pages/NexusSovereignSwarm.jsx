@@ -531,8 +531,9 @@ function SwarmHiveCanvas({ agentCount, running }) {
 }
 
 function SiqGauge({ score }) {
-  const pct = Math.min(100, Math.max(0, score ?? 0))
-  const color = pct >= 80 ? '#ef4444' : pct >= 60 ? '#f59e0b' : '#22d3ee'
+  const hasScore = score != null && Number.isFinite(Number(score))
+  const pct = hasScore ? Math.min(100, Math.max(0, Number(score))) : 0
+  const color = !hasScore ? 'rgba(255,255,255,0.12)' : pct >= 80 ? '#ef4444' : pct >= 60 ? '#f59e0b' : '#22d3ee'
   return (
     <div className="relative w-36 h-36 mx-auto">
       <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
@@ -540,13 +541,13 @@ function SiqGauge({ score }) {
         <circle
           cx="50" cy="50" r="42" fill="none"
           stroke={color} strokeWidth="8"
-          strokeDasharray={`${pct * 2.64} 264`}
+          strokeDasharray={hasScore ? `${pct * 2.64} 264` : '0 264'}
           strokeLinecap="round"
-          style={{ filter: `drop-shadow(0 0 8px ${color}80)` }}
+          style={hasScore ? { filter: `drop-shadow(0 0 8px ${color}80)` } : undefined}
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-3xl font-bold text-white">{pct || '—'}</span>
+        <span className="text-3xl font-bold text-white">{hasScore ? pct : '—'}</span>
         <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-widest">SIQ</span>
       </div>
     </div>
@@ -595,17 +596,18 @@ function Chips({ items, color = '#22d3ee', empty }) {
   )
 }
 
-function ThreatBar({ score = 0 }) {
-  const pct = Math.min(100, Math.max(0, score))
-  const color = pct >= 70 ? '#ef4444' : pct >= 40 ? '#f59e0b' : pct >= 15 ? '#eab308' : '#34d399'
+function ThreatBar({ score }) {
+  const hasScore = score != null && Number.isFinite(Number(score))
+  const pct = hasScore ? Math.min(100, Math.max(0, Number(score))) : 0
+  const color = !hasScore ? 'rgba(255,255,255,0.12)' : pct >= 70 ? '#ef4444' : pct >= 40 ? '#f59e0b' : pct >= 15 ? '#eab308' : '#34d399'
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between">
         <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)]">Threat Surface</span>
-        <span className="text-sm font-bold" style={{ color }}>{pct}/100</span>
+        <span className="text-sm font-bold" style={{ color }}>{hasScore ? `${pct}/100` : '—'}</span>
       </div>
       <div className="h-2 rounded-full bg-[var(--row-hover-bg)] overflow-hidden">
-        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color, boxShadow: `0 0 10px ${color}80` }} />
+        <div className="h-full rounded-full transition-all" style={{ width: hasScore ? `${pct}%` : '0%', background: color, boxShadow: hasScore ? `0 0 10px ${color}80` : undefined }} />
       </div>
     </div>
   )
@@ -1142,7 +1144,7 @@ function IntelligencePanel({ metrics, findings, oracle, onLaunchEngine, launchin
       <div className="flex items-center gap-5">
         {grade && <GradeBadge grade={grade} />}
         <div className="flex-1 min-w-0">
-          <ThreatBar score={metrics?.threat_surface_score ?? intel?.threat_surface_score ?? 0} />
+          <ThreatBar score={metrics?.threat_surface_score ?? intel?.threat_surface_score} />
           {metrics?.severity_tally && (
             <div className="flex gap-3 mt-2 text-[10px] font-mono">
               <span className="text-red-400">{metrics.severity_tally.critical ?? 0} crit</span>
@@ -1276,7 +1278,14 @@ export default function NexusSovereignSwarm() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE_ID, realFindings)
+  const liveMetrics = historyUnavailable ? null : metrics
+
+  const handleExportCsv = useCallback(() => {
+    if (historyUnavailable) return
+    exportCsv()
+  }, [historyUnavailable, exportCsv])
 
   useEffect(() => {
     refreshFromHistory().then((run) => {
@@ -1381,6 +1390,7 @@ export default function NexusSovereignSwarm() {
   }, [params, target])
 
   const handleExportReport = useCallback(() => {
+    if (historyUnavailable) return
     if (!metrics && !findings.length) return
     const blob = new Blob([JSON.stringify({
       metrics,
@@ -1396,7 +1406,7 @@ export default function NexusSovereignSwarm() {
     a.download = `nssi-intelligence-${Date.now()}.json`
     a.click()
     URL.revokeObjectURL(url)
-  }, [metrics, findings, oracleSynth])
+  }, [metrics, findings, oracleSynth, historyUnavailable])
 
   const handleImportConfig = useCallback(() => {
     importRef.current?.click()
@@ -1655,7 +1665,7 @@ export default function NexusSovereignSwarm() {
               </p>
             </div>
             <div className="flex gap-2 flex-wrap items-center">
-              <ShellScanActions onRefresh={handleRefresh} onExport={exportCsv} exportDisabled={!filteredFindings.length} />
+              <ShellScanActions onRefresh={handleRefresh} onExport={historyUnavailable ? undefined : handleExportCsv} exportDisabled={historyUnavailable || !filteredFindings.length} />
               <Link to={`/engines/${ENGINE_ID}`} className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-colors">
                 Engine Detail →
               </Link>
@@ -1923,20 +1933,20 @@ export default function NexusSovereignSwarm() {
                   <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-3">
                     {t('nexusSwarm.siq', 'Swarm Intelligence Quotient')}
                   </p>
-                  <SiqGauge score={metrics?.swarm_iq} />
+                  <SiqGauge score={liveMetrics?.swarm_iq} />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <MetricTile label="Agents" value={metrics?.agents_deployed?.toLocaleString() ?? agentCount.toLocaleString()} accent="#22d3ee" />
-                  <MetricTile label="Requests" value={metrics?.requests_sent?.toLocaleString()} accent="#38bdf8" />
-                  <MetricTile label="Signals" value={metrics?.raw_signals} accent="#ef4444" />
-                  <MetricTile label="Consensus" value={metrics?.consensus_findings} accent="#a855f7" />
+                  <MetricTile label="Agents" value={liveMetrics?.agents_deployed != null ? liveMetrics.agents_deployed.toLocaleString() : '—'} accent="#22d3ee" />
+                  <MetricTile label="Requests" value={liveMetrics?.requests_sent?.toLocaleString()} accent="#38bdf8" />
+                  <MetricTile label="Signals" value={liveMetrics?.raw_signals} accent="#ef4444" />
+                  <MetricTile label="Consensus" value={liveMetrics?.consensus_findings} accent="#a855f7" />
                 </div>
               </div>
             </div>
 
             {/* Hive intelligence synthesis */}
             <IntelligencePanel
-              metrics={metrics}
+              metrics={liveMetrics}
               findings={findings}
               oracle={oracleSynth}
               onLaunchEngine={launchRecommendedEngine}
@@ -1954,7 +1964,7 @@ export default function NexusSovereignSwarm() {
                 <div className="flex items-center gap-3">
                   {swarmWsLive && <span className="text-[9px] font-mono text-emerald-400">{t('nexusSwarm.swarm_ws_live', 'swarm ws live')}</span>}
                   <span className="text-[10px] font-mono text-[var(--text-muted)]">
-                    {metrics?.endpoint_agents_bridged ?? fleetOnline} {t('nexusSwarm.bridged', 'bridged')}
+                    {liveMetrics?.endpoint_agents_bridged != null ? liveMetrics.endpoint_agents_bridged : '—'} {t('nexusSwarm.bridged', 'bridged')}
                   </span>
                 </div>
               </div>
@@ -1997,7 +2007,7 @@ export default function NexusSovereignSwarm() {
             </div>
 
             {/* Findings */}
-            {(metrics || realFindings.length > 0) && (
+            {!historyUnavailable && (metrics || realFindings.length > 0) && (
               <div className="flex justify-end">
                 <Button variant="unstyled"
                   type="button"
@@ -2007,6 +2017,11 @@ export default function NexusSovereignSwarm() {
                   Export Intelligence Report
                 </Button>
               </div>
+            )}
+            {historyUnavailable && (
+              <p data-testid="nexus-sovereign-swarm-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+                {t('pages.nexusSovereignSwarm.history_unavailable')}
+              </p>
             )}
             <WeissmanFindingsPanel
               findings={realFindings}
@@ -2022,7 +2037,10 @@ export default function NexusSovereignSwarm() {
               lastUpdated={lastUpdated}
               jobId={lastJobId}
               accent="#a855f7"
-              showEmptyReady={!running && realFindings.length === 0}
+              unavailable={historyUnavailable}
+              unavailableTitle={t('pages.nexusSovereignSwarm.history_unavailable')}
+              unavailableBody={t('pages.nexusSovereignSwarm.history_unavailable')}
+              showEmptyReady={!running && realFindings.length === 0 && !historyUnavailable}
               renderFinding={(f, i) => <FindingRow key={`${f.title}-${i}`} finding={f} />}
             />
           </div>

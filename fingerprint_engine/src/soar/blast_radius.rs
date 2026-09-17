@@ -36,13 +36,11 @@ pub async fn evaluate(pool: &PgPool, input: &BlastRadiusInput) -> BlastRadiusRep
     };
 
     let Ok(mut tx) = crate::db::begin_tenant_tx(pool, input.tenant_id).await else {
-        report.block_reason = "database unavailable".into();
-        report.blocked = !input.force_approved;
-        return report;
+        return unavailable_blast();
     };
 
     let target_norm = input.target_id.trim().to_lowercase();
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT id, label, business_value_usd, crown_jewel, tags, metadata
            FROM risk_graph_nodes
            WHERE client_id = $1
@@ -57,7 +55,10 @@ pub async fn evaluate(pool: &PgPool, input: &BlastRadiusInput) -> BlastRadiusRep
     .bind(&target_norm)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(_) => return unavailable_blast(),
+    };
 
     for r in &rows {
         let val: i64 = r.try_get("business_value_usd").ok().flatten().unwrap_or(0);
@@ -75,7 +76,7 @@ pub async fn evaluate(pool: &PgPool, input: &BlastRadiusInput) -> BlastRadiusRep
         }
     }
 
-    let neighbor_rows = sqlx::query(
+    let neighbor_rows = match sqlx::query(
         r#"SELECT DISTINCT n.id, n.business_value_usd, n.crown_jewel
            FROM risk_graph_edges e
            JOIN risk_graph_nodes n ON n.id IN (e.from_node_id, e.to_node_id)
@@ -91,7 +92,10 @@ pub async fn evaluate(pool: &PgPool, input: &BlastRadiusInput) -> BlastRadiusRep
     .bind(input.tenant_id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(_) => return unavailable_blast(),
+    };
 
     report.neighbor_count = neighbor_rows.len() as u32;
     for r in neighbor_rows {
@@ -101,7 +105,9 @@ pub async fn evaluate(pool: &PgPool, input: &BlastRadiusInput) -> BlastRadiusRep
             report.crown_jewel_touched = true;
         }
     }
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return unavailable_blast();
+    }
 
     let total = report
         .target_asset_value_usd
@@ -115,6 +121,13 @@ pub async fn evaluate(pool: &PgPool, input: &BlastRadiusInput) -> BlastRadiusRep
         input.force_approved,
         input.hitl_approved,
     );
+    report
+}
+
+fn unavailable_blast() -> BlastRadiusReport {
+    let mut report = BlastRadiusReport::default();
+    report.block_reason = "database unavailable".into();
+    report.blocked = true;
     report
 }
 
@@ -207,5 +220,15 @@ mod tests {
         apply_blast_decision(&mut r, 1_000_000, 500_000, false, false);
         assert!(r.blocked);
         assert!(!r.requires_hitl);
+    }
+
+    #[test]
+    fn store_down_does_not_unblock_on_zero_dollar_graph() {
+        let r = unavailable_blast();
+        assert!(r.blocked);
+        assert!(!r.requires_hitl);
+        assert_eq!(r.block_reason, "database unavailable");
+        assert_eq!(r.target_asset_value_usd, 0);
+        assert_eq!(r.neighbor_count, 0);
     }
 }

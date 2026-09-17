@@ -128,7 +128,10 @@
     "linked_findings": "Linked findings",
     "shadow_node": "Shadow node — projected STRIPS future state. Not yet observed in live recon.",
     "nodes": "NODES",
-    "edges": "EDGES"
+    "edges": "EDGES",
+    "evidence_unavailable": "Findings API unavailable — empty evidence is not confirmed.",
+    "clients_unavailable": "Clients API unavailable — the tenant list is not confirmed empty.",
+    "evidence_truncated": "Open findings page is truncated — this node may have evidence outside the loaded window."
   },
   "engineC2": {
     "kill_switch_region": "Emergency kill switch",
@@ -329,7 +332,18 @@
     "sample_q2": "top 20 vulnerabilities by EPSS score",
     "sample_q3": "list assets flagged as crown jewels with business value over 100000",
     "sample_q4": "all UEBA anomalies with z-score above 5 in the last day",
-    "sample_q5": "open findings on internet-exposed nodes"
+    "sample_q5": "open findings on internet-exposed nodes",
+    "safeguards_aria": "Ask Weissman safeguards",
+    "live_guards_aria": "Live query guards",
+    "guard_tenant": "Tenant-scoped",
+    "guard_role": "Read-only role",
+    "guard_timeout": "Statement timeout",
+    "guard_limit": "Row cap",
+    "guard_plan": "Sealed plan",
+    "guard_oracle": "No oracle leak",
+    "guard_mask": "PII masked",
+    "guard_depth": "Bounded depth",
+    "guard_vector": "No raw vectors"
   },
   "playbooks": {
     "title": "SOAR Playbooks",
@@ -558,8 +572,8 @@
     "enterprise_sso": "Enterprise SSO",
     "brand_tagline": "Unified offensive security for enterprise teams",
     "brand_release": "{{name}} · {{release}}",
-    "brand_story": "Correlate findings across 254 attack engines, orchestrate SOAR playbooks, and prove compliance — from a single command center.",
-    "trust_engines": "254 engines",
+    "brand_story": "Correlate findings across {{engines}} attack engines, orchestrate SOAR playbooks, and prove compliance — from a single command center.",
+    "trust_engines": "{{engines}} engines",
     "trust_soc2": "SOC2-ready",
     "trust_region": "EU-West",
     "trust_label": "Platform trust indicators",
@@ -580,7 +594,10 @@
     "verifying_access": "Verifying access",
     "requires_role": "This area requires the {{min}} role or higher. Your account has the {{role}} role. If an admin just upgraded you, sign in again so your token refreshes.",
     "sign_in_again": "Sign in again",
-    "open_operator_cockpit": "Open operator cockpit"
+    "open_operator_cockpit": "Open operator cockpit",
+    "brand_story_checking": "Correlate findings across the live engine roster, orchestrate SOAR playbooks, and prove compliance — from a single command center.",
+    "trust_engines_live": "{{count}} production engines",
+    "trust_engines_checking": "Live engine roster"
   },
   "notifications": {
     "title": "Notifications",
@@ -648,7 +665,8 @@
     "detail_scan_paused": "Scanning paused",
     "detail_engines_ok": "{{production}} production · {{catalog}} catalog",
     "detail_agents_online": "{{online}}/{{total}} online",
-    "detail_http": "HTTP {{status}}"
+    "detail_http": "HTTP {{status}}",
+    "detail_scan_unconfirmed": "Scan job count unconfirmed — not idle"
   },
   "audit": {
     "title": "Audit Log",
@@ -708,7 +726,9 @@
     "verify_created": "Generated {{time}}",
     "verify_fail": "Not verified — no run matches this hash.",
     "verify_fail_hint": "The hash was not found in the ledger. The artifact may be altered, forged, or from a different tenant.",
-    "verify_error": "Verification request failed."
+    "verify_error": "Verification request failed.",
+    "unavailable_title": "Audit log unavailable",
+    "unavailable_body": "GET /api/audit-logs could not be confirmed. Zeros are not a quiet trail."
   },
   "engines": {
     "title": "Engine Grid",
@@ -808,7 +828,10 @@
     "catalog_remote_detection": "REMOTE",
     "catalog_production_only": "Production only",
     "catalog_remote_only": "Remote detection",
-    "evidence_notice": "Production roster from GET /api/engines/production and capability matrix from GET /api/engines/capabilities. Per-engine history via GET /api/engines/history/:engineId. Scans queue through POST /api/command-center/scan and POST /api/scan/all-engines — no fabricated engine telemetry."
+    "evidence_notice": "Production roster from GET /api/engines/production and capability matrix from GET /api/engines/capabilities. Per-engine history via GET /api/engines/history/:engineId. Scans queue through POST /api/command-center/scan and POST /api/scan/all-engines — no fabricated engine telemetry.",
+    "config_unavailable": "Client engine-config API unavailable — zero enabled is not an unconfigured tenant.",
+    "integrations_unavailable": "Integrations API unavailable — blank prefill is not an unconfigured tenant.",
+    "detail_history_unavailable": "—"
   },
   "findings": {
     "title": "Findings",
@@ -935,7 +958,9 @@
     "open_evidence": "Open evidence drawer",
     "live_badge": "LIVE",
     "evidence_notice": "CVE-correlated rows are loaded live from GET /api/findings — no seeded vulnerability catalog.",
-    "export_csv": "Export CSV"
+    "export_csv": "Export CSV",
+    "unavailable_title": "Vulnerability intelligence unavailable",
+    "unavailable_body": "GET /api/findings could not be confirmed. Zero critical is not a clean CVE surface."
   },
   "client_detail": {
     "title": "Client Details",
@@ -1041,7 +1066,9 @@
     "time_hours": "{{count}}h ago",
     "time_days": "{{count}}d ago",
     "no_filter_title": "No agents match filter",
-    "no_filter_body": "Try a different status filter."
+    "no_filter_body": "Try a different status filter.",
+    "status_unavailable_title": "Agent fleet status unavailable",
+    "status_unavailable_body": "The Command Center could not reach GET /api/agents/status. This is not an empty fleet — retry before treating hosts as unenrolled."
   },
   "system_config": {
     "title": "System Configuration",
@@ -1054,7 +1081,9 @@
   },
   "scanStatus": {
     "active": "Scanning",
-    "active_hint": "One or more scans are running right now (GET /api/scan/status)."
+    "active_hint": "One or more scans are running right now (GET /api/scan/status).",
+    "unknown": "Scan status unknown",
+    "unknown_hint": "GET /api/scan/status is unavailable — idle is not confirmed."
   },
   "errors": {
     "loading_failed": "Failed to load: {{detail}}",
@@ -1136,7 +1165,8 @@
     "telemetry": "Scan Telemetry",
     "awaiting": "Awaiting assessment…",
     "findings": "Findings",
-    "no_findings": "No findings yet — configure target and run scan."
+    "no_findings": "No findings yet — configure target and run scan.",
+    "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet CI/CD trail."
   },
   "iacSecurity": {
     "title": "IaC Security Center",
@@ -1230,14 +1260,20 @@
     "export_csv": "Export CSV",
     "last_scan": "Last scan",
     "findings_search": "Search policy, file, resource…",
-    "no_findings_filtered": "No findings match the current search and severity filters."
+    "no_findings_filtered": "No findings match the current search and severity filters.",
+    "history_unavailable": "Engine history API unavailable — a green risk-0 gauge is not a quiet IaC trail."
   },
   "agentRequired": {
     "empty_title": "Endpoint agent required",
     "empty_body": "You must install the Weissman Agent on your endpoint to view this data. Remote scans cannot observe host-local signals for this engine.",
     "install_cta": "Open Agent Management",
     "install_hint": "Generate an enrollment token in Agent Management, run the install script on the target host, then refresh once the agent connects.",
-    "engine_id": "Engine"
+    "engine_id": "Engine",
+    "unavailable_title": "Agent fleet status unknown",
+    "unavailable_body": "The Command Center could not reach the endpoint-agent API. This is not proof that no agents are enrolled — agent-required engines stay paused until status is confirmed.",
+    "unavailable_cta": "Retry fleet status",
+    "unavailable_hint": "If this persists, check weissman-server and GET /api/agents/status.",
+    "open_management": "Open Agent Management"
   },
   "weissmanFindings": {
     "title": "Findings",
@@ -1256,7 +1292,9 @@
     "filtered_title": "No matches",
     "filtered_body": "No findings match the current search or severity filter.",
     "confidence": "Risk confidence ×{{value}}",
-    "export_json": "Export JSON"
+    "export_json": "Export JSON",
+    "unavailable_title": "Engine history unavailable",
+    "unavailable_body": "GET /api/engines/history could not be confirmed. Ready-to-scan is not a quiet empty trail."
   },
   "nexusSwarm": {
     "save_preset_title": "Save preset",
@@ -1348,7 +1386,9 @@
       "crypto_sub": "Post-quantum readiness (ML-KEM)",
       "open_crypto": "Open crypto posture",
       "pq_ready": "PQ-Ready",
-      "pq_check": "Verify"
+      "pq_check": "Verify",
+      "financial_unavailable": "Financial-risk snapshot unavailable",
+      "attack_unavailable": "Attack-path snapshot unavailable"
     },
     "liveFeed": {
       "title": "Live Findings Feed",
@@ -1538,7 +1578,7 @@
       "no_paths_title": "No attack paths",
       "no_paths_body": "No internet → crown-jewel path was found in the current graph.",
       "jewel_panel": "Crown jewels & exposure",
-      "jewel_panel_hint": "Flag internet-exposed entries and crown jewels on the live risk graph. PATCH marks the graph dirty and recomputes paths.",
+      "jewel_panel_hint": "Internet-exposed nodes are Dijkstra seeds; crown jewels are sinks. Toggle flags here, then recompute paths.",
       "node_search": "Search nodes…",
       "flag_exposed": "Internet-exposed",
       "flag_jewel": "Crown jewel",
@@ -1546,20 +1586,20 @@
       "zero_jewel_banner": "No crown jewel is flagged — internet → jewel paths stay empty until you mark one.",
       "no_nodes_title": "No graph nodes",
       "no_nodes_body": "The risk graph is empty. Run a scan or recompute paths to create nodes, then flag crown jewels.",
-      "what_if_smb": "What-if: block SMB (445)",
+      "what_if_smb": "What-if: block SMB/445",
       "what_if_run": "Run what-if",
       "what_if_done": "What-if snapshot computed",
       "what_if_clear": "Clear what-if",
       "kpi_path_ale": "Path ALE",
-      "kpi_path_ale_hint": "Annualized loss expectancy on ranked paths",
-      "kpi_top_score": "Top score",
-      "kpi_top_score_hint": "Highest ranked path score",
+      "kpi_path_ale_hint": "Annualized loss if those paths fire",
+      "kpi_top_score": "Top path score",
+      "kpi_top_score_hint": "Highest composite path score",
       "score": "Score",
-      "path_ale": "Path ALE {{value}}",
+      "path_ale": "ALE {{value}}",
       "root_cause": "Root cause",
       "zero_jewel_title": "No crown jewels tagged",
       "zero_jewel_body": "Recompute runs live auto-tag from business value and high-risk identity/cloud/k8s nodes, then Dijkstra. Paths stay empty until a jewel exists.",
-      "no_jewels_banner": "No crown jewels are flagged — attack paths stay empty until an operator marks them.",
+      "no_jewels_banner": "Zero crown jewels are marked. Paths cannot be inferred until at least one node is a jewel. Toggle jewels in the panel above, then recompute.",
       "no_jewels_hint": "Use the board below. Dijkstra only walks internet-exposed → crown-jewel.",
       "jewel_board": "Crown jewels",
       "jewel_board_hint": "PATCH /api/risk-graph/nodes/:id/flags — live operator truth, not a guessed inventory.",
@@ -1569,7 +1609,21 @@
       "jewel_toggle_failed": "Could not update crown-jewel flag.",
       "no_graph_title": "No graph nodes",
       "no_graph_body": "Build or refresh the risk graph for this client, then flag crown jewels here.",
-      "entry_flag": "internet-exposed"
+      "entry_flag": "internet-exposed",
+      "no_seeds_banner": "No internet-exposed seeds are marked. Dijkstra has nowhere to start until at least one node is internet-exposed. Toggle exposure, then recompute.",
+      "no_jewels_recompute": "Recompute after tagging jewels",
+      "jewel_panel_title": "Crown jewels & internet exposure",
+      "jewel_marked": "{{count}} / {{total}} jewels",
+      "jewel_loading": "Loading risk-graph nodes…",
+      "jewel_empty_title": "No graph nodes yet",
+      "jewel_empty_body": "Build the risk graph for this client, then mark internet-exposed entry points and crown jewels.",
+      "jewel_load_failed": "Failed to load risk-graph nodes.",
+      "jewel_save_ok": "Node flags saved. Graph cache marked dirty.",
+      "jewel_save_failed": "Failed to save node flags.",
+      "jewel_node_fallback": "node",
+      "jewel_node_meta": "{{type}} · risk {{score}}",
+      "toggle_crown_jewel": "Crown jewel",
+      "toggle_internet_exposed": "Internet-exposed"
     },
     "attackCoverage": {
       "title": "ATT&CK Coverage Matrix",
@@ -1815,7 +1869,9 @@
       "field_created": "Created",
       "field_updated": "Updated",
       "field_heartbeat": "Heartbeat",
-      "field_error": "Last error"
+      "field_error": "Last error",
+      "unavailable_title": "Job queue unavailable",
+      "unavailable_body": "Live job counts could not be confirmed. Zeros are not an idle queue."
     },
     "billing": {
       "title": "Billing & Usage",
@@ -1889,7 +1945,9 @@
       "severity_high": "High",
       "severity_medium": "Medium",
       "severity_low": "Low",
-      "severity_info": "Info"
+      "severity_info": "Info",
+      "counters_unavailable_title": "Operational counters unavailable",
+      "counters_unavailable_body": "GET /api/metrics/dashboard did not confirm live counts. Zeros are not a quiet pipeline."
     },
     "scanScheduler": {
       "title": "Scan Scheduler",
@@ -2066,7 +2124,9 @@
           "enable_failed": "Failed to enable MFA",
           "disable_failed": "Failed to disable MFA"
         }
-      }
+      },
+      "load_failed": "Failed to load configuration",
+      "config_unavailable": "Configuration store unavailable — MFA and policy values are not confirmed."
     },
     "darkWebMonitor": {
       "title": "Dark Web Monitor",
@@ -2137,7 +2197,15 @@
       "play_t1486": "Ransomware impact",
       "play_proven": "Proven live",
       "play_gap": "Not in exposure",
-      "download_failed": "Excel download failed."
+      "download_failed": "Excel download failed.",
+      "unavailable_title": "Dark-web findings unavailable",
+      "unavailable_body": "GET /api/findings could not be confirmed. Zero hits are not a clean surface.",
+      "war_current": "Current exposure",
+      "war_previous": "Previous",
+      "play_pending": "pending",
+      "play_closed_source": "Closed-source underground search",
+      "play_credential_leak": "Credential leak sweep",
+      "play_ioc": "IOC correlation"
     },
     "healReadiness": {
       "title": "Auto-heal readiness",
@@ -2153,7 +2221,8 @@
       "avg_attempts": "Avg attempts",
       "volume": "Daily volume",
       "success_rate": "Success rate",
-      "aria_chart": "daily heal volume and success rate"
+      "aria_chart": "daily heal volume and success rate",
+      "unavailable": "Heal-trend API unavailable — a missing sparkline is not zero activity."
     },
     "remediationAnalytics": {
       "title": "Remediation Analytics",
@@ -2167,7 +2236,9 @@
       "partial": "Some client telemetry could not be loaded — the totals below are partial.",
       "bounded": "Bounded sample: aggregated across the first 25 clients seen in recent findings, not every client.",
       "search_placeholder": "Search heals…",
-      "no_match": "No heals match your search."
+      "no_match": "No heals match your search.",
+      "unavailable_title": "Remediation analytics unavailable",
+      "unavailable_body": "Heal telemetry could not be confirmed. Empty is not a quiet heal program."
     },
     "remediationHub": {
       "title": "Remediation Hub",
@@ -2308,7 +2379,10 @@
       "program_sla_due": "Due in {{days}}d",
       "program_sla_unknown": "No SLA clock",
       "program_no_match": "No remediation actions match.",
-      "program_search": "Search remediation actions…"
+      "program_search": "Search remediation actions…",
+      "unavailable_title": "Remediation backlog unavailable",
+      "unavailable_body": "GET /api/findings could not be confirmed. Zero pending is not a clean backlog.",
+      "brief_unavailable": "Brief GET unavailable — leftover leftover-brief from another finding is not this finding."
     },
     "alertRulesEngine": {
       "title": "Alert Rules Engine",
@@ -2339,7 +2413,10 @@
       "save_failed": "Failed to save rule",
       "test_error": "Failed to test rule",
       "toggle_failed": "Failed to toggle rule",
-      "teams_honesty": "Microsoft Teams delivers Adaptive Cards via teams_webhook_url or WEISSMAN_TEAMS_WEBHOOK_URL. Slack incoming-webhook URLs are refused — they are not Teams."
+      "teams_honesty": "Microsoft Teams delivers Adaptive Cards via teams_webhook_url or WEISSMAN_TEAMS_WEBHOOK_URL. Slack incoming-webhook URLs are refused — they are not Teams.",
+      "rules_unavailable": "Alert rules store unavailable — the empty list is not confirmed.",
+      "unavailable_title": "Alert rules unavailable",
+      "unavailable_body": "GET /api/alerts/rules could not be confirmed. Zero rules is not an idle detector."
     },
     "adminManagement": {
       "search_users": "Search users…",
@@ -2372,7 +2449,8 @@
       "role_client": "Customer portal",
       "assigned_client": "Bound customer",
       "assigned_client_placeholder": "Select the customer this login belongs to",
-      "assigned_client_required": "Customer-portal users must be bound to a client"
+      "assigned_client_required": "Customer-portal users must be bound to a client",
+      "users_unavailable": "User directory unavailable — store could not be confirmed."
     },
     "complianceFrameworks": {
       "title": "Compliance Frameworks",
@@ -2449,7 +2527,13 @@
       "gap_title": "Gap Analysis",
       "gap_body": "{{count}} controls are non-compliant in {{framework}}. Address these gaps to improve certification readiness.",
       "open_remediation": "Open Remediation Hub",
-      "posture_no_match": "No frameworks match."
+      "posture_no_match": "No frameworks match.",
+      "mappings_unavailable_title": "Control mappings unavailable",
+      "mappings_unavailable_body": "GET /api/compliance/control-mappings could not be confirmed. An empty list is not \"no mappings defined.\"",
+      "unavailable_title": "Compliance frameworks unavailable",
+      "unavailable_body": "GET /api/compliance/frameworks could not be confirmed. Zero frameworks is not an unmapped tenant.",
+      "controls_unavailable_title": "Compliance controls unavailable",
+      "controls_unavailable_body": "GET /api/compliance/frameworks/:id/controls could not be confirmed. Zero controls is not an empty framework."
     },
     "clientNew": {
       "title": "Add New Client",
@@ -2517,7 +2601,9 @@
       "llm_client": "Client LLM / chat API endpoints",
       "add_endpoint": "Add endpoint",
       "tenant_settings": "Tenant settings →",
-      "back_client": "Back to client"
+      "back_client": "Back to client",
+      "unavailable_title": "Integrations unavailable",
+      "unavailable_body": "GET /api/clients/:id/integrations could not be confirmed. Blank fields are not an unconfigured tenant — Save is locked."
     },
     "clientOnboarding": {
       "subtitle": "Full onboarding — every engine and platform requirement before first scan",
@@ -2564,7 +2650,10 @@
       "gaps_title": "Missing requirements — {{pct}}% ready",
       "fix_in_settings": "Update missing fields in client settings",
       "aws_external_id": "AWS External ID",
-      "configure_tenant": "Configure tenant"
+      "configure_tenant": "Configure tenant",
+      "catalog_unavailable_title": "Engine requirements catalog unavailable",
+      "catalog_unavailable_body": "GET /api/engines/requirements and GET /api/onboarding/tenant-status could not be confirmed. 0% is not an unready client.",
+      "readiness_unavailable": "Readiness GET unavailable — leftover leftover-percent is not this client."
     },
     "threatIntelHub": {
       "title": "Threat Intelligence Hub",
@@ -2739,7 +2828,9 @@
       "severity_high": "HIGH",
       "severity_medium": "MEDIUM",
       "severity_low": "LOW",
-      "severity_info": "INFO"
+      "severity_info": "INFO",
+      "unavailable_title": "Incident queue unavailable",
+      "unavailable_body": "GET /api/soc/incidents could not be confirmed. Zero active is not a quiet IR queue."
     },
     "threatEmulation": {
       "title": "APT Threat Emulation",
@@ -2818,7 +2909,10 @@
           "description": "Most technically sophisticated threat actor — Stuxnet, Flame, HDD firmware implants."
         }
       },
-      "evidence_notice": "APT group cards are MITRE reference taxonomies correlated to your live GET /api/findings and GET /api/engines/history/threat_emulation — coverage % reflects real mapped findings, not scripted kill chains."
+      "evidence_notice": "APT group cards are MITRE reference taxonomies correlated to your live GET /api/findings and GET /api/engines/history/threat_emulation — coverage % reflects real mapped findings, not scripted kill chains.",
+      "unavailable": "Emulation APIs unavailable — empty findings are not a clean surface.",
+      "history_unavailable": "Engine history API unavailable — empty job history is not a quiet APT trail.",
+      "clients_unavailable": "Clients API unavailable — missing client is not confirmed."
     },
     "networkIntelligence": {
       "title": "Network Intelligence",
@@ -2929,7 +3023,9 @@
       "p_udp_doh": "UDP/53 vs DoH cross-check",
       "p_dmarc": "DMARC at _dmarc",
       "p_parent_ns": "Parent/child NS consistency",
-      "evidence_notice": "Network recon, BGP/DNS hijack risk, and lateral-path signals from POST /api/command-center/scan (network / bgp_dns_hijacking engines). Paths require authorized IP/DNS scope."
+      "evidence_notice": "Network recon, BGP/DNS hijack risk, and lateral-path signals from POST /api/command-center/scan (network / bgp_dns_hijacking engines). Paths require authorized IP/DNS scope.",
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
+      "history_unavailable": "Engine history API unavailable — hijack-resistance is not confirmed."
     },
     "cloudControlTower": {
       "title": "Cloud Control Tower",
@@ -2948,7 +3044,9 @@
       "select_client_first": "Select a client first",
       "scan_failed": "Scan failed",
       "queued": "{{label}}: queued {{jobId}}",
-      "evidence_notice": "Cloud asset inventory, K8s posture panel, and multi-provider scans from POST /api/command-center/scan plus GET /api/clients scope. Kubernetes findings require in-scope cluster credentials or reachable API servers."
+      "evidence_notice": "Cloud asset inventory, K8s posture panel, and multi-provider scans from POST /api/command-center/scan plus GET /api/clients scope. Kubernetes findings require in-scope cluster credentials or reachable API servers.",
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
+      "history_unavailable": "Engine history API unavailable — run-to-populate is not a quiet empty trail."
     },
     "socialEngineering": {
       "title": "Social Engineering Command Center",
@@ -2999,7 +3097,10 @@
       "template_hr_notice": "HR Notice",
       "template_package_delivery": "Package Delivery",
       "template_account_verification": "Account Verification",
-      "evidence_notice": "Phishing and pretext campaign artifacts queue via POST /api/command-center/scan (social_engineering) with council/RoE gates. Click and credential-capture events are OAST-verified when configured."
+      "evidence_notice": "Phishing and pretext campaign artifacts queue via POST /api/command-center/scan (social_engineering) with council/RoE gates. Click and credential-capture events are OAST-verified when configured.",
+      "unavailable_title": "Social-engineering assessments unavailable",
+      "unavailable_body": "GET /api/soc/social-engineering could not be confirmed. Zero campaigns is not a quiet mailbox.",
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant."
     },
     "engineManagementConsole": {
       "title": "Engine Management Console",
@@ -3034,8 +3135,10 @@
       "concurrency_detail": "Concurrency: {{count}}",
       "last_run_detail": "Last run: {{time}}",
       "id_detail": "ID: {{id}}",
-      "evidence_notice": "Engine roster and tenant enablement from GET /api/ceo/god-mode/snapshot with fallback to GET /api/health. Toggles persist via PUT /api/ceo/tenant/engines; config via PUT /api/system/config.",
-      "export_csv": "Export CSV"
+      "evidence_notice": "Engine roster and tenant enablement from GET /api/ceo/god-mode/snapshot. Snapshot failure stays unavailable — GET /api/health is not a catalog. Toggles persist via PUT /api/ceo/tenant/engines; config via PUT /api/system/config.",
+      "export_csv": "Export CSV",
+      "unavailable_title": "Engine catalog unavailable",
+      "unavailable_body": "Live engine roster could not be confirmed. Empty is not a catalog."
     },
     "strategicEngineProgram": {
       "back_matrix": "Back to Engine Matrix",
@@ -3149,7 +3252,10 @@
           "title": "SCADA / ICS Operations Page",
           "mission": "OT environments require isolated UX and explicit safety context."
         }
-      }
+      },
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
+      "integrations_unavailable": "Integrations API unavailable — blank prefill is not an unconfigured tenant.",
+      "history_unavailable": "Engine history API unavailable — KPI zeros are not a quiet run trail."
     },
     "threatHuntingWorkbench": {
       "title": "Threat Hunting Workbench",
@@ -3207,7 +3313,9 @@
       "priority_critical": "CRITICAL",
       "priority_high": "HIGH",
       "priority_medium": "MEDIUM",
-      "priority_low": "LOW"
+      "priority_low": "LOW",
+      "unavailable_title": "Hunt workbench unavailable",
+      "unavailable_body": "GET /api/soc/hunts did not confirm campaigns, queries, or IOCs. Zero hunts is not a confirmed empty program."
     },
     "integrationManager": {
       "title": "Integration Manager",
@@ -3236,7 +3344,10 @@
       "evidence_notice": "SIEM, ticketing, and webhook integrations configured via GET/PUT /api/integrations. Delivery health reflects last successful outbound call — credentials never echoed to the UI.",
       "delete_failed": "Failed to delete integration",
       "delete_success": "Integration deleted",
-      "delete_title": "Delete integration"
+      "delete_title": "Delete integration",
+      "unavailable_title": "Integrations unavailable",
+      "unavailable_body": "GET /api/integrations could not be confirmed. Zero connected is not an unconfigured tenant.",
+      "load_failed": "Failed to load integrations"
     },
     "killChainOrchestrator": {
       "title": "Kill Chain Orchestrator",
@@ -3315,7 +3426,9 @@
           "label": "Exfiltration",
           "description": "Extract sensitive data from the target environment using covert channels or cloud storage abuse."
         }
-      }
+      },
+      "unavailable_title": "Kill-chain view unavailable",
+      "unavailable_body": "Kill-chain and findings telemetry could not be confirmed. Zero chains is not a quiet ATT&CK surface."
     },
     "rateLimitAnalytics": {
       "title": "Rate Limit Analytics",
@@ -3347,7 +3460,9 @@
       "history_empty_body": "Request activity for the selected range will plot here as traffic flows through the API.",
       "endpoints_empty_title": "No endpoint pressure yet",
       "violations_empty_title": "No throttling events",
-      "evidence_notice": "Rate-limit and abuse-pattern metrics from GET /api/metrics/dashboard and request counters on your tenant. Threshold breaches align with live API gateway logs — not random sparklines."
+      "evidence_notice": "Rate-limit and abuse-pattern metrics from GET /api/metrics/dashboard and request counters on your tenant. Threshold breaches align with live API gateway logs — not random sparklines.",
+      "unavailable_title": "Rate-limit analytics unavailable",
+      "unavailable_body": "Live usage, throttling events, and endpoint pressure could not be confirmed. Retry to refresh."
     },
     "aiAnalysisEngine": {
       "title": "AI Analysis Engine",
@@ -3409,7 +3524,9 @@
       "corr_co_located_body": "{{count}} distinct vulnerability clusters affect {{target}}, indicating compounding attack surface.",
       "risk_multiplier": "Risk multiplier:",
       "detected": "Detected",
-      "evidence_notice": "AI pattern synthesis from GET /api/soc/ai-patterns with fallback to GET /api/findings/clusters — models summarize live tenant evidence only."
+      "evidence_notice": "AI pattern synthesis from GET /api/soc/ai-patterns with fallback to GET /api/findings/clusters — models summarize live tenant evidence only.",
+      "unavailable_title": "AI analysis intel unavailable",
+      "unavailable_body": "GET /api/findings could not be confirmed. Zero patterns is not a quiet threat landscape."
     },
     "askWeissman": {
       "evidence_notice": "Natural-language answers compiled via POST /api/ask only — read-only SQL against tenant-scoped data with audit logging. Transcript is session-local until you export it.",
@@ -3503,7 +3620,9 @@
       "job": "Job",
       "findings": "Findings",
       "no_findings": "No live signal observed for this target with the selected probes.",
-      "evidence_notice": "Post-quantum crypto readiness from POST /api/command-center/scan (pqc_scanner). Cipher suites and certificate algorithms are measured on live TLS handshakes to authorized hosts."
+      "evidence_notice": "Post-quantum crypto readiness from POST /api/command-center/scan (pqc_scanner). Cipher suites and certificate algorithms are measured on live TLS handshakes to authorized hosts.",
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
+      "history_unavailable": "Engine history API unavailable — PQC readiness is not confirmed."
     },
     "edDetection": {
       "title": "Detection Evasion Surface Command Center",
@@ -3523,7 +3642,8 @@
       "score_hint": "Higher = harder to evade",
       "score_explainer": "Composite score from live edge blocking, rate limits, defender telemetry in-page, CSP/cookie hardening, and exposed debug surfaces. Host EDR (AMSI/ETW) requires the endpoint agent.",
       "findings": "Findings",
-      "empty_ready": "Configure probes and run a live assessment."
+      "empty_ready": "Configure probes and run a live assessment.",
+      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet detection-surface trail."
     },
     "wafBypass": {
       "title": "WAF Bypass Characterization Lab",
@@ -3543,7 +3663,8 @@
       "score_hint": "Higher = stronger blocking",
       "score_explainer": "Composite score from block rate, vendor detection, and observed bypass surfaces (encoding, headers, path normalization, verb gaps, JSON inspection). Every finding is from a live harmless probe.",
       "findings": "Findings",
-      "empty_ready": "Select a client, configure probes, and run a live WAF assessment."
+      "empty_ready": "Select a client, configure probes, and run a live WAF assessment.",
+      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet WAF trail."
     },
     "supplyChainHub": {
       "title": "Supply Chain Hub",
@@ -3587,7 +3708,9 @@
       "empty_findings_title": "No supply chain findings yet",
       "open_command_center": "Open CI/CD Command Center →",
       "ready_body": "Select a client and run a supply-chain engine.",
-      "ready_title": "Ready to scan"
+      "ready_title": "Ready to scan",
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
+      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet supply-chain trail."
     },
     "digitalTwinSimulator": {
       "title": "Digital Twin Live Probes",
@@ -3679,7 +3802,9 @@
       "profile_stack": "Stack",
       "profile_cleartext": "Cleartext HTTP",
       "profile_paths": "Discovered paths",
-      "evidence_notice": "Every scenario performs real HTTP/TLS network I/O via POST /api/command-center/scan (digital_twin). A clear verdict means probes did not observe an exploitable signal — not a skipped check. Blast-radius uses GET /api/financial-risk/:clientId when FAIR inputs exist."
+      "evidence_notice": "Every scenario performs real HTTP/TLS network I/O via POST /api/command-center/scan (digital_twin). A clear verdict means probes did not observe an exploitable signal — not a skipped check. Blast-radius uses GET /api/financial-risk/:clientId when FAIR inputs exist.",
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
+      "history_unavailable": "Engine history API unavailable — not-run is not confirmed."
     },
     "exploitResearchLab": {
       "title": "Exploit Research Lab",
@@ -3762,7 +3887,12 @@
           "description": "Docker/Kubernetes: privileged containers, RBAC misconfigs, secret exposure, image vulnerability scan."
         }
       },
-      "evidence_notice": "Controlled exploit validation runs through POST /api/command-center/scan with strict RoE and council gates. PoC success requires reproducible live target behavior — no canned shell screenshots."
+      "evidence_notice": "Controlled exploit validation runs through POST /api/command-center/scan with strict RoE and council gates. PoC success requires reproducible live target behavior — no canned shell screenshots.",
+      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet exploit-lab trail.",
+      "clients_unavailable": "Clients API unavailable — missing target is not confirmed.",
+      "payloads_unavailable": "Payload intel API unavailable — empty library is not confirmed.",
+      "lab_unavailable": "Exploit-lab API unavailable — findings fallback is not sealed PoE.",
+      "findings_truncated": "Showing the first 500 critical/high findings — the live inventory is larger."
     },
     "otIcsSecurity": {
       "title": "OT / ICS / IoT Security",
@@ -3832,18 +3962,18 @@
       "scan_findings_ready_title": "Ready to scan",
       "scan_findings_ready_body": "Select a client and run any OT/ICS engine. Live findings from completed jobs appear here with search, severity filters, and CSV export.",
       "evidence_notice": "OT/ICS protocol probes via POST /api/command-center/scan (ot_ics) against authorized industrial IP ranges. Empty state means no reachable PLCs/RTUs in scope — not simulated Modbus traffic.",
-      "engine_safety": "OT Passive/Active Safety Interlock",
-      "engine_safety_desc": "Safe-read fingerprint of Modbus, Siemens S7, DNP3, and IEC 61850 — writes and Direct Operate are structurally impossible",
+      "engine_safety": "OT Passive/Active Safety",
+      "engine_safety_desc": "Fail-closed interlock: writes, Direct Operate, CPU stop, GOOSE inject, and file-transfer are structurally impossible",
       "engine_crown": "OT Crown-Jewel Path",
-      "engine_crown_desc": "OT protocol confirmation fused with FAIR exposure and SOAR isolate recommendation on crown-jewel paths",
+      "engine_crown_desc": "OT protocol confirmation fused with live FAIR crown-jewel value — evidence only, no process-write",
       "engine_dnp3": "DNP3 IEEE 1815 Probe",
-      "engine_dnp3_desc": "CRC-validated DNP3 read-only poll — Direct Operate, cold restart, and file transfer blocked",
+      "engine_dnp3_desc": "Read-only DNP3 confirmation on TCP 20000 — Direct Operate never emitted",
       "engine_iec": "IEC 61850 MMS Probe",
-      "engine_iec_desc": "Iterative BER MMS identification — GOOSE inject and MMS write structurally blocked",
-      "safety_heading": "Safety Interlock",
+      "engine_iec_desc": "MMS identify on TCP 102 — GOOSE inject structurally blocked",
+      "safety_heading": "Compiled safety interlock",
       "safety_armed": "ARMED",
       "safety_controls": "{{implemented}} / {{total}} hardening controls armed",
-      "safety_body": "Compiled Rules of Engagement: this worker can fingerprint and read industrial protocols. Writes, Direct Operate, CPU stop, RTU restart, GOOSE inject, and file-transfer objects cannot be emitted.",
+      "safety_body": "This worker cannot emit destructive OT opcodes. Policy is compiled into the probe kernel, not a UI toggle.",
       "safety_write_blocked": "Writes blocked",
       "safety_direct_operate_blocked": "Direct Operate blocked",
       "safety_cpu_control_blocked": "CPU control blocked",
@@ -3857,10 +3987,15 @@
       "safety_ber_iterative": "Iterative BER",
       "safety_s7plus": "S7-Plus structural",
       "safety_decoy": "PLC decoy",
-      "safety_events": "{{count}} live safety events",
+      "safety_events": "{{count}} safety events",
       "safety_fair": "FAIR ALE ${{ale}} · crown jewels ${{jewels}}",
       "safety_unavailable": "UNAVAILABLE",
-      "safety_unavailable_body": "GET /api/ot-ics/safety could not load live events. The panel is not armed from an empty or failed read — retry after the database is available."
+      "safety_unavailable_body": "GET /api/ot-ics/safety could not load live events. The panel is not armed from an empty or failed read — retry after the database is available.",
+      "unavailable_title": "OT/ICS inventory unavailable",
+      "unavailable_body": "GET /api/ot-ics/devices could not be confirmed. Zero devices is not a quiet plant floor.",
+      "fingerprints_unavailable": "OT fingerprint trail unavailable — empty is not confirmed.",
+      "scan_history_unavailable": "Engine scan history unavailable — ready-to-scan is not a quiet OT findings trail.",
+      "safety_compiled": "COMPILED — no observed events"
     },
     "eliteHardening": {
       "title": "Elite Hardening",
@@ -3901,7 +4036,7 @@
       "subtitle": "Live blackboard, DAG waves, and engine manifests — Redis-backed scan memory, not placeholder findings",
       "badge": "Cognitive mesh",
       "evidence_notice": "GET /api/cem-dago/status, /manifests, /waves, /blackboard. Empty blackboard is a real idle tenant — the worker has not written scan memory yet.",
-      "load_failed": "Could not load CEM-DAGO mesh",
+      "load_failed": "Failed to load CEM-DAGO mesh",
       "select_client": "Select client",
       "reload": "Reload",
       "kpi_enabled": "Mesh",
@@ -3941,7 +4076,9 @@
       "col_outputs": "Outputs",
       "col_signal": "Signal",
       "col_source": "Source engine",
-      "col_value": "Value"
+      "col_value": "Value",
+      "unavailable_title": "CEM-DAGO mesh unavailable",
+      "unavailable_body": "GET /api/cem-dago/status could not be confirmed. Empty waves are not an idle mesh."
     },
     "competitiveDelta": {
       "title": "Competitive Delta",
@@ -4014,7 +4151,10 @@
       "status_critical": "Critical",
       "status_warning": "Warning",
       "status_secure": "Secure",
-      "no_search_results": "No protocols match your search."
+      "no_search_results": "No protocols match your search.",
+      "unavailable_title": "Protocol exposure unavailable",
+      "unavailable_body": "GET /api/soc/network-protocols did not confirm live protocol data. Empty is not a clean scan.",
+      "clients_unavailable": "Client list unavailable"
     },
     "riskGraphVisualization": {
       "title": "Risk Graph Visualization",
@@ -4064,7 +4204,9 @@
       "severity_critical": "Critical",
       "severity_high": "High",
       "severity_medium": "Medium",
-      "severity_low": "Low"
+      "severity_low": "Low",
+      "unavailable_title": "Risk graph unavailable",
+      "unavailable_body": "GET /api/risk/graph could not be confirmed. Zero assets is not an empty attack surface."
     },
     "baselineAndDrift": {
       "title": "Baseline & Drift Detection",
@@ -4101,7 +4243,8 @@
       "observed_vs_baseline": "Observed {{observed}} vs baseline {{baseline}}",
       "detected_at": "Detected: {{time}}",
       "no_baseline_title": "No Baseline Established",
-      "no_baseline_body": "Endpoint agents auto-learn baselines over 7 days. Deploy agents and wait for UEBA samples to populate this view."
+      "no_baseline_body": "Endpoint agents auto-learn baselines over 7 days. Deploy agents and wait for UEBA samples to populate this view.",
+      "unavailable": "Baseline APIs unavailable — empty drift is not confirmed."
     },
     "sbomBrowser": {
       "title": "SBOM Browser",
@@ -4142,7 +4285,9 @@
       "ingested_at": "Ingested {{date}}",
       "alert_title": "Supply Chain Risk Alert",
       "alert_body": "{{count}} components have known vulnerabilities. Update these packages to reduce supply chain risk.",
-      "evidence_notice": "SBOM components and vulnerability matches from POST /api/command-center/scan (sbom_analyzer) and GET /api/findings filtered by supply-chain engines. CVE links resolve to NVD records."
+      "evidence_notice": "SBOM components and vulnerability matches from POST /api/command-center/scan (sbom_analyzer) and GET /api/findings filtered by supply-chain engines. CVE links resolve to NVD records.",
+      "unavailable_title": "SBOM unavailable",
+      "unavailable_body": "GET /api/sbom/components could not be confirmed. Zero components is not a clean bill of materials."
     },
     "containmentRulesBuilder": {
       "title": "Containment Rules Builder",
@@ -4176,7 +4321,11 @@
       "auto_trigger": "Auto-trigger on condition match",
       "saving": "Saving...",
       "save_changes": "Save Changes",
-      "evidence_notice": "Containment playbooks from GET/POST /api/containment-rules. Actions execute against live agent/session records when triggers match — dry-run shows planned API calls only."
+      "evidence_notice": "Containment playbooks from GET/POST /api/containment-rules. Actions execute against live agent/session records when triggers match — dry-run shows planned API calls only.",
+      "load_failed": "Failed to load containment rules",
+      "rules_unavailable": "Containment rules store unavailable — the empty list is not confirmed.",
+      "unavailable_title": "Containment rules unavailable",
+      "unavailable_body": "GET /api/containment/rules could not be confirmed. Zero rules is not an idle playbook."
     },
     "templateEngineWorkbench": {
       "title": "Template Engine",
@@ -4207,7 +4356,10 @@
       "step_label": "Step {{id}}",
       "step_matched": "Matched",
       "step_no_match": "No match",
-      "duration_ms": "{{ms}} ms"
+      "duration_ms": "{{ms}} ms",
+      "templates_unavailable": "Template catalog unavailable",
+      "templates_unavailable_body": "GET /api/template-engine/templates could not be confirmed. An empty picker is not a missing template — YAML can still be edited by hand.",
+      "yaml_unavailable_body": "GET /api/template-engine/templates/:id could not be confirmed. YAML from another template is not this template."
     },
     "ceoVault": {
       "title": "CEO Vault",
@@ -4245,7 +4397,9 @@
       "delete_failed": "Failed to delete secret",
       "delete_success": "Secret deleted",
       "delete_title": "Delete secret",
-      "load_failed": "Failed to load secrets"
+      "load_failed": "Failed to load secrets",
+      "unavailable_title": "CEO vault unavailable",
+      "unavailable_body": "GET /api/ceo/vault/secrets could not be confirmed. Zero secrets is not an empty vault."
     },
     "identityContextManager": {
       "title": "Identity Context Manager",
@@ -4278,7 +4432,9 @@
       "evidence_notice": "Identity context and IdP discovery from GET /api/identity-context and client-scoped SaaS/IdP endpoints. Correlation rows map to live SSO/OAuth metadata — not sample Entra tenants.",
       "oauth_hub_title": "OAuth & token security hub",
       "oauth_hub_body": "Review OAuth grants, token scopes and third-party app risk in the dedicated identity security console.",
-      "oauth_hub_cta": "Open identity security"
+      "oauth_hub_cta": "Open identity security",
+      "unavailable_title": "Identity context unavailable",
+      "unavailable_body": "GET /api/identity/contexts could not be confirmed. Zero identities is not a quiet UEBA surface."
     },
     "ceoCommandCenter": {
       "title": "CEO command center",
@@ -4327,7 +4483,8 @@
       "close_action": "Close engagement",
       "close_success": "Engagement closed",
       "close_title": "Close engagement",
-      "create_success": "Engagement created"
+      "create_success": "Engagement created",
+      "unavailable": "Engagements API unavailable — empty is not confirmed."
     },
     "clientEvidenceVault": {
       "title": "Evidence Vault",
@@ -4369,7 +4526,9 @@
       "load_failed": "Failed to load evidence (HTTP {{status}}) {{detail}}",
       "network_error": "Network error",
       "delete_success": "Evidence deleted",
-      "delete_title": "Delete evidence"
+      "delete_title": "Delete evidence",
+      "download_failed": "Download failed — store could not be confirmed",
+      "unavailable": "Evidence vault API unavailable — empty is not confirmed."
     },
     "roeApprovals": {
       "title": "ROE Approvals",
@@ -4394,7 +4553,9 @@
       "reject_reason_label": "Reason",
       "reject_reason_placeholder": "Reason for rejection…",
       "reject_success": "Override request rejected",
-      "reject_title": "Reject override request"
+      "reject_title": "Reject override request",
+      "unavailable_title": "ROE queue unavailable",
+      "unavailable_body": "GET /api/roe/override-requests could not be confirmed. Zero pending is not a clear dual-control queue."
     },
     "councilHitlQueue": {
       "title": "Council HITL Queue",
@@ -4438,7 +4599,9 @@
       "empty_search": "No items match your search.",
       "clear_search": "Clear search",
       "search_placeholder": "Search by ID, target, client, or severity…",
-      "export_csv": "Export CSV"
+      "export_csv": "Export CSV",
+      "unavailable_title": "Council HITL queue unavailable",
+      "unavailable_body": "GET /api/council/hitl/queue could not be confirmed. An empty queue is not idle council dual-control."
     },
     "feedbackLoopVerification": {
       "title": "Feedback Loop Verification",
@@ -4463,7 +4626,11 @@
       "not_verified": "NOT VERIFIED",
       "run_failed": "Run failed",
       "evidence_notice": "Closed-loop verification re-runs remediated findings via POST /api/command-center/scan and compares against GET /api/findings history — confirms fixes on live targets.",
-      "select_client": "— Select client —"
+      "select_client": "— Select client —",
+      "templates_unavailable": "Template catalog unavailable",
+      "templates_unavailable_body": "GET /api/template-engine/templates could not be confirmed. An empty picker is not a missing chain — YAML can still be edited by hand.",
+      "yaml_unavailable_body": "GET /api/template-engine/templates/:id could not be confirmed. YAML from another template is not this template.",
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant."
     },
     "mobileSecurity": {
       "title": "Mobile & App Security",
@@ -4503,7 +4670,11 @@
       "recent_findings_heading": "Recent Mobile Findings",
       "open_findings": "Open Findings →",
       "findings_empty_title": "No mobile findings yet",
-      "evidence_notice": "Mobile app surface checks via POST /api/command-center/scan (mobile engines). Certificate pinning and deep-link findings require supplied app binaries or reachable mobile API hosts."
+      "evidence_notice": "Mobile app surface checks via POST /api/command-center/scan (mobile engines). Certificate pinning and deep-link findings require supplied app binaries or reachable mobile API hosts.",
+      "unavailable_title": "Mobile inventory unavailable",
+      "unavailable_body": "GET /api/mobile-security/apps could not be confirmed. Zero apps is not an empty inventory.",
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
+      "history_unavailable": "Engine history API unavailable — empty mobile findings are not a quiet trail."
     },
     "astFuzzingStudio": {
       "title": "AST Smart Fuzzing",
@@ -4580,7 +4751,8 @@
       "col_time": "Time",
       "col_channel": "Channel",
       "col_source": "Source IP",
-      "col_payload": "Payload"
+      "col_payload": "Payload",
+      "callbacks_unavailable": "Callback API unavailable — empty callbacks are not confirmed."
     },
     "domainDiscovery": {
       "dashboard": "← Dashboard",
@@ -4640,7 +4812,8 @@
       "stage_crawl": "Web Crawl",
       "stage_whois": "WHOIS Lookup",
       "stage_email": "Email Records",
-      "stage_pattern": "Pattern Generation"
+      "stage_pattern": "Pattern Generation",
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant."
     },
     "topTierEngineHub": {
       "back_matrix": "← Engine Matrix",
@@ -4673,7 +4846,9 @@
       "search_placeholder": "Search engines by ID, label, or path…",
       "export_csv": "Export audit CSV",
       "showing_count": "{{count}} of {{total}} engines",
-      "no_search_results": "No engines match your search."
+      "no_search_results": "No engines match your search.",
+      "audit_unavailable": "Top-tier audit API unavailable — 0 connected is not a disconnected fleet.",
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant."
     },
     "clientSaasIdpDiscovery": {
       "title": "SaaS / IdP Discovery",
@@ -4711,7 +4886,9 @@
         "duo": "Duo",
         "adfs": "ADFS (on-prem)"
       },
-      "copy_manual_title": "Copy manually"
+      "copy_manual_title": "Copy manually",
+      "unavailable_title": "SaaS / IdP discovery unavailable",
+      "unavailable_body": "GET /api/clients/:id/discovery/saas-idp could not be confirmed. Empty domains is not a quiet tenant."
     },
     "oastDashboard": {
       "title": "OAST / OOB Dashboard",
@@ -4778,7 +4955,19 @@
           "description": "Host / X-Forwarded-Host routing misconfig OOB canary"
         }
       },
-      "evidence_notice": "OAST tokens from POST /api/oast/probe and callback rows from GET /api/oast/callbacks. A hit means your listener received a real out-of-band interaction."
+      "evidence_notice": "OAST tokens from POST /api/oast/probe and callback rows from GET /api/oast/callbacks. A hit means your listener received a real out-of-band interaction.",
+      "callbacks_unavailable": "Callback API unavailable — empty callbacks are not confirmed.",
+      "verify_unavailable": "Verify GET unavailable — leftover leftover-callback hits are not confirmed.",
+      "health_listener": "Listener",
+      "health_configured": "configured",
+      "health_missing": "WEISSMAN_OAST_LISTENER_URL / domain not set — fail-visible, no fake hits",
+      "health_domain": "Domain",
+      "health_last": "Last callback",
+      "health_idle": "configured, none observed",
+      "health_unavailable": "callback API unreachable — not proof the listener is off",
+      "health_none": "none observed",
+      "health_count": "{{count}} recent hits",
+      "clients_unavailable": "Clients API unavailable — the tenant list is not confirmed empty."
     },
     "osintEngineProfile": {
       "title": "OSINT Engine",
@@ -4823,7 +5012,10 @@
       "col_discovered": "Discovered",
       "col_severity": "Severity",
       "col_title": "Title",
-      "col_type": "Type"
+      "col_type": "Type",
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
+      "integrations_unavailable": "Integrations API unavailable — blank prefill is not an unconfigured tenant.",
+      "history_unavailable": "Engine history API unavailable — KPI zeros are not a quiet OSINT trail."
     },
     "superpositionCollapse": {
       "title": "Risk Superposition Collapse",
@@ -4884,7 +5076,10 @@
       "auto_queueing": "Auto-collapse: prerequisites met, queueing…",
       "auto_queued": "Auto-collapse job {{jobId}} queued",
       "need_clusters": "Need at least {{min}} open clusters — run ASM/SSRF/cloud engines first",
-      "payload_preview": "Audit: scan payload (read-only)"
+      "payload_preview": "Audit: scan payload (read-only)",
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
+      "clusters_unavailable": "GET /api/findings/clusters could not be confirmed. Zero clusters is not a quiet fusion feed.",
+      "history_unavailable": "Engine history API unavailable — empty collapse findings are not a quiet completed scan."
     },
     "sovereignDefense": {
       "title": "Sovereign Defense Matrix",
@@ -4931,7 +5126,12 @@
       "ebpf_ssh_user": "SSH user",
       "ebpf_ssh_port": "SSH port",
       "ebpf_ssh_key_pem": "SSH private key (PEM)",
-      "ebpf_ssh_key_path": "SSH key path"
+      "ebpf_ssh_key_path": "SSH key path",
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
+      "poison_unavailable": "Poison library API unavailable — empty is not a confirmed library.",
+      "chronos_unavailable": "CHRONOS event feed unavailable — empty is not a quiet endpoint.",
+      "cognitive_unavailable": "Cognitive session feed unavailable — empty is not a quiet starvation trail.",
+      "history_unavailable": "Engine history API unavailable — configure-and-run is not a quiet defense trail."
     },
     "topTierEngineProfile": {
       "unknown_engine": "Unknown Top-Tier engine: {{id}}",
@@ -4989,7 +5189,10 @@
       "evidence_notice": "Audit, history, and exports from GET /api/engines/top-tier/* and POST /api/command-center/scan — live engine evidence only.",
       "empty_jobs_title": "No jobs tracked yet",
       "empty_jobs_body": "Queue a scan from the run panel to populate job history for this Top-Tier engine.",
-      "command_center": "Command Center"
+      "command_center": "Command Center",
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
+      "integrations_unavailable": "Integrations API unavailable — blank prefill is not an unconfigured tenant.",
+      "history_unavailable": "Engine history API unavailable — empty jobs are not a quiet trail."
     },
     "ssoDashboard": {
       "title": "SSO & Identity Providers",
@@ -5109,10 +5312,14 @@
           "placeholder": "email"
         }
       },
-      "evidence_notice": "SSO/OIDC/SAML provider configuration from GET/PUT /api/sso-config. Metadata and redirect URIs are live tenant settings — test logins hit your configured IdP endpoints."
+      "evidence_notice": "SSO/OIDC/SAML provider configuration from GET/PUT /api/sso-config. Metadata and redirect URIs are live tenant settings — test logins hit your configured IdP endpoints.",
+      "idps_unavailable": "IdP directory unavailable — store could not be confirmed."
     },
     "engineDetail": {
-      "evidence_notice": "Run history from GET /api/engines/history/:engineId. Live scans via POST /api/command-center/scan with engine-specific params. Progress streams on GET /api/telemetry/stream?job_id=… — findings persist to your tenant only."
+      "evidence_notice": "Run history from GET /api/engines/history/:engineId. Live scans via POST /api/command-center/scan with engine-specific params. Progress streams on GET /api/telemetry/stream?job_id=… — findings persist to your tenant only.",
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
+      "integrations_unavailable": "Integrations API unavailable — blank prefill is not an unconfigured tenant.",
+      "history_unavailable": "Engine history API unavailable — never-run is not confirmed."
     },
     "clientDetail": {
       "evidence_notice": "Client record, scope, and engagement data from GET /api/clients/:id and related tenant endpoints. Scan bundles and evidence vault rows are live database records — never seeded demo profiles."
@@ -5221,13 +5428,17 @@
           "id": "JWKS hygiene",
           "desc": "Weak RSA / leaked private params"
         }
-      }
+      },
+      "history_unavailable_title": "JWT history unavailable",
+      "history_unavailable": "GET /api/engines/history/jwt_attack could not be confirmed. Ready-to-assess is not a quiet empty trail."
     },
     "iacSecurityCenter": {
       "evidence_notice": "IaC misconfiguration analysis runs through POST /api/command-center/scan (iac_misconfig). Terraform, K8s, Dockerfile, and CI manifests are parsed server-side — policy hits are real static findings, not simulated CIS scores."
     },
     "graphqlSecurityCommandCenter": {
-      "evidence_notice": "GraphQL introspection, batching, and auth bypass checks via POST /api/command-center/scan (graphql_attack). Results correlate to GET /api/findings — live authorized probing only."
+      "evidence_notice": "GraphQL introspection, batching, and auth bypass checks via POST /api/command-center/scan (graphql_attack). Results correlate to GET /api/findings — live authorized probing only.",
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
+      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet GraphQL trail."
     },
     "websocketSecurity": {
       "evidence_notice": "WebSocket DAST via POST /api/command-center/scan (websocket_attack). RFC6455 handshake verification, CSWSH differential, and stateful fuzz findings stream on GET /api/telemetry/stream?job_id=… — live authorized probing only, no simulated WS results.",
@@ -5274,7 +5485,8 @@
         "messages": "Post-handshake sessions",
         "enterprise": "Weissman Standard (DAST)",
         "intel": "Weissman intelligence"
-      }
+      },
+      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet WebSocket trail."
     },
     "attackSurfaceManagement": {
       "evidence_notice": "ASM inventory from POST /api/command-center/scan (asm). First-mover drift from GET /api/clients/:id/surface-diff, CT squirt nerve from GET /api/first-mover/nerve, delta hunt POST first_mover_surface_delta, kill-chain POST first_mover_delta_fusion — live DNS/HTTP/CT vs last snapshot, no canned graphs.",
@@ -5426,7 +5638,29 @@
       "skip_hunt": "Prove dual-stack skip",
       "skip_hunting": "Proving skip…",
       "prep_hunt": "Ransomware preposition",
-      "prep_hunting": "Probing preposition…"
+      "prep_hunting": "Probing preposition…",
+      "nerve_oast_last": "Last OAST hit",
+      "nerve_oast_none": "none",
+      "nerve_oast_idle": "configured, no hit",
+      "nerve_unavailable": "Nerve APIs unavailable — off is not confirmed.",
+      "nerve_follow_on": "CT kill-chain follow-on: {{engines}}",
+      "first_seen_title": "First-seen vs NVD",
+      "first_seen_subtitle": "Live SBOM queried against OSV. Pre-NVD only when the OSV hit has no CVE alias or NIST has no catalog row. Hits already in NVD are shown and never titled first-seen.",
+      "first_seen_loading": "Loading SBOM × OSV hits…",
+      "first_seen_load_failed": "Failed to load first-seen hits.",
+      "first_seen_pre_nvd": "Pre-NVD",
+      "first_seen_listed": "Already in NVD",
+      "first_seen_skipped": "Unproven (no NVD key)",
+      "first_seen_empty_title": "No SBOM × OSV hits yet",
+      "first_seen_empty_body": "Run first_seen_osv_nvd against a client with SBOM rows. Empty SBOM never fabricates CVEs.",
+      "first_seen_badge_pre": "pre-NVD",
+      "first_seen_status_listed": "listed in NVD (not first-seen)",
+      "first_seen_status_unpublished": "CVE unpublished in NVD",
+      "first_seen_status_skipped": "unproven (no NVD key)",
+      "first_seen_status_unknown": "unknown NVD status",
+      "history_unavailable": "Engine history API unavailable — ready-to-map is not a quiet attack-surface trail.",
+      "clients_unavailable": "Clients API unavailable — the tenant list is not confirmed empty.",
+      "corpus_unavailable": "Discovery corpus API unavailable — stored counts are not confirmed zero."
     },
     "dnsDomainPosture": {
       "evidence_notice": "DNS, SPF, DMARC, and subdomain posture from POST /api/command-center/scan (email_dns_posture / dns engines). Records are resolved live against public resolvers for authorized domains.",
@@ -5474,7 +5708,8 @@
       "target_domain": "Target domain",
       "target_required": "A target domain is required",
       "threat_planes": "Threat planes",
-      "timeout_ms": "Timeout (ms)"
+      "timeout_ms": "Timeout (ms)",
+      "history_unavailable": "Engine history API unavailable — strong hijack-resistance is not confirmed."
     },
     "webCachePosture": {
       "evidence_notice": "Web cache poisoning and header-smuggling probes via POST /api/command-center/scan (cache_poisoning). Each hit is a reproducible HTTP response differential on your authorized target.",
@@ -5532,7 +5767,8 @@
       "shared_cache_no": "No shared cache observed",
       "shared_cache_yes": "Shared cache detected",
       "timeout_ms": "Per-probe timeout (ms)",
-      "top_primitives": "Top primitives (triage)"
+      "top_primitives": "Top primitives (triage)",
+      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet cache-posture trail."
     },
     "httpSmugglingPosture": {
       "evidence_notice": "HTTP request-smuggling and desync tests via POST /api/command-center/scan (http_smuggling). Desync evidence requires live front/back-end behavior on the authorized host.",
@@ -5566,7 +5802,8 @@
       "run_to_populate": "Run a desync scan to assess CL.TE/TE.CL confusion, TE obfuscation, pipeline behaviour and protocol-boundary fractures.",
       "select_client_warning": "Select an in-scope client and target URL to run the desync posture scan.",
       "timeout_ms": "Per-probe timeout (ms)",
-      "worst": "Worst: {{sev}}"
+      "worst": "Worst: {{sev}}",
+      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet desync trail."
     },
     "emailDnsPosture": {
       "evidence_notice": "Email authentication posture (SPF/DKIM/DMARC/BIMI) from POST /api/command-center/scan (email_dns_posture). MX and TXT lookups are live — misconfigurations map to real deliverability risk.",
@@ -5714,7 +5951,8 @@
       "last_completed": "Last completed: {{time}}",
       "select_client_prompt": "Select an in-scope client and target domain to run the email-trust posture scan.",
       "empty_ready_title": "Run a posture scan to assess SPF, DKIM, DMARC, BIMI, MTA-STS, DNSSEC, DANE & SMTP TLS.",
-      "empty_ready_body": "No exposures returned — email-trust posture appears strong."
+      "empty_ready_body": "No exposures returned — email-trust posture appears strong.",
+      "history_unavailable": "Engine history API unavailable — strong email-trust posture is not confirmed."
     },
     "transportSecurityCommandCenter": {
       "evidence_notice": "World-class transport-security posture (mtls_grpc): 38+ live probe modules — TLS/crypto matrix, gRPC/mTLS/gRPC-Web, weak-cipher CRIME, Must-Staple, chain trust, HSTS/CSP, attack-path synthesis, 8-dimension executive scorecard. Every finding from real handshakes and HTTP probes via POST /api/command-center/scan (mtls_grpc). Command Center: /transport-security."
@@ -5928,7 +6166,8 @@
       "check_sso": "IAM Identity Center (SSO)",
       "check_graph_paths": "Graph-native attack paths",
       "include_attack_paths": "Toxic-combination attack paths",
-      "include_security_graph": "Security graph (asset relationships)"
+      "include_security_graph": "Security graph (asset relationships)",
+      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet CSPM trail."
     },
     "edDetectionSurface": {
       "evidence_notice": "Detection coverage and log-source gaps derived from GET /api/findings and POST /api/command-center/scan correlation — shows where your stack would miss real attacker tradecraft."
@@ -6038,16 +6277,21 @@
       "recovery_rate": "Recovery Rate",
       "search_ph": "Search engines...",
       "shown": "Shown",
-      "total_runs": "Total Runs"
+      "total_runs": "Total Runs",
+      "unconfirmed": "run history unconfirmed",
+      "unavailable_title": "Engine catalog unavailable",
+      "unavailable_body": "Capability roster could not be confirmed. Empty is not a healthy fleet."
     },
     "nexusSovereignSwarm": {
-      "evidence_notice": "Swarm deployments queue via POST /api/command-center/scan (nexus_sovereign_swarm). Live agent fleet status from GET /api/agents/status. WebSocket telemetry streams real worker events — never scripted hive animations."
+      "evidence_notice": "Swarm deployments queue via POST /api/command-center/scan (nexus_sovereign_swarm). Live agent fleet status from GET /api/agents/status. WebSocket telemetry streams real worker events — never scripted hive animations.",
+      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet swarm trail."
     },
     "engineClientCatalog": {
       "evidence_notice": "Scan profile templates launch real engine bundles via POST /api/command-center/scan and POST /api/scan/all-engines. Profile cards are RoE presets — telemetry from GET /api/engines/telemetry.",
       "readiness_blocked": "Client readiness {{pct}}% — complete integrations first",
       "readiness_pct": "Readiness {{pct}}%",
-      "engine_queued": "Engine queued (Job: {{jobId}})"
+      "engine_queued": "Engine queued (Job: {{jobId}})",
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant."
     },
     "agentManagement": {
       "evidence_notice": "Endpoint agent roster and heartbeat from GET /api/agents/status. Remote tasking uses authenticated agent channels — offline agents show honest last-seen timestamps."
@@ -6102,7 +6346,8 @@
       "stack_pack": "Platform pack",
       "toxic_combinations": "Toxic combinations",
       "upload_paths": "Upload paths",
-      "upload_posture": "Upload Posture"
+      "upload_posture": "Upload Posture",
+      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet upload trail."
     },
     "pkiTlsPosture": {
       "client": "Client",
@@ -6135,7 +6380,8 @@
       "target_required": "A target host/URL is required",
       "timeout_ms": "Handshake timeout (ms)",
       "tls_posture": "TLS Posture",
-      "worst": "Worst: {{sev}}"
+      "worst": "Worst: {{sev}}",
+      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet TLS trail."
     },
     "transportSecurity": {
       "badge": "TLS / mTLS / gRPC / HTTP HARDENING",
@@ -6152,7 +6398,8 @@
       "select_client": "Select a client first",
       "select_client_opt": "— Select —",
       "target": "Target",
-      "target_required": "Target required"
+      "target_required": "Target required",
+      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet transport trail."
     },
     "msspPartnerPortal": {
       "title": "MSSP Partner Portal",
@@ -6197,17 +6444,21 @@
       "load_failed": "Failed to load ITDR data.",
       "kpi_events": "Auth events",
       "kpi_fails": "Failures",
-      "kpi_providers": "Providers",
+      "kpi_providers": "Armed IdPs",
       "pull": "Pull {{provider}}",
       "pulling": "Pulling…",
       "pulled": "{{provider}} ingested {{n}} events",
       "pull_failed": "IdP pull failed — check connector tokens.",
-      "connector_hint": "Configured connector keys:",
+      "connector_hint": "Armed connectors:",
       "search_placeholder": "Filter users, IPs, countries…",
       "empty_title": "No auth events",
-      "empty_body": "Save Entra/Okta/Google tokens under System Config → ITDR connectors, then Pull. Empty means the table is empty.",
+      "empty_body": "Connectors are armed. Empty means itdr_auth_events has no rows yet — Pull to ingest live sign-ins.",
       "ok": "ok",
-      "fail": "fail"
+      "fail": "fail",
+      "pull_unconfigured": "{{provider}} has no stored token — save connectors first.",
+      "none_armed": "none",
+      "empty_unconfigured_title": "No IdP connectors armed",
+      "empty_unconfigured_body": "Save Entra/Okta/Google tokens under System Config → ITDR connectors, then Pull. The catalog has three providers; none are live until a token is stored."
     },
     "casbDlpCenter": {
       "title": "CASB / DLP / CNAPP",
@@ -6222,7 +6473,8 @@
       "refresh_failed": "CNAPP refresh failed.",
       "search_placeholder": "Filter findings…",
       "empty_title": "No CASB/DLP/CNAPP findings",
-      "empty_body": "Run the engines or Refresh CNAPP graph. Missing cloud credentials yield empty_ok, not invented toxic combos."
+      "empty_body": "Run the engines or Refresh CNAPP graph. Missing cloud credentials yield empty_ok, not invented toxic combos.",
+      "unavailable": "CASB/DLP findings API unavailable — empty is not a clean SaaS posture."
     },
     "ngfwGate": {
       "title": "Weissman Gate",
@@ -6380,6 +6632,12 @@
       "filter_blind": "Blind spots",
       "filter_pushed": "Pushed",
       "open_finding": "Open in findings"
+    },
+    "soarHitlQueue": {
+      "title": "SOAR HITL Queue",
+      "pending_badge": "{{count}} pending",
+      "unavailable_title": "HITL queue unavailable",
+      "unavailable_body": "GET /api/soar/executions could not be confirmed. An empty queue is not idle dual-control."
     }
   },
   "components": {
@@ -6419,7 +6677,10 @@
       "engaging": "ENGAGING…",
       "board_failed": "Board report failed",
       "board_network_error": "Network error generating board report",
-      "client_fallback": "Client {{id}}"
+      "client_fallback": "Client {{id}}",
+      "health_unavailable": "Health: unavailable",
+      "safe_mode_unavailable": "Safe mode unavailable",
+      "engage_failed": "Scan launch unavailable — store could not be confirmed"
     },
     "engineScanParams": {
       "title": "Engine Parameters",
@@ -6437,7 +6698,8 @@
       "no_client": "Select a client to prefill credentials",
       "configure": "Configure →",
       "engine_detail": "Engine Detail →",
-      "hint": "Missing integrations are hydrated server-side when configured; complete client setup for full live coverage."
+      "hint": "Missing integrations are hydrated server-side when configured; complete client setup for full live coverage.",
+      "unavailable": "GET /api/clients/:id/integrations could not be confirmed. Unconfirmed 0% is not idle coverage."
     },
     "neuralEngineWeb": {
       "title": "Neural engine web",
@@ -6548,7 +6810,8 @@
         "criticalOpen": "{{count}} critical open",
         "cvesTitle": "Top CVEs",
         "cvesFooter": "most frequent across assets",
-        "cvesEmpty": "No CVE-correlated findings yet"
+        "cvesEmpty": "No CVE-correlated findings yet",
+        "unavailable": "Executive KPI API unavailable — empty movers are not confirmed."
       },
       "engineCard": {
         "run": "Run",
@@ -6588,7 +6851,8 @@
         "loading": "Loading…",
         "noZeroDay": "No zero-day findings",
         "findingFallback": "Finding",
-        "moreCount": "+{{count}} more"
+        "moreCount": "+{{count}} more",
+        "findings_unavailable": "Findings API unavailable — all-clear is not confirmed."
       },
       "cockpitTabErrorBoundary": {
         "title": "Tab error",
@@ -6609,7 +6873,8 @@
         "noNodes": "No edge nodes registered. From a worker, POST",
         "noNodesSuffix": "optional lat/lng and",
         "popFallback": "POP",
-        "jobs": "jobs={{count}}"
+        "jobs": "jobs={{count}}",
+        "unavailable": "Edge swarm API unavailable — quiet is not an empty fleet."
       },
       "roePanel": {
         "title": "System Exploitation Mode",
@@ -6623,7 +6888,8 @@
         "loading": "Loading traces…",
         "noTracesFinding": "No runtime traces linked to this finding. Deploy the IAST agent or enable eBPF ingestion to see execution flow.",
         "noTracesClient": "No runtime traces for this client yet.",
-        "payloadHash": "payload_hash: {{hash}}"
+        "payloadHash": "payload_hash: {{hash}}",
+        "unavailable": "Runtime traces API unavailable — quiet is not confirmed."
       },
       "severityTrendChart": {
         "ariaLabel": "24-hour findings trend",
@@ -6631,7 +6897,8 @@
         "subtitle": "findings discovered vs. resolved per hour",
         "discovered": "{{count}} discovered",
         "resolved": "{{count}} resolved",
-        "chartAria": "Findings discovered vs resolved over the last 24 hours"
+        "chartAria": "Findings discovered vs resolved over the last 24 hours",
+        "unavailable": "Executive KPI API unavailable — empty velocity is not confirmed."
       },
       "digitalEvidenceHud": {
         "awaitingPoe": "Awaiting PoE Synthesis…",
@@ -6661,7 +6928,8 @@
         "patrolMode": "Patrol mode",
         "zooming": "Drone zooming…",
         "markersActive": "Markers active",
-        "satellite": "Satellite"
+        "satellite": "Satellite",
+        "findings_unavailable": "Findings API unavailable — empty markers are not a clean map."
       },
       "systemPulseEkg": {
         "title": "System pulse",
@@ -6699,7 +6967,9 @@
         "loading": "Loading assets…",
         "error": "Failed to load assets",
         "empty": "No assets discovered",
-        "title": "Asset Grid"
+        "title": "Asset Grid",
+        "unavailable": "Client or asset-graph API unavailable — empty is not confirmed.",
+        "truncated": "Showing a subset of the live asset graph — the full surface is larger."
       },
       "killChainVisualizer": {
         "title": "Kill-Chain",
@@ -6759,7 +7029,8 @@
         },
         "reset": "Reset: {{time}}",
         "resetNow": "Now",
-        "warning": "Rate limit approaching. Requests will be throttled."
+        "warning": "Rate limit approaching. Requests will be throttled.",
+        "unavailable": "Rate-limit API unavailable — healthy 0/max is not confirmed."
       },
       "redTeamSkullSwitch": {
         "commandRefused": "COMMAND REFUSED",
@@ -6910,7 +7181,9 @@
           "title": "Privilege Escalation (Kill Chain)",
           "subtitle": "— low-priv context executed high-priv action",
           "empty": "No privilege escalation events yet. Add contexts, run ENGAGE TARGET; Shadow Engine will record when a lower-privilege token succeeds on an admin path."
-        }
+        },
+        "unavailable": "Identity surface API unavailable — empty is not confirmed.",
+        "truncated": "Showing 200 identity contexts — additional live contexts exist."
       },
       "riskGraph": {
         "select_client": "Select a client to view the Contextual Risk Graph.",
@@ -6923,7 +7196,9 @@
         "build_request_failed": "Build request failed",
         "loading_graph": "Loading graph…",
         "no_graph_data": "No graph data. Run scans (ASM, findings, identity contexts) then click Build.",
-        "build_graph": "Build graph"
+        "build_graph": "Build graph",
+        "unavailable": "Risk graph API unavailable — empty is not confirmed.",
+        "truncated": "Showing the first 500 nodes/edges — the live risk graph is larger."
       },
       "autoHeal": {
         "selectClient": "Select a client to use Auto-Heal.",
@@ -6948,7 +7223,11 @@
         "loading": "Loading…",
         "noRequests": "No heal requests yet. Trigger one above.",
         "verifyJobPrefix": "verify job: {{id}}",
-        "openPr": "Open PR / Approve & merge"
+        "openPr": "Open PR / Approve & merge",
+        "unavailable": "Heal-requests API unavailable — empty is not confirmed.",
+        "truncated": "Showing the 200 newest heal requests — additional history exists.",
+        "triggerFailed": "Auto-heal trigger failed — the request was not accepted.",
+        "verifyPollFailed": "Sandbox verification polling failed — last status is not confirmed."
       },
       "deceptionGrid": {
         "simulationBadge": "Simulation",
@@ -6994,7 +7273,8 @@
         "noAssets": "No deception assets. Generate tokens, then deploy to AWS above.",
         "canaryAkia": "canary AKIA: {{id}}",
         "liveOastBadge": "Live OAST",
-        "refresh": "Refresh"
+        "refresh": "Refresh",
+        "assetsUnavailable": "Deception inventory unavailable — store could not be confirmed."
       },
       "containmentRules": {
         "selectClient": "Select a client to configure containment.",
@@ -7029,7 +7309,8 @@
         "off": "off",
         "preApprovedStatus": "pre-approved",
         "notApprovedStatus": "not approved",
-        "refresh": "Refresh"
+        "refresh": "Refresh",
+        "unavailable": "Containment rules API unavailable — cannot verify the rule set."
       },
       "livePipelineMonitor": {
         "title": "Live Pipeline Monitor",
@@ -7051,7 +7332,10 @@
           "2": "Vulnerability Scanning",
           "3": "Kill Shot (PoE, Deception)",
           "4": "Compliance (Audit, PDF)"
-        }
+        },
+        "unavailable": "Pipeline state API unavailable — idle is not confirmed.",
+        "dag_unavailable": "DAG graph unavailable",
+        "dag_unavailable_body": "GET /api/dag could not be confirmed. An empty canvas is not a quiet pipeline tree."
       },
       "auditTrail": {
         "title": "Audit trail",
@@ -7091,7 +7375,8 @@
         "crashTitle": "Settings & alerts",
         "crashBody": "This tab crashed. You can retry or return to another cockpit view.",
         "tryAgain": "Try again",
-        "unexpectedError": "Unexpected error"
+        "unexpectedError": "Unexpected error",
+        "settings_unavailable": "Settings store unavailable — safe mode is not confirmed."
       },
       "complianceDashboard": {
         "selectClient": "Select a client to manage cloud IAM and compliance posture.",
@@ -7123,7 +7408,8 @@
           "GDPR": "GDPR"
         },
         "compliantMapped": "Compliant (mapped controls)",
-        "controlsWithFindings": "{{violated}} / {{total}} controls with active findings"
+        "controlsWithFindings": "{{violated}} / {{total}} controls with active findings",
+        "unavailable": "Compliance posture API unavailable — mapped controls are not confirmed."
       },
       "swarmMind": {
         "selectClient": "Select a client to run the multi-agent swarm.",
@@ -7178,7 +7464,9 @@
         "colHalluc": "Halluc.",
         "colBlocked": "Blocked",
         "noEvents": "No events.",
-        "blockedYes": "yes"
+        "blockedYes": "yes",
+        "unavailable": "AI model-risk API unavailable — clean scores are not confirmed.",
+        "endpoints_unavailable": "Integrations API unavailable — a blank endpoint row is not an unconfigured LLM."
       }
     },
     "onboarding": {
@@ -7322,7 +7610,8 @@
       "audit_root_hash_label": "Audit Root Hash (SHA-256):",
       "verify_link": "Verify: {{url}}",
       "no_sealed_run": "No sealed run for this client yet. Run a scan to generate the audit trail.",
-      "client_fallback": "Client {{id}}"
+      "client_fallback": "Client {{id}}",
+      "unavailable": "Report APIs unavailable — zero findings is not confirmed."
     },
     "tools": {
       "memoryForensicsLab": {
@@ -7376,7 +7665,9 @@
         "data_bleed": "TRUE STATE: DATA BLEED (High Entropy Bypass)",
         "entropy_safe": "Safe",
         "entropy_warning": "Warning",
-        "entropy_critical": "Critical"
+        "entropy_critical": "Critical",
+        "fetch_failed": "PoE findings API unavailable — this is not an empty lab.",
+        "unavailable": "Clients API unavailable — missing client is not confirmed."
       },
       "aiRedteamArena": {
         "evidence_notice": "Adversarial LLM rounds from POST /api/command-center/scan (ai_adversarial_redteam) with live judge status over WebSocket — findings persist to GET /api/findings.",
@@ -7400,7 +7691,8 @@
         "defender_title": "Target LLM (Defender)",
         "attacker_empty": "Generated adversarial payloads will stream here…",
         "defender_empty": "Target responses will stream here…",
-        "footer": "Findings are saved with source ai_adversarial_redteam and appear in the Executive PDF Report."
+        "footer": "Findings are saved with source ai_adversarial_redteam and appear in the Executive PDF Report.",
+        "unavailable": "Clients API unavailable — missing client is not confirmed."
       },
       "quantumTimingProfiler": {
         "evidence_notice": "Microsecond latency samples from POST /api/command-center/scan (timing_side_channel) — Z-score anomalies computed from live HTTP round-trips, not scripted charts.",
@@ -7427,7 +7719,9 @@
         "payload_legend": "— Payload (μs)",
         "chart_baseline": "Baseline (μs)",
         "chart_payload": "Payload (μs)",
-        "footer": "This report is cryptographically sealed. Response times measured with real network latency; Z-Score > 3 indicates critical blind injection timing deviation."
+        "footer": "This report is cryptographically sealed. Response times measured with real network latency; Z-Score > 3 indicates critical blind injection timing deviation.",
+        "no_samples": "No live samples yet — start a scan. Idle is not a zero waveform.",
+        "unavailable": "Clients API unavailable — missing client is not confirmed."
       },
       "zeroDayRadar": {
         "back_war_room": "← War Room",
@@ -7445,7 +7739,8 @@
         "synthesis_title": "Synthesis Terminal",
         "threats_progress": "{{current}}/{{total}} threats",
         "synthesis_empty": "Synthesizing AI Probe... and scan progress will appear here.",
-        "footer": "Probes are safe detection-only (no destructive exploits). Findings saved with source zero_day_radar."
+        "footer": "Probes are safe detection-only (no destructive exploits). Findings saved with source zero_day_radar.",
+        "feed_unavailable": "Threat-intel feed API unreachable — not an empty radar."
       },
       "attackSurfaceGraph": {
         "evidence_notice": "Graph nodes and edges from GET /api/risk/graph?client_id=… and attack-path snapshots from GET /api/attack-paths/:clientId — no pre-baked topology.",
@@ -7464,7 +7759,8 @@
         "ai_remediation": "AI Remediation",
         "remediation_takeover": "Remediation: Remove the dangling DNS record or reclaim the CNAME target (e.g. create the S3 bucket / GitHub Pages site) so an attacker cannot host content on your subdomain.",
         "remediation_exposed": "Remediation: Restrict bucket/container to private or enforce authentication. Remove public list/read ACLs and block public access.",
-        "remediation_secure": "No critical finding. Ensure CNAME target remains valid and storage is not exposed."
+        "remediation_secure": "No critical finding. Ensure CNAME target remains valid and storage is not exposed.",
+        "truncated": "Showing the first 500 nodes/edges — the live attack-surface graph is larger."
       },
       "semanticLogicEngine": {
         "evidence_notice": "OpenAPI-derived state machines and LLM reasoning logs from POST /api/command-center/scan (semantic_logic) — reasoning text is tenant-scoped live output.",
@@ -7477,7 +7773,9 @@
         "state_machine_title": "State Machine (API flow)",
         "no_openapi": "No OpenAPI/Swagger at target. Add a client and run a scan.",
         "reasoning_title": "LLM Reasoning",
-        "no_reasoning": "No reasoning log yet. Run a scan with Semantic Logic Engine enabled."
+        "no_reasoning": "No reasoning log yet. Run a scan with Semantic Logic Engine enabled.",
+        "graph_not_persisted": "Live fuzz log present; OpenAPI graph was not persisted on this run.",
+        "unavailable": "Semantic logic API unavailable — empty graph is not a missing OpenAPI."
       },
       "cicdThreatMatrix": {
         "evidence_notice": "Pipeline findings from POST /api/command-center/scan (cicd_pipeline) against a live GitHub repo URL — PoC snippets stored as findings, never auto-deployed.",
@@ -7500,7 +7798,9 @@
           "build": "Build",
           "test": "Test",
           "deploy": "Deploy"
-        }
+        },
+        "fetch_failed": "CI/CD findings API unavailable — this is not a clean pipeline.",
+        "unavailable": "Clients API unavailable — missing client is not confirmed."
       },
       "attackChainView": {
         "evidence_notice": "Kill-chain steps from GET /api/clients/:clientId/attack-chain — synthesized only from verified findings in your tenant.",
@@ -7511,7 +7811,8 @@
         "run_label": "Run #{{id}}",
         "no_chain": "No attack chain for this client yet.",
         "no_chain_hint": "Run a scan with findings to generate a chain.",
-        "step_fallback": "Step {{n}}"
+        "step_fallback": "Step {{n}}",
+        "unavailable": "Attack-chain API unavailable — empty is not a missing kill chain."
       }
     },
     "systemCore": {
@@ -7613,7 +7914,12 @@
       "gadget_chains_label": "Safe Gadget Chains (JSON) — framework ID → benign payload only",
       "gadget_chains_hint": "e.g. {\"CommonsCollections4\":\"<safe OOB DNS payload>\",\"Jackson\":\"<safe echo payload>\"}. No weaponized RCE.",
       "gadget_chains_placeholder": "{\"CommonsCollections4\":\"\",\"Jackson\":\"\"}",
-      "poe_footer": "Used by Exploit Synthesis & Memory Lab. Verified Exploitability Matrix appears in PDF report with cryptographic timestamp."
+      "poe_footer": "Used by Exploit Synthesis & Memory Lab. Verified Exploitability Matrix appears in PDF report with cryptographic timestamp.",
+      "auto_sync_inactive": "Auto-Sync Off",
+      "auto_sync_unavailable": "Auto-sync status unavailable",
+      "live_payloads_unknown": "Live payloads: —",
+      "ephemeral_payloads_unknown": "Ephemeral payloads: —",
+      "payloads_unavailable": "Payload intel API unavailable — empty library is not confirmed."
     },
     "ceo": {
       "integratedCommandDeck": {
@@ -7675,7 +7981,8 @@
         "warRoeProgress": "{{have}} of {{need}} distinct admin approvals (request #{{id}})",
         "warConfigFailed": "Failed to patch client_configs",
         "warUnleashDone": "Flags released. Worker overlay still needs compose unleash for CPU/RAM.",
-        "warQueued": "Queued {{n}} engines ({{intensity}}) job {{jobId}}"
+        "warQueued": "Queued {{n}} engines ({{intensity}}) job {{jobId}}",
+        "safeModeUnknown": "Safe mode unknown"
       },
       "warRoomDock": {
         "title": "War room · live jobs and event stream",
@@ -7885,7 +8192,8 @@
       "action_theme_light": "Switch to light theme",
       "action_signout": "Sign out",
       "triggerLabel": "Search",
-      "brand": "Weissman Global Search"
+      "brand": "Weissman Global Search",
+      "search_failed": "Search API unavailable — empty is not a confirmed miss."
     },
     "routeLoader": {
       "loading_module": "Loading module…",
@@ -7968,7 +8276,9 @@
     "frontendChunks": "Frontend JS chunks (Performance API)",
     "noJobs": "No pending or running async jobs for this tenant.",
     "controlParams": "Runtime control parameters",
-    "ceoTelemetry": "CEO ops telemetry (raw)"
+    "ceoTelemetry": "CEO ops telemetry (raw)",
+    "unavailable_title": "Nerve center unavailable",
+    "unavailable_body": "Live snapshot could not be confirmed. Idle zeros are not a running fleet."
   },
   "targetIntel": {
     "title": "Target Intelligence",
@@ -8082,6 +8392,10 @@
     "run": "Run Serverless Scan",
     "no_findings": "No findings yet — configure target and run scan.",
     "telemetry": "Live Telemetry",
-    "reference": "Attack Reference"
+    "reference": "Attack Reference",
+    "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet serverless trail."
+  },
+  "engineReality": {
+    "unavailable": "Engine capabilities API unavailable — 0 engines is not confirmed."
   }
 }

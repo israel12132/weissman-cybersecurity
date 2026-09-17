@@ -91,11 +91,18 @@ pub async fn try_acquire_isolate_lock(idempotency_key: &str) -> Result<SoarLockG
     let Ok(mut conn) = rl.client.get_multiplexed_async_connection().await else {
         return Err("isolate_host Redis unavailable — fail closed".into());
     };
-    if conn.exists(&done_key).await.ok().unwrap_or(false) {
+    let done: bool = match conn.exists(&done_key).await {
+        Ok(v) => v,
+        Err(_) => return Err("isolate_host Redis unavailable — fail closed".into()),
+    };
+    if done {
         return Err("isolate_host already completed (done marker)".into());
     }
     let token = uuid::Uuid::new_v4().to_string();
-    let acquired: bool = conn.set_nx(&lock_key, &token).await.ok().unwrap_or(false);
+    let acquired: bool = match conn.set_nx(&lock_key, &token).await {
+        Ok(v) => v,
+        Err(_) => return Err("isolate_host Redis unavailable — fail closed".into()),
+    };
     if !acquired {
         return Err("isolate_host already in-flight on another replica".into());
     }
@@ -107,30 +114,38 @@ pub async fn try_acquire_isolate_lock(idempotency_key: &str) -> Result<SoarLockG
     })
 }
 
-/// Acquire exclusive lock for this idempotency key. `None` = already in-flight or done marker.
-pub async fn try_acquire_lock(idempotency_key: &str) -> Option<SoarLockGuard> {
+/// Acquire exclusive lock for this idempotency key.
+/// `Ok(None)` = already in-flight or done marker. `Err` = Redis configured but unreadable.
+pub async fn try_acquire_lock(idempotency_key: &str) -> Result<Option<SoarLockGuard>, String> {
     let Some(rl) = shared() else {
-        return Some(SoarLockGuard::Local);
+        return Ok(Some(SoarLockGuard::Local));
     };
     let lock_key = format!("{LOCK_PREFIX}{idempotency_key}");
     let done_key = format!("{DONE_PREFIX}{idempotency_key}");
     let Ok(mut conn) = rl.client.get_multiplexed_async_connection().await else {
-        return Some(SoarLockGuard::Local);
+        return Err("store_down".to_string());
     };
-    if conn.exists(&done_key).await.ok().unwrap_or(false) {
-        return None;
+    let done: bool = match conn.exists(&done_key).await {
+        Ok(v) => v,
+        Err(_) => return Err("store_down".to_string()),
+    };
+    if done {
+        return Ok(None);
     }
     let token = uuid::Uuid::new_v4().to_string();
-    let acquired: bool = conn.set_nx(&lock_key, &token).await.ok().unwrap_or(false);
+    let acquired: bool = match conn.set_nx(&lock_key, &token).await {
+        Ok(v) => v,
+        Err(_) => return Err("store_down".to_string()),
+    };
     if !acquired {
-        return None;
+        return Ok(None);
     }
     let _: Result<(), _> = conn.expire(&lock_key, DEFAULT_LOCK_SECS as i64).await;
-    Some(SoarLockGuard::Redis {
+    Ok(Some(SoarLockGuard::Redis {
         key: lock_key,
         token,
         client: rl.client.clone(),
-    })
+    }))
 }
 
 /// Mark idempotency key completed — survives lock release for cooldown window.

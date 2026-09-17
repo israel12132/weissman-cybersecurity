@@ -159,6 +159,7 @@ export default function AuditLog() {
   // via GET /api/audit/export. The packet carries the SHA-256 chain-integrity
   // flag so an auditor can verify no entry was altered or removed.
   const exportFull = useCallback(async () => {
+    if (error) return
     setExportingFull(true)
     try {
       const d = await apiFetch('/api/audit/export?format=json&limit=50000')
@@ -180,7 +181,7 @@ export default function AuditLog() {
     } finally {
       setExportingFull(false)
     }
-  }, [t, toast])
+  }, [error, t, toast])
 
   // Tamper-evidence verifier — resolve a report's audit_root_hash against the
   // live ledger via GET /api/verify-audit/:hash. Proves a report artifact
@@ -240,6 +241,11 @@ export default function AuditLog() {
   }
 
   const hasFilters = actionFilter || actor.trim() || dateFrom || dateTo
+
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    exportCsv(filteredEntries)
+  }, [error, filteredEntries])
 
   const pageKpi = useMemo(() => {
     const denied = filteredEntries.filter((e) => {
@@ -336,6 +342,7 @@ export default function AuditLog() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {!error && (
             <Button variant="unstyled"
               type="button"
               onClick={exportFull}
@@ -346,11 +353,12 @@ export default function AuditLog() {
               <FileJson className={`w-4 h-4 ${exportingFull ? 'animate-pulse' : ''}`} />
               {exportingFull ? t('audit.export_full_running') : t('audit.export_full')}
             </Button>
+            )}
             <ShellScanActions
               onRefresh={load}
-              onExport={() => exportCsv(filteredEntries)}
+              onExport={error ? undefined : handleExportCsv}
               refreshLoading={loading}
-              exportDisabled={filteredEntries.length === 0}
+              exportDisabled={!!error || filteredEntries.length === 0}
             />
           </div>
         </div>
@@ -361,17 +369,17 @@ export default function AuditLog() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <ExecutiveWidget
             label={t('audit.kpi_shown')}
-            value={loading ? '—' : pageKpi.shown.toLocaleString()}
+            value={loading || error ? '—' : pageKpi.shown.toLocaleString()}
             accent="#22d3ee"
           />
           <ExecutiveWidget
             label={t('audit.kpi_denied')}
-            value={loading ? '—' : pageKpi.denied.toLocaleString()}
+            value={loading || error ? '—' : pageKpi.denied.toLocaleString()}
             accent="#f87171"
           />
           <ExecutiveWidget
             label={t('audit.kpi_total')}
-            value={loading ? '—' : total.toLocaleString()}
+            value={loading || error ? '—' : total.toLocaleString()}
             accent="#a78bfa"
             className="col-span-2 lg:col-span-1"
           />
@@ -521,10 +529,10 @@ export default function AuditLog() {
           <Search className="h-3.5 w-3.5" />
           <span>
             {t('audit.summary', {
-              shown: filteredEntries.length,
-              total,
-              page: currentPage,
-              pages: totalPages,
+              shown: error ? '—' : filteredEntries.length,
+              total: error ? '—' : total,
+              page: error ? '—' : currentPage,
+              pages: error ? '—' : totalPages,
             })}
           </span>
         </div>
@@ -532,11 +540,11 @@ export default function AuditLog() {
 
       <section className="max-w-7xl mx-auto space-y-3">
         {error && (
-          <div className="text-sm text-rose-300 font-mono">{error}</div>
+          <div data-testid="audit-log-unavailable" className="text-sm text-rose-300 font-mono">{error}</div>
         )}
         <DataTable
           columns={columns}
-          data={filteredEntries}
+          data={error ? [] : filteredEntries}
           loading={loading}
           hidePagination
           densityToggle
@@ -546,10 +554,12 @@ export default function AuditLog() {
           getRowCanExpand={(row) => Boolean(row.original.details)}
           expandLabel={t('audit.expand_payload')}
           collapseLabel={t('audit.collapse_payload')}
-          emptyState={{ icon: 'list', title: t('audit.empty_title'), body: t('audit.empty_body') }}
+          emptyState={error
+            ? { icon: 'alert', title: t('audit.unavailable_title'), body: t('audit.unavailable_body') }
+            : { icon: 'list', title: t('audit.empty_title'), body: t('audit.empty_body') }}
         />
 
-        {total > 0 && (
+        {!error && total > 0 && (
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-4 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)]">
             <div className="flex items-center gap-3 text-[11px] font-mono text-[var(--text-muted)]">
               <span>{t('audit.rows_per_page')}</span>

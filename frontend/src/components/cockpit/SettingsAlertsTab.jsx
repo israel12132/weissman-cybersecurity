@@ -56,6 +56,7 @@ function SettingsAlertsTabInner() {
   const { t } = useTranslation()
   const [webhookUrl, setWebhookUrl] = useState('')
   const [safeMode, setSafeMode] = useState(false)
+  const [settingsUnavailable, setSettingsUnavailable] = useState(false)
   const [destructiveToken, setDestructiveToken] = useState('')
   const [msg, setMsg] = useState(null)
   const [backupMsg, setBackupMsg] = useState(null)
@@ -65,11 +66,19 @@ function SettingsAlertsTabInner() {
     setLoading(true)
     apiFetch('/api/enterprise/settings')
       .then((d) => {
-        if (d == null || typeof d !== 'object') return
+        if (d == null || typeof d !== 'object' || d.ok === false || d.unavailable) {
+          throw new Error(d?.detail || t(`${NS}.loadFailed`))
+        }
+        if (typeof d.global_safe_mode !== 'boolean') {
+          throw new Error(t(`${NS}.loadFailed`))
+        }
+        setSettingsUnavailable(false)
         setWebhookUrl(typeof d.alert_webhook_url === 'string' ? d.alert_webhook_url : '')
-        setSafeMode(!!d.global_safe_mode)
+        setSafeMode(d.global_safe_mode === true)
       })
-      .catch(() => setMsg({ type: 'err', text: t(`${NS}.loadFailed`) }))
+      .catch(() => {
+        setSettingsUnavailable(true)
+      })
       .finally(() => setLoading(false))
   }
 
@@ -121,8 +130,15 @@ function SettingsAlertsTabInner() {
         {t(`${NS}.subtitle`)}
       </p>
       {loading && <p className="text-sm text-white/40">{t(`${NS}.loading`)}</p>}
+      {!loading && settingsUnavailable && (
+        <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400" role="alert" data-testid="settings-alerts-unavailable">
+          {t(`${NS}.settings_unavailable`)}
+        </div>
+      )}
       {!loading && (
         <div className="space-y-6 rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md p-6">
+          {!settingsUnavailable && (
+            <>
           <label className="block">
             <span className="text-xs uppercase tracking-widest text-white/50 block mb-2">
               {t(`${NS}.webhookLabel`)}
@@ -147,6 +163,8 @@ function SettingsAlertsTabInner() {
             />
             <span className="text-sm text-white/80">{t(`${NS}.safeModeLabel`)}</span>
           </label>
+            </>
+          )}
           <label className="block">
             <span className="text-xs uppercase tracking-widest text-amber-200/80 block mb-2">
               {t(`${NS}.destructiveLabel`)}
@@ -170,14 +188,16 @@ function SettingsAlertsTabInner() {
             <p id="settings-message" className={msg.type === 'ok' ? 'text-emerald-400 text-sm' : 'text-red-400 text-sm'}>{msg.text}</p>
           )}
           <div className="flex flex-wrap gap-3">
+            {!settingsUnavailable && (
             <Button variant="unstyled"
               id="settings-save-btn"
               type="button"
               onClick={save}
-              className="px-4 py-2 rounded-xl text-sm font-medium border border-[#22d3ee]/50 bg-[#22d3ee]/10 text-[#22d3ee] hover:bg-[#22d3ee]/20"
+              className="px-4 py-2 rounded-xl text-sm font-medium border border-[#22d3ee]/50 bg-[#22d3ee]/10 text-[#22d3ee] hover:bg-[#22d3ee]/20 disabled:opacity-40"
             >
               {t(`${NS}.saveSettings`)}
             </Button>
+            )}
             <Button variant="unstyled"
               id="settings-backup-btn"
               type="button"

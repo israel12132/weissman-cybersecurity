@@ -81,25 +81,26 @@ fn norm_level(s: &str) -> String {
 
 /// Whether the autonomous engine is enabled for this tenant (system config
 /// `self_improve_enabled` = "1"/"true"/"yes"). Defaults to disabled (opt-in).
-pub async fn is_enabled(pool: &PgPool, tenant_id: i64) -> bool {
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return false;
-    };
+pub async fn is_enabled(pool: &PgPool, tenant_id: i64) -> Result<bool, String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let val: Option<String> = sqlx::query_scalar(
         "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'self_improve_enabled'",
     )
     .bind(tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
-    matches!(
+    .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
+    Ok(matches!(
         val.as_deref()
             .map(|s| s.trim().to_ascii_lowercase())
             .as_deref(),
         Some("1") | Some("true") | Some("yes") | Some("on")
-    )
+    ))
 }
 
 /// Set the live enable toggle (system config `self_improve_enabled`). Takes effect on
@@ -130,41 +131,47 @@ pub fn configured_interval_secs() -> u64 {
 
 /// Status summary for the Command Center console: toggle state, interval, queue counts,
 /// and the last cycle time.
-pub async fn status_summary(pool: &PgPool, tenant_id: i64) -> Value {
-    let enabled = is_enabled(pool, tenant_id).await;
+pub async fn status_summary(pool: &PgPool, tenant_id: i64) -> Result<Value, sqlx::Error> {
     let interval = configured_interval_secs();
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
+    let val: Option<String> = sqlx::query_scalar(
+        "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'self_improve_enabled'",
+    )
+    .bind(tenant_id)
+    .fetch_optional(&mut *tx)
+    .await?;
+    let enabled = matches!(
+        val.as_deref()
+            .map(|s| s.trim().to_ascii_lowercase())
+            .as_deref(),
+        Some("1") | Some("true") | Some("yes") | Some("on")
+    );
     let mut pending = 0i64;
     let mut approved = 0i64;
     let mut rejected = 0i64;
     let mut applied = 0i64;
-    let mut last_cycle_at: Option<chrono::DateTime<chrono::Utc>> = None;
-    if let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await {
-        for (status, slot) in [
-            ("PENDING_APPROVAL", &mut pending),
-            ("APPROVED", &mut approved),
-            ("REJECTED", &mut rejected),
-            ("APPLIED", &mut applied),
-        ] {
-            *slot = sqlx::query_scalar::<_, i64>(
-                "SELECT COUNT(*)::bigint FROM system_improvement_queue WHERE tenant_id = $1 AND status = $2",
-            )
-            .bind(tenant_id)
-            .bind(status)
-            .fetch_one(&mut *tx)
-            .await
-            .unwrap_or(0);
-        }
-        last_cycle_at = sqlx::query_scalar::<_, Option<chrono::DateTime<chrono::Utc>>>(
-            "SELECT MAX(proposed_at) FROM system_improvement_queue WHERE tenant_id = $1",
+    for (status, slot) in [
+        ("PENDING_APPROVAL", &mut pending),
+        ("APPROVED", &mut approved),
+        ("REJECTED", &mut rejected),
+        ("APPLIED", &mut applied),
+    ] {
+        *slot = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*)::bigint FROM system_improvement_queue WHERE tenant_id = $1 AND status = $2",
         )
         .bind(tenant_id)
+        .bind(status)
         .fetch_one(&mut *tx)
-        .await
-        .ok()
-        .flatten();
-        let _ = tx.commit().await;
+        .await?;
     }
-    json!({
+    let last_cycle_at: Option<chrono::DateTime<chrono::Utc>> = sqlx::query_scalar(
+        "SELECT MAX(proposed_at) FROM system_improvement_queue WHERE tenant_id = $1",
+    )
+    .bind(tenant_id)
+    .fetch_one(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(json!({
         "enabled": enabled,
         "interval_secs": interval,
         "counts": {
@@ -174,7 +181,7 @@ pub async fn status_summary(pool: &PgPool, tenant_id: i64) -> Value {
             "applied": applied,
         },
         "last_cycle_at": last_cycle_at,
-    })
+    }))
 }
 
 // ─── Queue operations (mirror council_hitl) ─────────────────────────────────────
@@ -413,11 +420,9 @@ pub async fn reject(
 // ─── Analysis cycle ─────────────────────────────────────────────────────────────
 
 /// Gather deterministic, always-available signals for one tenant.
-async fn gather_signals(pool: &PgPool, tenant_id: i64) -> Vec<(String, i64)> {
+async fn gather_signals(pool: &PgPool, tenant_id: i64) -> Result<Vec<(String, i64)>, sqlx::Error> {
     let mut sig = Vec::new();
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return sig;
-    };
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
 
     let open_critical: i64 = sqlx::query_scalar(
         "SELECT COUNT(*)::bigint FROM vulnerabilities WHERE tenant_id = $1 \
@@ -425,8 +430,7 @@ async fn gather_signals(pool: &PgPool, tenant_id: i64) -> Vec<(String, i64)> {
     )
     .bind(tenant_id)
     .fetch_one(&mut *tx)
-    .await
-    .unwrap_or(0);
+    .await?;
     sig.push(("open_critical_high".to_string(), open_critical));
 
     let dead_jobs: i64 = sqlx::query_scalar(
@@ -434,8 +438,7 @@ async fn gather_signals(pool: &PgPool, tenant_id: i64) -> Vec<(String, i64)> {
     )
     .bind(tenant_id)
     .fetch_one(&mut *tx)
-    .await
-    .unwrap_or(0);
+    .await?;
     sig.push(("dead_jobs".to_string(), dead_jobs));
 
     let false_positives: i64 = sqlx::query_scalar(
@@ -443,12 +446,11 @@ async fn gather_signals(pool: &PgPool, tenant_id: i64) -> Vec<(String, i64)> {
     )
     .bind(tenant_id)
     .fetch_one(&mut *tx)
-    .await
-    .unwrap_or(0);
+    .await?;
     sig.push(("false_positives".to_string(), false_positives));
 
-    let _ = tx.commit().await;
-    sig
+    tx.commit().await?;
+    Ok(sig)
 }
 
 /// Deterministic proposals derived purely from live signals (no LLM needed).
@@ -500,7 +502,9 @@ pub async fn run_cycle(
     tenant_id: i64,
 ) -> Result<u64, String> {
     let cycle_id = Uuid::new_v4();
-    let signals = gather_signals(pool, tenant_id).await;
+    let signals = gather_signals(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let mut proposals = deterministic_proposals(&signals);
 
     // LLM augmentation (optional — cycle still produces deterministic proposals without it).
@@ -653,8 +657,18 @@ pub fn spawn_self_improve_loop(app_pool: Arc<PgPool>, telemetry: Arc<Sender<Stri
                 }
             };
             for tenant_id in tenants {
-                if !is_enabled(app_pool.as_ref(), tenant_id).await {
-                    continue;
+                match is_enabled(app_pool.as_ref(), tenant_id).await {
+                    Ok(true) => {}
+                    Ok(false) => continue,
+                    Err(e) => {
+                        tracing::warn!(
+                            target: "self_improve",
+                            tenant_id,
+                            error = %e,
+                            "enabled toggle store_down"
+                        );
+                        continue;
+                    }
                 }
                 if let Err(e) = run_cycle(app_pool.as_ref(), telemetry.as_ref(), tenant_id).await {
                     tracing::warn!(target: "self_improve", tenant_id, error = %e, "cycle failed");

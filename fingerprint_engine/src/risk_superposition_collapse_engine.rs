@@ -273,7 +273,7 @@ async fn load_clusters(
 ) -> Result<Vec<ClusterEvidence>, String> {
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
-        .map_err(|e| format!("tenant tx: {e}"))?;
+        .map_err(|_| "store_down".to_string())?;
 
     let rows = sqlx::query(
         r#"SELECT c.id, c.target, c.title, c.cwe, c.vuln_signature,
@@ -297,9 +297,11 @@ async fn load_clusters(
     .bind(limit)
     .fetch_all(&mut *tx)
     .await
-    .map_err(|e| format!("load clusters: {e}"))?;
+    .map_err(|_| "store_down".to_string())?;
 
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return Err("store_down".into());
+    }
 
     Ok(rows
         .into_iter()
@@ -329,7 +331,7 @@ async fn load_raw_findings(
 ) -> Result<Vec<Value>, String> {
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
-        .map_err(|e| format!("tenant tx: {e}"))?;
+        .map_err(|_| "store_down".to_string())?;
 
     let rows = sqlx::query(
         r#"SELECT COALESCE(v.raw_data, '{}'::jsonb) AS rd,
@@ -352,9 +354,11 @@ async fn load_raw_findings(
     .bind(limit)
     .fetch_all(&mut *tx)
     .await
-    .map_err(|e| format!("load findings: {e}"))?;
+    .map_err(|_| "store_down".to_string())?;
 
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return Err("store_down".into());
+    }
 
     let mut out = Vec::with_capacity(rows.len());
     for r in rows {
@@ -820,16 +824,18 @@ pub async fn run_risk_superposition_collapse_result(
 
     let clusters = match load_clusters(pool, tenant_id, client_id, cfg.max_clusters).await {
         Ok(c) => c,
-        Err(e) => return EngineResult::error(&format!("cluster load failed: {e}")),
+        Err(_) => return EngineResult::error("store_down"),
     };
 
     if clusters.is_empty() {
         return empty_ok(ENGINE_ID, target);
     }
 
-    let raw_findings = load_raw_findings(pool, tenant_id, client_id, cfg.max_findings)
-        .await
-        .unwrap_or_default();
+    let raw_findings = match load_raw_findings(pool, tenant_id, client_id, cfg.max_findings).await
+    {
+        Ok(v) => v,
+        Err(_) => return EngineResult::error("store_down"),
+    };
 
     let fact_map = fact_belief_map(&clusters, &raw_findings, &cfg);
     let initial_facts = build_initial_facts(&fact_map, &cfg, &clusters);

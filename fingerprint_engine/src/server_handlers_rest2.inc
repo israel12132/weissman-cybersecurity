@@ -5,9 +5,15 @@ async fn api_client_findings_all(
 ) -> Response {
     let cid = id;
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({ "findings": [] }))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::findings_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT id, finding_id, title, severity, source, COALESCE(description,''), COALESCE(poc_exploit,''),
                   COALESCE(poc_sealed, false), COALESCE(poc_commitment_sha256,''),
                   COALESCE(raw_data, '{}'::jsonb) AS raw_data
@@ -16,8 +22,27 @@ async fn api_client_findings_all(
     .bind(cid)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let _ = tx.commit().await;
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::findings_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::findings_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     let findings: Vec<Value> = rows
         .into_iter()
         .map(|r| {
@@ -65,14 +90,33 @@ async fn api_client_export_csv(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         "SELECT id, title, severity, source, status, discovered_at FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC",
     )
     .bind(id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let _ = tx.commit().await;
+    {
+        Ok(r) => r,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::findings_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::findings_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     let mut csv = String::from("ID,Title,Severity,Source,Status,Discovered\n");
     for r in rows {
         let idv = r.try_get::<i64, _>("id").unwrap_or(0);
@@ -107,15 +151,15 @@ async fn get_crypto_proof_for_client_tx(
     tenant_id: i64,
     client_id: i64,
 ) -> Result<Option<crate::pdf_report::CryptoProof>, String> {
-    let enabled: String = sqlx::query_scalar(
+    let enabled: Option<String> = sqlx::query_scalar(
         "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'enable_rfc3161_signing'",
     )
     .bind(tenant_id)
     .fetch_optional(&mut **tx)
     .await
-    .ok()
-    .flatten()
-    .unwrap_or_else(|| "true".to_string());
+    .map_err(|e| format!("store_down: rfc3161 config: {e}"))?;
+    // Confirmed missing key after a successful read: product default is signing ON.
+    let enabled = enabled.unwrap_or_else(|| "true".to_string());
     if enabled.to_lowercase() != "true" && enabled != "1" {
         return Ok(None);
     }
@@ -125,8 +169,7 @@ async fn get_crypto_proof_for_client_tx(
     .bind(client_id)
     .fetch_optional(&mut **tx)
     .await
-    .ok()
-    .flatten();
+    .map_err(|e| format!("store_down: audit root: {e}"))?;
     let hash = match audit_root_hash {
         Some(h) => h,
         None => return Ok(None),
@@ -143,36 +186,78 @@ async fn api_client_report_pdf(
     Path(id): Path<i64>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::report_pdf_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
     let client_name: String = match sqlx::query_scalar::<_, String>("SELECT name FROM clients WHERE id = $1")
         .bind(id)
         .fetch_optional(&mut *tx)
         .await
-        .ok()
-        .flatten()
     {
-        Some(n) => n,
-        None => {
+        Ok(Some(n)) => n,
+        Ok(None) => {
             let _ = tx.rollback().await;
             return (StatusCode::NOT_FOUND, Json(json!({"error": "client not found"}))).into_response();
         }
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::client_lookup_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         "SELECT id, title, severity, source, COALESCE(description,''), COALESCE(poc_exploit,'') FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC",
     )
     .bind(id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::report_pdf_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
     let proof = match get_crypto_proof_for_client_tx(&mut tx, auth.tenant_id, id).await {
         Ok(p) => p,
+        Err(e) if e.starts_with("store_down:") => {
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::report_pdf_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
         Err(e) => {
             let _ = tx.rollback().await;
             return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e}))).into_response();
         }
     };
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::report_pdf_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    };
     let findings: Vec<(i64, String, String, String, String, String)> = rows
         .into_iter()
         .map(|r| {
@@ -217,11 +302,25 @@ async fn api_client_report_crypto_proof(
     Path(id): Path<i64>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::report_pdf_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
     match get_crypto_proof_for_client_tx(&mut tx, auth.tenant_id, id).await {
         Ok(Some((audit_root_hash, qr_data_url, verification_url))) => {
-            let _ = tx.commit().await;
+            if tx.commit().await.is_err() {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::report_pdf_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
             (
                 StatusCode::OK,
                 Json(json!({
@@ -233,7 +332,15 @@ async fn api_client_report_crypto_proof(
                 .into_response()
         }
         Ok(None) => {
-            let _ = tx.commit().await;
+            if tx.commit().await.is_err() {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::report_pdf_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
             (
                 StatusCode::OK,
                 Json(json!({
@@ -242,6 +349,16 @@ async fn api_client_report_crypto_proof(
                     "verification_url": null,
                     "message": "No sealed run for this client yet."
                 })),
+            )
+                .into_response()
+        }
+        Err(e) if e.starts_with("store_down:") => {
+            let _ = tx.rollback().await;
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::report_pdf_unavailable_json(
+                    "database unavailable",
+                )),
             )
                 .into_response()
         }
@@ -262,15 +379,39 @@ async fn api_verify_audit(
         return (StatusCode::BAD_REQUEST, Json(json!({"verified": false, "error": "hash required"}))).into_response();
     }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"verified": false, "error": "DB"}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::audit_verify_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let row = sqlx::query("SELECT id, created_at, summary FROM report_runs WHERE audit_root_hash = $1 LIMIT 1")
+    let row = match sqlx::query("SELECT id, created_at, summary FROM report_runs WHERE audit_root_hash = $1 LIMIT 1")
         .bind(hash)
         .fetch_optional(&mut *tx)
         .await
-        .ok()
-        .flatten();
-    let _ = tx.commit().await;
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::audit_verify_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::audit_verify_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     match row {
         Some(r) => {
             let run_id: i64 = r.try_get("id").unwrap_or(0);
@@ -463,12 +604,18 @@ async fn api_findings_update_status(
         }
     }
 
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::findings_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
 
-    // Closed-loop remediation verification: when an analyst marks a finding FIXED,
-    // re-run the same engine against the same target to prove the vector is actually
-    // closed (→ VERIFIED_FIXED) or detect a regression (→ REOPENED).
-    if new_status == "FIXED"
+    if matches!(&affected, Ok(r) if r.rows_affected() > 0)
+        && new_status == "FIXED"
         && !target_url.is_empty()
         && weissman_core::models::engine::is_production_engine_id(&engine)
     {
@@ -488,6 +635,13 @@ async fn api_findings_update_status(
         .await
         {
             tracing::warn!(target: "remediation_verify", error = %e, "enqueue verify job failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::findings_unavailable_json(
+                    "store_down",
+                )),
+            )
+                .into_response();
         }
     }
 
@@ -594,6 +748,13 @@ async fn api_findings_verify_live(
             Json(json!({"ok": false, "detail": e})),
         )
             .into_response(),
+        Ok(Err(e)) if e == crate::finding_live_verify::STORE_DOWN => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::findings_verify_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response(),
         Ok(Err(e)) => (
             StatusCode::BAD_REQUEST,
             Json(json!({"ok": false, "detail": e})),
@@ -663,7 +824,7 @@ async fn api_findings_export_csv(
     // Bounded to avoid pinning a pool connection for the full statement_timeout and materialising
     // the entire tenant's findings (plus the ~2x CSV string) in memory — an unauthenticated-cost
     // DoS from any viewer. 50k mirrors the audit export cap.
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         "SELECT id, finding_id, title, severity, source, status, client_id::text, \
          COALESCE(description,'') AS description, discovered_at, \
          COALESCE(poc_sealed, false) AS poc_sealed \
@@ -671,8 +832,27 @@ async fn api_findings_export_csv(
     )
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let _ = tx.commit().await;
+    {
+        Ok(r) => r,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::findings_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::findings_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     let mut csv = String::from("ID,Finding ID,Title,Severity,Source,Status,Client,Verified,Discovered,Description\n");
     for r in rows {
         let raw_id = r.try_get::<i64, _>("id").unwrap_or(0);

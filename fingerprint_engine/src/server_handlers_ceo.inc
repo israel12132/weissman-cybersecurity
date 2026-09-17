@@ -36,13 +36,46 @@ fn ceo_default_suspended_limit() -> i64 {
     50
 }
 
+fn ceo_write_err(e: String) -> Response {
+    if e == "store_down" || e == "database unavailable" {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::ceo_write_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
+    if e == "vault row not found" || e == "buffer row not found" {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "ok": false, "detail": e })),
+        )
+            .into_response();
+    }
+    (
+        StatusCode::BAD_REQUEST,
+        Json(json!({ "ok": false, "detail": e })),
+    )
+        .into_response()
+}
+
 async fn api_ceo_strategy_get(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
-    let j =
-        crate::ceo::strategy::get_ceo_strategy_json(state.app_pool.as_ref(), auth.tenant_id).await;
-    (StatusCode::OK, Json(j)).into_response()
+    match crate::ceo::strategy::get_ceo_strategy_json(state.app_pool.as_ref(), auth.tenant_id)
+        .await
+    {
+        Ok(j) => (StatusCode::OK, Json(j)).into_response(),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::ceo_strategy_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response(),
+    }
 }
 
 async fn api_ceo_strategy_patch(
@@ -58,18 +91,23 @@ async fn api_ceo_strategy_patch(
     .await
     {
         Ok(()) => {
-            let j = crate::ceo::strategy::get_ceo_strategy_json(
+            match crate::ceo::strategy::get_ceo_strategy_json(
                 state.app_pool.as_ref(),
                 auth.tenant_id,
             )
-            .await;
-            (StatusCode::OK, Json(json!({ "ok": true, "strategy": j }))).into_response()
+            .await
+            {
+                Ok(j) => (StatusCode::OK, Json(json!({ "ok": true, "strategy": j }))).into_response(),
+                Err(_) => (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::ceo_strategy_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response(),
+            }
         }
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "ok": false, "detail": e })),
-        )
-            .into_response(),
+        Err(e) => ceo_write_err(e),
     }
 }
 
@@ -96,9 +134,11 @@ async fn api_ceo_hpc_policy_get(
 ) -> Response {
     match crate::ceo::hpc::get_hpc_policy(state.app_pool.as_ref(), auth.tenant_id).await {
         Ok(v) => (StatusCode::OK, Json(v)).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "ok": false, "detail": scrub_internal_error(&e) })),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::hpc_policy_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response(),
     }
@@ -111,11 +151,7 @@ async fn api_ceo_hpc_policy_put(
 ) -> Response {
     match crate::ceo::hpc::put_hpc_policy(state.app_pool.as_ref(), auth.tenant_id, &body).await {
         Ok(row) => (StatusCode::OK, Json(row)).into_response(),
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "ok": false, "detail": e })),
-        )
-            .into_response(),
+        Err(e) => ceo_write_err(e),
     }
 }
 
@@ -183,11 +219,7 @@ async fn api_ceo_vault_match(
 ) -> Response {
     match crate::ceo::vault::match_vault_row(state.app_pool.as_ref(), auth.tenant_id, id).await {
         Ok(v) => (StatusCode::OK, Json(v)).into_response(),
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "ok": false, "detail": e })),
-        )
-            .into_response(),
+        Err(e) => ceo_write_err(e),
     }
 }
 
@@ -343,11 +375,7 @@ async fn api_ceo_sovereign_trigger_post(
         Ok(job_id) => {
             (StatusCode::ACCEPTED, Json(json!({ "ok": true, "job_id": job_id }))).into_response()
         }
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "ok": false, "detail": e })),
-        )
-            .into_response(),
+        Err(e) => ceo_write_err(e),
     }
 }
 
@@ -373,11 +401,7 @@ async fn api_ceo_suspended_resume(
         Ok(job_id) => {
             (StatusCode::ACCEPTED, Json(json!({ "ok": true, "job_id": job_id }))).into_response()
         }
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "ok": false, "detail": e })),
-        )
-            .into_response(),
+        Err(e) => ceo_write_err(e),
     }
 }
 
@@ -447,9 +471,11 @@ async fn api_ceo_global_safe_patch(
             })),
         )
             .into_response(),
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "ok": false, "detail": e })),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::enterprise_settings_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response(),
     }
@@ -462,10 +488,12 @@ async fn api_ceo_god_mode_snapshot_get(
     let policy_tid = match crate::ceo::default_tenant_id(state.auth_pool.as_ref()).await {
         Ok(Some(id)) => id,
         Ok(None) => auth.tenant_id,
-        Err(e) => {
+        Err(_) => {
             return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "ok": false, "detail": scrub_internal_error(&e) })),
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::god_mode_unavailable_json(
+                    "database unavailable",
+                )),
             )
                 .into_response();
         }
@@ -478,9 +506,11 @@ async fn api_ceo_god_mode_snapshot_get(
     .await
     {
         Ok(j) => (StatusCode::OK, Json(j)).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "ok": false, "detail": scrub_internal_error(&e) })),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::god_mode_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response(),
     }
@@ -513,8 +543,22 @@ async fn api_ceo_god_mode_scan_interval_patch(
     .await
     {
         Ok(()) => {
-            let v =
-                crate::ceo::god_mode::default_scan_interval_secs_get(state.app_pool.as_ref()).await;
+            let v = match crate::ceo::god_mode::default_scan_interval_secs_get(
+                state.app_pool.as_ref(),
+            )
+            .await
+            {
+                Ok(v) => v,
+                Err(_) => {
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(crate::http_unavailable::ceo_write_unavailable_json(
+                            "database unavailable",
+                        )),
+                    )
+                        .into_response();
+                }
+            };
             (
                 StatusCode::OK,
                 Json(json!({
@@ -524,11 +568,7 @@ async fn api_ceo_god_mode_scan_interval_patch(
             )
                 .into_response()
         }
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "ok": false, "detail": e })),
-        )
-            .into_response(),
+        Err(e) => ceo_write_err(e),
     }
 }
 
@@ -619,11 +659,7 @@ async fn api_ceo_tenant_engines_put(
             Json(crate::ceo::tenant_engines::active_engines_json_value(&engines)),
         )
             .into_response(),
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "ok": false, "detail": e })),
-        )
-            .into_response(),
+        Err(e) => ceo_write_err(e),
     }
 }
 
@@ -640,12 +676,11 @@ async fn api_ceo_supreme_nerve_center_get(
     .await
     {
         Ok(j) => (StatusCode::OK, Json(j)).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({
-                "ok": false,
-                "detail": scrub_internal_error(&e),
-            })),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::nerve_center_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response(),
     }

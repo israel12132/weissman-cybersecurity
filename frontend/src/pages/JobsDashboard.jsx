@@ -85,6 +85,9 @@ export default function JobsDashboard() {
         data = await apiFetch('/api/ceo/jobs/live')
       }
 
+      if (data && typeof data === 'object' && !Array.isArray(data) && (data.ok === false || data.unavailable === true)) {
+        throw Object.assign(new Error(data.detail || 'jobs unavailable'), { unavailable: true })
+      }
       const jobsList = Array.isArray(data) ? data : (data.jobs || data.items || [])
       setJobs(jobsList)
       setTotal(data.total ?? jobsList.length)
@@ -92,7 +95,9 @@ export default function JobsDashboard() {
       setLastUpdated(new Date())
       hasLoadedRef.current = true
     } catch (err) {
-      if (hasLoadedRef.current) return
+      // Leftover leftover-jobs stay in state. Still setError so page-header
+      // Export CSV unmounts (`onExport={error ? undefined}`). EmptyState dump
+      // stays first-load only (`error && !hasLoadedRef.current`).
       if (err?.response) {
         const text = await err.response.text().catch(() => 'Failed to load jobs')
         setError(t('pages.jobsDashboard.load_failed', { detail: text }))
@@ -149,6 +154,11 @@ export default function JobsDashboard() {
     csvPrefix: 'weissman-jobs',
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
+
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    exportJobsCsv(filteredJobs, t)
+  }, [error, filteredJobs, t])
 
   function getStatusBadgeClass(status) {
     const statusLower = normalizeJobStatus(status)
@@ -264,7 +274,7 @@ export default function JobsDashboard() {
           </label>
           <ShellScanActions
             onRefresh={() => { setLoading(true); loadJobs() }}
-            onExport={() => exportJobsCsv(filteredJobs, t)}
+            onExport={error ? undefined : handleExportCsv}
             refreshLoading={loading}
             exportDisabled={!filteredFindings.length}
           />
@@ -283,8 +293,8 @@ export default function JobsDashboard() {
             })}
             {' · '}
             {total === 1
-              ? t('pages.jobsDashboard.jobs_tracked', { count: total })
-              : t('pages.jobsDashboard.jobs_tracked_plural', { count: total })}
+              ? t('pages.jobsDashboard.jobs_tracked', { count: error ? '—' : total })
+              : t('pages.jobsDashboard.jobs_tracked_plural', { count: error ? '—' : total })}
           </p>
         )}
 
@@ -299,6 +309,14 @@ export default function JobsDashboard() {
             <SkeletonWidgetGrid count={5} />
             <SkeletonTable rows={8} cols={6} />
           </>
+        ) : error && !hasLoadedRef.current ? (
+          <div data-testid="jobs-dashboard-unavailable">
+            <EmptyState
+              icon="alert"
+              title={t('pages.jobsDashboard.unavailable_title')}
+              body={t('pages.jobsDashboard.unavailable_body')}
+            />
+          </div>
         ) : (
           <>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -314,7 +332,7 @@ export default function JobsDashboard() {
                   }`}
                 >
                   <div className={`text-2xl font-bold ${getStatusBadgeClass(status).split(' ')[0]}`}>
-                    {statusCounts[status]}
+                    {error ? '—' : statusCounts[status]}
                   </div>
                   <div className="text-[11px] text-[var(--text-tertiary)] capitalize mt-1">
                     {t(`pages.jobsDashboard.status_${status}`, { defaultValue: status })}

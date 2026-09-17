@@ -12,7 +12,7 @@ async fn api_market_readiness(
     Extension(auth): Extension<AuthContext>,
     Query(q): Query<std::collections::HashMap<String, String>>,
 ) -> Response {
-    let mut body = crate::elite_hardening::moat::market_readiness();
+    let mut body = crate::elite_hardening::moat::snapshot();
     let client_id = q.get("client_id").and_then(|s| s.parse::<i64>().ok());
     match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
         Ok(mut tx) => {

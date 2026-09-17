@@ -47,20 +47,23 @@ export default function BaselineAndDrift() {
         api.get(`/api/baseline/drift?range=${timeRange}`),
         api.get(`/api/baseline/anomalies?range=${timeRange}&limit=200`),
       ]);
+      const down = [summaryRes, driftRes, anomaliesRes].find(
+        (d) => d?.ok === false || d?.unavailable,
+      );
+      if (down) {
+        throw new Error(down.detail || t('pages.baselineAndDrift.unavailable'));
+      }
       const hasBaseline = (summaryRes.total_assets || 0) > 0 || (summaryRes.baseline_rows || 0) > 0;
       setBaseline(hasBaseline ? summaryRes : null);
       setDriftData(driftRes.data || []);
       setAnomalies(anomaliesRes.anomalies || []);
     } catch (err) {
       console.error('Failed to fetch baseline data:', err);
-      setError(err?.message || t('pages.baselineAndDrift.load_failed'));
-      setBaseline(null);
-      setDriftData([]);
-      setAnomalies([]);
+      setError(err?.message || t('pages.baselineAndDrift.unavailable'));
     } finally {
       setLoading(false);
     }
-  }, [timeRange, t]);
+  }, [timeRange]);
 
   useEffect(() => {
     fetchData();
@@ -113,6 +116,11 @@ export default function BaselineAndDrift() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    exportCsv()
+  }, [error, exportCsv])
+
   return (
     <PageShell
       title={t('pages.baselineAndDrift.title')}
@@ -123,9 +131,9 @@ export default function BaselineAndDrift() {
       actions={(
         <ShellScanActions
           onRefresh={fetchData}
-          onExport={exportCsv}
+          onExport={error ? undefined : handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={!!error || !filteredFindings.length}
         />
       )}
     >
@@ -136,14 +144,18 @@ export default function BaselineAndDrift() {
         </div>
 
         {error && (
-          <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-950/30 px-4 py-3 text-sm text-rose-200">
-            {error}
+          <div
+            role="alert"
+            data-testid="baseline-unavailable"
+            className="rounded-xl border border-rose-500/30 bg-rose-950/30 px-4 py-3 text-sm text-rose-200"
+          >
+            {t('pages.baselineAndDrift.unavailable')}
           </div>
         )}
 
-        {loading && !baseline && anomalies.length === 0 ? (
+        {loading && !baseline && anomalies.length === 0 && !error ? (
           <SkeletonWidgetGrid count={5} />
-        ) : (
+        ) : error ? null : (
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <StatCard
               label={t('pages.baselineAndDrift.baseline_assets')}
@@ -204,7 +216,7 @@ export default function BaselineAndDrift() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <ChartPanel title={t('pages.baselineAndDrift.drift_over_time')} icon={<TrendingUp className="w-4 h-4 text-cyan-400" />}>
-            {driftData.length > 0 ? (
+            {error ? null : driftData.length > 0 ? (
               <ResponsiveContainer width="100%" height={240}>
                 <LineChart accessibilityLayer data={driftData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
@@ -220,7 +232,7 @@ export default function BaselineAndDrift() {
           </ChartPanel>
 
           <ChartPanel title={t('pages.baselineAndDrift.anomaly_volume')} icon={<AlertTriangle className="w-4 h-4 text-orange-400" />}>
-            {driftData.some((d) => d.anomalies > 0) ? (
+            {error ? null : driftData.some((d) => d.anomalies > 0) ? (
               <ResponsiveContainer width="100%" height={240}>
                 <BarChart accessibilityLayer data={driftData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
@@ -258,7 +270,7 @@ export default function BaselineAndDrift() {
                   severityFilter === s ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30' : 'text-[var(--text-muted)]'
                 }`}
               >
-                {s === 'all' ? t('pages.baselineAndDrift.filter_all') : `${s} (${severityCounts[s] || 0})`}
+                {s === 'all' ? t('pages.baselineAndDrift.filter_all') : error ? s : `${s} (${severityCounts[s] || 0})`}
               </Button>
             ))}
           </div>
@@ -268,13 +280,13 @@ export default function BaselineAndDrift() {
           <div className="p-4 border-b border-[var(--border-default)]">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-red-400" />
-              {t('pages.baselineAndDrift.anomalies_heading', { count: filteredAnomalies.length })}
+              {t('pages.baselineAndDrift.anomalies_heading', { count: error ? '—' : filteredAnomalies.length })}
             </h3>
           </div>
 
           {loading ? (
             <div className="p-6"><SkeletonTable rows={5} cols={4} /></div>
-          ) : filteredAnomalies.length === 0 ? (
+          ) : error ? null : filteredAnomalies.length === 0 ? (
             <div className="p-8">
               <EmptyState
                 icon="shield"
@@ -334,7 +346,7 @@ export default function BaselineAndDrift() {
           )}
         </div>
 
-        {!baseline && !loading && (
+        {!baseline && !loading && !error && (
           <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-6">
             <div className="flex items-center gap-2 mb-2">
               <AlertTriangle className="w-5 h-5 text-yellow-400" />

@@ -177,14 +177,16 @@ export default function GodModeEngineMatrix({
         </div>
         <div
           className={`text-[10px] font-mono uppercase px-3 py-1 rounded-lg border ${
-            scanningActive
+            scanningActive === true
               ? 'border-orange-500/50 text-orange-300 bg-orange-950/40'
               : 'border-white/15 text-[var(--text-muted)] bg-white/5'
           }`}
         >
-          {scanningActive
+          {scanningActive === true
             ? t('components.ceo.engineMatrix.orchestratorScanning')
-            : t('components.ceo.engineMatrix.orchestratorIdle')}
+            : scanningActive === false
+              ? t('components.ceo.engineMatrix.orchestratorIdle')
+              : '—'}
         </div>
       </div>
 

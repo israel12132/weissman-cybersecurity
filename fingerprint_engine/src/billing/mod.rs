@@ -85,18 +85,18 @@ pub async fn enforce_client_create(
     .bind(tenant_id)
     .fetch_optional(auth_pool)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|_| "store_down".to_string())?;
     let Some(r) = row else {
         return Err("Subscription not provisioned for tenant".to_string());
     };
-    let status: String = r.try_get("status").map_err(|e| e.to_string())?;
+    let status: String = r.try_get("status").map_err(|_| "store_down".to_string())?;
     if !subscription_allows_usage(&status) {
         return Err(format!(
             "Subscription not active (status={}). Complete Paddle checkout or update payment method.",
             status
         ));
     }
-    let max_c: i32 = r.try_get("max_clients").map_err(|e| e.to_string())?;
+    let max_c: i32 = r.try_get("max_clients").map_err(|_| "store_down".to_string())?;
     let count = count_tenant_clients(app_pool, tenant_id).await?;
     if count >= max_c as i64 {
         return Err(format!(
@@ -111,14 +111,14 @@ pub async fn enforce_client_create(
 async fn count_tenant_clients(app_pool: &PgPool, tenant_id: i64) -> Result<i64, String> {
     let mut tx = weissman_db::begin_tenant_tx(app_pool, tenant_id)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|_| "store_down".to_string())?;
     let count: i64 =
         sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM clients WHERE tenant_id = $1")
             .bind(tenant_id)
             .fetch_one(&mut *tx)
             .await
-            .map_err(|e| e.to_string())?;
-    let _ = tx.commit().await;
+            .map_err(|_| "store_down".to_string())?;
+    tx.commit().await.map_err(|_| "store_down".to_string())?;
     Ok(count)
 }
 
@@ -144,18 +144,18 @@ pub async fn enforce_scan_quota(
     .bind(tenant_id)
     .fetch_optional(pool)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|_| "store_down".to_string())?;
     let Some(r) = row else {
         return Err("Subscription not provisioned for tenant".to_string());
     };
-    let status: String = r.try_get("status").map_err(|e| e.to_string())?;
+    let status: String = r.try_get("status").map_err(|_| "store_down".to_string())?;
     if !subscription_allows_usage(&status) {
         return Err(format!(
             "Subscription not active (status={}). Complete Paddle checkout or update payment method.",
             status
         ));
     }
-    let max_s: i32 = r.try_get("max_scans_month").map_err(|e| e.to_string())?;
+    let max_s: i32 = r.try_get("max_scans_month").map_err(|_| "store_down".to_string())?;
     if max_s <= 0 {
         return Ok(());
     }
@@ -167,7 +167,7 @@ pub async fn enforce_scan_quota(
     .bind(&period)
     .fetch_optional(pool)
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|_| "store_down".to_string())?
     .unwrap_or(0);
     let requested = i64::try_from(job_count).unwrap_or(i64::MAX);
     if used.saturating_add(requested) > max_s as i64 {
@@ -199,7 +199,7 @@ pub async fn gate_scan_enqueue_n(
     enforce_scan_quota(pool, tenant_id, job_count).await?;
     record_scans_started(pool, tenant_id, job_count)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|_| "store_down".to_string())
 }
 
 pub async fn record_scan_started(pool: &PgPool, tenant_id: i64) -> Result<(), sqlx::Error> {
@@ -249,7 +249,7 @@ pub async fn usage_dashboard_json(
     .bind(tenant_id)
     .fetch_optional(auth_pool)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|_| "store_down".to_string())?;
     let Some(r) = row else {
         return Ok(json!({
             "billing_strict": billing_strict_enabled(),
@@ -274,7 +274,7 @@ pub async fn usage_dashboard_json(
     .bind(&period)
     .fetch_optional(app_pool)
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|_| "store_down".to_string())?
     {
         Some(n) => n,
         None => sqlx::query_scalar::<_, i64>(
@@ -284,7 +284,7 @@ pub async fn usage_dashboard_json(
         .bind(&period)
         .fetch_optional(app_pool)
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(|_| "store_down".to_string())?
         .unwrap_or(0),
     };
 
@@ -316,7 +316,7 @@ pub async fn resolve_paddle_price_id(pool: &PgPool, plan_slug: &str) -> Result<S
     .bind(plan_slug)
     .fetch_optional(pool)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|_| "store_down".to_string())?;
     if let Some(Some(ref pid)) = cell {
         let t = pid.trim();
         if !t.is_empty() {
@@ -346,33 +346,43 @@ pub async fn resolve_paddle_price_id(pool: &PgPool, plan_slug: &str) -> Result<S
         })
 }
 
-pub async fn plan_slug_for_paddle_price_id(pool: &PgPool, price_id: &str) -> Option<String> {
+pub async fn plan_slug_for_paddle_price_id(
+    pool: &PgPool,
+    price_id: &str,
+) -> Result<Option<String>, String> {
     let pid = price_id.trim();
-    if let Ok(Some(s)) = sqlx::query_scalar::<_, String>(
+    match sqlx::query_scalar::<_, String>(
         "SELECT slug FROM billing_plans WHERE paddle_price_id = $1 AND active = true",
     )
     .bind(pid)
     .fetch_optional(pool)
     .await
     {
-        return Some(s);
+        Ok(Some(s)) => {
+            let trimmed = s.trim();
+            if !trimmed.is_empty() {
+                return Ok(Some(trimmed.to_string()));
+            }
+        }
+        Ok(None) => {}
+        Err(_) => return Err("store_down".into()),
     }
     if let Ok(p) = std::env::var("WEISSMAN_PADDLE_PRICE_ENTERPRISE") {
         if p.trim() == pid {
-            return Some("enterprise".to_string());
+            return Ok(Some("enterprise".to_string()));
         }
     }
     if let Ok(p) = std::env::var("WEISSMAN_PADDLE_PRICE_PROFESSIONAL") {
         if p.trim() == pid {
-            return Some("professional".to_string());
+            return Ok(Some("professional".to_string()));
         }
     }
     if let Ok(p) = std::env::var("WEISSMAN_PADDLE_PRICE_STARTER") {
         if p.trim() == pid {
-            return Some("starter".to_string());
+            return Ok(Some("starter".to_string()));
         }
     }
-    None
+    Ok(None)
 }
 
 pub(crate) fn first_subscription_item_paddle_price_id(sub: &Value) -> Option<String> {
@@ -550,7 +560,7 @@ pub async fn create_checkout_session_url(
     .bind(tenant_id)
     .fetch_optional(pool)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|_| "store_down".to_string())?;
     let email: String = row
         .and_then(|r| r.try_get::<String, _>("email").ok())
         .filter(|e| !e.is_empty())
@@ -572,7 +582,7 @@ pub async fn create_checkout_session_url(
 
     upsert_paddle_customer(pool, tenant_id, &customer_id)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|_| "store_down".to_string())?;
 
     paddle_create_transaction_checkout(&customer_id, &price_id, tenant_id).await
 }
@@ -689,7 +699,7 @@ pub(crate) async fn apply_paddle_subscription_to_tenant(
         .to_lowercase();
     let price_id = first_subscription_item_paddle_price_id(sub);
     let plan_slug = if let Some(ref pid) = price_id {
-        plan_slug_for_paddle_price_id(pool, pid).await
+        plan_slug_for_paddle_price_id(pool, pid).await?
     } else {
         None
     };
@@ -713,12 +723,12 @@ pub(crate) async fn apply_paddle_subscription_to_tenant(
         cancel_at,
     )
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|_| "store_down".to_string())?;
 
     if let Some(cust) = sub.get("customer_id").and_then(|x| x.as_str()) {
         upsert_paddle_customer(pool, tenant_id, cust)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|_| "store_down".to_string())?;
     }
     Ok(())
 }
@@ -733,7 +743,7 @@ pub async fn refresh_subscription_from_paddle_api(
             .bind(tenant_id)
             .fetch_optional(pool)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|_| "store_down".to_string())?;
     let Some(r) = row else {
         return Err("No subscription row for tenant.".to_string());
     };
@@ -805,12 +815,12 @@ pub async fn register_tenant_and_admin(
     .bind(plan_slug)
     .fetch_one(auth_pool)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|_| "store_down".to_string())?;
     if !plan_ok {
         return Err("invalid or inactive plan_slug".to_string());
     }
     let hash = bcrypt::hash(password, bcrypt::DEFAULT_COST).map_err(|e| e.to_string())?;
-    let mut tx = auth_pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = auth_pool.begin().await.map_err(|_| "store_down".to_string())?;
     let tid: i64 = sqlx::query_scalar(
         "INSERT INTO tenants (slug, name, active) VALUES ($1, $2, true) RETURNING id",
     )
@@ -824,7 +834,7 @@ pub async fn register_tenant_and_admin(
                 return "tenant_slug already registered".to_string();
             }
         }
-        e.to_string()
+        "store_down".to_string()
     })?;
     let uid: i64 = auth_access::insert_user_auth(&mut *tx, tid, em, Some(hash.as_str()), "admin")
         .await
@@ -834,7 +844,7 @@ pub async fn register_tenant_and_admin(
                     return "email already registered for this tenant".to_string();
                 }
             }
-            e.to_string()
+            "store_down".to_string()
         })?;
     let sub_status = if billing_strict_enabled() {
         "incomplete"
@@ -849,7 +859,7 @@ pub async fn register_tenant_and_admin(
     .bind(sub_status)
     .execute(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|_| "store_down".to_string())?;
     let period = period_ym_now();
     sqlx::query(
         "INSERT INTO tenant_usage_counters (tenant_id, period_ym, scans_started) VALUES ($1, $2, 0)",
@@ -858,8 +868,8 @@ pub async fn register_tenant_and_admin(
     .bind(&period)
     .execute(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
-    tx.commit().await.map_err(|e| e.to_string())?;
+    .map_err(|_| "store_down".to_string())?;
+    tx.commit().await.map_err(|_| "store_down".to_string())?;
     Ok((tid, uid))
 }
 
@@ -878,5 +888,17 @@ mod tests {
             src.contains("async fn count_tenant_clients"),
             "usage dashboard and quota share one app-pool COUNT helper"
         );
+    }
+
+    #[test]
+    fn sql_errors_are_store_down_not_quota_or_plan_guess() {
+        let src = include_str!("mod.rs");
+        let impl_src = src.split("#[cfg(test)]").next().expect("impl");
+        assert!(impl_src.contains(
+            "record_scans_started(pool, tenant_id, job_count)\n        .await\n        .map_err(|_| \"store_down\".to_string())"
+        ));
+        assert!(impl_src.contains("Result<Option<String>, String>"));
+        assert!(impl_src.contains("Err(_) => return Err(\"store_down\".into())"));
+        assert!(!impl_src.contains("if let Ok(Some(s)) = sqlx::query_scalar"));
     }
 }

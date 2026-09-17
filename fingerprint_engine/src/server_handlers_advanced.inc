@@ -167,6 +167,16 @@ async fn api_risk_node_flags_patch(
     Path(node_id): Path<i64>,
     Json(body): Json<RiskNodeFlagsBody>,
 ) -> Response {
+    if let Err(resp) = crate::rbac::require_operator(&auth) {
+        return resp;
+    }
+    if body.internet_exposed.is_none() && body.crown_jewel.is_none() && body.asset_value.is_none() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "detail": "no flags"})),
+        )
+            .into_response();
+    }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
     };
@@ -977,16 +987,33 @@ async fn api_playbooks_list(
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::playbook_list_unavailable_json("database unavailable")),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT id, name, description, enabled, trigger_dsl, actions_dsl,
                   last_run_at, last_run_status, run_count, failure_count,
                   created_at, updated_at
              FROM weissman_playbooks
             ORDER BY enabled DESC, updated_at DESC"#,
     )
-    .fetch_all(&mut *tx).await.unwrap_or_default();
+    .fetch_all(&mut *tx)
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::playbook_list_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
 
     let list: Vec<Value> = rows.into_iter().map(|r| {
@@ -1673,10 +1700,16 @@ async fn api_baseline_summary(
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::baseline_summary_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
 
-    let baseline_row = sqlx::query(
+    let baseline_row = match sqlx::query(
         r#"SELECT COUNT(DISTINCT agent_id)::bigint AS total_assets,
                   MAX(last_updated_at) AS last_updated,
                   COALESCE(SUM(n), 0)::bigint AS sample_count,
@@ -1684,9 +1717,21 @@ async fn api_baseline_summary(
              FROM agent_metric_baselines"#,
     )
     .fetch_one(&mut *tx)
-    .await;
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::baseline_summary_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
 
-    let drift_row = sqlx::query(
+    let drift_row = match sqlx::query(
         r#"SELECT COALESCE(
                   LEAST(
                       100.0,
@@ -1699,25 +1744,32 @@ async fn api_baseline_summary(
             WHERE detected_at >= now() - interval '7 days'"#,
     )
     .fetch_one(&mut *tx)
-    .await;
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::baseline_summary_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
 
     let _ = tx.commit().await;
 
-    let (total_assets, last_updated, sample_count, baseline_rows) = match baseline_row {
-        Ok(r) => (
-            r.try_get::<i64, _>("total_assets").unwrap_or(0),
-            r.try_get::<Option<chrono::DateTime<Utc>>, _>("last_updated")
-                .ok()
-                .flatten()
-                .map(|d| d.to_rfc3339()),
-            r.try_get::<i64, _>("sample_count").unwrap_or(0),
-            r.try_get::<i64, _>("baseline_rows").unwrap_or(0),
-        ),
-        Err(_) => (0, None, 0, 0),
-    };
-    let drift_score = drift_row
+    let total_assets = baseline_row.try_get::<i64, _>("total_assets").unwrap_or(0);
+    let last_updated = baseline_row
+        .try_get::<Option<chrono::DateTime<Utc>>, _>("last_updated")
         .ok()
-        .and_then(|r| r.try_get::<f64, _>("drift_score").ok())
+        .flatten()
+        .map(|d| d.to_rfc3339());
+    let sample_count = baseline_row.try_get::<i64, _>("sample_count").unwrap_or(0);
+    let baseline_rows = baseline_row.try_get::<i64, _>("baseline_rows").unwrap_or(0);
+    let drift_score = drift_row
+        .try_get::<f64, _>("drift_score")
         .unwrap_or(0.0);
 
     (
@@ -1744,7 +1796,13 @@ async fn api_baseline_drift(
     let bucket = baseline_range_bucket(range);
 
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::baseline_drift_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
 
     let sql = format!(
@@ -1756,7 +1814,18 @@ async fn api_baseline_drift(
             GROUP BY 1
             ORDER BY 1 ASC"#
     );
-    let rows = sqlx::query(&sql).fetch_all(&mut *tx).await.unwrap_or_default();
+    let rows = match sqlx::query(&sql).fetch_all(&mut *tx).await {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::baseline_drift_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
 
     let data: Vec<Value> = rows
@@ -1803,7 +1872,13 @@ async fn api_baseline_anomalies(
         .clamp(1, 500);
 
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::baseline_anomalies_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
 
     let sql = format!(
@@ -1814,11 +1889,22 @@ async fn api_baseline_anomalies(
             ORDER BY detected_at DESC
             LIMIT $1"#
     );
-    let rows = sqlx::query(&sql)
+    let rows = match sqlx::query(&sql)
         .bind(limit)
         .fetch_all(&mut *tx)
         .await
-        .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::baseline_anomalies_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
 
     let anomalies: Vec<Value> = rows
@@ -1857,9 +1943,13 @@ async fn api_playbook_runs(
 ) -> Response {
     let limit: i64 = q.get("limit").and_then(|s| s.parse::<i64>().ok()).unwrap_or(50).clamp(1, 500);
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::playbook_runs_unavailable_json("database unavailable")),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT id, triggered_at, trigger_kind, trigger_event,
                   actions_total, actions_succeeded, actions_failed,
                   action_results, status, run_dedup_key
@@ -1870,7 +1960,20 @@ async fn api_playbook_runs(
     )
     .bind(playbook_id)
     .bind(limit)
-    .fetch_all(&mut *tx).await.unwrap_or_default();
+    .fetch_all(&mut *tx)
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::playbook_runs_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
     let runs: Vec<Value> = rows.into_iter().map(|r| json!({
         "id":                r.try_get::<i64, _>("id").unwrap_or(0),

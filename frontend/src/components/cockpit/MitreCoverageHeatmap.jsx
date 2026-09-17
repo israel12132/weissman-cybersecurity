@@ -95,7 +95,7 @@ export default function MitreCoverageHeatmap({ className = '', maxHeight = 320 }
             {t(`${NS}.title`)}
           </h3>
           <p className="text-[10px] font-mono text-white/40 mt-0.5">
-            {t(`${NS}.summary`, { techniques: totalTechniques, hits: totalHits })}
+            {err ? '—' : t(`${NS}.summary`, { techniques: totalTechniques, hits: totalHits })}
           </p>
         </div>
         <a
@@ -109,9 +109,10 @@ export default function MitreCoverageHeatmap({ className = '', maxHeight = 320 }
       </header>
 
       {err && (
-        <p className="px-3 py-2 text-[11px] font-mono text-rose-300">{err}</p>
+        <p className="px-3 py-2 text-[11px] font-mono text-rose-300" data-testid="mitre-heatmap-unavailable" role="alert">{err}</p>
       )}
 
+      {!err && (
       <div className="overflow-x-auto custom-scroll" style={{ maxHeight }}>
         <div className="flex gap-1 p-2 min-w-max">
           {TACTICS.map((tac) => {
@@ -163,6 +164,7 @@ export default function MitreCoverageHeatmap({ className = '', maxHeight = 320 }
           })}
         </div>
       </div>
+      )}
     </section>
   )
 }

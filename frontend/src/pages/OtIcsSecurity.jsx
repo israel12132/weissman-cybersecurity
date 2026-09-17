@@ -14,6 +14,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench';
 import EmptyState from '../components/ui/EmptyState';
 import { SkeletonTable } from '../components/ui/Skeleton';
 import { apiFetch } from '../utils/apiFetch';
+import { classifyEngineHistory } from '../hooks/useEngineHistory';
 import { clientPrimaryTargetUrl } from '../lib/clientTarget';
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll';
 import Button from '../components/ui/Button'
@@ -255,15 +256,28 @@ export default function OtIcsSecurity() {
   const [fpLoading, setFpLoading] = useState(false);
   const [safety, setSafety] = useState(null);
   const [safetyStatus, setSafetyStatus] = useState('idle');
+  const [devicesUnavailable, setDevicesUnavailable] = useState(false);
+  const [fingerprintsUnavailable, setFingerprintsUnavailable] = useState(false);
+  const [scanHistoryUnavailable, setScanHistoryUnavailable] = useState(false);
 
   const fetchOtDevices = useCallback(async () => {
     try {
       const data = await apiFetch('/api/ot-ics/devices');
-      setDevices(data.devices || []);
-      setProtocols(data.protocols || []);
-      setFindings(data.findings || []);
-    } catch (error) {
-      console.error('Failed to fetch OT devices:', error);
+      if (data?.ok === false || data?.unavailable) {
+        setDevicesUnavailable(true);
+        return;
+      }
+      const list = Array.isArray(data?.devices) ? data.devices : null;
+      if (!list) {
+        setDevicesUnavailable(true);
+        return;
+      }
+      setDevicesUnavailable(false);
+      setDevices(list);
+      setProtocols(Array.isArray(data.protocols) ? data.protocols : []);
+      setFindings(Array.isArray(data.findings) ? data.findings : []);
+    } catch {
+      setDevicesUnavailable(true);
     } finally {
       setLoading(false);
     }
@@ -295,14 +309,26 @@ export default function OtIcsSecurity() {
   const fetchFingerprints = useCallback(async (cid) => {
     if (cid == null || cid === '') {
       setFingerprints([]);
+      setFingerprintsUnavailable(false);
       return;
     }
     setFpLoading(true);
+    setFingerprintsUnavailable(false);
     try {
       const d = await apiFetch(`/api/clients/${encodeURIComponent(cid)}/ot-ics/fingerprints`);
-      setFingerprints(Array.isArray(d.fingerprints) ? d.fingerprints : []);
+      if (d?.ok === false || d?.unavailable) {
+        setFingerprintsUnavailable(true);
+        return;
+      }
+      const list = Array.isArray(d?.fingerprints) ? d.fingerprints : null;
+      if (!list) {
+        setFingerprintsUnavailable(true);
+        return;
+      }
+      setFingerprintsUnavailable(false);
+      setFingerprints(list);
     } catch {
-      setFingerprints([]);
+      setFingerprintsUnavailable(true);
     } finally {
       setFpLoading(false);
     }
@@ -356,15 +382,19 @@ export default function OtIcsSecurity() {
     try {
       try {
         const d = await apiFetch('/api/engines/history/scada_ics?limit=1');
-        const runs = Array.isArray(d) ? d : Array.isArray(d?.runs) ? d.runs : [];
-        const last = runs[0];
-        if (last) {
-          const historyFindings = Array.isArray(last.findings) ? last.findings : [];
-          setEngineFindingsMap((prev) => ({ ...prev, scada_ics: historyFindings }));
-          setLastUpdated(last.completed_at || last.updated_at || last.created_at || null);
-          setLastJobId(last.job_id ?? last.id ?? null);
+        const classified = classifyEngineHistory(d);
+        if (classified.kind === 'unavailable') {
+          setScanHistoryUnavailable(true);
+        } else {
+          setScanHistoryUnavailable(false);
+          const last = classified.last;
+          if (last) {
+            setEngineFindingsMap((prev) => ({ ...prev, scada_ics: classified.findings }));
+            setLastUpdated(last.completed_at || last.updated_at || last.created_at || null);
+            setLastJobId(last.job_id ?? last.id ?? null);
+          }
         }
-      } catch { /* history unavailable — still refresh the device inventory below */ }
+      } catch { setScanHistoryUnavailable(true) }
       await fetchOtDevices();
       await fetchSafety(selectedClientId);
     } finally {
@@ -457,7 +487,7 @@ export default function OtIcsSecurity() {
                     {t(`pages.otIcsSecurity.${key}`)}
                   </div>
                   <div className="text-2xl font-bold mt-1 tabular-nums" style={{ color }}>
-                    {loading ? '—' : value}
+                    {loading || devicesUnavailable ? '—' : value}
                   </div>
                 </div>
                 <Icon className="w-4 h-4 shrink-0" style={{ color }} />
@@ -467,7 +497,7 @@ export default function OtIcsSecurity() {
         </div>
 
         {toast && (
-          <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${
+          <div className={`fixed top-16 end-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${
             toast.sev === 'error'
               ? 'bg-rose-950/90 border-rose-500/40 text-rose-200'
               : 'bg-[var(--bg-1)] border-cyan-500/30 text-cyan-300'
@@ -497,17 +527,28 @@ export default function OtIcsSecurity() {
         {safetyStatus === 'live' && safety?.policy && (
           <div
             data-testid="ot-safety-interlock"
-            className="rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-950/40 via-[var(--bg-2)] to-cyan-950/30 p-5 space-y-4"
+            data-live={safety.live ? 'true' : 'false'}
+            className={`rounded-2xl border p-5 space-y-4 ${
+              safety.live
+                ? 'border-emerald-500/30 bg-gradient-to-br from-emerald-950/40 via-[var(--bg-2)] to-cyan-950/30'
+                : 'border-amber-500/30 bg-gradient-to-br from-amber-950/30 via-[var(--bg-2)] to-cyan-950/20'
+            }`}
           >
             <div className="flex items-start justify-between gap-3 flex-wrap">
               <div className="flex items-center gap-2">
-                <Lock className="w-4 h-4 text-emerald-400" />
+                <Lock className={`w-4 h-4 ${safety.live ? 'text-emerald-400' : 'text-amber-300'}`} />
                 <h3 className="text-sm font-semibold text-white">{t('pages.otIcsSecurity.safety_heading')}</h3>
-                <span className="text-[9px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded border border-emerald-500/40 text-emerald-300 bg-emerald-500/10">
-                  {t('pages.otIcsSecurity.safety_armed')}
+                <span className={`text-[9px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded border ${
+                  safety.live
+                    ? 'border-emerald-500/40 text-emerald-300 bg-emerald-500/10'
+                    : 'border-amber-500/40 text-amber-200 bg-amber-500/10'
+                }`}>
+                  {safety.live
+                    ? t('pages.otIcsSecurity.safety_armed')
+                    : t('pages.otIcsSecurity.safety_compiled')}
                 </span>
               </div>
-              <div className="text-[10px] font-mono text-emerald-300/80">
+              <div className={`text-[10px] font-mono ${safety.live ? 'text-emerald-300/80' : 'text-amber-200/80'}`}>
                 {t('pages.otIcsSecurity.safety_controls', {
                   implemented: safety.control_count ?? 0,
                   total: 100,
@@ -616,24 +657,28 @@ export default function OtIcsSecurity() {
                   <span className="text-sm text-[var(--text-tertiary)]">{t(labelKey)}</span>
                   <Icon className="w-4 h-4" style={{ color }} />
                 </div>
-                <div className="text-2xl font-bold text-white">{count}</div>
+                <div className="text-2xl font-bold text-white">{devicesUnavailable ? '—' : count}</div>
               </div>
             ))}
           </div>
         </div>
 
-        {selectedClientId != null && (fpLoading || fingerprints.length > 0) && (
+        {selectedClientId != null && (fpLoading || fingerprintsUnavailable || fingerprints.length > 0) && (
           <div>
             <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
               <Fingerprint className="w-4 h-4 text-cyan-400" />
               {t('pages.otIcsSecurity.fingerprints_heading')}
-              {!fpLoading && (
+              {!fpLoading && !fingerprintsUnavailable && (
                 <span className="text-[10px] font-mono text-[var(--text-muted)]">({fingerprints.length})</span>
               )}
             </h3>
             <p className="text-[11px] text-[var(--text-muted)] mb-3">{t('pages.otIcsSecurity.fingerprints_hint')}</p>
             {fpLoading ? (
               <SkeletonTable rows={3} cols={4} />
+            ) : fingerprintsUnavailable ? (
+              <p data-testid="ot-ics-fingerprints-unavailable" className="text-xs text-amber-300/80 font-mono">
+                {t('pages.otIcsSecurity.fingerprints_unavailable')}
+              </p>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                 {fingerprints.map((fp) => {
@@ -710,6 +755,15 @@ export default function OtIcsSecurity() {
           </h3>
           {loading ? (
             <SkeletonTable rows={2} cols={3} />
+          ) : devicesUnavailable ? (
+            <div data-testid="ot-ics-protocols-unavailable">
+              <EmptyState
+                compact
+                icon="alert"
+                title={t('pages.otIcsSecurity.unavailable_title')}
+                body={t('pages.otIcsSecurity.unavailable_body')}
+              />
+            </div>
           ) : protocols.length === 0 ? (
             <EmptyState
               compact
@@ -763,6 +817,15 @@ export default function OtIcsSecurity() {
           {loading ? (
             <div className="p-4">
               <SkeletonTable rows={5} cols={4} />
+            </div>
+          ) : devicesUnavailable ? (
+            <div className="p-4" data-testid="ot-ics-devices-unavailable">
+              <EmptyState
+                compact
+                icon="alert"
+                title={t('pages.otIcsSecurity.unavailable_title')}
+                body={t('pages.otIcsSecurity.unavailable_body')}
+              />
             </div>
           ) : filteredDevices.length === 0 ? (
             <div className="p-4">
@@ -823,6 +886,11 @@ export default function OtIcsSecurity() {
           )}
         </div>
 
+        {scanHistoryUnavailable && (
+          <p data-testid="ot-ics-scan-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+            {t('pages.otIcsSecurity.scan_history_unavailable')}
+          </p>
+        )}
         <WeissmanFindingsPanel
           findings={aggregatedScanFindings}
           filteredFindings={filteredScanFindings}
@@ -839,7 +907,10 @@ export default function OtIcsSecurity() {
           title={t('pages.otIcsSecurity.scan_findings_title')}
           emptyTitle={t('pages.otIcsSecurity.scan_findings_empty_title')}
           emptyBody={t('pages.otIcsSecurity.scan_findings_empty_body')}
-          showEmptyReady
+          unavailable={scanHistoryUnavailable}
+          unavailableTitle={t('pages.otIcsSecurity.scan_history_unavailable')}
+          unavailableBody={t('pages.otIcsSecurity.scan_history_unavailable')}
+          showEmptyReady={!scanHistoryUnavailable}
           emptyReadyTitle={t('pages.otIcsSecurity.scan_findings_ready_title')}
           emptyReadyBody={t('pages.otIcsSecurity.scan_findings_ready_body')}
           renderFinding={renderOtFinding}

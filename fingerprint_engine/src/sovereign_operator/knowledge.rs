@@ -20,20 +20,24 @@ Canonical registry: PRODUCTION_ENGINE_IDS (compiled) + frontend/src/lib/enginesR
 pub async fn build_snapshot(pool: &PgPool, tenant_id: i64) -> Result<Value, String> {
     let ids = production_engine_ids();
     let sample: Vec<&str> = ids.iter().copied().take(48).collect();
-    let jobs = recent_jobs(pool, tenant_id).await.unwrap_or_default();
-    let clusters = recent_clusters(pool, tenant_id).await.unwrap_or_default();
+    let jobs = recent_jobs(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
+    let clusters = recent_clusters(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let logs = crate::sovereign_operator::log_stream::list_recent(pool, tenant_id, 40)
         .await
-        .unwrap_or_default();
+        .map_err(|_| "store_down".to_string())?;
     let living_memory = crate::sovereign_operator::memory::list_recent(pool, tenant_id, None, 24)
         .await
-        .unwrap_or_default();
+        .map_err(|_| "store_down".to_string())?;
     let forge_queue = crate::sovereign_operator::forge::list_forge(pool, tenant_id, 12)
         .await
-        .unwrap_or_default();
+        .map_err(|_| "store_down".to_string())?;
     let scripts = crate::sovereign_operator::scripts::list_scripts(pool, tenant_id, 12)
         .await
-        .unwrap_or_default();
+        .map_err(|_| "store_down".to_string())?;
     let fail_classes = failure_classes_from_jobs(&jobs);
     Ok(json!({
         "architecture": ARCHITECTURE,
@@ -103,7 +107,7 @@ async fn recent_jobs(pool: &PgPool, tenant_id: i64) -> Result<Vec<Value>, sqlx::
     )
     .fetch_all(&mut *tx)
     .await?;
-    let _ = tx.commit().await;
+    tx.commit().await?;
     Ok(rows
         .into_iter()
         .map(|r| {
@@ -127,12 +131,8 @@ async fn recent_clusters(pool: &PgPool, tenant_id: i64) -> Result<Vec<Value>, sq
            LIMIT 15"#,
     )
     .fetch_all(&mut *tx)
-    .await;
-    let _ = tx.commit().await;
-    let rows = match rows {
-        Ok(r) => r,
-        Err(_) => return Ok(vec![]),
-    };
+    .await?;
+    tx.commit().await?;
     Ok(rows
         .into_iter()
         .map(|r| {

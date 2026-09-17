@@ -166,13 +166,13 @@ fn cve_matches(condition: &Value, title: &str, desc: &str, cve: &str) -> bool {
 async fn evaluate_tenant(app_pool: &PgPool, tenant_id: i64) -> Result<u32, String> {
     let mut tx = crate::db::begin_tenant_tx(app_pool, tenant_id)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|_| "store_down".to_string())?;
     let rules = sqlx::query(
         r#"SELECT id, name, condition, actions FROM weissman_alert_rules WHERE enabled = true"#,
     )
     .fetch_all(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|_| "store_down".to_string())?;
     if rules.is_empty() {
         let _ = tx.rollback().await;
         return Ok(0);
@@ -205,7 +205,7 @@ async fn evaluate_tenant(app_pool: &PgPool, tenant_id: i64) -> Result<u32, Strin
     )
     .fetch_all(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|_| "store_down".to_string())?;
 
     let mut fired = 0u32;
     for finding in findings {
@@ -302,8 +302,7 @@ async fn evaluate_tenant(app_pool: &PgPool, tenant_id: i64) -> Result<u32, Strin
             .bind(json!(channels))
             .fetch_optional(&mut *tx)
             .await
-            .ok()
-            .flatten();
+            .map_err(|_| "store_down".to_string())?;
 
             // No row returned ⇒ this (rule, finding) already fired ⇒ skip delivery.
             let Some(fire_id) = fire_id else {
@@ -311,7 +310,7 @@ async fn evaluate_tenant(app_pool: &PgPool, tenant_id: i64) -> Result<u32, Strin
             };
 
             let delivered =
-                deliver_alert(app_pool, tenant_id, &rule_info, &finding_info, &channels).await;
+                deliver_alert(app_pool, tenant_id, &rule_info, &finding_info, &channels).await?;
 
             if delivered {
                 let _ = sqlx::query(
@@ -333,15 +332,27 @@ async fn evaluate_tenant(app_pool: &PgPool, tenant_id: i64) -> Result<u32, Strin
             );
         }
     }
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
     Ok(fired)
 }
 
 async fn tick(app_pool: &PgPool, auth_pool: &PgPool) {
-    let tenants: Vec<i64> = sqlx::query_scalar("SELECT id FROM tenants WHERE active = true")
+    let tenants: Vec<i64> = match sqlx::query_scalar("SELECT id FROM tenants WHERE active = true")
         .fetch_all(auth_pool)
         .await
-        .unwrap_or_default();
+    {
+        Ok(ids) => ids,
+        Err(e) => {
+            tracing::warn!(
+                target: "alert_evaluator",
+                error = %e,
+                "tenant list store_down"
+            );
+            return;
+        }
+    };
     for tid in tenants {
         if let Err(e) = evaluate_tenant(app_pool, tid).await {
             tracing::warn!(target: "alert_evaluator", tenant_id = tid, error = %e, "eval failed");

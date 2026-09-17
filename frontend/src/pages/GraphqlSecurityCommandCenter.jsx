@@ -508,8 +508,9 @@ function SchemaGraphCanvas({ schemaGraph, running }) {
 }
 
 function ExposureGauge({ score }) {
-  const pct = Math.min(100, Math.max(0, score ?? 0))
-  const color = pct >= 70 ? '#ef4444' : pct >= 40 ? '#f59e0b' : '#22d3ee'
+  const hasScore = score != null && Number.isFinite(Number(score))
+  const pct = hasScore ? Math.min(100, Math.max(0, Number(score))) : 0
+  const color = !hasScore ? 'rgba(255,255,255,0.12)' : pct >= 70 ? '#ef4444' : pct >= 40 ? '#f59e0b' : '#22d3ee'
   return (
     <div className="relative w-36 h-36 mx-auto">
       <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
@@ -517,13 +518,13 @@ function ExposureGauge({ score }) {
         <circle
           cx="50" cy="50" r="42" fill="none"
           stroke={color} strokeWidth="8"
-          strokeDasharray={`${pct * 2.64} 264`}
+          strokeDasharray={hasScore ? `${pct * 2.64} 264` : '0 264'}
           strokeLinecap="round"
-          style={{ filter: `drop-shadow(0 0 8px ${color}80)` }}
+          style={hasScore ? { filter: `drop-shadow(0 0 8px ${color}80)` } : undefined}
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-3xl font-bold text-white">{pct || '—'}</span>
+        <span className="text-3xl font-bold text-white">{hasScore ? pct : '—'}</span>
         <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-widest">Exposure</span>
       </div>
     </div>
@@ -762,6 +763,7 @@ export default function GraphqlSecurityCommandCenter() {
   const { t } = useTranslation()
   const engine = ENGINES_BY_ID[ENGINE_ID]
   const [clients, setClients] = useState([])
+  const [clientsUnavailable, setClientsUnavailable] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState('')
   const { postScan } = useCommandCenterScan(selectedClientId)
   const [target, setTarget] = useState('')
@@ -805,7 +807,31 @@ export default function GraphqlSecurityCommandCenter() {
     [findings],
   )
 
+  const {
+    filteredFindings,
+    counts,
+    searchQuery,
+    setSearchQuery,
+    severityFilter,
+    setSeverityFilter,
+    exportCsv,
+    refreshFromHistory,
+    historyLoading,
+    lastUpdated,
+    lastJobId,
+    setLastUpdated,
+    setLastJobId,
+    historyUnavailable,
+  } = useWeissmanEnginePage(ENGINE_ID, realFindings)
+
+  const handleExportCsv = useCallback(() => {
+    if (historyUnavailable) return
+    exportCsv()
+  }, [historyUnavailable, exportCsv])
+  const liveMetrics = historyUnavailable ? null : metrics
+
   const exportPostureJson = useCallback(() => {
+    if (historyUnavailable) return
     const payload = {
       engine: ENGINE_ID,
       target,
@@ -823,9 +849,10 @@ export default function GraphqlSecurityCommandCenter() {
       `graphql-posture-${Date.now()}.json`,
       'application/json',
     )
-  }, [target, metrics, realFindings, attackPaths])
+  }, [historyUnavailable, target, metrics, realFindings, attackPaths])
 
   const exportExecutivePdf = useCallback(() => {
+    if (historyUnavailable) return
     const ex = metrics?.executive_summary
     const card = metrics?.compliance_scorecard
     const lines = [
@@ -852,23 +879,8 @@ export default function GraphqlSecurityCommandCenter() {
       lines.push(`- ${c.category} ${c.grade} (${c.score}) — ${c.label}`)
     }
     downloadBytes(buildSimpleTextPdf(lines), `graphql-executive-${Date.now()}.pdf`, 'application/pdf')
-  }, [target, metrics])
+  }, [historyUnavailable, target, metrics])
 
-  const {
-    filteredFindings,
-    counts,
-    searchQuery,
-    setSearchQuery,
-    severityFilter,
-    setSeverityFilter,
-    exportCsv,
-    refreshFromHistory,
-    historyLoading,
-    lastUpdated,
-    lastJobId,
-    setLastUpdated,
-    setLastJobId,
-  } = useWeissmanEnginePage(ENGINE_ID, realFindings)
 
   useEffect(() => {
     refreshFromHistory().then((run) => {
@@ -892,9 +904,13 @@ export default function GraphqlSecurityCommandCenter() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((d) => { if (Array.isArray(d)) setClients(d) })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {})
+      .then((d) => {
+        const list = Array.isArray(d) ? d : Array.isArray(d?.clients) ? d.clients : null
+        if (!list) { setClientsUnavailable(true); return }
+        setClientsUnavailable(false)
+        setClients(list)
+      })
+      .catch(() => setClientsUnavailable(true))
   }, [])
 
   useEffect(() => {
@@ -977,10 +993,10 @@ export default function GraphqlSecurityCommandCenter() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={exportCsv}
+          onExport={historyUnavailable ? undefined : handleExportCsv}
           refreshLoading={historyLoading}
           refreshDisabled={running}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={historyUnavailable || !filteredFindings.length}
         />
       )}
     >
@@ -1071,6 +1087,11 @@ export default function GraphqlSecurityCommandCenter() {
                       <option key={c.id} value={c.id}>{c.name || c.id}</option>
                     ))}
                   </select>
+                  {clientsUnavailable && (
+                    <p data-testid="graphql-security-clients-unavailable" className="text-xs text-amber-300/80 font-mono">
+                      {t('pages.graphqlSecurityCommandCenter.clients_unavailable')}
+                    </p>
+                  )}
                 </label>
                 <Txt label={t('common.target', 'Target')} value={target} onChange={setTarget} placeholder="https://api.example.com" />
               </Section>
@@ -1300,7 +1321,7 @@ export default function GraphqlSecurityCommandCenter() {
                   )}
                 </div>
                 <div className="h-72 md:h-80">
-                  <SchemaGraphCanvas schemaGraph={metrics?.schema_graph} running={running} />
+                  <SchemaGraphCanvas schemaGraph={liveMetrics?.schema_graph} running={running} />
                 </div>
               </div>
 
@@ -1309,42 +1330,42 @@ export default function GraphqlSecurityCommandCenter() {
                   <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-3">
                     {t('graphqlSec.exposure_score', 'API Exposure Score')}
                   </p>
-                  <ExposureGauge score={metrics?.exposure_score} />
+                  <ExposureGauge score={liveMetrics?.exposure_score} />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <MetricTile label="Endpoints" value={metrics?.endpoints_found} accent="#22d3ee" />
-                  <MetricTile label="Introspectable" value={metrics?.introspectable_endpoints} accent="#f59e0b" />
-                  <MetricTile label="DoS Vectors" value={metrics?.dos_vectors} accent="#ef4444" />
-                  <MetricTile label="Attack Paths" value={metrics?.attack_paths} accent="#a855f7" />
-                  <MetricTile label="Components" value={metrics?.components_probed} accent="#34d399" />
-                  <MetricTile label="High / Crit" value={metrics ? `${metrics.highs ?? 0} / ${metrics.criticals ?? 0}` : null} accent="#fb7185" />
+                  <MetricTile label="Endpoints" value={liveMetrics?.endpoints_found} accent="#22d3ee" />
+                  <MetricTile label="Introspectable" value={liveMetrics?.introspectable_endpoints} accent="#f59e0b" />
+                  <MetricTile label="DoS Vectors" value={liveMetrics?.dos_vectors} accent="#ef4444" />
+                  <MetricTile label="Attack Paths" value={liveMetrics?.attack_paths} accent="#a855f7" />
+                  <MetricTile label="Components" value={liveMetrics?.components_probed} accent="#34d399" />
+                  <MetricTile label="High / Crit" value={liveMetrics ? `${liveMetrics.highs ?? 0} / ${liveMetrics.criticals ?? 0}` : null} accent="#fb7185" />
                 </div>
-                {metrics?.implementation && (
+                {liveMetrics?.implementation && (
                   <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-3 text-center">
                     <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-1">Implementation</p>
-                    <p className="text-sm font-bold text-pink-300">{metrics.implementation}</p>
+                    <p className="text-sm font-bold text-pink-300">{liveMetrics.implementation}</p>
                   </div>
                 )}
               </div>
             </div>
 
             <ExecutiveSummaryStrip
-              summary={metrics?.executive_summary}
-              onExportPdf={metrics?.executive_summary ? exportExecutivePdf : undefined}
-              onExportJson={metrics ? exportPostureJson : undefined}
+              summary={liveMetrics?.executive_summary}
+              onExportPdf={liveMetrics?.executive_summary ? exportExecutivePdf : undefined}
+              onExportJson={liveMetrics ? exportPostureJson : undefined}
             />
 
-            <ComplianceScorecardPanel scorecard={metrics?.compliance_scorecard} />
+            <ComplianceScorecardPanel scorecard={liveMetrics?.compliance_scorecard} />
 
-            <OwaspBreakdownPanel posture={metrics?.owasp_posture} findings={realFindings} />
+            <OwaspBreakdownPanel posture={liveMetrics?.owasp_posture} findings={historyUnavailable ? [] : realFindings} />
 
-            <RemediationPanel items={metrics?.remediation_priorities} />
+            <RemediationPanel items={liveMetrics?.remediation_priorities} />
 
-            <SchemaTypeExplorer schemaGraph={metrics?.schema_graph} />
+            <SchemaTypeExplorer schemaGraph={liveMetrics?.schema_graph} />
 
             {/* Attack paths */}
             <AnimatePresence>
-              {attackPaths.length > 0 && (
+              {!historyUnavailable && attackPaths.length > 0 && (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -1384,6 +1405,11 @@ export default function GraphqlSecurityCommandCenter() {
             </div>
 
             {/* Findings */}
+            {historyUnavailable && (
+              <p data-testid="graphql-security-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+                {t('pages.graphqlSecurityCommandCenter.history_unavailable')}
+              </p>
+            )}
             <WeissmanFindingsPanel
               findings={realFindings}
               filteredFindings={filteredFindings}
@@ -1398,7 +1424,10 @@ export default function GraphqlSecurityCommandCenter() {
               lastUpdated={lastUpdated}
               jobId={lastJobId}
               accent="#f472b6"
-              showEmptyReady={!running && realFindings.length === 0}
+              unavailable={historyUnavailable}
+              unavailableTitle={t('pages.graphqlSecurityCommandCenter.history_unavailable')}
+              unavailableBody={t('pages.graphqlSecurityCommandCenter.history_unavailable')}
+              showEmptyReady={!running && realFindings.length === 0 && !historyUnavailable}
               renderFinding={(f, i) => (
                 <div key={i} className="text-[11px] border-b border-[var(--border-subtle)] pb-2 last:border-0">
                   <div className="flex items-start gap-2">

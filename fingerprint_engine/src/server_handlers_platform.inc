@@ -119,6 +119,15 @@ async fn api_onboarding_launch_scan(
                     axum::extract::Json(scan_body),
                 )
                 .await;
+                if resp.status() == StatusCode::SERVICE_UNAVAILABLE {
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(crate::http_unavailable::scan_status_unavailable_json(
+                            "store_down",
+                        )),
+                    )
+                        .into_response();
+                }
                 if resp.status() == StatusCode::ACCEPTED {
                     if let Ok(bytes) = axum::body::to_bytes(resp.into_body(), 1_048_576).await {
                         if let Ok(v) = serde_json::from_slice::<Value>(&bytes) {
@@ -128,6 +137,15 @@ async fn api_onboarding_launch_scan(
                         }
                     }
                 }
+            }
+            if job_ids.is_empty() {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::scan_status_unavailable_json(
+                        "store_down",
+                    )),
+                )
+                    .into_response();
             }
             return (
                 StatusCode::ACCEPTED,
@@ -479,7 +497,20 @@ async fn integration_live_test(
         .unwrap_or(id)
         .to_ascii_lowercase();
     let config_raw = item.get("config").cloned().unwrap_or(json!({}));
-    let integrations = crate::soar::integrations::load_integrations(pool, tenant_id).await;
+    let integrations = match crate::soar::integrations::load_integrations(pool, tenant_id).await {
+        Ok(i) => i,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({
+                    "ok": false,
+                    "unavailable": true,
+                    "detail": "database unavailable"
+                })),
+            )
+                .into_response();
+        }
+    };
     let record = integrations
         .into_iter()
         .find(|i| i.id == id || i.provider_type == provider)

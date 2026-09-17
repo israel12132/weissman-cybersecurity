@@ -62,7 +62,9 @@ export default function RemediationAnalytics() {
     setLoading(true); setError(null)
     try {
       const d = await apiFetch('/api/findings?limit=2000')
-      setFindings(Array.isArray(d) ? d : Array.isArray(d?.findings) ? d.findings : [])
+      const list = Array.isArray(d) ? d : Array.isArray(d?.findings) ? d.findings : null
+      if (!list) throw new Error('Failed to load findings')
+      setFindings(list)
     } catch (e) {
       setError(e.message || 'Failed to load findings')
     } finally {
@@ -94,7 +96,13 @@ export default function RemediationAnalytics() {
       clientIds.map((id) => apiFetch(`/api/clients/${id}/heal-stats`)),
     ).then((results) => {
       if (cancelled) return
-      setPartial(results.some((x) => x.status === 'rejected'))
+      if (results.some((x) => x.status === 'rejected')) {
+        setHealStats(null)
+        setPartial(true)
+        setStatsLoading(false)
+        return
+      }
+      setPartial(false)
       const list = results.filter((x) => x.status === 'fulfilled' && x.value).map((x) => x.value)
       const channelMap = {}
       const agg = list.reduce(
@@ -128,7 +136,6 @@ export default function RemediationAnalytics() {
     Promise.all(
       clientIds.map((id) =>
         apiFetch(`/api/clients/${id}/heal-requests`)
-          .catch(() => null)
           .then((d) => {
             const list = Array.isArray(d) ? d : Array.isArray(d?.requests) ? d.requests : []
             return list.map((x) => ({ ...x, client_id: id }))
@@ -138,6 +145,8 @@ export default function RemediationAnalytics() {
       const merged = lists.flat().filter(Boolean)
       merged.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
       setHeals(merged.slice(0, 50))
+    }).catch(() => {
+      if (!cancelled) setHeals(null)
     })
     return () => { cancelled = true }
   }, [clientIds])
@@ -145,19 +154,19 @@ export default function RemediationAnalytics() {
   // Client-side filter over the already-loaded heals feed (a bounded, tenant-scoped
   // rollup — no server round-trip needed to search it).
   const filteredHeals = useMemo(
-    () => heals.filter((h) => rowMatchesQuery(searchQuery, [h?.finding_id, h?.verdict, h?.channel])),
+    () => (heals ?? []).filter((h) => rowMatchesQuery(searchQuery, [h?.finding_id, h?.verdict, h?.channel])),
     [heals, searchQuery],
   )
 
   const handleRefresh = useCallback(() => load(), [load])
-  const exportCsv = useCallback(
-    () => exportRowsCsv(HEALS_CSV_HEADER, healsRows(filteredHeals), 'weissman-remediation-analytics'),
-    [filteredHeals],
-  )
-  const exportPdf = useCallback(
-    () => exportRowsPdf('Weissman Remediation Analytics', HEALS_CSV_HEADER, healsRows(filteredHeals), 'weissman-remediation-analytics'),
-    [filteredHeals],
-  )
+  const exportCsv = useCallback(() => {
+    if (error) return
+    exportRowsCsv(HEALS_CSV_HEADER, healsRows(filteredHeals), 'weissman-remediation-analytics')
+  }, [error, filteredHeals])
+  const exportPdf = useCallback(() => {
+    if (error) return
+    exportRowsPdf('Weissman Remediation Analytics', HEALS_CSV_HEADER, healsRows(filteredHeals), 'weissman-remediation-analytics')
+  }, [error, filteredHeals])
 
   return (
     <PageShell
@@ -170,21 +179,23 @@ export default function RemediationAnalytics() {
         <div className="flex items-center gap-2 flex-wrap">
           <ShellScanActions
             onRefresh={handleRefresh}
-            onExport={exportCsv}
+            onExport={error ? undefined : exportCsv}
             refreshLoading={loading}
-            exportDisabled={!filteredHeals.length}
+            exportDisabled={!!error || !filteredHeals.length}
           />
+          {!error && (
           <Button
             variant="unstyled"
             type="button"
             onClick={exportPdf}
-            disabled={!filteredHeals.length}
+            disabled={!!error || !filteredHeals.length}
             title={t('common.export_pdf')}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/15 text-[11px] font-mono text-white/70 hover:bg-white/10 disabled:opacity-40 transition-colors"
           >
             <FileText className="w-3.5 h-3.5" />
             {t('common.export_pdf')}
           </Button>
+          )}
         </div>
       }
     >
@@ -205,7 +216,9 @@ export default function RemediationAnalytics() {
 
         <HealReadinessPanel />
 
-        <HealTrendSparkline clientIds={clientIds} days={30} />
+        <div hidden={!!error}>
+          <HealTrendSparkline clientIds={clientIds} days={30} />
+        </div>
 
         {error && (
           <div className="p-4 rounded-xl border border-red-500/30 bg-red-900/20 text-red-300 text-sm flex items-center gap-2">
@@ -214,16 +227,23 @@ export default function RemediationAnalytics() {
           </div>
         )}
 
-        {(bounded || partial) && !loading && !statsLoading && (
+        {bounded && !error && !loading && !statsLoading && healStats && (
           <div className="text-[11px] text-amber-300/70 font-mono flex items-center gap-2">
             <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-            {partial
-              ? t('pages.remediationAnalytics.partial')
-              : t('pages.remediationAnalytics.bounded')}
+            {t('pages.remediationAnalytics.bounded')}
           </div>
         )}
 
-        {loading || statsLoading ? (
+        {error || partial ? (
+          <div data-testid="remediation-analytics-unavailable">
+            <EmptyState
+              compact
+              icon="alert"
+              title={t('pages.remediationAnalytics.unavailable_title')}
+              body={t('pages.remediationAnalytics.unavailable_body')}
+            />
+          </div>
+        ) : loading || statsLoading ? (
           <SkeletonTable rows={4} cols={3} />
         ) : healStats ? (
           <RemediationAnalyticsPanel stats={healStats} />
@@ -236,7 +256,8 @@ export default function RemediationAnalytics() {
           />
         )}
 
-        {/* Recent heals feed */}
+        {/* Recent heals feed — leftover rows stay in React state; mute paint on failed findings GET */}
+        {!error && (
         <section className="space-y-2">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
@@ -257,6 +278,8 @@ export default function RemediationAnalytics() {
           </div>
           {loading ? (
             <SkeletonTable rows={5} cols={4} />
+          ) : heals == null ? (
+            <p className="text-xs text-amber-300/80 font-mono">{t('pages.remediationAnalytics.unavailable_body')}</p>
           ) : filteredHeals.length === 0 ? (
             <div className="text-xs text-white/30 font-mono">—</div>
           ) : (
@@ -292,6 +315,7 @@ export default function RemediationAnalytics() {
             </div>
           )}
         </section>
+        )}
       </div>
     </PageShell>
   )

@@ -42,10 +42,11 @@ async function getJson(path) {
 }
 
 /** A metric tile linking to its detail page. */
-function Tile({ to, label, value, sub, accent = '#22d3ee', linkLabel, loading }) {
+function Tile({ to, label, value, sub, accent = '#22d3ee', linkLabel, loading, testId }) {
   return (
     <Link
       to={to}
+      data-testid={testId}
       className="group relative overflow-hidden rounded-2xl border p-5 backdrop-blur-md transition-all hover:border-[var(--border-strong)] block"
       style={{
         borderColor: `${accent}30`,
@@ -75,7 +76,7 @@ export default function ExecutiveOverview() {
   const { clients, selectedClientId, setSelectedClientId } = useClient()
 
   const [global, setGlobal] = useState({ loading: true, error: false, posture: null, coverage: null, iocs: null, intel: null, ueba: null, crypto: null })
-  const [client, setClient] = useState({ loading: false, financial: null, attack: null })
+  const [client, setClient] = useState({ loading: false, financial: null, attack: null, financialUnavailable: false, attackUnavailable: false })
   const [searchQuery, setSearchQuery] = useState('')
 
   // Live tile filter — narrows the signal wall to matching labels/subtitles.
@@ -104,15 +105,25 @@ export default function ExecutiveOverview() {
 
   const loadClient = useCallback(async (cid) => {
     if (cid == null) {
-      setClient({ loading: false, financial: null, attack: null })
+      setClient({ loading: false, financial: null, attack: null, financialUnavailable: false, attackUnavailable: false })
       return
     }
     setClient((c) => ({ ...c, loading: true }))
-    const [financial, attack] = await Promise.all([
-      getJson(`/api/financial-risk/${encodeURIComponent(cid)}`).catch(() => null),
-      getJson(`/api/attack-paths/${encodeURIComponent(cid)}`).catch(() => null),
+    const results = await Promise.allSettled([
+      getJson(`/api/financial-risk/${encodeURIComponent(cid)}`),
+      getJson(`/api/attack-paths/${encodeURIComponent(cid)}`),
     ])
-    setClient({ loading: false, financial, attack })
+    const financial = results[0].status === 'fulfilled' ? results[0].value : null
+    const attack = results[1].status === 'fulfilled' ? results[1].value : null
+    const financialUnavailable = results[0].status === 'rejected'
+      || financial?.ok === false
+      || financial?.unavailable
+      || (results[0].status === 'fulfilled' && (financial == null || typeof financial !== 'object'))
+    const attackUnavailable = results[1].status === 'rejected'
+      || attack?.ok === false
+      || attack?.unavailable
+      || (results[1].status === 'fulfilled' && (attack == null || typeof attack !== 'object'))
+    setClient({ loading: false, financial, attack, financialUnavailable, attackUnavailable })
   }, [])
 
   useEffect(() => {
@@ -230,7 +241,7 @@ export default function ExecutiveOverview() {
                 to="/attack-coverage"
                 label={t(`${NS}.coverage`)}
                 value={totals.techniques_covered ?? t(`${NS}.na`)}
-                sub={t(`${NS}.coverage_sub`, { tactics: totals.tactics_covered ?? 0 })}
+                sub={global.coverage ? t(`${NS}.coverage_sub`, { tactics: totals.tactics_covered ?? 0 }) : t(`${NS}.na`)}
                 accent="#f43f5e"
                 linkLabel={t(`${NS}.open_coverage`)}
               />
@@ -256,7 +267,7 @@ export default function ExecutiveOverview() {
                       {t(`${NS}.kev_fresh`, { time: kev?.last_refresh ? new Date(kev.last_refresh).toLocaleDateString() : '—' })}
                     </span>
                     <span style={{ color: freshnessColor(epss?.last_refresh) }}>
-                      {t(`${NS}.epss_fresh`, { rows: epss?.rows ?? 0 })}
+                      {t(`${NS}.epss_fresh`, { rows: epss?.rows != null ? epss.rows : '—' })}
                     </span>
                   </span>
                 }
@@ -269,7 +280,7 @@ export default function ExecutiveOverview() {
                 to="/ueba"
                 label={t(`${NS}.ueba`)}
                 value={uebaList ? (uebaCritHigh > 0 ? <span style={{ color: '#f43f5e' }}>{uebaCritHigh}</span> : uebaList.length) : t(`${NS}.na`)}
-                sub={t(`${NS}.ueba_sub`, { total: uebaList ? uebaList.length : 0 })}
+                sub={uebaList ? t(`${NS}.ueba_sub`, { total: uebaList.length }) : t(`${NS}.na`)}
                 accent="#a78bfa"
                 linkLabel={t(`${NS}.open_ueba`)}
               />
@@ -304,13 +315,24 @@ export default function ExecutiveOverview() {
               {t(`${NS}.no_matches`)}
             </div>
           ) : (
+            <div className="space-y-3">
+              {client.financialUnavailable && (
+                <p data-testid="executive-overview-financial-unavailable" className="text-xs text-amber-300/80 font-mono">
+                  {t(`${NS}.financial_unavailable`)}
+                </p>
+              )}
+              {client.attackUnavailable && (
+                <p data-testid="executive-overview-attack-unavailable" className="text-xs text-amber-300/80 font-mono">
+                  {t(`${NS}.attack_unavailable`)}
+                </p>
+              )}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {showAle && (
               <Tile
                 to="/financial-risk"
                 label={t(`${NS}.ale`)}
-                value={fin ? fmtUsd(fin.ale_annualised_usd) : t(`${NS}.no_snapshot`)}
-                sub={fin ? t(`${NS}.ale_sub`, { sle: fmtUsd(fin.sle_worst_usd) }) : t(`${NS}.recompute_hint`)}
+                value={client.financialUnavailable ? t(`${NS}.financial_unavailable`) : fin ? fmtUsd(fin.ale_annualised_usd) : t(`${NS}.no_snapshot`)}
+                sub={client.financialUnavailable ? t(`${NS}.financial_unavailable`) : fin ? t(`${NS}.ale_sub`, { sle: fmtUsd(fin.sle_worst_usd) }) : t(`${NS}.recompute_hint`)}
                 accent="#ef4444"
                 linkLabel={t(`${NS}.open_financial`)}
               />
@@ -319,8 +341,8 @@ export default function ExecutiveOverview() {
               <Tile
                 to="/attack-paths"
                 label={t(`${NS}.paths`)}
-                value={atk ? paths.length : t(`${NS}.no_snapshot`)}
-                sub={atk ? t(`${NS}.paths_sub`, { entries: atk.entry_count ?? 0, jewels: atk.jewel_count ?? 0 }) : t(`${NS}.recompute_hint`)}
+                value={client.attackUnavailable ? t(`${NS}.attack_unavailable`) : atk ? paths.length : t(`${NS}.no_snapshot`)}
+                sub={client.attackUnavailable ? t(`${NS}.attack_unavailable`) : atk ? t(`${NS}.paths_sub`, { entries: atk.entry_count ?? 0, jewels: atk.jewel_count ?? 0 }) : t(`${NS}.recompute_hint`)}
                 accent="#f97316"
                 linkLabel={t(`${NS}.open_paths`)}
               />
@@ -329,12 +351,13 @@ export default function ExecutiveOverview() {
               <Tile
                 to="/attack-paths"
                 label={t(`${NS}.top_risk`)}
-                value={topRisk != null ? <span style={{ color: riskColor(topRisk) }}>{topRisk.toFixed(1)}<span className="text-sm text-[var(--text-muted)]"> / 10</span></span> : t(`${NS}.no_snapshot`)}
+                value={client.attackUnavailable ? t(`${NS}.attack_unavailable`) : topRisk != null ? <span style={{ color: riskColor(topRisk) }}>{topRisk.toFixed(1)}<span className="text-sm text-[var(--text-muted)]"> / 10</span></span> : t(`${NS}.no_snapshot`)}
                 sub={t(`${NS}.top_risk_sub`)}
                 accent={riskColor(topRisk)}
                 linkLabel={t(`${NS}.open_paths`)}
               />
               )}
+            </div>
             </div>
           )}
         </div>

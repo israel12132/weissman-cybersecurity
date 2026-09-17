@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useEngineCapabilities } from '../lib/useEngineCapabilities'
 import { REALITY_KIND_META } from '../lib/realityKindMeta'
 
@@ -105,15 +106,28 @@ export default function EngineRealityBadge({
 
 /** Fleet-wide reality summary strip from capabilities API summary counts. */
 export function EngineRealitySummary({ className = '', compact = false }) {
-  const { total, summary, remoteDetectionCount, loading } = useEngineCapabilities()
+  const { t } = useTranslation()
+  const { total, summary, remoteDetectionCount, loading, unavailable } = useEngineCapabilities()
 
-  if (loading && !total) {
+  if (loading && total == null) {
     return (
       <div className={`flex gap-2 ${className}`}>
         {[1, 2, 3, 4].map((i) => (
           <span key={i} className="h-5 w-16 rounded bg-white/5 animate-pulse" />
         ))}
       </div>
+    )
+  }
+
+  if (unavailable && total == null) {
+    return compact ? null : (
+      <span
+        data-testid="engine-reality-unavailable"
+        role="alert"
+        className={`text-[10px] font-mono text-amber-200/80 ${className}`}
+      >
+        {t('engineReality.unavailable')}
+      </span>
     )
   }
 

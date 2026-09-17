@@ -32,18 +32,24 @@ export default function ContainmentRulesTab() {
   })
   const [exec, setExec] = useState({ rule_id: '', mode: 'aws_sg', aws_instance_id: '' })
   const [msg, setMsg] = useState(null)
+  const [loadError, setLoadError] = useState(null)
 
   const fetchRules = useCallback(async () => {
     if (!selectedClientId) {
       setRules([])
+      setLoadError(null)
       return
     }
     setLoading(true)
+    setLoadError(null)
     try {
       const d = await apiFetch(`/api/clients/${selectedClientId}/containment-rules`)
+      if (d?.ok === false || d?.unavailable) {
+        throw new Error(d.detail || t(`${NS}.unavailable`))
+      }
       setRules(d.rules || [])
-    } catch (_) {
-      setRules([])
+    } catch (e) {
+      setLoadError(e?.message || t(`${NS}.unavailable`))
     } finally {
       setLoading(false)
     }
@@ -70,6 +76,7 @@ export default function ContainmentRulesTab() {
 
   const execute = async () => {
     if (!selectedClientId) return
+    if (loadError) return
     const rid = parseInt(exec.rule_id, 10)
     if (!Number.isFinite(rid)) {
       setMsg({ ok: false, text: t(`${NS}.selectRuleId`) })
@@ -220,7 +227,7 @@ export default function ContainmentRulesTab() {
             className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white text-sm"
           >
             <option value="">{t(`${NS}.rulePlaceholder`)}</option>
-            {rules.map(r => (
+            {(!loadError ? rules : []).map(r => (
               <option key={r.id} value={r.id}>
                 #{r.id} {r.name} {r.pre_approved ? '✓' : '—'}
               </option>
@@ -243,7 +250,8 @@ export default function ContainmentRulesTab() {
           <Button variant="unstyled"
             type="button"
             onClick={execute}
-            className="px-4 py-2 rounded-xl bg-red-600/80 text-white text-sm hover:bg-red-600"
+            disabled={!!loadError}
+            className="px-4 py-2 rounded-xl bg-red-600/80 text-white text-sm hover:bg-red-600 disabled:opacity-40"
           >
             {t(`${NS}.executeQuarantine`)}
           </Button>
@@ -261,6 +269,15 @@ export default function ContainmentRulesTab() {
         </div>
         {loading ? (
           <div className="p-6 text-white/50 text-sm">{t(`${NS}.loading`)}</div>
+        ) : loadError ? (
+          <div
+            className="p-6 text-amber-200/90 text-sm"
+            data-testid="containment-rules-unavailable"
+            data-live="false"
+            role="alert"
+          >
+            {t(`${NS}.unavailable`)}
+          </div>
         ) : rules.length === 0 ? (
           <div className="p-6 text-white/50 text-sm">{t(`${NS}.noRules`)}</div>
         ) : (

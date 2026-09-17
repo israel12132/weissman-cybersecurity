@@ -249,14 +249,14 @@ pub async fn hydrate_paths(
     llm_base: &str,
     llm_model: &str,
     llm_tenant_id: Option<i64>,
-) -> Vec<String> {
+) -> Result<Vec<String>, String> {
     let seed = weissman_engines::discovery_corpus::all_http_paths().to_vec();
     let mut stored_all = Vec::new();
     let mut stored_learned = Vec::new();
     if let Some(p) = pool {
         crate::discovery_knowledge::seed_public_knowledge(p).await;
-        stored_all = crate::discovery_knowledge::load_paths(p).await;
-        stored_learned = crate::discovery_knowledge::load_learned_paths(p).await;
+        stored_all = crate::discovery_knowledge::load_paths(p).await?;
+        stored_learned = crate::discovery_knowledge::load_learned_paths(p).await?;
     }
     // LLM sees the public seed so it does not reinvent /graphql; the return set is
     // learned + live proposals only (engines that need the full seed call all_http_paths).
@@ -273,7 +273,7 @@ pub async fn hydrate_paths(
         Some(3),
     )
     .await;
-    crate::discovery_knowledge::merge_unique(&[&stored_learned, extra, &ai])
+    Ok(crate::discovery_knowledge::merge_unique(&[&stored_learned, extra, &ai]))
 }
 
 /// Seed ∪ DB ∪ extra ∪ live LLM subdomain prefixes.
@@ -285,12 +285,12 @@ pub async fn hydrate_subdomain_prefixes(
     llm_base: &str,
     llm_model: &str,
     llm_tenant_id: Option<i64>,
-) -> Vec<String> {
+) -> Result<Vec<String>, String> {
     let seed = weissman_engines::discovery_corpus::all_subdomain_prefixes().to_vec();
     let mut stored = Vec::new();
     if let Some(p) = pool {
         crate::discovery_knowledge::seed_public_knowledge(p).await;
-        stored = crate::discovery_knowledge::load_subdomain_prefixes(p).await;
+        stored = crate::discovery_knowledge::load_subdomain_prefixes(p).await?;
     }
     let merged = crate::discovery_knowledge::merge_unique(&[&seed, &stored, extra]);
     let ai = generate_and_remember(
@@ -305,7 +305,7 @@ pub async fn hydrate_subdomain_prefixes(
         Some(3),
     )
     .await;
-    crate::discovery_knowledge::merge_unique(&[&merged, &ai])
+    Ok(crate::discovery_knowledge::merge_unique(&[&merged, &ai]))
 }
 
 #[cfg(test)]

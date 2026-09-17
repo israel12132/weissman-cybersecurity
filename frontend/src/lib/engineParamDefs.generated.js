@@ -4647,6 +4647,70 @@ export const GENERATED_PARAM_DEFS = {
       ]
     }
   ],
+  "credential_ransomware_fusion": [
+    {
+      "key": "safe_mode",
+      "label": "Safe Mode (no destructive exec)",
+      "type": "select",
+      "defaultVal": "true",
+      "options": [
+        "true",
+        "false"
+      ]
+    },
+    {
+      "key": "intensity",
+      "label": "Scan Intensity",
+      "type": "select",
+      "defaultVal": "normal",
+      "options": [
+        "light",
+        "normal",
+        "aggressive"
+      ]
+    },
+    {
+      "key": "cookies",
+      "label": "Session Cookies",
+      "type": "password",
+      "defaultVal": "",
+      "placeholder": "session=..."
+    },
+    {
+      "key": "auth_header",
+      "label": "Authorization Header",
+      "type": "password",
+      "defaultVal": "",
+      "placeholder": "Bearer eyJ..."
+    },
+    {
+      "key": "timeout_ms",
+      "label": "Probe Timeout (ms)",
+      "type": "number",
+      "defaultVal": "8000",
+      "min": 500,
+      "max": 60000
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    },
+    {
+      "key": "stealth_mode",
+      "label": "Stealth Mode",
+      "type": "select",
+      "defaultVal": "low",
+      "options": [
+        "off",
+        "low",
+        "high"
+      ]
+    }
+  ],
   "kerberos_attack_suite": [
     {
       "key": "domain",

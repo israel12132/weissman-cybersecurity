@@ -56,7 +56,11 @@ pub fn spawn_after_persist(
                 );
             }
             Ok(None) => {}
-            Err(e) => tracing::debug!(target: "superposition_followup", error = %e, "skip"),
+            Err(e) => tracing::warn!(
+                target: "superposition_followup",
+                error = %e,
+                "store_down"
+            ),
         }
     });
 }
@@ -105,7 +109,9 @@ async fn maybe_enqueue(
     .map_err(|e| format!("cluster count: {e}"))?;
 
     if cluster_count < MIN_OPEN_CLUSTERS {
-        let _ = tx.commit().await;
+        if tx.commit().await.is_err() {
+            return Err("store_down".to_string());
+        }
         return Ok(None);
     }
 
@@ -127,7 +133,9 @@ async fn maybe_enqueue(
     .await
     .map_err(|e| format!("dedup: {e}"))?;
 
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
 
     if inflight > 0 {
         return Ok(None);

@@ -59,15 +59,32 @@ async fn api_client_evidence_list(
     Path(client_id): Path<i64>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"evidence": []}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::evidence_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
     // Ensure client exists (better error than silent empty list).
-    let exists: Option<i64> = sqlx::query_scalar("SELECT id FROM clients WHERE id = $1")
+    // Query failure is store-down (503), not "client missing" (404).
+    let exists: Option<i64> = match sqlx::query_scalar("SELECT id FROM clients WHERE id = $1")
         .bind(client_id)
         .fetch_optional(&mut *tx)
         .await
-        .ok()
-        .flatten();
+    {
+        Ok(v) => v,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::evidence_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     if exists.is_none() {
         let _ = tx.rollback().await;
         return (
@@ -77,7 +94,7 @@ async fn api_client_evidence_list(
             .into_response();
     }
 
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT id, client_id, engagement_id, vulnerability_id, filename, content_type,
                   size_bytes, sha256_hex, label, notes, created_by_user_id, created_at
            FROM evidence_items
@@ -88,8 +105,27 @@ async fn api_client_evidence_list(
     .bind(client_id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let _ = tx.commit().await;
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::evidence_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::evidence_unavailable_json(
+                "store_down",
+            )),
+        )
+            .into_response();
+    }
 
     let evidence: Vec<Value> = rows
         .into_iter()
@@ -158,12 +194,22 @@ async fn api_client_evidence_upload(
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
     };
 
-    let client_exists: Option<i64> = sqlx::query_scalar("SELECT id FROM clients WHERE id = $1")
+    let client_exists: Option<i64> = match sqlx::query_scalar("SELECT id FROM clients WHERE id = $1")
         .bind(client_id)
         .fetch_optional(&mut *tx)
         .await
-        .ok()
-        .flatten();
+    {
+        Ok(v) => v,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::evidence_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     if client_exists.is_none() {
         let _ = tx.rollback().await;
         return (
@@ -175,13 +221,23 @@ async fn api_client_evidence_upload(
 
     // If engagement_id provided, validate it belongs to this client.
     if let Some(eid) = body.engagement_id {
-        let ok: Option<i64> = sqlx::query_scalar("SELECT id FROM engagements WHERE id = $1 AND client_id = $2")
+        let ok: Option<i64> = match sqlx::query_scalar("SELECT id FROM engagements WHERE id = $1 AND client_id = $2")
             .bind(eid)
             .bind(client_id)
             .fetch_optional(&mut *tx)
             .await
-            .ok()
-            .flatten();
+        {
+            Ok(v) => v,
+            Err(e) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::evidence_unavailable_json(
+                        scrub_internal_error(&e),
+                    )),
+                )
+                    .into_response();
+            }
+        };
         if ok.is_none() {
             let _ = tx.rollback().await;
             return (
@@ -193,15 +249,25 @@ async fn api_client_evidence_upload(
     }
     // If vulnerability_id provided, validate it belongs to this client.
     if let Some(vid) = body.vulnerability_id {
-        let ok: Option<i64> = sqlx::query_scalar(
+        let ok: Option<i64> = match sqlx::query_scalar(
             "SELECT id FROM vulnerabilities WHERE id = $1 AND client_id = $2",
         )
         .bind(vid)
         .bind(client_id)
         .fetch_optional(&mut *tx)
         .await
-        .ok()
-        .flatten();
+        {
+            Ok(v) => v,
+            Err(e) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::evidence_unavailable_json(
+                        scrub_internal_error(&e),
+                    )),
+                )
+                    .into_response();
+            }
+        };
         if ok.is_none() {
             let _ = tx.rollback().await;
             return (
@@ -212,7 +278,7 @@ async fn api_client_evidence_upload(
         }
     }
 
-    let created: Option<(i64,)> = sqlx::query_as(
+    let created: Option<(i64,)> = match sqlx::query_as(
         r#"INSERT INTO evidence_items
               (tenant_id, client_id, engagement_id, vulnerability_id, filename, content_type,
                size_bytes, sha256_hex, label, notes, blob, created_by_user_id)
@@ -233,17 +299,33 @@ async fn api_client_evidence_upload(
     .bind(auth.user_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::evidence_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
 
     let Some((evidence_id,)) = created else {
         let _ = tx.rollback().await;
-        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::evidence_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
 
     let ip = extract_client_ip(&headers, addr);
     let actor = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
-    let _ = audit_log::insert_audit(
+    if audit_log::insert_audit(
         &mut tx,
         auth.tenant_id,
         Some(auth.user_id),
@@ -255,8 +337,26 @@ async fn api_client_evidence_upload(
         ),
         &ip,
     )
-    .await;
-    let _ = tx.commit().await;
+    .await
+    .is_err()
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::evidence_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::evidence_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
 
     (
         StatusCode::CREATED,
@@ -273,9 +373,15 @@ async fn api_evidence_download(
     Path(evidence_id): Path<i64>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::evidence_download_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let row = sqlx::query(
+    let row = match sqlx::query(
         r#"SELECT id, client_id, filename, content_type, blob
            FROM evidence_items
            WHERE id = $1"#,
@@ -283,22 +389,51 @@ async fn api_evidence_download(
     .bind(evidence_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::evidence_download_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
 
     let Some(r) = row else {
-        let _ = tx.commit().await;
+        if tx.commit().await.is_err() {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::evidence_download_unavailable_json(
+                    "store_down",
+                )),
+            )
+                .into_response();
+        }
         return (StatusCode::NOT_FOUND, Json(json!({"error": "not found"}))).into_response();
     };
 
     let client_id = r.try_get::<i64, _>("client_id").unwrap_or(0);
     let filename = sanitize_filename(&r.try_get::<String, _>("filename").unwrap_or_else(|_| "evidence.bin".to_string()));
     let content_type = normalize_content_type(r.try_get::<String, _>("content_type").ok().as_deref());
-    let blob: Vec<u8> = r.try_get::<Vec<u8>, _>("blob").unwrap_or_default();
+    let blob: Vec<u8> = match r.try_get::<Vec<u8>, _>("blob") {
+        Ok(b) => b,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::evidence_download_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
 
     let ip = extract_client_ip(&headers, addr);
     let actor = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
-    let _ = audit_log::insert_audit(
+    if audit_log::insert_audit(
         &mut tx,
         auth.tenant_id,
         Some(auth.user_id),
@@ -307,8 +442,26 @@ async fn api_evidence_download(
         &format!("client_id={} evidence_id={}", client_id, evidence_id),
         &ip,
     )
-    .await;
-    let _ = tx.commit().await;
+    .await
+    .is_err()
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::evidence_download_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::evidence_download_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
 
     let mut res = Response::new(Body::from(blob));
     res.headers_mut().insert(
@@ -338,25 +491,52 @@ async fn api_evidence_delete(
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
     };
 
-    let row = sqlx::query("SELECT client_id FROM evidence_items WHERE id = $1")
+    let row = match sqlx::query("SELECT client_id FROM evidence_items WHERE id = $1")
         .bind(evidence_id)
         .fetch_optional(&mut *tx)
         .await
-        .ok()
-        .flatten();
+    {
+        Ok(v) => v,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::evidence_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let Some(r) = row else {
-        let _ = tx.commit().await;
+        if tx.commit().await.is_err() {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::evidence_unavailable_json(
+                    "store_down",
+                )),
+            )
+                .into_response();
+        }
         return (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "not found"}))).into_response();
     };
     let client_id = r.try_get::<i64, _>("client_id").unwrap_or(0);
 
-    let deleted = sqlx::query("DELETE FROM evidence_items WHERE id = $1")
+    let deleted = match sqlx::query("DELETE FROM evidence_items WHERE id = $1")
         .bind(evidence_id)
         .execute(&mut *tx)
         .await
-        .ok()
-        .map(|r| r.rows_affected())
-        .unwrap_or(0);
+    {
+        Ok(r) => r.rows_affected(),
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::evidence_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     if deleted == 0 {
         let _ = tx.rollback().await;
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false}))).into_response();
@@ -364,7 +544,7 @@ async fn api_evidence_delete(
 
     let ip = extract_client_ip(&headers, addr);
     let actor = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
-    let _ = audit_log::insert_audit(
+    if audit_log::insert_audit(
         &mut tx,
         auth.tenant_id,
         Some(auth.user_id),
@@ -373,8 +553,26 @@ async fn api_evidence_delete(
         &format!("client_id={} evidence_id={}", client_id, evidence_id),
         &ip,
     )
-    .await;
-    let _ = tx.commit().await;
+    .await
+    .is_err()
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::evidence_unavailable_json(
+                "store_down",
+            )),
+        )
+            .into_response();
+    }
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::evidence_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
 
     (StatusCode::OK, Json(json!({"ok": true}))).into_response()
 }

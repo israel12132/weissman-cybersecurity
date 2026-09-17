@@ -27,7 +27,7 @@ async fn api_async_jobs_list(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({"ok": false, "detail": "Database unavailable", "jobs": []})),
+            Json(crate::http_unavailable::async_jobs_list_unavailable_json("store_down")),
         )
             .into_response();
     };
@@ -59,10 +59,19 @@ async fn api_async_jobs_list(
     .bind(auth.tenant_id)
     .bind(scoped_client)
     .fetch_all(&mut *tx)
-    .await
-    .unwrap_or_default();
+    .await;
+    let rows = match rows {
+        Ok(r) => r,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::async_jobs_list_unavailable_json("store_down")),
+            )
+                .into_response();
+        }
+    };
 
-    let total: i64 = sqlx::query_scalar::<_, i64>(
+    let total = match sqlx::query_scalar::<_, i64>(
         r#"SELECT COUNT(*)::bigint FROM weissman_async_jobs
             WHERE tenant_id = $2 AND ($1::text IS NULL OR status = $1)
               AND (
@@ -76,8 +85,23 @@ async fn api_async_jobs_list(
     .bind(scoped_client)
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
-    let _ = tx.commit().await;
+    {
+        Ok(n) => n,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::async_jobs_list_unavailable_json("store_down")),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::async_jobs_list_unavailable_json("store_down")),
+        )
+            .into_response();
+    }
 
     let tenant_id = auth.tenant_id;
     let out: Vec<Value> = rows
@@ -366,7 +390,13 @@ async fn api_async_job_status(
     .bind(&jid)
     .fetch_optional(&mut *tx)
     .await;
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::poe_job_unavailable_json("store_down")),
+        )
+            .into_response();
+    }
     match row {
         Ok(Some(r)) => {
             let findings_json: String = r.try_get("findings_json").unwrap_or_else(|_| "[]".into());

@@ -193,10 +193,12 @@ function scoreColor(score) {
 }
 
 function ScoreGauge({ score, label }) {
-  const c = scoreColor(score)
+  const hasScore = score != null && Number.isFinite(Number(score))
+  const n = hasScore ? Number(score) : 0
+  const c = hasScore ? scoreColor(n) : 'rgba(255,255,255,0.25)'
   const r = 52
   const circ = 2 * Math.PI * r
-  const dash = (score / 100) * circ
+  const dash = hasScore ? (n / 100) * circ : 0
   return (
     <div className="relative flex items-center justify-center w-[140px] h-[140px]">
       <svg width="140" height="140" className="-rotate-90">
@@ -207,11 +209,11 @@ function ScoreGauge({ score, label }) {
           initial={{ strokeDasharray: `0 ${circ}` }}
           animate={{ strokeDasharray: `${dash} ${circ}` }}
           transition={{ duration: 0.9, ease: 'easeOut' }}
-          style={{ filter: `drop-shadow(0 0 6px ${c}80)` }}
+          style={hasScore ? { filter: `drop-shadow(0 0 6px ${c}80)` } : undefined}
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-4xl font-bold font-mono" style={{ color: c }}>{score}</span>
+        <span className="text-4xl font-bold font-mono" style={{ color: c }}>{hasScore ? n : '—'}</span>
         <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-widest">{label}</span>
       </div>
     </div>
@@ -287,6 +289,7 @@ export default function PqcRadar() {
   const tt = useCallback((key, def) => t(`pages.pqcRadar.${key}`, { defaultValue: def }), [t])
 
   const [clients, setClients] = useState([])
+  const [clientsUnavailable, setClientsUnavailable] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState(null)
   const { postScan } = useCommandCenterScan(selectedClientId)
   const [target, setTarget] = useState('')
@@ -324,7 +327,13 @@ export default function PqcRadar() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE_ID, detailFindings)
+
+  const handleExportCsv = useCallback(() => {
+    if (historyUnavailable) return
+    exportCsv()
+  }, [historyUnavailable, exportCsv])
 
   useEffect(() => {
     refreshFromHistory().then((run) => {
@@ -354,9 +363,13 @@ export default function PqcRadar() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((d) => { if (Array.isArray(d)) setClients(d) })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {})
+      .then((d) => {
+        const list = Array.isArray(d) ? d : Array.isArray(d?.clients) ? d.clients : null
+        if (!list) { setClientsUnavailable(true); return }
+        setClientsUnavailable(false)
+        setClients(list)
+      })
+      .catch(() => setClientsUnavailable(true))
   }, [])
 
   // Auto-fill target from the selected client's primary domain (unless the operator edited it).
@@ -391,7 +404,9 @@ export default function PqcRadar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId, target, params, showToast, tt])
 
-  const score = summary ? Number(summary.readiness_score ?? 0) : null
+  const score = summary && summary.readiness_score != null && Number.isFinite(Number(summary.readiness_score))
+    ? Number(summary.readiness_score)
+    : null
   const ev = summary?.evidence ?? {}
   const sshState = !ev.ssh_checked ? 'na' : (!ev.ssh_reachable ? 'na' : (ev.ssh_pqc_kex ? 'good' : 'bad'))
 
@@ -411,10 +426,10 @@ export default function PqcRadar() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={exportCsv}
+          onExport={historyUnavailable ? undefined : handleExportCsv}
           refreshLoading={historyLoading}
           refreshDisabled={scanning}
-          exportDisabled={!sortedFindings.length}
+          exportDisabled={historyUnavailable || !sortedFindings.length}
         />
       )}
     >
@@ -431,6 +446,11 @@ export default function PqcRadar() {
               <option value="">{tt('select_client', '— Select client —')}</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
+            {clientsUnavailable && (
+              <p data-testid="pqc-radar-clients-unavailable" className="text-xs text-amber-300/80 font-mono">
+                {tt('clients_unavailable', 'Clients API unavailable — a missing picker is not a missing tenant.')}
+              </p>
+            )}
           </label>
           <label className="space-y-1">
             <span className="block text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wider">{tt('target_label', 'Target host')}</span>
@@ -515,7 +535,7 @@ export default function PqcRadar() {
         {/* ── Results column ── */}
         <div className="space-y-6 lg:col-span-2">
           <AnimatePresence mode="wait">
-            {summary ? (
+            {summary && !historyUnavailable ? (
               <motion.div
                 key="score"
                 initial={{ opacity: 0, y: 8 }}
@@ -523,7 +543,7 @@ export default function PqcRadar() {
                 className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-6"
               >
                 <div className="flex items-center gap-6 flex-wrap">
-                  <ScoreGauge score={score ?? 0} label={tt('score_label', 'READINESS')} />
+                  <ScoreGauge score={score} label={tt('score_label', 'READINESS')} />
                   <div className="flex-1 min-w-[240px] space-y-3">
                     <div>
                       <h3 className="text-sm font-bold text-white">{tt('readiness_score', 'Quantum-Readiness Score')}</h3>
@@ -568,6 +588,8 @@ export default function PqcRadar() {
                 <p className="text-[11px] font-mono text-[var(--text-disabled)]">
                   {scanning
                     ? tt('scan_running', 'Negotiating post-quantum key exchange with the target…')
+                    : historyUnavailable
+                      ? tt('history_unavailable', 'Engine history API unavailable — PQC readiness is not confirmed.')
                     : !selectedClientId
                       ? tt('empty_no_client', 'Select a client and run the PQC scanner to measure quantum readiness.')
                       : tt('empty_ready', 'Ready — run to test live PQC key-exchange negotiation, SSH, certificates, and HNDL exposure.')}
@@ -576,6 +598,11 @@ export default function PqcRadar() {
             )}
           </AnimatePresence>
 
+          {historyUnavailable && (
+            <p data-testid="pqc-radar-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+              {tt('history_unavailable', 'Engine history API unavailable — PQC readiness is not confirmed.')}
+            </p>
+          )}
           <WeissmanFindingsPanel
             findings={detailFindings}
             filteredFindings={sortedFindings}
@@ -590,7 +617,10 @@ export default function PqcRadar() {
             lastUpdated={lastUpdated}
             jobId={pendingJobId || lastJobId}
             accent="#10b981"
-            showEmptyReady={!scanning && detailFindings.length === 0 && !summary}
+            unavailable={historyUnavailable}
+            unavailableTitle={tt('history_unavailable', 'Engine history API unavailable — PQC readiness is not confirmed.')}
+            unavailableBody={tt('history_unavailable', 'Engine history API unavailable — PQC readiness is not confirmed.')}
+            showEmptyReady={!scanning && !historyUnavailable && detailFindings.length === 0 && !summary}
             emptyReadyTitle={tt('empty_ready', 'Ready — run to test live PQC key-exchange negotiation, SSH, certificates, and HNDL exposure.')}
             emptyReadyBody={tt('empty_no_client', 'Select a client and run the PQC scanner to measure quantum readiness.')}
             renderFinding={(f, i) => <FindingCard key={i} f={f} />}

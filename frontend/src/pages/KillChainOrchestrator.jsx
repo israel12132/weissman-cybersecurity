@@ -471,6 +471,11 @@ export default function KillChainOrchestrator() {
 
   const { exportCsv, filteredFindings } = useFindingsWorkbench(findings, { csvPrefix: 'weissman-kill-chain' })
 
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    exportCsv()
+  }, [error, exportCsv])
+
   return (
     <PageShell
       title={t('pages.killChainOrchestrator.title')}
@@ -480,18 +485,20 @@ export default function KillChainOrchestrator() {
       actions={(
         <ShellScanActions
           onRefresh={loadKillChainData}
-          onExport={exportCsv}
+          onExport={error ? undefined : handleExportCsv}
           refreshLoading={isLoading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={!!error || !filteredFindings.length}
         />
       )}
     >
+      {!error && (
       <p className="text-xs text-[var(--text-muted)] font-mono mb-6">
         {t('pages.killChainOrchestrator.data_source_note', {
           live: chainsFromApi ? t('pages.killChainOrchestrator.data_source_live') : t('pages.killChainOrchestrator.data_source_fallback'),
           engines: productionCount > 0 ? t('pages.killChainOrchestrator.data_source_engines', { count: productionCount }) : '',
         })}
       </p>
+      )}
 
       {error && (
         <div className="mb-6 p-4 rounded-xl border border-red-500/30 bg-red-900/20 text-red-300 text-sm">
@@ -499,6 +506,15 @@ export default function KillChainOrchestrator() {
         </div>
       )}
 
+      {error ? (
+        <div data-testid="kill-chain-unavailable" className="mb-8">
+          <EmptyState
+            icon="alert"
+            title={t('pages.killChainOrchestrator.unavailable_title')}
+            body={t('pages.killChainOrchestrator.unavailable_body')}
+          />
+        </div>
+      ) : (
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
         {[
           { label: t('pages.killChainOrchestrator.kpi_active_chains'), value: isLoading ? '…' : chains.length, color: '#22d3ee' },
@@ -512,12 +528,13 @@ export default function KillChainOrchestrator() {
           </div>
         ))}
       </div>
+      )}
 
       {isLoading ? (
         <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-8 text-center text-sm text-[var(--text-muted)]">
           {t('pages.killChainOrchestrator.loading')}
         </div>
-      ) : chains.length === 0 ? (
+      ) : error ? null : chains.length === 0 ? (
         <EmptyState
           icon="radar"
           title={t('pages.killChainOrchestrator.no_findings_title')}

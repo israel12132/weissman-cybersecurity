@@ -75,8 +75,7 @@ pub async fn run_verification(
     .bind(client_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten()
+    .map_err(|_| "store_down".to_string())?
     .unwrap_or_else(|| "OPEN".to_string());
     let was_verified_fixed = current_status == "VERIFIED_FIXED";
     let liveness = if still {

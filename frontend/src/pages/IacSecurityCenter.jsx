@@ -10,6 +10,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import { isHttpUrl } from '../utils/safeUrl'
 import { SkeletonBar, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch } from '../utils/apiFetch'
+import { classifyEngineHistory } from '../hooks/useEngineHistory'
 import { openSseStream } from '../lib/sseStream'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import { useClientIntegrations } from '../hooks/useClientIntegrations'
@@ -987,18 +988,19 @@ function Chips({ options, selected, onToggle, render }) {
 // ─── Result visualization ────────────────────────────────────────────────────
 
 function ScoreGauge({ score, grade, blast }) {
-  const pct = Math.min(100, Math.max(0, score ?? 0))
-  const color = pct >= 75 ? '#ef4444' : pct >= 50 ? '#f97316' : pct >= 25 ? '#f59e0b' : '#10b981'
+  const hasScore = score != null && Number.isFinite(Number(score))
+  const pct = hasScore ? Math.min(100, Math.max(0, Number(score))) : 0
+  const color = !hasScore ? 'rgba(255,255,255,0.12)' : pct >= 75 ? '#ef4444' : pct >= 50 ? '#f97316' : pct >= 25 ? '#f59e0b' : '#10b981'
   return (
     <div className="relative w-36 h-36 mx-auto">
       <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
         <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="8" />
-        <circle cx="50" cy="50" r="42" fill="none" stroke={color} strokeWidth="8" strokeDasharray={`${pct * 2.64} 264`} strokeLinecap="round" style={{ filter: `drop-shadow(0 0 8px ${color}80)` }} />
+        <circle cx="50" cy="50" r="42" fill="none" stroke={color} strokeWidth="8" strokeDasharray={hasScore ? `${pct * 2.64} 264` : '0 264'} strokeLinecap="round" style={{ filter: hasScore ? `drop-shadow(0 0 8px ${color}80)` : undefined }} />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-3xl font-bold text-white">{grade ?? '—'}</span>
-        <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-widest">risk {pct}</span>
-        {blast > 1 && <span className="text-[8px] font-mono text-rose-300/80 mt-0.5">×{blast.toFixed(2)} blast</span>}
+        <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-widest">{hasScore ? `risk ${pct}` : 'risk —'}</span>
+        {hasScore && blast > 1 && <span className="text-[8px] font-mono text-rose-300/80 mt-0.5">×{blast.toFixed(2)} blast</span>}
       </div>
     </div>
   )
@@ -1660,6 +1662,7 @@ export default function IacSecurityCenter() {
   const [sevFilter, setSevFilter] = useState('all')
   const [findingSearch, setFindingSearch] = useState('')
   const [lastScanAt, setLastScanAt] = useState(null)
+  const [historyUnavailable, setHistoryUnavailable] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [policyQuery, setPolicyQuery] = useState('')
   const esRef = useRef(null)
@@ -1796,12 +1799,17 @@ export default function IacSecurityCenter() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canRun, params, selectedClientId, effectiveTarget, paramCount, appendLine])
 
-  const remediationQueue = useMemo(() => summary?.remediation_queue || [], [summary])
-  const policyCatalog = useMemo(() => (Array.isArray(summary?.policy_catalog) ? summary.policy_catalog : []), [summary])
-  const attackChains = useMemo(() => summary?.attack_chains || [], [summary])
+  const liveSummary = historyUnavailable ? null : summary
   const policyFindings = useMemo(() => findings.filter((f) => f.category !== 'iac_attack_chain'), [findings])
+  const livePolicyFindings = historyUnavailable ? [] : policyFindings
+  const liveTelemetryLines = historyUnavailable
+    ? lines.filter((l) => !String(l).includes('[IaC] Loaded last run'))
+    : lines
+  const remediationQueue = useMemo(() => liveSummary?.remediation_queue || [], [liveSummary])
+  const policyCatalog = useMemo(() => (Array.isArray(liveSummary?.policy_catalog) ? liveSummary.policy_catalog : []), [liveSummary])
+  const attackChains = useMemo(() => liveSummary?.attack_chains || [], [liveSummary])
   const shownFindings = useMemo(() => {
-    let list = policyFindings
+    let list = livePolicyFindings
     if (sevFilter !== 'all') list = list.filter((f) => f.severity === sevFilter)
     const q = findingSearch.trim().toLowerCase()
     if (q) {
@@ -1810,9 +1818,10 @@ export default function IacSecurityCenter() {
       )
     }
     return list
-  }, [policyFindings, sevFilter, findingSearch])
+  }, [livePolicyFindings, sevFilter, findingSearch])
 
   const exportFixBundle = useCallback(() => {
+    if (historyUnavailable) return
     const bundle = summary?.fix_bundle
     if (!bundle) return
     const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' })
@@ -1822,9 +1831,10 @@ export default function IacSecurityCenter() {
     a.download = `iac-fixes-${Date.now()}.json`
     a.click()
     URL.revokeObjectURL(url)
-  }, [summary])
+  }, [historyUnavailable, summary])
 
   const exportShellScript = useCallback(() => {
+    if (historyUnavailable) return
     const script = summary?.fix_bundle?.shell_script
     if (!script) return
     const blob = new Blob([script], { type: 'text/plain' })
@@ -1834,9 +1844,10 @@ export default function IacSecurityCenter() {
     a.download = `iac-fixes-${Date.now()}.sh`
     a.click()
     URL.revokeObjectURL(url)
-  }, [summary])
+  }, [historyUnavailable, summary])
 
   const exportGateEvidence = useCallback(() => {
+    if (historyUnavailable) return
     const ev = summary?.gate_evidence
     if (!ev) return
     const blob = new Blob([JSON.stringify(ev, null, 2)], { type: 'application/json' })
@@ -1846,9 +1857,10 @@ export default function IacSecurityCenter() {
     a.download = `iac-gate-evidence-${Date.now()}.json`
     a.click()
     URL.revokeObjectURL(url)
-  }, [summary])
+  }, [historyUnavailable, summary])
 
   const exportAuditPacket = useCallback(() => {
+    if (historyUnavailable) return
     const pkt = summary?.audit_packet
     if (!pkt) return
     const blob = new Blob([JSON.stringify(pkt, null, 2)], { type: 'application/json' })
@@ -1858,9 +1870,10 @@ export default function IacSecurityCenter() {
     a.download = `iac-audit-packet-${Date.now()}.json`
     a.click()
     URL.revokeObjectURL(url)
-  }, [summary])
+  }, [historyUnavailable, summary])
 
   const exportBundle = useCallback(() => {
+    if (historyUnavailable) return
     const bundle = {
       engine: ENGINE_ID,
       summary,
@@ -1876,39 +1889,44 @@ export default function IacSecurityCenter() {
     a.download = `iac-security-${Date.now()}.json`
     a.click()
     URL.revokeObjectURL(url)
-  }, [summary, policyFindings, attackChains])
+  }, [historyUnavailable, summary, policyFindings, attackChains])
 
   const loadLastScan = useCallback(async () => {
     try {
       const d = await apiFetch('/api/engines/history/iac_misconfig?limit=1')
-      const runs = Array.isArray(d) ? d : Array.isArray(d?.runs) ? d.runs : []
-      const last = runs[0]
+      const classified = classifyEngineHistory(d)
+      if (classified.kind === 'unavailable') {
+        setHistoryUnavailable(true)
+        return
+      }
+      setHistoryUnavailable(false)
+      const last = classified.last
       if (!last) return
-      const all = Array.isArray(last.findings) ? last.findings : []
+      const all = classified.findings
       const sum = all.find((x) => x.category === 'iac_summary')
       const viol = all.filter((x) => x.category !== 'iac_summary')
       if (sum?.iac_summary || viol.length) {
         setSummary(sum?.iac_summary || null)
         setFindings(viol)
         setLastScanAt(last.completed_at || last.updated_at || last.created_at || null)
-        appendLine(`[IaC] Loaded last run — ${viol.length} findings`)
       }
     } catch {
-      /* no fabricated history */
+      setHistoryUnavailable(true)
     }
-  }, [appendLine])
+  }, [])
 
   const exportFindingsCsv = useCallback(() => {
+    if (historyUnavailable) return
     if (!shownFindings.length) return
     exportPolicyFindingsCsv(shownFindings, 'weissman-iac-findings')
-  }, [shownFindings])
+  }, [historyUnavailable, shownFindings])
 
   const shellActions = (
     <ShellScanActions
       onRefresh={loadLastScan}
-      onExport={exportFindingsCsv}
+      onExport={historyUnavailable ? undefined : exportFindingsCsv}
       refreshLoading={running}
-      exportDisabled={!shownFindings.length}
+      exportDisabled={historyUnavailable || !shownFindings.length}
     />
   )
 
@@ -1932,7 +1950,7 @@ export default function IacSecurityCenter() {
               <div className="flex items-center gap-2 mb-2 flex-wrap">
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-cyan-400/40 text-cyan-300 bg-cyan-500/10 uppercase tracking-widest">CNAPP · IaC Scanning</span>
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-emerald-400/30 text-emerald-300 bg-emerald-500/10 uppercase tracking-widest">{paramCount} {t('iacSecurity.live_params', 'live parameters')}</span>
-                {summary && <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-[var(--border-strong)] text-[var(--text-tertiary)]">{summary.policies_available} policies</span>}
+                {liveSummary && <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-[var(--border-strong)] text-[var(--text-tertiary)]">{liveSummary.policies_available} policies</span>}
               </div>
               <h1 className="text-2xl font-bold text-white tracking-tight">{engine?.label ? `${engine.label} — Security Center` : 'IaC Security Center'}</h1>
               <p className="text-sm text-[var(--text-tertiary)] mt-1 max-w-2xl leading-relaxed">{t('iacSecurity.hero_desc', 'Deterministic, agentless static analysis of your infrastructure code with deep policy coverage, secret detection, compliance posture and code-level remediation — inspired by Wiz, Checkov & tfsec.')}</p>
@@ -2080,43 +2098,50 @@ export default function IacSecurityCenter() {
                 <SkeletonBar className="h-24 w-full" />
               </div>
             )}
-            {lastScanAt && (
+            {lastScanAt && !historyUnavailable && (
               <p className="text-[10px] font-mono text-[var(--text-muted)]">
                 {t('iacSecurity.last_scan', 'Last scan')}: {new Date(lastScanAt).toLocaleString()}
               </p>
             )}
-            <ExecutiveBanner summary={summary} />
-            {summary?.readiness && <ReadinessPanel readiness={summary.readiness} />}
-            {summary?.cis_scorecard && <CisScorecard scorecard={summary.cis_scorecard} />}
-            {summary?.risk_heatmap && <RiskHeatmap heatmap={summary.risk_heatmap} />}
+            <ExecutiveBanner summary={liveSummary} />
+            {liveSummary?.readiness && <ReadinessPanel readiness={liveSummary.readiness} />}
+            {liveSummary?.cis_scorecard && <CisScorecard scorecard={liveSummary.cis_scorecard} />}
+            {liveSummary?.risk_heatmap && <RiskHeatmap heatmap={liveSummary.risk_heatmap} />}
             {attackChains.length > 0 && (
               <div className="rounded-2xl border border-rose-500/40 bg-gradient-to-r from-rose-950/40 to-orange-950/20 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
                 <p className="text-sm font-semibold text-rose-200">{t('iacSecurity.toxic_alert', 'Toxic combination detected')} — {attackChains.length} {t('iacSecurity.attack_paths', 'attack paths')}</p>
                 <span className="text-[10px] font-mono text-rose-300/70">{t('iacSecurity.toxic_hint', 'Correlated policies indicate exploitable breach chains — prioritize remediation queue')}</span>
               </div>
             )}
+            {historyUnavailable && (
+              <p data-testid="iac-security-history-unavailable" className="text-xs text-amber-300/80 font-mono">
+                {t('iacSecurity.history_unavailable')}
+              </p>
+            )}
             <div className="grid grid-cols-1 2xl:grid-cols-3 gap-6">
               <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-5 text-center">
                 <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-3">{t('iacSecurity.posture', 'Security Posture')}</p>
-                <ScoreGauge score={summary?.risk_score} grade={summary?.grade} blast={summary?.blast_radius_multiplier ?? 1} />
-                {summary && (
-                  <div className={`mt-3 inline-block text-[10px] font-mono px-2 py-1 rounded ${summary.gate?.passed ? 'text-emerald-300 bg-emerald-500/10' : 'text-rose-300 bg-rose-500/10'}`}>
-                    {t('iacSecurity.gate', 'Gate')}: {summary.gate?.passed ? 'PASS' : `FAIL (${summary.gate?.blocking_findings} ≥ ${summary.gate?.fail_severity})`}
+                <ScoreGauge score={liveSummary?.risk_score} grade={liveSummary?.grade} blast={liveSummary?.blast_radius_multiplier ?? 1} />
+                {liveSummary && (
+                  <div className={`mt-3 inline-block text-[10px] font-mono px-2 py-1 rounded ${liveSummary.gate?.passed ? 'text-emerald-300 bg-emerald-500/10' : 'text-rose-300 bg-rose-500/10'}`}>
+                    {t('iacSecurity.gate', 'Gate')}: {liveSummary.gate?.passed ? 'PASS' : `FAIL (${liveSummary.gate?.blocking_findings} ≥ ${liveSummary.gate?.fail_severity})`}
                   </div>
                 )}
               </div>
               <div className="2xl:col-span-2 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-5">
                 <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-3">{t('iacSecurity.severity_breakdown', 'Severity Breakdown')}</p>
-                <SeverityBars bySeverity={summary?.by_severity} />
+                {!historyUnavailable && liveSummary?.by_severity
+                  ? <SeverityBars bySeverity={liveSummary.by_severity} />
+                  : <p className="text-[11px] font-mono text-[var(--text-muted)]">—</p>}
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4">
-                  <MetricTile label="Findings" value={summary?.findings_total} accent="#ef4444" />
-                  <MetricTile label="Files" value={summary?.files_scanned} accent="#22d3ee" />
-                  <MetricTile label="Policies hit" value={summary ? `${summary.policies_triggered}/${summary.policies_available}` : '—'} accent="#a855f7" />
-                  <MetricTile label="Attack paths" value={attackChains.length || '—'} accent="#f43f5e" />
-                  <MetricTile label="Readiness" value={summary?.readiness?.readiness_score != null ? `${summary.readiness.readiness_score}` : '—'} accent="#8b5cf6" />
-                  <MetricTile label="Drift" value={summary?.drift_findings ?? '—'} accent="#f97316" />
-                  <MetricTile label="Reconcile" value={summary?.plan_reconcile_findings ?? '—'} accent="#8b5cf6" />
-                  <MetricTile label="Supply" value={summary?.supply_chain_findings ?? '—'} accent="#f59e0b" />
+                  <MetricTile label="Findings" value={liveSummary?.findings_total} accent="#ef4444" />
+                  <MetricTile label="Files" value={liveSummary?.files_scanned} accent="#22d3ee" />
+                  <MetricTile label="Policies hit" value={liveSummary ? `${liveSummary.policies_triggered}/${liveSummary.policies_available}` : '—'} accent="#a855f7" />
+                  <MetricTile label="Attack paths" value={historyUnavailable ? '—' : (liveSummary ? attackChains.length : '—')} accent="#f43f5e" />
+                  <MetricTile label="Readiness" value={liveSummary?.readiness?.readiness_score != null ? `${liveSummary.readiness.readiness_score}` : '—'} accent="#8b5cf6" />
+                  <MetricTile label="Drift" value={liveSummary?.drift_findings ?? '—'} accent="#f97316" />
+                  <MetricTile label="Reconcile" value={liveSummary?.plan_reconcile_findings ?? '—'} accent="#8b5cf6" />
+                  <MetricTile label="Supply" value={liveSummary?.supply_chain_findings ?? '—'} accent="#f59e0b" />
                 </div>
               </div>
             </div>
@@ -2128,38 +2153,38 @@ export default function IacSecurityCenter() {
                   <span className="text-[9px] font-mono text-[var(--text-muted)]">{attackChains.length} {t('iacSecurity.chains_detected', 'chains from correlated policies')}</span>
                 </div>
                 <InteractiveAttackGraph chains={attackChains} />
-                <AttackPathMermaid source={summary?.attack_path_mermaid} chains={attackChains} />
+                <AttackPathMermaid source={liveSummary?.attack_path_mermaid} chains={attackChains} />
                 <div className="grid gap-2">
                   {attackChains.map((c) => <AttackPathCard key={c.id} chain={c} />)}
                 </div>
               </div>
             )}
 
-            <WaiversPanel waivers={summary?.policy_waivers_applied} />
-            <DriftPanel findings={policyFindings} count={summary?.drift_findings} />
-            <ReconcilePanel findings={policyFindings} count={summary?.plan_reconcile_findings} />
-            {summary?.soc2_report && <Soc2ReportPanel report={summary.soc2_report} />}
-            {summary?.pci_report && <PciReportPanel report={summary.pci_report} />}
-            {summary?.hipaa_report && <HipaaReportPanel report={summary.hipaa_report} />}
-            {summary?.nist_report && <NistReportPanel report={summary.nist_report} />}
-            {summary?.iso27001_report && <Iso27001ReportPanel report={summary.iso27001_report} />}
-            {summary?.fedramp_report && <FedRampReportPanel report={summary.fedramp_report} />}
-            {summary?.live_blast && (
+            <WaiversPanel waivers={liveSummary?.policy_waivers_applied} />
+            <DriftPanel findings={livePolicyFindings} count={liveSummary?.drift_findings} />
+            <ReconcilePanel findings={livePolicyFindings} count={liveSummary?.plan_reconcile_findings} />
+            {liveSummary?.soc2_report && <Soc2ReportPanel report={liveSummary.soc2_report} />}
+            {liveSummary?.pci_report && <PciReportPanel report={liveSummary.pci_report} />}
+            {liveSummary?.hipaa_report && <HipaaReportPanel report={liveSummary.hipaa_report} />}
+            {liveSummary?.nist_report && <NistReportPanel report={liveSummary.nist_report} />}
+            {liveSummary?.iso27001_report && <Iso27001ReportPanel report={liveSummary.iso27001_report} />}
+            {liveSummary?.fedramp_report && <FedRampReportPanel report={liveSummary.fedramp_report} />}
+            {liveSummary?.live_blast && (
               <LiveBlastPanel
-                liveBlast={summary.live_blast}
-                realLiveRisk={summary.real_live_risk_score}
-                staticRisk={summary.static_risk_score}
+                liveBlast={liveSummary.live_blast}
+                realLiveRisk={liveSummary.real_live_risk_score}
+                staticRisk={liveSummary.static_risk_score}
               />
             )}
-            {summary?.audit_packet && <AuditPacketPanel packet={summary.audit_packet} />}
-            {summary?.gate_evidence && <GateEvidencePanel evidence={summary.gate_evidence} />}
-            <SupplyChainPanel findings={policyFindings} count={summary?.supply_chain_findings} />
-            {summary?.compliance_playbooks?.length > 0 && <CompliancePlaybooks playbooks={summary.compliance_playbooks} />}
+            {liveSummary?.audit_packet && <AuditPacketPanel packet={liveSummary.audit_packet} />}
+            {liveSummary?.gate_evidence && <GateEvidencePanel evidence={liveSummary.gate_evidence} />}
+            <SupplyChainPanel findings={livePolicyFindings} count={liveSummary?.supply_chain_findings} />
+            {liveSummary?.compliance_playbooks?.length > 0 && <CompliancePlaybooks playbooks={liveSummary.compliance_playbooks} />}
 
-            {summary?.framework_coverage && (
+            {liveSummary?.framework_coverage && (
               <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
                 <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-3">{t('iacSecurity.framework_coverage', 'Framework Policy Coverage')}</p>
-                <FrameworkCoverage coverage={summary.framework_coverage} />
+                <FrameworkCoverage coverage={liveSummary.framework_coverage} />
               </div>
             )}
 
@@ -2188,18 +2213,18 @@ export default function IacSecurityCenter() {
               </div>
             )}
 
-            {summary?.mitre_rollup?.length > 0 && (
+            {liveSummary?.mitre_rollup?.length > 0 && (
               <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
                 <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-3">{t('iacSecurity.mitre_rollup', 'MITRE ATT&CK Rollup')}</p>
-                <MitreRollup rows={summary.mitre_rollup} />
+                <MitreRollup rows={liveSummary.mitre_rollup} />
               </div>
             )}
 
-            {summary?.compliance && summary.compliance.length > 0 && (
+            {liveSummary?.compliance && liveSummary.compliance.length > 0 && (
               <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
                 <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-3">{t('iacSecurity.compliance_posture', 'Compliance Posture')}</p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {summary.compliance.map((p) => <ComplianceCard key={p.pack} pack={p} />)}
+                  {liveSummary.compliance.map((p) => <ComplianceCard key={p.pack} pack={p} />)}
                 </div>
               </div>
             )}
@@ -2207,14 +2232,14 @@ export default function IacSecurityCenter() {
             {/* Telemetry */}
             <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--scrim)] overflow-hidden">
               <div className="px-4 py-2 border-b border-[var(--border-subtle)] text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest">{t('iacSecurity.telemetry', 'Scan Telemetry')}</div>
-              <pre className="h-32 overflow-auto p-3 text-[10px] font-mono text-emerald-400/80 leading-relaxed">{lines.length ? lines.join('\n') : t('iacSecurity.awaiting', 'Awaiting scan…')}</pre>
+              <pre className="h-32 overflow-auto p-3 text-[10px] font-mono text-emerald-400/80 leading-relaxed">{liveTelemetryLines.length ? liveTelemetryLines.join('\n') : t('iacSecurity.awaiting', 'Awaiting scan…')}</pre>
             </div>
 
             {/* Findings */}
             <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 space-y-3">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)]">
-                  {shownFindings.length}/{policyFindings.length} {t('iacSecurity.findings', 'Findings')}
+                  {historyUnavailable ? '—' : `${shownFindings.length}/${policyFindings.length}`} {t('iacSecurity.findings', 'Findings')}
                 </p>
                 <div className="relative min-w-[200px] flex-1 max-w-xs">
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-disabled)]" />
@@ -2228,7 +2253,7 @@ export default function IacSecurityCenter() {
                   />
                 </div>
                 <div className="flex gap-1 items-center flex-wrap">
-                  {summary && (
+                  {liveSummary && (
                     <>
                       <Button variant="unstyled" type="button" onClick={exportBundle} className="text-[9px] font-mono px-2 py-0.5 rounded border border-emerald-400/30 text-emerald-300/80 hover:bg-emerald-500/10">
                         {t('iacSecurity.export_bundle', 'Export remediation bundle')}
@@ -2269,11 +2294,13 @@ export default function IacSecurityCenter() {
                   </motion.div>
                 ) : (
                   <p className="text-[11px] text-[var(--text-disabled)] font-mono py-6 text-center">
-                    {running
-                      ? t('iacSecurity.running_note', 'Analyzing infrastructure code…')
-                      : findingSearch.trim()
-                        ? t('iacSecurity.no_findings_filtered', 'No findings match the current search and severity filters.')
-                        : t('iacSecurity.no_findings', 'No findings yet — configure a scan and run.')}
+                    {historyUnavailable
+                      ? t('iacSecurity.history_unavailable')
+                      : running
+                        ? t('iacSecurity.running_note', 'Analyzing infrastructure code…')
+                        : findingSearch.trim()
+                          ? t('iacSecurity.no_findings_filtered', 'No findings match the current search and severity filters.')
+                          : t('iacSecurity.no_findings', 'No findings yet — configure a scan and run.')}
                   </p>
                 )}
               </AnimatePresence>

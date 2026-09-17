@@ -50,12 +50,16 @@ export default function TopTierEngineProfile() {
   const [history, setHistory] = useState(null)
   const [historyLoading, setHistoryLoading] = useState(true)
   const [clients, setClients] = useState([])
+  const [clientsUnavailable, setClientsUnavailable] = useState(false)
   const [clientId, setClientId] = useState('')
   const [target, setTarget] = useState('')
   const [runState, setRunState] = useState({ running: false, msg: '' })
   const [activeJobId, setActiveJobId] = useState('')
   const [liveJob, setLiveJob] = useState(null)
   const [clientIntegrations, setClientIntegrations] = useState(null)
+  const [integrationsUnavailable, setIntegrationsUnavailable] = useState(false)
+  const [historyUnavailable, setHistoryUnavailable] = useState(false)
+  const [auditUnavailable, setAuditUnavailable] = useState(false)
   const { schema: paramSchema, extraParams, setParam } = useEngineScanParams(engineId, clientIntegrations)
   useSyncHubScanParams(engineId, extraParams)
   const { postScan } = useCommandCenterScan(clientId)
@@ -73,10 +77,23 @@ export default function TopTierEngineProfile() {
       ])
       if (auditRes.status === 'fulfilled' && Array.isArray(auditRes.value?.engines)) {
         const row = auditRes.value.engines.find((x) => x.engine_id === engineId) || null
+        setAuditUnavailable(false)
         setAudit(row)
+      } else {
+        setAuditUnavailable(true)
       }
       if (historyRes.status === 'fulfilled') {
-        setHistory(historyRes.value instanceof Response ? null : historyRes.value)
+        const v = historyRes.value instanceof Response ? null : historyRes.value
+        if (!v || v.ok === false || v.unavailable) {
+          setHistoryUnavailable(true)
+        } else if (v.jobs != null && !Array.isArray(v.jobs)) {
+          setHistoryUnavailable(true)
+        } else {
+          setHistoryUnavailable(false)
+          setHistory(v)
+        }
+      } else {
+        setHistoryUnavailable(true)
       }
     } finally {
       setHistoryLoading(false)
@@ -90,8 +107,16 @@ export default function TopTierEngineProfile() {
   useEffect(() => {
     let cancelled = false
     async function loadClients() {
-      const d = await apiFetch('/api/clients').catch(() => null)
-      if (!cancelled && Array.isArray(d)) setClients(d)
+      try {
+        const d = await apiFetch('/api/clients')
+        const list = Array.isArray(d) ? d : Array.isArray(d?.clients) ? d.clients : null
+        if (cancelled) return
+        if (!list) { setClientsUnavailable(true); return }
+        setClientsUnavailable(false)
+        setClients(list)
+      } catch {
+        if (!cancelled) setClientsUnavailable(true)
+      }
     }
     loadClients()
     return () => {
@@ -102,13 +127,27 @@ export default function TopTierEngineProfile() {
   useEffect(() => {
     if (!clientId) {
       setClientIntegrations(null)
+      setIntegrationsUnavailable(false)
       return
     }
     let cancelled = false
     ;(async () => {
-      const d = await apiFetch(`/api/clients/${clientId}/integrations`).catch(() => null)
-      if (cancelled) return
-      setClientIntegrations(normalizeIntegrations(d))
+      try {
+        const d = await apiFetch(`/api/clients/${clientId}/integrations`)
+        if (cancelled) return
+        if (!d || d.ok === false || d.unavailable) {
+          setIntegrationsUnavailable(true)
+          setClientIntegrations(null)
+          return
+        }
+        setIntegrationsUnavailable(false)
+        setClientIntegrations(normalizeIntegrations(d))
+      } catch {
+        if (!cancelled) {
+          setIntegrationsUnavailable(true)
+          setClientIntegrations(null)
+        }
+      }
     })()
     return () => { cancelled = true }
   }, [clientId])
@@ -226,6 +265,7 @@ export default function TopTierEngineProfile() {
   }
 
   async function exportJson() {
+    if (historyUnavailable) return
     let d
     try {
       d = await apiFetch(`/api/engines/top-tier/${encodeURIComponent(engineId)}/export?limit=120${activeJobId ? `&job_id=${encodeURIComponent(activeJobId)}` : ''}`)
@@ -244,12 +284,17 @@ export default function TopTierEngineProfile() {
   }
 
   function exportPdf() {
+    if (historyUnavailable) return
     const lines = []
     lines.push(`Top-Tier Engine Profile: ${profile.label} (${profile.id})`)
     lines.push(`Generated: ${new Date().toISOString()}`)
-    lines.push(`Execution path: ${audit?.execution_path || '-'}`)
-    lines.push(`Canonical: ${audit?.canonical_engine || '-'}`)
-    lines.push(`Production runnable: ${audit?.is_production_runnable ? 'yes' : 'no'}`)
+    if (auditUnavailable) {
+      lines.push(t('pages.topTierEngineProfile.audit_unavailable'))
+    } else {
+      lines.push(`Execution path: ${audit?.execution_path || '-'}`)
+      lines.push(`Canonical: ${audit?.canonical_engine || '-'}`)
+      lines.push(`Production runnable: ${audit?.is_production_runnable ? 'yes' : 'no'}`)
+    }
     lines.push('')
     lines.push('Mission')
     lines.push(profile.mission)
@@ -302,8 +347,9 @@ export default function TopTierEngineProfile() {
           <div className="ms-auto">
             <ShellScanActions
               onRefresh={reloadAll}
-              onExport={exportJson}
+              onExport={historyUnavailable ? undefined : exportJson}
               refreshLoading={historyLoading}
+              exportDisabled={historyUnavailable}
             />
           </div>
         </div>
@@ -339,12 +385,12 @@ export default function TopTierEngineProfile() {
           <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
             <h2 className="text-sm font-semibold text-white mb-2">{t('pages.topTierEngineProfile.reality_status')}</h2>
             <div className="space-y-2 text-[12px] font-mono text-[var(--text-tertiary)]">
-              <div>{t('pages.topTierEngineProfile.catalog', { value: audit?.known_in_catalog ? t('pages.topTierEngineProfile.connected') : t('pages.topTierEngineProfile.missing') })}</div>
-              <div>{t('pages.topTierEngineProfile.canonical', { value: audit?.canonical_engine || '-' })}</div>
-              <div>{t('pages.topTierEngineProfile.execution_path', { value: audit?.execution_path || '-' })}</div>
-              <div>{t('pages.topTierEngineProfile.production_runnable', { value: audit?.is_production_runnable ? t('pages.topTierEngineProfile.yes') : t('pages.topTierEngineProfile.no') })}</div>
-              <div>{t('pages.topTierEngineProfile.jobs_tracked', { count: jobs.length })}</div>
-              <div>{t('pages.topTierEngineProfile.findings_tracked', { count: findings.length })}</div>
+              <div>{t('pages.topTierEngineProfile.catalog', { value: auditUnavailable ? '—' : (audit?.known_in_catalog ? t('pages.topTierEngineProfile.connected') : t('pages.topTierEngineProfile.missing')) })}</div>
+              <div>{t('pages.topTierEngineProfile.canonical', { value: auditUnavailable ? '—' : (audit?.canonical_engine || '-') })}</div>
+              <div>{t('pages.topTierEngineProfile.execution_path', { value: auditUnavailable ? '—' : (audit?.execution_path || '-') })}</div>
+              <div>{t('pages.topTierEngineProfile.production_runnable', { value: auditUnavailable ? '—' : (audit?.is_production_runnable ? t('pages.topTierEngineProfile.yes') : t('pages.topTierEngineProfile.no')) })}</div>
+              <div>{historyUnavailable ? t('pages.topTierEngineProfile.history_unavailable') : t('pages.topTierEngineProfile.jobs_tracked', { count: jobs.length })}</div>
+              <div>{historyUnavailable ? t('pages.topTierEngineProfile.history_unavailable') : t('pages.topTierEngineProfile.findings_tracked', { count: findings.length })}</div>
             </div>
           </article>
         </section>
@@ -362,6 +408,16 @@ export default function TopTierEngineProfile() {
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
+            {clientsUnavailable && (
+              <p data-testid="top-tier-engine-profile-clients-unavailable" className="text-xs text-amber-300/80 font-mono md:col-span-3">
+                {t('pages.topTierEngineProfile.clients_unavailable')}
+              </p>
+            )}
+            {integrationsUnavailable && (
+              <p data-testid="top-tier-engine-profile-integrations-unavailable" className="text-xs text-amber-300/80 font-mono md:col-span-3">
+                {t('pages.topTierEngineProfile.integrations_unavailable')}
+              </p>
+            )}
             <input
               value={target}
               onChange={(e) => setTarget(e.target.value)}
@@ -388,6 +444,7 @@ export default function TopTierEngineProfile() {
             />
           )}
           <div className="flex flex-wrap items-center gap-2">
+            {!historyUnavailable && (
             <Button variant="unstyled"
               type="button"
               onClick={exportJson}
@@ -395,6 +452,8 @@ export default function TopTierEngineProfile() {
             >
               {t('pages.topTierEngineProfile.export_json')}
             </Button>
+            )}
+            {!historyUnavailable && (
             <Button variant="unstyled"
               type="button"
               onClick={exportPdf}
@@ -402,6 +461,7 @@ export default function TopTierEngineProfile() {
             >
               {t('pages.topTierEngineProfile.export_pdf')}
             </Button>
+            )}
             {activeJobId && <span className="text-[11px] font-mono text-[var(--text-tertiary)]">{t('pages.topTierEngineProfile.job_id', { id: activeJobId })}</span>}
           </div>
           {runState.msg && <div className="text-[12px] font-mono text-[var(--text-tertiary)]">{runState.msg}</div>}
@@ -427,6 +487,7 @@ export default function TopTierEngineProfile() {
           )}
         </section>
 
+        {!historyUnavailable && (
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 h-[280px]">
             <h2 className="text-sm font-semibold text-white mb-2">{t('pages.topTierEngineProfile.job_status_chart')}</h2>
@@ -453,6 +514,7 @@ export default function TopTierEngineProfile() {
             </ResponsiveContainer>
           </article>
         </section>
+        )}
 
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
@@ -472,7 +534,7 @@ export default function TopTierEngineProfile() {
 
         <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 space-y-3">
           <h2 className="text-sm font-semibold text-white">{t('pages.topTierEngineProfile.recent_jobs')}</h2>
-          {jobs.length > 0 && (
+          {!historyUnavailable && jobs.length > 0 && (
             <WeissmanListToolbar
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
@@ -482,6 +544,10 @@ export default function TopTierEngineProfile() {
           )}
           {historyLoading ? (
             <SkeletonTable rows={8} cols={5} />
+          ) : historyUnavailable ? (
+            <p data-testid="top-tier-engine-profile-history-unavailable" className="text-xs text-amber-300/80 font-mono">
+              {t('pages.topTierEngineProfile.history_unavailable')}
+            </p>
           ) : jobs.length === 0 ? (
             <EmptyState
               icon="inbox"

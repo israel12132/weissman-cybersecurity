@@ -17,6 +17,7 @@ export const PRIMARY_NAV = [
   { to: '/playbooks', labelKey: 'nav.playbooks', icon: '⚡' },
   { to: '/soar-hitl', labelKey: 'nav.soar_hitl', icon: '🛡' },
   { to: '/ask', labelKey: 'nav.ask_weissman', icon: '💬' },
+  { to: '/dominion', labelKey: 'nav.dominion', icon: '👑' },
 ]
 
 /** @type {NavGroup} */

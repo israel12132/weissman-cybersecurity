@@ -3,6 +3,7 @@
  * Auto-generated extract from EngineDetail — edit here or in generator output.
  */
 export const EXPLICIT_PARAM_DEFS = {
+  adversary_exposure_delta: [{ key:'max_findings', label:'Max Findings', type:'number', placeholder:'50', defaultVal:'50', min:1, max:50 }],
   osint:           [{ key:'depth',        label:'Recon Depth',                     type:'select',   options:['1','2','3','4','5'], defaultVal:'3' },
                    { key:'github_token', label:'GitHub Token (optional)',          type:'password', placeholder:'ghp_...', defaultVal:'' }],
   asm:             [{ key:'ports',            label:'Ports',                       type:'text',     placeholder:'top | all | 80,443,8080-8090', defaultVal:'top' },

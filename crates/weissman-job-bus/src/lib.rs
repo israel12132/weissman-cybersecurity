@@ -36,6 +36,8 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 /// Facade over the military-grade job bus. Gracefully degrades when Redis/secret unset.
+/// `Clone` is a multiplexed Redis handle + pool clone — not a new TCP connect.
+#[derive(Clone)]
 pub struct JobBus {
     pool: PgPool,
     redis: Option<redis::aio::ConnectionManager>,

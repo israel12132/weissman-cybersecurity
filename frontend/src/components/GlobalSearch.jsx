@@ -41,6 +41,7 @@ export default function GlobalSearch() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const listRef = useRef(null);
   const dialogRef = useRef(null);
@@ -154,20 +155,28 @@ export default function GlobalSearch() {
   useEffect(() => { setActiveIndex(0); }, [query, results.length, isOpen]);
 
   useEffect(() => {
-    if (!query.trim() || query.trim().length < 2) {
+    if (!isOpen || !query.trim() || query.trim().length < 2) {
       setResults([]);
+      setSearchError(false);
       return undefined;
     }
     const ctrl = new AbortController();
     const tmr = setTimeout(async () => {
       setLoading(true);
+      setSearchError(false);
       try {
         const d = await apiFetch(`/api/search?q=${encodeURIComponent(query.trim())}`, {
           signal: ctrl.signal,
         });
+        if (d?.ok === false || d?.unavailable) {
+          throw new Error(d.detail || 'unavailable');
+        }
         setResults(Array.isArray(d.results) ? d.results : []);
       } catch {
-        if (!ctrl.signal.aborted) setResults([]);
+        if (!ctrl.signal.aborted) {
+          setResults([]);
+          setSearchError(true);
+        }
       } finally {
         if (!ctrl.signal.aborted) setLoading(false);
       }
@@ -176,7 +185,7 @@ export default function GlobalSearch() {
       clearTimeout(tmr);
       ctrl.abort();
     };
-  }, [query]);
+  }, [query, isOpen]);
 
   const goTo = useCallback((result) => {
     if (!result) return;
@@ -267,9 +276,15 @@ export default function GlobalSearch() {
               loading && query.length >= 2 ? (
                 <div className="p-8 text-center text-[var(--text-muted)]">{t('components.globalSearch.searching')}</div>
               ) : query.length >= 2 ? (
-                <div className="p-8 text-center text-[var(--text-muted)]">
-                  {t('components.globalSearch.noResults', { query })}
-                </div>
+                searchError ? (
+                  <div className="p-8 text-center text-amber-200/90" data-testid="global-search-unavailable" role="alert">
+                    {t('components.globalSearch.search_failed')}
+                  </div>
+                ) : (
+                  <div className="p-8 text-center text-[var(--text-muted)]">
+                    {t('components.globalSearch.noResults', { query })}
+                  </div>
+                )
               ) : (
                 <div className="p-8 text-center text-[var(--text-muted)]">
                   <Command className="w-8 h-8 mx-auto mb-2 opacity-50" />
@@ -277,7 +292,13 @@ export default function GlobalSearch() {
                 </div>
               )
             ) : (
-              <div className="divide-y divide-[var(--border-subtle)]">
+              <>
+                {searchError && (
+                  <div className="px-4 py-2 text-xs text-amber-200/90" data-testid="global-search-unavailable" role="alert">
+                    {t('components.globalSearch.search_failed')}
+                  </div>
+                )}
+                <div className="divide-y divide-[var(--border-subtle)]">
                 {combined.map((result, index) => {
                   const active = index === activeIndex;
                   const isNav = result.type === 'navigate';
@@ -316,6 +337,7 @@ export default function GlobalSearch() {
                   );
                 })}
               </div>
+              </>
             )}
           </div>
 

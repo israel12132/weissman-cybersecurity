@@ -137,21 +137,23 @@ fn tenant_id_from_custom(obj: &Value) -> Option<i64> {
     v.as_str()?.trim().parse().ok()
 }
 
-async fn tenant_id_by_paddle_customer(pool: &PgPool, customer_id: &str) -> Option<i64> {
+async fn tenant_id_by_paddle_customer(pool: &PgPool, customer_id: &str) -> Result<Option<i64>, String> {
     sqlx::query_scalar::<_, i64>(
         "SELECT tenant_id FROM tenant_paddle_customers WHERE paddle_customer_id = $1",
     )
     .bind(customer_id)
     .fetch_optional(pool)
     .await
-    .ok()?
+    .map_err(|_| "store_down".to_string())
 }
 
-async fn resolve_tenant_for_subscription(pool: &PgPool, sub: &Value) -> Option<i64> {
+async fn resolve_tenant_for_subscription(pool: &PgPool, sub: &Value) -> Result<Option<i64>, String> {
     if let Some(t) = tenant_id_from_custom(sub) {
-        return Some(t);
+        return Ok(Some(t));
     }
-    let cust = sub.get("customer_id").and_then(|x| x.as_str())?;
+    let Some(cust) = sub.get("customer_id").and_then(|x| x.as_str()) else {
+        return Ok(None);
+    };
     tenant_id_by_paddle_customer(pool, cust).await
 }
 
@@ -242,7 +244,7 @@ async fn apply_event(pool: &PgPool, event_type: &str, event: &Value) -> Result<(
                 .ok_or_else(|| "subscription id missing".to_string())?;
             update_subscription_status_by_paddle_id(pool, sub_id, "canceled")
                 .await
-                .map_err(|e| e.to_string())
+                .map_err(|_| "store_down".to_string())
         }
         "transaction.completed" | "transaction.paid" => {
             handle_transaction_payment(pool, &data).await
@@ -256,7 +258,7 @@ async fn handle_transaction_payment(pool: &PgPool, txn: &Value) -> Result<(), St
         if let Some(cust) = txn.get("customer_id").and_then(|x| x.as_str()) {
             upsert_paddle_customer(pool, tenant_id, cust)
                 .await
-                .map_err(|e| e.to_string())?;
+                .map_err(|_| "store_down".to_string())?;
         }
     }
     let sub_id = txn
@@ -282,18 +284,20 @@ async fn handle_subscription_upsert(pool: &PgPool, sub: &Value) -> Result<(), St
         .and_then(|x| x.as_str())
         .ok_or_else(|| "subscription id missing".to_string())?;
 
-    if let Some(tid) = resolve_tenant_for_subscription(pool, sub).await {
-        return handle_subscription_upsert_inner(pool, tid, sub).await;
+    match resolve_tenant_for_subscription(pool, sub).await {
+        Ok(Some(tid)) => return handle_subscription_upsert_inner(pool, tid, sub).await,
+        Ok(None) => {}
+        Err(e) => return Err(e),
     }
 
     let sub_json = fetch_paddle_subscription(sub_id).await?;
-    let Some(tid) = resolve_tenant_for_subscription(pool, &sub_json).await else {
-        return Err(
+    match resolve_tenant_for_subscription(pool, &sub_json).await? {
+        Some(tid) => handle_subscription_upsert_inner(pool, tid, &sub_json).await,
+        None => Err(
             "Cannot resolve tenant: set custom_data.tenant_id on checkout or link paddle customer"
                 .to_string(),
-        );
-    };
-    handle_subscription_upsert_inner(pool, tid, &sub_json).await
+        ),
+    }
 }
 
 async fn handle_subscription_upsert_inner(

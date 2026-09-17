@@ -494,7 +494,7 @@ pub async fn run_itdr_result(target: &str, ctx: &EngineRunContext) -> EngineResu
     let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
         return EngineResult::error("database unavailable");
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT ts, username, ip, country, success, mfa_prompted
              FROM itdr_auth_events
             WHERE client_id = $1
@@ -503,7 +503,10 @@ pub async fn run_itdr_result(target: &str, ctx: &EngineRunContext) -> EngineResu
     .bind(client_id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(_) => return EngineResult::error("database unavailable"),
+    };
     let _ = tx.commit().await;
 
     let mut events = Vec::new();
@@ -586,15 +589,10 @@ pub async fn run_casb_saas_posture_result(target: &str, ctx: &EngineRunContext) 
     if let Some(ref t) = tokens.google {
         findings.extend(crate::casb_dlp_api::google_casb_findings(target, t).await);
     }
-    if tokens.graph.is_none() && tokens.google.is_none() {
-        findings.push(finding(
-            "casb_saas_posture",
-            "No Graph/Google CASB token — HTTP SaaS discovery only",
-            "info",
-            "T1078",
-            "Set WEISSMAN_GRAPH_TOKEN / WEISSMAN_GOOGLE_TOKEN or persist IdP tokens via PUT /api/itdr/connectors for OAuth-grant inventory. Not faked.",
-            target,
-        ));
+    if let Some(f) = tokens.store_unavailable_finding("casb_saas_posture", target) {
+        findings.push(f);
+    } else if let Some(f) = tokens.confirmed_tokenless_finding("casb_saas_posture", target) {
+        findings.push(f);
     }
     if findings.is_empty() {
         empty_ok("casb_saas_posture", target)
@@ -611,12 +609,36 @@ pub async fn run_dlp_content_scan_result(target: &str, ctx: &EngineRunContext) -
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
+    let tokens = crate::casb_dlp_api::load_tokens(ctx).await;
     let client = http_client().await;
     let url = normalize_url(target);
-    let Some(p) = http_get(&client, &url).await else {
-        return empty_ok("dlp_content_scan", target);
-    };
+    let http_body = http_get(&client, &url).await;
     let mut findings = Vec::new();
+    let Some(p) = http_body else {
+        findings.push(finding(
+            "dlp_content_scan",
+            "HTTP target unreachable — DLP body scan did not run",
+            "medium",
+            "T1530",
+            "GET failed. Mailbox DLP still runs when Graph/Google tokens exist. Not a clean pass.",
+            target,
+        ));
+        if let Some(ref t) = tokens.graph {
+            findings.extend(crate::casb_dlp_api::graph_dlp_findings(target, t).await);
+        }
+        if let Some(ref t) = tokens.google {
+            findings.extend(crate::casb_dlp_api::google_dlp_findings(target, t).await);
+        }
+        if let Some(f) = tokens.store_unavailable_finding("dlp_content_scan", target) {
+            findings.push(f);
+        } else if let Some(f) = tokens.confirmed_tokenless_finding("dlp_content_scan", target) {
+            findings.push(f);
+        }
+        return EngineResult::ok(
+            findings.clone(),
+            format!("dlp_content_scan: {}", findings.len()),
+        );
+    };
     let re_cc = regex::Regex::new(r"\b(?:\d[ -]*?){13,19}\b").ok();
     let re_ssn = regex::Regex::new(r"\b\d{3}-\d{2}-\d{4}\b").ok();
     let re_il_id = regex::Regex::new(r"\b\d{9}\b").ok();
@@ -661,12 +683,16 @@ pub async fn run_dlp_content_scan_result(target: &str, ctx: &EngineRunContext) -
         }
     }
     let _ = re_il_id;
-    let tokens = crate::casb_dlp_api::load_tokens(ctx).await;
     if let Some(ref t) = tokens.graph {
         findings.extend(crate::casb_dlp_api::graph_dlp_findings(target, t).await);
     }
     if let Some(ref t) = tokens.google {
         findings.extend(crate::casb_dlp_api::google_dlp_findings(target, t).await);
+    }
+    if let Some(f) = tokens.store_unavailable_finding("dlp_content_scan", target) {
+        findings.push(f);
+    } else if let Some(f) = tokens.confirmed_tokenless_finding("dlp_content_scan", target) {
+        findings.push(f);
     }
     if findings.is_empty() {
         empty_ok("dlp_content_scan", target)

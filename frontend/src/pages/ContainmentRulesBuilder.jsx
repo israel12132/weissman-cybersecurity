@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import useFocusTrap from '../hooks/useFocusTrap';
 import { useTranslation } from 'react-i18next';
 import { Shield, Plus, Trash2, Edit, Play, AlertTriangle, Check } from 'lucide-react';
@@ -8,8 +8,7 @@ import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { api } from '../utils/apiFetch';
 import { confirmDialog } from '../utils/confirmDialog';
-
-
+import EmptyState from '../components/ui/EmptyState'
 import { useFirstTenantClientId, withClientId } from '../lib/aliasClient';
 import Button from '../components/ui/Button'
 import { useToast } from '../components/ui/Toaster'
@@ -17,29 +16,44 @@ import { useToast } from '../components/ui/Toaster'
 export default function ContainmentRulesBuilder() {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const { clientId, loading: clientLoading } = useFirstTenantClientId();
+  const { clientId, loading: clientLoading, unavailable: clientsUnavailable } = useFirstTenantClientId();
   const [rules, setRules] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [unavailable, setUnavailable] = useState(false);
   const [createModal, setCreateModal] = useState(false);
   const [editModal, setEditModal] = useState(null);
 
   useEffect(() => {
     if (clientLoading) return;
+    if (clientsUnavailable) {
+      setUnavailable(true);
+      setLoading(false);
+      return;
+    }
     if (clientId == null) {
       setRules([]);
+      setUnavailable(false);
       setLoading(false);
       return;
     }
     fetchRules(clientId);
-  }, [clientId, clientLoading]);
+  }, [clientId, clientLoading, clientsUnavailable]);
 
   const fetchRules = async (cid) => {
     try {
       setLoading(true);
       const data = await api.get(withClientId('/api/containment/rules', cid));
-      setRules(data.rules || []);
+      if (data?.ok === false || data?.unavailable) {
+        throw new Error(data.detail || t('pages.containmentRulesBuilder.load_failed'));
+      }
+      if (!Array.isArray(data.rules)) {
+        throw new Error(t('pages.containmentRulesBuilder.load_failed'));
+      }
+      setUnavailable(false);
+      setRules(data.rules);
     } catch (error) {
       console.error('Failed to fetch containment rules:', error);
+      setUnavailable(true);
     } finally {
       setLoading(false);
     }
@@ -112,6 +126,11 @@ export default function ContainmentRulesBuilder() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (unavailable) return
+    exportCsv()
+  }, [unavailable, exportCsv])
+
   const visibleRules = useMemo(() => {
     if (!searchQuery.trim()) return rules
     const ids = new Set(filteredFindings.map((f) => f.id))
@@ -129,13 +148,24 @@ export default function ContainmentRulesBuilder() {
       actions={(
         <ShellScanActions
           onRefresh={reloadRules}
-          onExport={exportCsv}
+          onExport={unavailable ? undefined : handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={unavailable || !filteredFindings.length}
         />
       )}
     >
       <div className="space-y-6">
+        {unavailable && !loading && (
+          <div data-testid="containment-rules-unavailable">
+            <EmptyState
+              icon="alert"
+              title={t('pages.containmentRulesBuilder.unavailable_title')}
+              body={t('pages.containmentRulesBuilder.unavailable_body')}
+            />
+          </div>
+        )}
+        {!unavailable && (
+        <>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
@@ -313,9 +343,11 @@ export default function ContainmentRulesBuilder() {
             </Button>
           </div>
         </div>
+        </>
+        )}
       </div>
 
-      {(createModal || editModal) && (
+      {(createModal || (editModal && !unavailable)) && (
         <RuleModal
           rule={editModal}
           clientId={clientId}

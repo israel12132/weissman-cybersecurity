@@ -17,27 +17,36 @@ const DEFAULT_TEMPLATE = 'multi_step_state_chain'
 export default function FeedbackLoopVerification() {
   const { t } = useTranslation()
   const [clients, setClients] = useState([])
+  const [clientsUnavailable, setClientsUnavailable] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState(null)
   useCommandCenterScan(selectedClientId)
   const [templates, setTemplates] = useState([])
-  const [selectedId, setSelectedId] = useState(DEFAULT_TEMPLATE)
+  const [templatesUnavailable, setTemplatesUnavailable] = useState(false)
+  const [selectedId, setSelectedId] = useState('')
   const [targetUrl, setTargetUrl] = useState('')
   const [yaml, setYaml] = useState('')
+  const [yamlUnavailable, setYamlUnavailable] = useState(false)
   const [loadingYaml, setLoadingYaml] = useState(false)
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
 
   const canRun = useMemo(
-    () => !!targetUrl.trim() && !!yaml.trim(),
-    [targetUrl, yaml],
+    () => !!targetUrl.trim() && !!yaml.trim() && !yamlUnavailable,
+    [targetUrl, yaml, yamlUnavailable],
   )
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((d) => { if (Array.isArray(d)) setClients(d) })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {})
+      .then((d) => {
+        if (!Array.isArray(d)) {
+          setClientsUnavailable(true)
+          return
+        }
+        setClientsUnavailable(false)
+        setClients(d)
+      })
+      .catch(() => setClientsUnavailable(true))
   }, [])
 
   useClientTargetPrefill(selectedClientId, clients, setTargetUrl)
@@ -45,27 +54,37 @@ export default function FeedbackLoopVerification() {
   useEffect(() => {
     apiFetch('/api/template-engine/templates')
       .then((d) => {
-        if (!Array.isArray(d)) return
+        if (!Array.isArray(d)) {
+          setTemplatesUnavailable(true)
+          return
+        }
+        setTemplatesUnavailable(false)
         setTemplates(d)
         const preferred = d.find((tpl) => tpl.id === DEFAULT_TEMPLATE)
         if (preferred) setSelectedId(preferred.id)
         else if (d[0]?.id) setSelectedId(d[0].id)
       })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {})
+      .catch(() => setTemplatesUnavailable(true))
   }, [])
 
   useEffect(() => {
-    if (!selectedId) return
+    if (!selectedId || templatesUnavailable) {
+      if (templatesUnavailable) setLoadingYaml(false)
+      return
+    }
     setLoadingYaml(true)
     setError('')
     apiFetch(`/api/template-engine/templates/${encodeURIComponent(selectedId)}`)
       .then((d) => {
+        setYamlUnavailable(false)
         setYaml(String(d?.yaml || ''))
       })
-      .catch((e) => setError(e?.message || t('pages.feedbackLoopVerification.load_failed')))
+      .catch((e) => {
+        setYamlUnavailable(true)
+        setError(e?.message || t('pages.feedbackLoopVerification.load_failed'))
+      })
       .finally(() => setLoadingYaml(false))
-  }, [selectedId, t])
+  }, [selectedId, templatesUnavailable, t])
 
   const run = useCallback(async () => {
     if (!canRun) return
@@ -115,6 +134,11 @@ export default function FeedbackLoopVerification() {
     total,
   } = useFindingsWorkbench(stepFindings, { csvPrefix: 'weissman-feedback-loop' })
 
+  const handleExportCsv = useCallback(() => {
+    if (templatesUnavailable) return
+    exportCsv()
+  }, [templatesUnavailable, exportCsv])
+
   const handleRefresh = useCallback(() => {
     if (result) run()
   }, [result, run])
@@ -133,10 +157,10 @@ export default function FeedbackLoopVerification() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={exportCsv}
+          onExport={templatesUnavailable ? undefined : handleExportCsv}
           refreshLoading={running}
           refreshDisabled={!result}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={templatesUnavailable || !filteredFindings.length}
         />
       )}
     >
@@ -146,7 +170,11 @@ export default function FeedbackLoopVerification() {
             {t('pages.feedbackLoopVerification.chain_runner')}
           </h3>
 
-          {clients.length > 0 && (
+          {clientsUnavailable ? (
+            <p data-testid="feedback-loop-clients-unavailable" className="text-[11px] text-amber-300/80 font-mono">
+              {t('pages.feedbackLoopVerification.clients_unavailable')}
+            </p>
+          ) : clients.length > 0 && (
             <select
               value={selectedClientId ?? ''}
               onChange={(e) => setSelectedClientId(e.target.value || null)}
@@ -166,7 +194,7 @@ export default function FeedbackLoopVerification() {
 
           <div className="flex items-center gap-3 flex-wrap">
             <select
-              value={selectedId}
+              value={templatesUnavailable ? '' : selectedId}
               onChange={(e) => setSelectedId(e.target.value)}
               disabled={loadingYaml}
               className="flex-1 min-w-[180px] rounded-xl bg-[var(--scrim)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] focus:outline-none focus:border-violet-500/40 disabled:opacity-50"
@@ -174,8 +202,8 @@ export default function FeedbackLoopVerification() {
               {templates.map((tpl) => (
                 <option key={tpl.id} value={tpl.id}>{tpl.name || tpl.id}</option>
               ))}
-              {templates.length === 0 && (
-                <option value={DEFAULT_TEMPLATE}>{DEFAULT_TEMPLATE}</option>
+              {templatesUnavailable && (
+                <option value="" disabled>{t('pages.feedbackLoopVerification.templates_unavailable')}</option>
               )}
             </select>
             <Button variant="unstyled"
@@ -188,11 +216,19 @@ export default function FeedbackLoopVerification() {
             </Button>
           </div>
 
-          {templates.length === 0 && (
+          {templatesUnavailable ? (
+            <div data-testid="feedback-loop-templates-unavailable">
+              <EmptyState
+                icon="alert"
+                title={t('pages.feedbackLoopVerification.templates_unavailable')}
+                body={t('pages.feedbackLoopVerification.templates_unavailable_body')}
+              />
+            </div>
+          ) : templates.length === 0 ? (
             <p className="text-[11px] text-amber-300/70 font-mono">
               {t('pages.feedbackLoopVerification.templates_empty')}
             </p>
-          )}
+          ) : null}
 
           {error && (
             <div className="rounded-xl border border-rose-500/30 bg-rose-950/40 px-3 py-2 text-[11px] text-rose-200">
@@ -212,11 +248,19 @@ export default function FeedbackLoopVerification() {
                 </span>
               )}
             </div>
-            {loadingYaml && !yaml ? (
+            {loadingYaml ? (
               <div className="space-y-2">
                 <SkeletonBar className="h-3 w-full" />
                 <SkeletonBar className="h-3 w-5/6" />
                 <SkeletonBar className="h-3 w-4/6" />
+              </div>
+            ) : yamlUnavailable ? (
+              <div data-testid="feedback-loop-yaml-unavailable">
+                <EmptyState
+                  icon="alert"
+                  title={t('pages.feedbackLoopVerification.load_failed')}
+                  body={t('pages.feedbackLoopVerification.yaml_unavailable_body')}
+                />
               </div>
             ) : (
               <textarea

@@ -13,7 +13,7 @@ pub async fn set_tenant_global_safe_mode(
     let actor = crate::audit_log::user_email_for_id(auth_pool, user_id).await;
     let mut tx = crate::db::begin_tenant_tx(app_pool, tenant_id)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|_| "store_down".to_string())?;
     let s = if global_safe_mode { "true" } else { "false" };
     sqlx::query(
         r#"INSERT INTO system_configs (tenant_id, key, value, description)
@@ -24,7 +24,7 @@ pub async fn set_tenant_global_safe_mode(
     .bind(s)
     .execute(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|_| "store_down".to_string())?;
     let _ = crate::audit_log::insert_audit(
         &mut tx,
         tenant_id,
@@ -35,6 +35,6 @@ pub async fn set_tenant_global_safe_mode(
         client_ip,
     )
     .await;
-    tx.commit().await.map_err(|e| e.to_string())?;
+    tx.commit().await.map_err(|_| "store_down".to_string())?;
     Ok(())
 }

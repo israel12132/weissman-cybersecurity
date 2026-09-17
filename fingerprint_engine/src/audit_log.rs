@@ -490,16 +490,42 @@ pub fn spawn_audit_checkpoint_worker(
                 continue;
             }
             let tenants: Vec<i64> =
-                sqlx::query_scalar("SELECT id FROM tenants WHERE active = true ORDER BY id")
+                match sqlx::query_scalar("SELECT id FROM tenants WHERE active = true ORDER BY id")
                     .fetch_all(auth_pool.as_ref())
                     .await
-                    .unwrap_or_default();
-            for tid in tenants {
-                if let Ok(mut tx) = crate::db::begin_tenant_tx(app_pool.as_ref(), tid).await {
-                    if let Err(e) = write_chain_checkpoint(&mut tx, tid).await {
-                        tracing::warn!(target: "audit_checkpoint", tenant_id = tid, error = %e, "checkpoint write failed");
+                {
+                    Ok(ids) => ids,
+                    Err(e) => {
+                        tracing::warn!(
+                            target: "audit_checkpoint",
+                            error = %e,
+                            "tenant list store_down"
+                        );
+                        continue;
                     }
-                    let _ = tx.commit().await;
+                };
+            for tid in tenants {
+                let mut tx = match crate::db::begin_tenant_tx(app_pool.as_ref(), tid).await {
+                    Ok(t) => t,
+                    Err(e) => {
+                        tracing::warn!(
+                            target: "audit_checkpoint",
+                            tenant_id = tid,
+                            error = %e,
+                            "checkpoint begin store_down"
+                        );
+                        continue;
+                    }
+                };
+                if let Err(e) = write_chain_checkpoint(&mut tx, tid).await {
+                    tracing::warn!(target: "audit_checkpoint", tenant_id = tid, error = %e, "checkpoint write failed");
+                }
+                if tx.commit().await.is_err() {
+                    tracing::warn!(
+                        target: "audit_checkpoint",
+                        tenant_id = tid,
+                        "checkpoint commit store_down"
+                    );
                 }
             }
         }

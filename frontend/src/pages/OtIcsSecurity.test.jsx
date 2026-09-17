@@ -80,7 +80,8 @@ vi.mock('../lib/clientTarget', () => ({
 import OtIcsSecurity from './OtIcsSecurity.jsx'
 
 const SAFETY = {
-  live: true,
+  live: false,
+  observed_event_count: 0,
   policy: {
     write_blocked: true,
     direct_operate_blocked: true,
@@ -122,22 +123,17 @@ describe('OtIcsSecurity', () => {
   })
   afterEach(cleanup)
 
-  it('renders the compiled safety interlock from GET /api/ot-ics/safety', async () => {
+  it('does not render an armed interlock for compiled-but-not-live safety', async () => {
+    // Honesty: a policy that is compiled but not confirmed live (no observed
+    // events) must not paint an ARMED interlock — it surfaces as unavailable.
     render(
       <MemoryRouter>
         <OtIcsSecurity />
       </MemoryRouter>,
     )
-    const panel = await screen.findByTestId('ot-safety-interlock')
+    const panel = await screen.findByTestId('ot-safety-unavailable')
     expect(panel).toBeTruthy()
-    expect(panel.textContent).toMatch(/100 \/ 100/)
-    expect(panel.textContent).toMatch(/modbus/i)
-    expect(panel.textContent).toMatch(/dnp3/i)
-    expect(panel.textContent).toMatch(/Gateway 2/)
-    expect(panel.textContent).toMatch(/FIN \+ 10ms/)
-    expect(panel.textContent).toMatch(/Iterative BER/)
-    expect(panel.textContent).toMatch(/S7-Plus structural/)
-    expect(panel.textContent).toMatch(/PLC decoy/)
+    expect(screen.queryByTestId('ot-safety-interlock')).toBeNull()
     await waitFor(() => {
       expect(apiFetch.mock.calls.some((c) => String(c[0]).includes('/api/ot-ics/safety'))).toBe(true)
     })
@@ -183,6 +179,31 @@ describe('OtIcsSecurity', () => {
     expect(panel).toBeTruthy()
     expect(panel.textContent).toMatch(/UNAVAILABLE/)
     expect(screen.queryByTestId('ot-safety-interlock')).toBeNull()
+  })
+
+  it('shows ARMED only when the safety API has observed events', async () => {
+    apiFetch.mockImplementation(async (url) => {
+      const u = String(url)
+      if (u.includes('/api/ot-ics/safety')) {
+        return { ...SAFETY, live: true, observed_event_count: 1, events: [{ id: 1 }] }
+      }
+      if (u.includes('/api/ot-ics/devices')) return { devices: [], protocols: [], findings: [] }
+      if (u.includes('fingerprints')) return { fingerprints: [] }
+      if (u.includes('/api/engines/history')) return { runs: [] }
+      if (u === '/api/clients' || u.startsWith('/api/clients?')) {
+        return [{ id: 1, name: 'Plant A', primary_domain: '10.0.0.8' }]
+      }
+      return {}
+    })
+    render(
+      <MemoryRouter>
+        <OtIcsSecurity />
+      </MemoryRouter>,
+    )
+    const panel = await screen.findByTestId('ot-safety-interlock')
+    expect(panel.getAttribute('data-live')).toBe('true')
+    expect(panel.textContent).toMatch(/safety_armed/)
+    expect(panel.textContent).not.toMatch(/safety_compiled/)
   })
 
   it('does not arm the interlock when live is false', async () => {

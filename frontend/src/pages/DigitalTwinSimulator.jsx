@@ -76,16 +76,17 @@ const STATE_META = {
 }
 
 function SubScoreBar({ label, value }) {
-  const v = Math.max(0, Math.min(100, Number(value) || 0))
-  const color = v >= 85 ? '#34d399' : v >= 60 ? '#a3e635' : v >= 40 ? '#fbbf24' : '#fb7185'
+  const hasScore = value != null && Number.isFinite(Number(value))
+  const v = hasScore ? Math.max(0, Math.min(100, Number(value))) : 0
+  const color = !hasScore ? 'rgba(255,255,255,0.12)' : v >= 85 ? '#34d399' : v >= 60 ? '#a3e635' : v >= 40 ? '#fbbf24' : '#fb7185'
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
         <span className="text-[10px] font-mono text-[var(--text-tertiary)]">{label}</span>
-        <span className="text-[10px] font-mono" style={{ color }}>{v}</span>
+        <span className="text-[10px] font-mono" style={{ color }}>{hasScore ? v : '—'}</span>
       </div>
       <div className="h-1.5 rounded-full bg-white/8 overflow-hidden">
-        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${v}%`, backgroundColor: color }} />
+        <div className="h-full rounded-full transition-all duration-500" style={{ width: hasScore ? `${v}%` : '0%', backgroundColor: color }} />
       </div>
     </div>
   )
@@ -93,9 +94,11 @@ function SubScoreBar({ label, value }) {
 
 function Scorecard({ summary, t }) {
   if (!summary) return null
-  const score = summary.score ?? 0
+  const raw = summary.score
+  const hasScore = raw != null && Number.isFinite(Number(raw))
+  const score = hasScore ? Number(raw) : 0
   const grade = summary.grade || '—'
-  const color = gradeColor(grade)
+  const color = hasScore ? gradeColor(grade) : 'rgba(255,255,255,0.12)'
   const exploit = EXPLOIT_STYLE[summary.exploitability] || EXPLOIT_STYLE.hardening_gaps
   const subscores = summary.subscores || {}
   const roadmap = Array.isArray(summary.roadmap) ? summary.roadmap : []
@@ -110,11 +113,11 @@ function Scorecard({ summary, t }) {
             <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
               <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="8" />
               <circle cx="50" cy="50" r="42" fill="none" stroke={color} strokeWidth="8"
-                strokeDasharray={`${(score / 100) * 264} 264`} strokeLinecap="round" />
+                strokeDasharray={hasScore ? `${(score / 100) * 264} 264` : '0 264'} strokeLinecap="round" />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-2xl font-bold" style={{ color }}>{grade}</span>
-              <span className="text-[10px] font-mono text-[var(--text-muted)]">{score}/100</span>
+              <span className="text-2xl font-bold" style={{ color }}>{hasScore ? grade : '—'}</span>
+              <span className="text-[10px] font-mono text-[var(--text-muted)]">{hasScore ? `${score}/100` : '—'}</span>
             </div>
           </div>
           <div>
@@ -271,6 +274,7 @@ export default function DigitalTwinSimulator() {
   const { t } = useTranslation()
   const { clientId: routeClientId } = useParams()
   const [clients, setClients] = useState([])
+  const [clientsUnavailable, setClientsUnavailable] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState(routeClientId ?? null)
   const { postScan } = useCommandCenterScan(selectedClientId)
   const [target, setTarget] = useState('')
@@ -320,7 +324,13 @@ export default function DigitalTwinSimulator() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE, detailFindings)
+
+  const handleExportCsv = useCallback(() => {
+    if (historyUnavailable) return
+    exportCsv()
+  }, [historyUnavailable, exportCsv])
 
   useEffect(() => {
     refreshFromHistory().then((run) => {
@@ -348,8 +358,13 @@ export default function DigitalTwinSimulator() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((d) => { if (Array.isArray(d)) setClients(d) })
-      .catch(() => setClients([]))
+      .then((d) => {
+        const list = Array.isArray(d) ? d : Array.isArray(d?.clients) ? d.clients : null
+        if (!list) { setClientsUnavailable(true); return }
+        setClientsUnavailable(false)
+        setClients(list)
+      })
+      .catch(() => setClientsUnavailable(true))
   }, [])
 
   useEffect(() => {
@@ -505,7 +520,7 @@ export default function DigitalTwinSimulator() {
       running: vals.filter((r) => r.pending).length,
     }
   }, [results])
-  const hasAnyResult = Object.keys(results).length > 0 || summary
+  const hasAnyResult = Object.keys(results).length > 0 || (!historyUnavailable && summary)
   const isScanning = Object.values(pendingJobs).some(Boolean) || !!runningId
 
   return (
@@ -514,10 +529,10 @@ export default function DigitalTwinSimulator() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={exportCsv}
+          onExport={historyUnavailable ? undefined : handleExportCsv}
           refreshLoading={historyLoading}
           refreshDisabled={isScanning}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={historyUnavailable || !filteredFindings.length}
         />
       )}
     >
@@ -538,6 +553,11 @@ export default function DigitalTwinSimulator() {
               <option value="">{t('pages.digitalTwinSimulator.select_client')}</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
+            {clientsUnavailable && (
+              <p data-testid="digital-twin-clients-unavailable" className="text-xs text-amber-300/80 font-mono">
+                {t('pages.digitalTwinSimulator.clients_unavailable')}
+              </p>
+            )}
           </div>
           <div className="flex flex-col gap-1 flex-1 min-w-[220px]">
             <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.digitalTwinSimulator.target_label')}</label>
@@ -606,7 +626,7 @@ export default function DigitalTwinSimulator() {
         </AnimatePresence>
       </div>
 
-      {summary && <Scorecard summary={summary} t={t} />}
+      {!historyUnavailable && summary && <Scorecard summary={summary} t={t} />}
 
       <div className="flex flex-wrap items-center justify-end gap-2 mb-8">
         {hasAnyResult && (
@@ -660,7 +680,7 @@ export default function DigitalTwinSimulator() {
                 )}
               </>
             )}
-            <TwinProfilePanel profile={twinProfile} t={t} />
+            {!historyUnavailable && <TwinProfilePanel profile={twinProfile} t={t} />}
           </div>
         </div>
 
@@ -675,6 +695,11 @@ export default function DigitalTwinSimulator() {
         </div>
       </div>
 
+      {historyUnavailable && (
+        <p data-testid="digital-twin-history-unavailable" className="text-xs text-amber-300/80 font-mono mt-8 mb-3">
+          {t('pages.digitalTwinSimulator.history_unavailable')}
+        </p>
+      )}
       <WeissmanFindingsPanel
         findings={detailFindings}
         filteredFindings={filteredFindings}
@@ -689,7 +714,10 @@ export default function DigitalTwinSimulator() {
         lastUpdated={lastUpdated}
         jobId={lastJobId}
         accent="#8b5cf6"
-        showEmptyReady={!isScanning && detailFindings.length === 0}
+        unavailable={historyUnavailable}
+        unavailableTitle={t('pages.digitalTwinSimulator.history_unavailable')}
+        unavailableBody={t('pages.digitalTwinSimulator.history_unavailable')}
+        showEmptyReady={!isScanning && !historyUnavailable && detailFindings.length === 0}
         emptyReadyTitle={t('pages.digitalTwinSimulator.not_run_hint')}
         emptyReadyBody={t('pages.digitalTwinSimulator.subtitle')}
         className="mt-8"

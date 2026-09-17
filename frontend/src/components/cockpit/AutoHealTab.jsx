@@ -23,10 +23,15 @@ export default function AutoHealTab() {
   const { selectedClientId } = useClient()
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState(null)
+  const [listTruncated, setListTruncated] = useState(false)
+  const [actionError, setActionError] = useState(null)
   const [healing, setHealing] = useState(null)
   const [verifyJobId, setVerifyJobId] = useState(null)
   const [verifySteps, setVerifySteps] = useState([])
   const pollRef = useRef(null)
+  const clientIdRef = useRef(selectedClientId)
+  clientIdRef.current = selectedClientId
   const [healForm, setHealForm] = useState({
     finding_id: '',
     git_token: '',
@@ -40,25 +45,33 @@ export default function AutoHealTab() {
   const fetchRequests = useCallback(async () => {
     if (!selectedClientId) {
       setRequests([])
+      setLoadError(null)
+      setListTruncated(false)
       return
     }
     setLoading(true)
+    setLoadError(null)
     try {
       const d = await apiFetch(`/api/clients/${selectedClientId}/heal-requests`)
+      if (d?.ok === false || d?.unavailable) {
+        throw new Error(d.detail || t(`${NS}.unavailable`))
+      }
       const list = Array.isArray(d) ? d : (d.requests ?? [])
       setRequests(list)
+      setListTruncated(Boolean(d?.truncated))
     } catch (e) {
-      // Before migration a non-OK HTTP response left the list unchanged (the
-      // `if (r.ok)` guard simply skipped setRequests); only a network/parse
-      // failure hit the catch and cleared it. utils/apiFetch throws on non-OK,
-      // so restrict clearing to network errors (no e.status) to preserve that.
-      if (e?.status == null) setRequests([])
+      setLoadError(e?.message || t(`${NS}.unavailable`))
+      setListTruncated(false)
     } finally {
       setLoading(false)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId])
 
   useEffect(() => {
+    stopPoll()
+    setVerifyJobId(null)
+    setVerifySteps([])
     fetchRequests()
   }, [fetchRequests])
 
@@ -80,8 +93,14 @@ export default function AutoHealTab() {
     setVerifyJobId(jobId)
     setVerifySteps([])
     const tick = async () => {
+      if (typeof document !== 'undefined' && document.hidden) return
+      const owner = clientIdRef.current
       try {
         const d = await apiFetch(`/api/heal-verify/${encodeURIComponent(jobId)}/steps`)
+        if (d?.ok === false || d?.unavailable) {
+          throw new Error(d.detail || t(`${NS}.verifyPollFailed`))
+        }
+        if (clientIdRef.current !== owner) return
         const steps = d.steps || []
         setVerifySteps(steps)
         const last = steps[steps.length - 1]
@@ -90,10 +109,11 @@ export default function AutoHealTab() {
           setVerifyJobId(null)
           await fetchRequests()
         }
-      } catch (_) {
+      } catch (e) {
+        if (clientIdRef.current !== owner) return
         stopPoll()
         setVerifyJobId(null)
-        await fetchRequests()
+        setActionError(e?.message || t(`${NS}.verifyPollFailed`))
       }
     }
     tick()
@@ -106,6 +126,7 @@ export default function AutoHealTab() {
     stopPoll()
     setVerifySteps([])
     setVerifyJobId(null)
+    setActionError(null)
     try {
       const port = parseInt(healForm.container_port, 10)
       const body = {
@@ -122,6 +143,9 @@ export default function AutoHealTab() {
         headers: destructiveHeaders({ 'Content-Type': 'application/json' }),
         body: dualControlBody('', '', body),
       })
+      if (data?.ok === false || data?.unavailable) {
+        throw new Error(data.detail || t(`${NS}.triggerFailed`))
+      }
       // 202-accepted was keyed on status===202 && data.job_id; on a 2xx
       // utils/apiFetch resolves to the parsed body, so key on data.job_id alone
       // (equivalent for the accepted case). A null JSON body still throws on
@@ -132,11 +156,7 @@ export default function AutoHealTab() {
         await fetchRequests()
       }
     } catch (e) {
-      // Before migration a non-OK HTTP response never threw: it fell through the
-      // else branch to fetchRequests(). Only a real exception (network error) hit
-      // the empty catch and did nothing. Reproduce both: refresh on HTTP errors
-      // (e.status set), do nothing on network errors (no e.status).
-      if (e?.status != null) await fetchRequests()
+      setActionError(e?.message || t(`${NS}.triggerFailed`))
     }
     setHealing(null)
   }
@@ -155,6 +175,16 @@ export default function AutoHealTab() {
         <Shield className="w-5 h-5 text-[#10b981]" />
         <h2 className="text-lg font-semibold text-white">{t(`${NS}.title`)}</h2>
       </div>
+
+      {actionError && (
+        <p
+          data-testid="auto-heal-action-failed"
+          role="alert"
+          className="text-sm text-red-300"
+        >
+          {actionError}
+        </p>
+      )}
 
       <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-4">
         <h3 className="text-sm font-medium text-white/90 mb-3">{t(`${NS}.formTitle`)}</h3>
@@ -271,9 +301,27 @@ export default function AutoHealTab() {
         </div>
         {loading ? (
           <div className="p-6 text-center text-white/50 text-sm">{t(`${NS}.loading`)}</div>
+        ) : loadError ? (
+          <div
+            className="p-6 text-center text-red-300 text-sm"
+            data-testid="auto-heal-unavailable"
+            role="alert"
+          >
+            {t(`${NS}.unavailable`)}
+          </div>
         ) : requests.length === 0 ? (
           <div className="p-6 text-center text-white/50 text-sm">{t(`${NS}.noRequests`)}</div>
         ) : (
+          <>
+          {listTruncated && (
+            <p
+              className="px-4 py-2 text-xs text-amber-200/80 border-b border-white/10"
+              data-testid="auto-heal-truncated"
+              role="status"
+            >
+              {t(`${NS}.truncated`)}
+            </p>
+          )}
           <ul className="divide-y divide-white/10">
             {requests.map(req => (
               <li key={req.id} className="p-4 hover:bg-white/5">
@@ -316,6 +364,7 @@ export default function AutoHealTab() {
               </li>
             ))}
           </ul>
+          </>
         )}
       </div>
     </div>

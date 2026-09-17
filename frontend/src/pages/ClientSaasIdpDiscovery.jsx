@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router'
 import PageShell from './PageShell'
@@ -111,6 +111,11 @@ export default function ClientSaasIdpDiscovery() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    exportCsv()
+  }, [error, exportCsv])
+
   const visibleIdps = useMemo(() => {
     if (!searchQuery.trim()) return idps
     const ids = new Set(filteredFindings.map((f) => String(f.id)))
@@ -136,14 +141,14 @@ export default function ClientSaasIdpDiscovery() {
 
   return (
     <PageShell
-      title={clientName ? `${t('pages.clientSaasIdpDiscovery.title')} — ${clientName}` : t('pages.clientSaasIdpDiscovery.title')}
+      title={!error && clientName ? `${t('pages.clientSaasIdpDiscovery.title')} — ${clientName}` : t('pages.clientSaasIdpDiscovery.title')}
       subtitle={t('pages.clientSaasIdpDiscovery.subtitle')}
       actions={(
         <ShellScanActions
           onRefresh={runDiscovery}
-          onExport={exportCsv}
+          onExport={error ? undefined : handleExportCsv}
           refreshLoading={loading || running}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={!!error || !filteredFindings.length}
         />
       )}
     >
@@ -162,12 +167,16 @@ export default function ClientSaasIdpDiscovery() {
           </Button>
         </div>
 
-        {error && (
-          <div className="p-4 bg-red-900/20 border border-red-500/30 rounded-lg text-red-300">
-            {error}
+        {error ? (
+          <div data-testid="saas-idp-discovery-unavailable">
+            <EmptyState
+              icon="alert"
+              title={t('pages.clientSaasIdpDiscovery.unavailable_title')}
+              body={t('pages.clientSaasIdpDiscovery.unavailable_body')}
+            />
           </div>
-        )}
-
+        ) : (
+        <>
         <div className="p-6 bg-[var(--bg-3)]/40 border border-[var(--border-default)] rounded-xl">
           <h2 className="text-lg font-semibold text-white">{t('pages.clientSaasIdpDiscovery.domains_heading')}</h2>
           <div className="mt-2 text-sm text-[var(--text-secondary)]">
@@ -300,6 +309,8 @@ export default function ClientSaasIdpDiscovery() {
             </div>
           )}
         </div>
+        </>
+        )}
       </div>
     </PageShell>
   )

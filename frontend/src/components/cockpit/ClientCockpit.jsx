@@ -91,6 +91,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
   const [engageLoading, setEngageLoading] = useState(false)
   const [healthSummary, setHealthSummary] = useState(null)
   const [safeMode, setSafeMode] = useState(false)
+  const [safeModeKnown, setSafeModeKnown] = useState(false)
   const [safeSaving, setSafeSaving] = useState(false)
   const [boardReportLoading, setBoardReportLoading] = useState(false)
   const { redTeamActive } = useWarRoom()
@@ -104,9 +105,20 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
   useEffect(() => {
     const loadHealth = () => {
       apiFetch('/api/health')
-        .then((d) => d && setHealthSummary(d))
-        // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-        .catch(() => {})
+        .then((d) => {
+          if (
+            !d ||
+            d.ok === false ||
+            d.unavailable ||
+            d.postgres_ok === false ||
+            d.running_async_jobs == null
+          ) {
+            setHealthSummary(d && typeof d === 'object' ? { ...d, unavailable: true } : { unavailable: true })
+            return
+          }
+          setHealthSummary(d)
+        })
+        .catch(() => setHealthSummary({ unavailable: true }))
     }
     loadHealth()
     const t = setInterval(loadHealth, 30000)
@@ -115,9 +127,16 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
 
   useEffect(() => {
     apiFetch('/api/enterprise/settings')
-      .then((d) => d && setSafeMode(!!d.global_safe_mode))
+      .then((d) => {
+        if (d?.ok === false || d?.unavailable || typeof d.global_safe_mode !== 'boolean') {
+          setSafeModeKnown(false)
+          return
+        }
+        setSafeModeKnown(true)
+        setSafeMode(d.global_safe_mode === true)
+      })
       // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {})
+      .catch(() => setSafeModeKnown(false))
   }, [])
 
   const toggleSafeMode = useCallback(async () => {
@@ -172,12 +191,8 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
   const runFullScan = async () => {
     setEngageLoading(true)
     try {
-      try {
-        const d = await apiFetch('/api/scan/run-all', { method: 'POST' })
-        if (d && d.message) refreshClients()
-      } catch (_) {
-        /* run-all is best-effort; poe-scan still runs even if it fails */
-      }
+      const d = await apiFetch('/api/scan/run-all', { method: 'POST' })
+      if (d && d.message) refreshClients()
       const targetUrl = targetUrlFromClient(selectedClient)
       if (targetUrl && selectedClientId) {
         const pd = await apiFetch('/api/poe-scan/run', {
@@ -186,8 +201,11 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
         })
         if (pd && pd.job_id) setPoeJobId(pd.job_id)
       }
-    } catch { /* best-effort; non-fatal */ }
-    setEngageLoading(false)
+    } catch (e) {
+      toast.error(e?.message || t('components.cockpit.engage_failed'))
+    } finally {
+      setEngageLoading(false)
+    }
   }
 
   if (!selectedClientId) {
@@ -223,6 +241,12 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
 
   const activeTabMeta = tabs.find((t) => t.id === activeTab)
   const ActiveComponent = activeTabMeta?.Component ?? OverviewTab
+  const healthLive =
+    !!healthSummary &&
+    healthSummary.ok !== false &&
+    healthSummary.unavailable !== true &&
+    healthSummary.postgres_ok !== false &&
+    healthSummary.running_async_jobs != null
 
   return (
     <main
@@ -266,28 +290,37 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
             <span
               className="px-3 py-1 rounded-lg text-xs font-mono font-medium border border-[#22d3ee]/30 max-w-full sm:max-w-[280px] truncate"
               style={{ background: 'rgba(34, 211, 238, 0.12)', color: '#22d3ee' }}
-              title={healthSummary ? JSON.stringify(healthSummary) : ''}
+              title={healthLive ? JSON.stringify(healthSummary) : ''}
+              data-testid={healthLive ? 'cockpit-health-live' : 'cockpit-health-unavailable'}
             >
-              {healthSummary
+              {healthLive
                 ? t('components.cockpit.health', {
                     mins: Math.floor((healthSummary.uptime_secs || 0) / 60),
                     mb: ((healthSummary.db_bytes || 0) / (1024 * 1024)).toFixed(1),
                     scan: healthSummary.scanning_active ? t('components.cockpit.health_scan') : '',
                   })
-                : t('components.cockpit.health_empty')}
+                : healthSummary
+                  ? t('components.cockpit.health_unavailable')
+                  : t('components.cockpit.health_empty')}
             </span>
             <Button variant="unstyled"
               id="cockpit-safe-mode-toggle"
               type="button"
-              disabled={safeSaving}
+              disabled={safeSaving || !safeModeKnown}
               onClick={toggleSafeMode}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider border transition-colors ${
-                safeMode
+                !safeModeKnown
+                  ? 'border-red-500/40 bg-red-950/40 text-red-300'
+                  : safeMode
                   ? 'border-emerald-500/70 bg-emerald-950/80 text-emerald-300'
                   : 'border-white/25 bg-white/5 text-white/60 hover:text-white/90'
               } disabled:opacity-50`}
             >
-              {safeMode ? t('components.cockpit.safe_mode_on') : t('components.cockpit.safe_mode_off')}
+              {!safeModeKnown
+                ? t('components.cockpit.safe_mode_unavailable')
+                : safeMode
+                  ? t('components.cockpit.safe_mode_on')
+                  : t('components.cockpit.safe_mode_off')}
             </Button>
           </div>
           <div className="flex flex-wrap items-stretch sm:items-center gap-2 shrink-0">

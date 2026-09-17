@@ -545,6 +545,7 @@ export default function FindingsCommandCenter() {
   }, [toast, t])
 
   const handleExportCsv = useCallback(() => {
+    if (error) return
     apiFetch('/api/findings/export/csv', { raw: true })
       .then((r) => {
         const disposition = r.headers.get('content-disposition') || ''
@@ -562,7 +563,7 @@ export default function FindingsCommandCenter() {
         toast.success(t('findings.toast_export_ok', { filename }))
       })
       .catch((e) => toast.error(t('findings.toast_export_failed', { detail: e?.message || t('findings.network_error') })))
-  }, [toast, t])
+  }, [error, toast, t])
 
   const handleVerifyComplete = useCallback((rawId, verification) => {
     const patch = (f) => (
@@ -728,7 +729,7 @@ export default function FindingsCommandCenter() {
       <main id="main-content" tabIndex={-1} className="max-w-screen-2xl mx-auto px-4 py-6 space-y-5 outline-none">
         <EvidenceNotice>{t('findings.evidence_notice')}</EvidenceNotice>
 
-        {serverTotal > rawFindings.length && (
+        {!error && serverTotal > rawFindings.length && (
           <div role="status" className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-200">
             {t('findings.shown_of_total', { shown: rawFindings.length, total: serverTotal })}
           </div>
@@ -739,12 +740,12 @@ export default function FindingsCommandCenter() {
           subtitle={t('findings.command_center_subtitle')}
           badge={t('findings.live_badge')}
           badgeColor="#ef4444"
-          count={totalFiltered}
+          count={error ? null : totalFiltered}
           countLabel={t('findings.title')}
-          lastUpdated={lastUpdated}
+          lastUpdated={error ? null : lastUpdated}
           loading={loading}
           onRefresh={loadFindings}
-          onExport={handleExportCsv}
+          onExport={error ? undefined : handleExportCsv}
           exportLabel={t('common.export_csv')}
           refreshLabel={t('common.refresh')}
         >
@@ -764,7 +765,7 @@ export default function FindingsCommandCenter() {
           </Button>
         </PremiumPageHeader>
 
-        {filtersExpanded && (
+        {filtersExpanded && !error && (
           <div className="glass-panel rounded-2xl p-4 sm:p-5 space-y-4">
             <FilterPills
               label={t('findings.filter_severity')}
@@ -933,7 +934,7 @@ export default function FindingsCommandCenter() {
           />
         )}
 
-        {selectedRows.length > 0 && (
+        {selectedRows.length > 0 && !error && (
           <div className="sticky top-2 z-10 flex flex-wrap items-center gap-3 rounded-xl border border-cyan-500/30 bg-[var(--bg-elevated)] px-4 py-2.5 shadow-lg">
             <span className="text-[12px] font-mono text-cyan-300">
               {t('findings.bulk_selected', { count: selectedRows.length })}
@@ -971,7 +972,7 @@ export default function FindingsCommandCenter() {
           </div>
         )}
 
-        {(tableData.length > 0 || loading) && (
+        {!error && (tableData.length > 0 || loading) && (
           <DataTable
             id="findings-command-table"
             columns={columns}
@@ -1001,7 +1002,7 @@ export default function FindingsCommandCenter() {
       </main>
 
       <FindingDrawer
-        finding={selectedFinding}
+        finding={error ? null : selectedFinding}
         onClose={handleCloseDrawer}
         onStatusUpdate={handleStatusUpdate}
         onVerifyComplete={handleVerifyComplete}

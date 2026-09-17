@@ -4,6 +4,7 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
+import EmptyState from '../components/ui/EmptyState'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch } from '../utils/apiFetch'
 import { promptDialog } from '../utils/confirmDialog'
@@ -27,7 +28,11 @@ export default function RoeApprovals() {
     setError('')
     try {
       const data = await apiFetch('/api/roe/override-requests?status=pending')
-      setRequests(Array.isArray(data.requests) ? data.requests : [])
+      if (!Array.isArray(data.requests)) {
+        throw new Error(t('pages.roeApprovals.network_error'))
+      }
+      setRequests(data.requests)
+      setError('')
     } catch (e) {
       if (e?.status) {
         const detail = e.response ? await e.response.text().catch(() => '') : ''
@@ -35,7 +40,6 @@ export default function RoeApprovals() {
       } else {
         setError(e?.message || t('pages.roeApprovals.network_error'))
       }
-      setRequests([])
     } finally {
       setLoading(false)
     }
@@ -67,6 +71,11 @@ export default function RoeApprovals() {
     csvPrefix: 'roe-approvals',
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
+
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    exportCsv()
+  }, [error, exportCsv])
 
   async function approve(req) {
     setActionId(req.id)
@@ -116,28 +125,32 @@ export default function RoeApprovals() {
       actions={(
         <ShellScanActions
           onRefresh={load}
-          onExport={exportCsv}
+          onExport={error ? undefined : handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={!!error || !filteredFindings.length}
         />
       )}
     >
       <div className="max-w-5xl mx-auto space-y-6">
         {error && (
-          <div className="p-4 bg-red-900/20 border border-red-500/30 rounded-lg text-red-300">
-            {error}
+          <div data-testid="roe-approvals-unavailable">
+            <EmptyState
+              icon="alert"
+              title={t('pages.roeApprovals.unavailable_title')}
+              body={t('pages.roeApprovals.unavailable_body')}
+            />
           </div>
         )}
 
         <div className="text-xs text-[var(--text-muted)] font-mono">
-          {t('pages.roeApprovals.pending', { count: requests.length })}
+          {error ? t('pages.roeApprovals.pending', { count: '—' }) : t('pages.roeApprovals.pending', { count: requests.length })}
         </div>
 
         {loading && !requests.length ? (
           <div className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-6">
             <SkeletonWidgetGrid count={3} />
           </div>
-        ) : (
+        ) : error ? null : (
           <WeissmanFindingsPanel
             findings={listFindings}
             filteredFindings={filteredFindings}

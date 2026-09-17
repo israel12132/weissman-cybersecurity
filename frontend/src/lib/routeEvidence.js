@@ -51,6 +51,7 @@ export const ROUTE_EVIDENCE_SKIP_PREFIX = [
 export const ROUTE_EVIDENCE = {
   '/clients': 'clients_page.evidence_notice',
   '/engines': 'engines.evidence_notice',
+  '/scim-provisioning': 'pages.scimProvisioning.evidence_notice',
   '/jwt-lab': 'pages.jwtAttackLab.evidence_notice',
   '/iac-security': 'pages.iacSecurityCenter.evidence_notice',
   '/graphql-security': 'pages.graphqlSecurityCommandCenter.evidence_notice',

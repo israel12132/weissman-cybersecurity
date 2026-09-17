@@ -186,9 +186,10 @@ const FILTER_KEYS = {
 export default function RiskGraphVisualization() {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const { clientId, loading: clientLoading } = useFirstTenantClientId();
+  const { clientId, loading: clientLoading, unavailable: clientsUnavailable } = useFirstTenantClientId();
   const [graphData, setGraphData] = useState({ nodes: [], edges: [] });
   const [attackPaths, setAttackPaths] = useState(null);
+  const [graphUnavailable, setGraphUnavailable] = useState(false);
   const [pathsLoading, setPathsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selectedNode, setSelectedNode] = useState(null);
@@ -200,13 +201,19 @@ export default function RiskGraphVisualization() {
 
   useEffect(() => {
     if (clientLoading) return;
+    if (clientsUnavailable) {
+      setGraphUnavailable(true);
+      setLoading(false);
+      return;
+    }
     if (clientId == null) {
       setGraphData({ nodes: [], edges: [] });
+      setGraphUnavailable(false);
       setLoading(false);
       return;
     }
     fetchGraphData(clientId);
-  }, [clientId, clientLoading]);
+  }, [clientId, clientLoading, clientsUnavailable]);
 
   const filteredNodes = useMemo(() => {
     if (filter === 'all') return graphData.nodes;
@@ -239,6 +246,11 @@ export default function RiskGraphVisualization() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (graphUnavailable) return
+    exportNodesCsv(graphData.nodes)
+  }, [graphUnavailable, graphData.nodes])
+
   const searchFilteredNodes = useMemo(() => {
     if (!searchQuery.trim()) return filteredNodes
     const ids = new Set(filteredFindings.map((f) => String(f.id)))
@@ -263,10 +275,11 @@ export default function RiskGraphVisualization() {
       setPathsLoading(true);
       const [graphRes, pathsRes] = await Promise.all([
         api.get(withClientId('/api/risk/graph', cid)),
-        api.get(`/api/attack-paths/${cid}`).catch(() => null),
+        api.get(`/api/attack-paths/${cid}`),
       ]);
       setGraphData(normalizeRiskGraph(graphRes));
       setSelectedNode(null);
+      setGraphUnavailable(false);
       if (pathsRes?.snapshot) {
         setAttackPaths(pathsRes.snapshot);
       } else {
@@ -274,8 +287,7 @@ export default function RiskGraphVisualization() {
       }
     } catch (error) {
       console.error('Failed to fetch graph data:', error);
-      setGraphData({ nodes: [], edges: [] });
-      setAttackPaths(null);
+      setGraphUnavailable(true);
     } finally {
       setLoading(false);
       setPathsLoading(false);
@@ -441,7 +453,7 @@ export default function RiskGraphVisualization() {
   // (richer than the client-side node CSV), for interchange / offline analysis.
   // Wired to GET /api/clients/:id/risk-graph/export.
   const exportGraphJson = async () => {
-    if (clientId == null) return
+    if (graphUnavailable || clientId == null) return
     try {
       const data = await api.get(`/api/clients/${clientId}/risk-graph/export`)
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
@@ -462,21 +474,23 @@ export default function RiskGraphVisualization() {
       icon={<GitBranch />}
       actions={(
         <div className="flex items-center gap-2">
+          {!graphUnavailable && (
           <Button variant="unstyled"
             type="button"
             onClick={exportGraphJson}
-            disabled={clientId == null || !graphData.nodes.length}
+            disabled={graphUnavailable || clientId == null || !graphData.nodes.length}
             className="flex items-center gap-2 px-3 py-2 rounded-lg border border-violet-500/40 bg-violet-500/10 text-violet-200 text-xs font-mono hover:bg-violet-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             title={t(`${NS}.export_json_hint`)}
           >
             <Download className="w-4 h-4" />
             {t(`${NS}.export_json`)}
           </Button>
+          )}
           <ShellScanActions
             onRefresh={reloadGraph}
-            onExport={() => exportNodesCsv(graphData.nodes)}
+            onExport={graphUnavailable ? undefined : handleExportCsv}
             refreshLoading={loading}
-            exportDisabled={!filteredFindings.length}
+            exportDisabled={graphUnavailable || !filteredFindings.length}
           />
         </div>
       )}
@@ -484,8 +498,16 @@ export default function RiskGraphVisualization() {
       <div className="space-y-6">
         <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>
 
-        {loading && graphData.nodes.length === 0 ? (
+        {loading && graphData.nodes.length === 0 && !graphUnavailable ? (
           <SkeletonWidgetGrid count={4} />
+        ) : graphUnavailable ? (
+          <div data-testid="risk-graph-unavailable">
+            <EmptyState
+              icon="alert"
+              title={t('pages.riskGraphVisualization.unavailable_title')}
+              body={t('pages.riskGraphVisualization.unavailable_body')}
+            />
+          </div>
         ) : (
         <>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -494,7 +516,7 @@ export default function RiskGraphVisualization() {
               <span className="text-sm text-[var(--text-tertiary)]">{t('pages.riskGraphVisualization.total_assets')}</span>
               <Target className="w-4 h-4 text-cyan-400" />
             </div>
-            <div className="text-2xl font-bold text-white">{stats.totalAssets}</div>
+            <div className="text-2xl font-bold text-white">{graphUnavailable ? '—' : stats.totalAssets}</div>
           </div>
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">

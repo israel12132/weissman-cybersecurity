@@ -60,7 +60,7 @@ describe('Command Center login is a single live surface', () => {
     expect(loginSrc).toContain('PLATFORM_RELEASE_NAME')
     expect(loginSrc).toContain('CyberLiveBackdrop')
     expect(loginSrc).not.toMatch(/\b254\b/)
-    expect(loginGateSrc).toContain('PRODUCTION_ENGINE_COUNT')
+    expect(loginGateSrc).toContain('production_engines')
     expect(loginGateSrc).toContain("auth.brand_story")
     expect(loginGateSrc).not.toMatch(/\b254\b/)
   })

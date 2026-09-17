@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import useFocusTrap from '../hooks/useFocusTrap';
 import { useTranslation } from 'react-i18next';
 import { Lock, Key, Shield, Eye, EyeOff, Plus, Trash2, Edit, Copy, Check } from 'lucide-react';
@@ -9,6 +9,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { api } from '../utils/apiFetch';
 import { confirmDialog } from '../utils/confirmDialog'
 import { useToast } from '../components/ui/Toaster'
+import EmptyState from '../components/ui/EmptyState'
 import Button from '../components/ui/Button'
 
 /**
@@ -28,6 +29,7 @@ export default function CeoVault() {
   const { toast } = useToast();
   const [secrets, setSecrets] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [showSecret, setShowSecret] = useState({});
   const [createModal, setCreateModal] = useState(false);
   const [editModal, setEditModal] = useState(null);
@@ -42,9 +44,14 @@ export default function CeoVault() {
     try {
       setLoading(true);
       const data = await api.get('/api/ceo/vault/secrets');
-      setSecrets(data.secrets || []);
+      if (!Array.isArray(data.secrets)) {
+        throw new Error(t('pages.ceoVault.load_failed'));
+      }
+      setLoadError(false);
+      setSecrets(data.secrets);
     } catch (error) {
       console.error('Failed to fetch secrets:', error);
+      setLoadError(true);
       toast.error(t('pages.ceoVault.load_failed'));
     } finally {
       setLoading(false);
@@ -131,6 +138,11 @@ export default function CeoVault() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (loadError) return
+    exportCsv()
+  }, [loadError, exportCsv])
+
   const visibleSecrets = useMemo(() => {
     if (!searchQuery.trim()) return secrets
     const ids = new Set(filteredFindings.map((f) => f.id))
@@ -144,14 +156,22 @@ export default function CeoVault() {
       actions={(
         <ShellScanActions
           onRefresh={fetchSecrets}
-          onExport={exportCsv}
+          onExport={loadError ? undefined : handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={loadError || !filteredFindings.length}
         />
       )}
     >
       <div className="space-y-6">
-        {/* Stats */}
+        {loadError ? (
+          <div data-testid="ceo-vault-unavailable">
+            <EmptyState
+              icon="alert"
+              title={t('pages.ceoVault.unavailable_title')}
+              body={t('pages.ceoVault.unavailable_body')}
+            />
+          </div>
+        ) : (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
@@ -204,6 +224,7 @@ export default function CeoVault() {
             </div>
           </div>
         </div>
+        )}
 
         {/* Create Button */}
         <div className="flex justify-end">
@@ -226,8 +247,8 @@ export default function CeoVault() {
             <WeissmanListToolbar
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
-              resultCount={visibleSecrets.length}
-              totalCount={secrets.length}
+              resultCount={loadError ? undefined : visibleSecrets.length}
+              totalCount={loadError ? undefined : secrets.length}
             />
           </div>
 
@@ -236,7 +257,7 @@ export default function CeoVault() {
               <div className="animate-spin w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full mx-auto mb-3" />
               {t('pages.ceoVault.loading')}
             </div>
-          ) : secrets.length === 0 ? (
+          ) : loadError ? null : secrets.length === 0 ? (
             <div className="p-8 text-center text-[var(--text-muted)]">
               {t('pages.ceoVault.empty')}
             </div>
@@ -348,7 +369,7 @@ export default function CeoVault() {
       </div>
 
       {/* Create/Edit Modals */}
-      {(createModal || editModal) && (
+      {(createModal || (editModal && !loadError)) && (
         <SecretModal
           secret={editModal}
           onClose={() => {

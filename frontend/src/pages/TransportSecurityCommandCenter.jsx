@@ -258,7 +258,13 @@ export default function TransportSecurityCommandCenter() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE, detailFindings)
+
+  const handleExportCsv = useCallback(() => {
+    if (historyUnavailable) return
+    exportCsv()
+  }, [historyUnavailable, exportCsv])
 
   useEffect(() => {
     refreshFromHistory().then((run) => {
@@ -364,10 +370,10 @@ export default function TransportSecurityCommandCenter() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={exportCsv}
+          onExport={historyUnavailable ? undefined : handleExportCsv}
           refreshLoading={historyLoading}
           refreshDisabled={status === 'running'}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={historyUnavailable || !filteredFindings.length}
         />
       )}
     >
@@ -463,9 +469,14 @@ export default function TransportSecurityCommandCenter() {
         {lastRun && <p className="text-[10px] font-mono text-[var(--text-disabled)] mt-3">Last: {lastRun}</p>}
       </div>
 
-      {findings.length > 0 && <Scorecard score={score} grade={grade} dimensions={dimensions} t={t} />}
-      {detailFindings.length > 0 && <CategoryBreakdown findings={detailFindings} />}
+      {findings.length > 0 && !historyUnavailable && <Scorecard score={score} grade={grade} dimensions={dimensions} t={t} />}
+      {detailFindings.length > 0 && !historyUnavailable && <CategoryBreakdown findings={detailFindings} />}
 
+      {historyUnavailable && (
+        <p data-testid="transport-security-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+          {t('pages.transportSecurity.history_unavailable')}
+        </p>
+      )}
       <WeissmanFindingsPanel
         findings={detailFindings}
         filteredFindings={filteredFindings}
@@ -480,7 +491,10 @@ export default function TransportSecurityCommandCenter() {
         lastUpdated={lastUpdated}
         jobId={pendingJobId || lastJobId}
         accent={ACCENT}
-        showEmptyReady={status !== 'running' && detailFindings.length === 0}
+        unavailable={historyUnavailable}
+        unavailableTitle={t('pages.transportSecurity.history_unavailable')}
+        unavailableBody={t('pages.transportSecurity.history_unavailable')}
+        showEmptyReady={status !== 'running' && detailFindings.length === 0 && !historyUnavailable}
         emptyReadyTitle={t('pages.transportSecurity.run_hint', 'Run a scan to assess TLS, mTLS, gRPC and HTTP hardening.')}
         emptyReadyBody={t('pages.transportSecurity.no_findings', 'No transport exposure observed.')}
         renderFinding={(f, i) => <FindingCard key={i} f={f} />}

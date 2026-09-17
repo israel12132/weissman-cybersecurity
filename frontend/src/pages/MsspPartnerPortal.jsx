@@ -52,10 +52,10 @@ export default function MsspPartnerPortal() {
     return worst.filter((c) => `${c?.name || ''} ${c?.grade || ''}`.toLowerCase().includes(q))
   }, [worst, searchQuery])
 
-  const exportCsv = useCallback(
-    () => downloadCsv(portfolioRows(filtered), PORTFOLIO_CSV_HEADER, 'weissman-mssp-portfolio'),
-    [filtered],
-  )
+  const exportCsv = useCallback(() => {
+    if (error) return
+    downloadCsv(portfolioRows(filtered), PORTFOLIO_CSV_HEADER, 'weissman-mssp-portfolio')
+  }, [error, filtered])
 
   const dist = data?.grade_distribution || {}
   const fleet = data?.fleet || {}
@@ -68,9 +68,9 @@ export default function MsspPartnerPortal() {
       actions={(
         <ShellScanActions
           onRefresh={load}
-          onExport={exportCsv}
+          onExport={error ? undefined : exportCsv}
           refreshLoading={loading}
-          exportDisabled={!filtered.length}
+          exportDisabled={!!error || !filtered.length}
         />
       )}
     >

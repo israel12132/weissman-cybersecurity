@@ -1967,7 +1967,11 @@ pub async fn run_asm_result_ctx(
         }
         if wildcard_dns && live_ai {
             if let Some(pool) = ctx.discovery_knowledge_pool() {
-                let stored = crate::discovery_knowledge::load_subdomain_prefixes(pool).await;
+                let stored = match crate::discovery_knowledge::load_subdomain_prefixes(pool).await
+                {
+                    Ok(v) => v,
+                    Err(_) => return EngineResult::error("store_down"),
+                };
                 let known = crate::discovery_knowledge::merge_unique(&[&stored, &custom_wordlist]);
                 let _ = crate::discovery_ai::generate_and_remember(
                     Some(pool),
@@ -1988,7 +1992,7 @@ pub async fn run_asm_result_ctx(
         if want_brute {
             let custom_extra: Vec<String> = custom_wordlist.clone();
             let wordlist = if live_ai {
-                crate::discovery_ai::hydrate_subdomain_prefixes(
+                match crate::discovery_ai::hydrate_subdomain_prefixes(
                     ctx.discovery_knowledge_pool(),
                     &host,
                     "",
@@ -1998,11 +2002,19 @@ pub async fn run_asm_result_ctx(
                     ctx.tenant_id,
                 )
                 .await
+                {
+                    Ok(w) => w,
+                    Err(_) => return EngineResult::error("store_down"),
+                }
             } else if custom_extra.is_empty() {
                 let mut wl = default_subdomain_wordlist();
                 if let Some(pool) = ctx.discovery_knowledge_pool() {
                     crate::discovery_knowledge::seed_public_knowledge(pool).await;
-                    let learned = crate::discovery_knowledge::load_subdomain_prefixes(pool).await;
+                    let learned =
+                        match crate::discovery_knowledge::load_subdomain_prefixes(pool).await {
+                            Ok(v) => v,
+                            Err(_) => return EngineResult::error("store_down"),
+                        };
                     wl = crate::discovery_knowledge::merge_unique(&[&wl, &learned]);
                 }
                 wl
@@ -2189,7 +2201,7 @@ pub async fn run_asm_result_ctx(
     let discovery_pool = ctx.discovery_knowledge_pool();
     let extra_sensitive: Vec<String> = if do_sensitive {
         if live_ai {
-            crate::discovery_ai::hydrate_paths(
+            match crate::discovery_ai::hydrate_paths(
                 discovery_pool,
                 &host,
                 "",
@@ -2199,8 +2211,15 @@ pub async fn run_asm_result_ctx(
                 ctx.tenant_id,
             )
             .await
+            {
+                Ok(v) => v,
+                Err(_) => return EngineResult::error("store_down"),
+            }
         } else if let Some(pool) = discovery_pool {
-            crate::discovery_knowledge::load_learned_paths(pool).await
+            match crate::discovery_knowledge::load_learned_paths(pool).await {
+                Ok(v) => v,
+                Err(_) => return EngineResult::error("store_down"),
+            }
         } else {
             Vec::new()
         }

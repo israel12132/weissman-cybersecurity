@@ -83,7 +83,7 @@ pub async fn ensure_routing_token(
 ) -> Result<(String, i32), String> {
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
-        .map_err(|e| format!("tenant tx: {e}"))?;
+        .map_err(|_| "store_down".to_string())?;
     let row = sqlx::query(
         r#"SELECT secret_b32, rotation_step_secs, port_pool_min, port_pool_max, active
              FROM liquid_matrix_routing_tokens
@@ -92,7 +92,7 @@ pub async fn ensure_routing_token(
     .bind(client_id)
     .fetch_optional(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|_| "store_down".to_string())?;
 
     let (secret_b32, step) = if let Some(r) = row {
         (
@@ -113,10 +113,12 @@ pub async fn ensure_routing_token(
         .bind(rotation_step_secs)
         .execute(&mut *tx)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|_| "store_down".to_string())?;
         (secret, rotation_step_secs)
     };
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return Err("store_down".into());
+    }
     Ok((secret_b32, step.max(1)))
 }
 
@@ -134,14 +136,14 @@ pub async fn rotate_liquid_matrix(
 
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
-        .map_err(|e| format!("tenant tx: {e}"))?;
+        .map_err(|_| "store_down".to_string())?;
     let cfg = sqlx::query(
         r#"SELECT port_pool_min, port_pool_max FROM liquid_matrix_routing_tokens WHERE client_id = $1"#,
     )
     .bind(client_id)
     .fetch_optional(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|_| "store_down".to_string())?;
     let (port_min, port_max) = cfg
         .map(|r| {
             (
@@ -173,8 +175,10 @@ pub async fn rotate_liquid_matrix(
     .bind(expires_at)
     .execute(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
-    let _ = tx.commit().await;
+    .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".into());
+    }
 
     Ok(LiquidRotation {
         epoch,
@@ -202,7 +206,7 @@ pub async fn insert_chronos_event(
 ) -> Result<i64, String> {
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
-        .map_err(|e| format!("tenant tx: {e}"))?;
+        .map_err(|_| "store_down".to_string())?;
     let id: i64 = sqlx::query_scalar(
         r#"INSERT INTO chronos_events
            (tenant_id, client_id, event_type, pid, parent_pid, process_name, syscall_hint, action_taken, delta_json, metadata)
@@ -221,8 +225,10 @@ pub async fn insert_chronos_event(
     .bind(metadata)
     .fetch_one(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
-    let _ = tx.commit().await;
+    .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".into());
+    }
     Ok(id)
 }
 
@@ -241,7 +247,7 @@ pub async fn insert_cognitive_session(
     let signals = json!(bot_signals);
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
-        .map_err(|e| format!("tenant tx: {e}"))?;
+        .map_err(|_| "store_down".to_string())?;
     let id: i64 = sqlx::query_scalar(
         r#"INSERT INTO cognitive_starvation_sessions
            (tenant_id, client_id, target_url, bot_score, bot_signals, poison_variant, poison_payload_id, response_status, metadata)
@@ -259,8 +265,10 @@ pub async fn insert_cognitive_session(
     .bind(metadata)
     .fetch_one(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
-    let _ = tx.commit().await;
+    .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".into());
+    }
     Ok(id)
 }
 
@@ -274,7 +282,7 @@ pub async fn load_poison_library(pool: &PgPool, limit: i64) -> Result<Vec<Value>
     .bind(limit)
     .fetch_all(pool)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|_| "store_down".to_string())?;
     Ok(rows
         .into_iter()
         .map(|r| {
@@ -297,7 +305,7 @@ pub async fn dashboard_snapshot(
 ) -> Result<Value, String> {
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
-        .map_err(|e| format!("tenant tx: {e}"))?;
+        .map_err(|_| "store_down".to_string())?;
 
     let chronos_count: i64 = sqlx::query_scalar(
         r#"SELECT COUNT(*)::bigint FROM chronos_events
@@ -306,7 +314,7 @@ pub async fn dashboard_snapshot(
     .bind(client_id)
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
+    .map_err(|_| "store_down".to_string())?;
 
     let freeze_count: i64 = sqlx::query_scalar(
         r#"SELECT COUNT(*)::bigint FROM chronos_events
@@ -315,7 +323,7 @@ pub async fn dashboard_snapshot(
     .bind(client_id)
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
+    .map_err(|_| "store_down".to_string())?;
 
     let trace_count: i64 = sqlx::query_scalar(
         r#"SELECT COUNT(*)::bigint FROM runtime_traces
@@ -324,7 +332,7 @@ pub async fn dashboard_snapshot(
     .bind(client_id)
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
+    .map_err(|_| "store_down".to_string())?;
 
     let cognitive_count: i64 = sqlx::query_scalar(
         r#"SELECT COUNT(*)::bigint FROM cognitive_starvation_sessions
@@ -333,7 +341,7 @@ pub async fn dashboard_snapshot(
     .bind(client_id)
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
+    .map_err(|_| "store_down".to_string())?;
 
     let agent_online: i64 = sqlx::query_scalar(
         r#"SELECT COUNT(*)::bigint FROM endpoint_agents
@@ -342,9 +350,11 @@ pub async fn dashboard_snapshot(
     .bind(client_id)
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
+    .map_err(|_| "store_down".to_string())?;
 
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return Err("store_down".into());
+    }
 
     let liquid = rotate_liquid_matrix(pool, tenant_id, client_id, 3)
         .await

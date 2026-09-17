@@ -1,7 +1,7 @@
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import { useClientTargetPrefill } from '../hooks/useHubLocalScanParams'
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import PageShell from './PageShell'
@@ -10,6 +10,7 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { apiFetch } from '../utils/apiFetch'
 import Button from '../components/ui/Button'
+import OastHealthStrip from '../components/oast/OastHealthStrip'
 
 const PROBE_IDS = ['log4shell', 'blind_ssrf', 'blind_xss', 'xxe_oob', 'cmd_dns', 'host_ssrf']
 
@@ -58,16 +59,25 @@ function ProbeCard({ probeId, active, onRun, disabled }) {
   )
 }
 
+function probeLabel(id, t) {
+  if (id === 'generic') return t('pages.oastDashboard.probe_generic')
+  return t(`pages.oastDashboard.probes.${id}.label`, { defaultValue: id })
+}
+
 export default function OastDashboard() {
   const { t } = useTranslation()
   const [clients, setClients] = useState([])
+  const [clientsError, setClientsError] = useState(null)
   const [selectedClientId, setSelectedClientId] = useState(null)
   const { postScan } = useCommandCenterScan(selectedClientId)
   const [callbacks, setCallbacks] = useState([])
+  const [oastHealth, setOastHealth] = useState(null)
   const [activeProbes, setActiveProbes] = useState(new Set())
   const [toast, setToast] = useState(null)
   const [callbacksInitialLoading, setCallbacksInitialLoading] = useState(true)
   const [refreshLoading, setRefreshLoading] = useState(false)
+  const callbacksAbortRef = useRef(null)
+  const callbacksInflightRef = useRef(false)
 
   const [mintTarget, setMintTarget] = useState('')
   const [mintProbeType, setMintProbeType] = useState('log4shell')
@@ -76,31 +86,87 @@ export default function OastDashboard() {
   const [mintedTokens, setMintedTokens] = useState([])
 
   useEffect(() => {
-    apiFetch('/api/clients')
-      .then((d) => { if (Array.isArray(d)) setClients(d) })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {})
+    const ac = new AbortController()
+    apiFetch('/api/clients', { signal: ac.signal })
+      .then((d) => {
+        if (ac.signal.aborted) return
+        if (d?.ok === false || d?.unavailable) {
+          throw new Error(d.detail || t('pages.oastDashboard.clients_unavailable'))
+        }
+        if (Array.isArray(d)) setClients(d)
+        setClientsError(null)
+      })
+      .catch((e) => {
+        if (e?.name === 'AbortError' || ac.signal.aborted) return
+        setClients([])
+        setClientsError(e?.message || t('pages.oastDashboard.clients_unavailable'))
+      })
+    return () => ac.abort()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useClientTargetPrefill(selectedClientId, clients, setMintTarget)
 
   const reloadCallbacks = useCallback(async ({ silent = false } = {}) => {
+    if (silent && callbacksInflightRef.current) return
+    if (!silent) callbacksAbortRef.current?.abort()
+    else if (callbacksInflightRef.current) return
+    const ac = new AbortController()
+    callbacksAbortRef.current = ac
+    callbacksInflightRef.current = true
     if (!silent) setRefreshLoading(true)
     try {
-      const d = await apiFetch('/api/oast/callbacks')
+      const d = await apiFetch('/api/oast/callbacks', { signal: ac.signal })
+      if (ac.signal.aborted) return
+      if (d?.ok === false || d?.unavailable) {
+        throw new Error(d.detail || 'unavailable')
+      }
       const list = Array.isArray(d?.callbacks)
         ? d.callbacks
         : (Array.isArray(d) ? d : [])
       setCallbacks(list.slice(0, 50))
-    } catch { /* best-effort; non-fatal */ }
-    finally {
-      if (!silent) setRefreshLoading(false)
-      setCallbacksInitialLoading(false)
+      if (d?.health && typeof d.health === 'object') {
+        setOastHealth({
+          configured: Boolean(d.health.configured),
+          unavailable: false,
+          domain: d.health.domain || '',
+          last_callback_at: d.health.last_callback_at || null,
+          callback_count: d.health.callback_count == null
+            ? null
+            : (Number.isFinite(Number(d.health.callback_count))
+              ? Number(d.health.callback_count)
+              : null),
+        })
+      } else {
+        setCallbacks([])
+        setOastHealth({
+          configured: false,
+          unavailable: true,
+          domain: '',
+          last_callback_at: null,
+          callback_count: null,
+        })
+      }
+    } catch (e) {
+      if (e?.name === 'AbortError' || ac.signal.aborted) return
+      setCallbacks([])
+      setOastHealth({
+        configured: false,
+        unavailable: true,
+        domain: '',
+        last_callback_at: null,
+        callback_count: null,
+      })
+    } finally {
+      if (callbacksAbortRef.current === ac) callbacksInflightRef.current = false
+      if (!silent && callbacksAbortRef.current === ac && !ac.signal.aborted) setRefreshLoading(false)
+      if (callbacksAbortRef.current === ac && !ac.signal.aborted) setCallbacksInitialLoading(false)
     }
   }, [])
 
   useEffect(() => {
     reloadCallbacks({ silent: true })
+    return () => callbacksAbortRef.current?.abort()
   }, [reloadCallbacks])
   // Hidden-tab-aware: pause the 5s OAST callback poll while the tab is backgrounded.
   useVisiblePolling(() => reloadCallbacks({ silent: true }), 5000)
@@ -190,16 +256,14 @@ export default function OastDashboard() {
   const handlePollToken = useCallback(async (token) => {
     try {
       const data = await apiFetch(`/api/oast/verify/${token}`)
-      setMintedTokens((prev) => prev.map((tok) => (tok.token === token ? { ...tok, ...data } : tok)))
+      setMintedTokens((prev) => prev.map((tok) => (tok.token === token ? { ...tok, ...data, pollUnavailable: false } : tok)))
     } catch (e) {
+      setMintedTokens((prev) => prev.map((tok) => (tok.token === token ? { ...tok, pollUnavailable: true } : tok)))
       showToast('error', t('pages.oastDashboard.poll_failed', { message: e.message }))
     }
   }, [showToast, t])
 
-  const probeLabel = (id) => {
-    if (id === 'generic') return t('pages.oastDashboard.probe_generic')
-    return t(`pages.oastDashboard.probes.${id}.label`, { defaultValue: id })
-  }
+  const labelForProbe = (id) => probeLabel(id, t)
 
   return (
     <PageShell
@@ -210,7 +274,7 @@ export default function OastDashboard() {
       actions={(
         <ShellScanActions
           onRefresh={() => reloadCallbacks()}
-          onExport={exportCsv}
+          onExport={oastHealth?.unavailable ? undefined : exportCsv}
           refreshLoading={refreshLoading}
           exportDisabled={!filteredFindings.length}
         />
@@ -219,6 +283,8 @@ export default function OastDashboard() {
       <div className="mb-6 rounded-xl border border-cyan-500/20 bg-cyan-950/20 px-4 py-3 text-[11px] font-mono text-cyan-200/80 leading-relaxed">
         {t('pages.oastDashboard.verification_banner')}
       </div>
+
+      <OastHealthStrip health={oastHealth} />
 
       <div className="flex items-center gap-2 mb-8">
         <span className="text-[11px] font-mono text-[var(--text-muted)]">{t('pages.oastDashboard.client')}</span>
@@ -230,10 +296,15 @@ export default function OastDashboard() {
           <option value="">{t('pages.oastDashboard.select_client')}</option>
           {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
+        {clientsError && (
+          <span className="text-[11px] font-mono text-amber-200/90" data-testid="oast-clients-unavailable" role="alert">
+            {t('pages.oastDashboard.clients_unavailable')}
+          </span>
+        )}
       </div>
 
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-cyan-500/30 text-cyan-200'}`}>
+        <div className={`fixed top-16 end-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-cyan-500/30 text-cyan-200'}`}>
           {toast.msg}
         </div>
       )}
@@ -255,6 +326,15 @@ export default function OastDashboard() {
         </div>
 
         <div className="space-y-4">
+          {oastHealth?.unavailable ? (
+            <p
+              className="text-sm text-amber-200/90"
+              data-testid="oast-callbacks-unavailable"
+              role="alert"
+            >
+              {t('pages.oastDashboard.callbacks_unavailable')}
+            </p>
+          ) : (
           <WeissmanFindingsPanel
             findings={listFindings}
             filteredFindings={filteredFindings}
@@ -267,6 +347,7 @@ export default function OastDashboard() {
             loading={callbacksInitialLoading && !listFindings.length}
             accent="#22d3ee"
           />
+          )}
         </div>
       </div>
 
@@ -291,7 +372,7 @@ export default function OastDashboard() {
               onChange={(e) => setMintProbeType(e.target.value)}
               className="rounded-xl bg-[var(--scrim)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] focus:outline-none focus:border-cyan-500/40"
             >
-              {PROBE_IDS.map((id) => <option key={id} value={id}>{probeLabel(id)}</option>)}
+              {PROBE_IDS.map((id) => <option key={id} value={id}>{labelForProbe(id)}</option>)}
               <option value="generic">{t('pages.oastDashboard.probe_generic')}</option>
             </select>
             <input
@@ -324,10 +405,15 @@ export default function OastDashboard() {
                 <div className="flex items-start justify-between gap-3 flex-wrap">
                   <div className="space-y-0.5 min-w-0">
                     <p className="text-[11px] font-mono text-cyan-400/80 break-all">{tok.token}</p>
-                    <p className="text-[10px] text-[var(--text-disabled)]">{probeLabel(tok.probe_type)} · {tok.target_url}</p>
+                    <p className="text-[10px] text-[var(--text-disabled)]">{labelForProbe(tok.probe_type)} · {tok.target_url}</p>
                     {tok.label && <p className="text-[10px] text-[var(--text-disabled)] italic">{tok.label}</p>}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
+                    {tok.pollUnavailable ? (
+                      <span data-testid="oast-verify-unavailable" className="text-[10px] font-mono px-2 py-0.5 rounded border border-rose-500/30 text-rose-300 bg-rose-900/10">
+                        {t('pages.oastDashboard.verify_unavailable')}
+                      </span>
+                    ) : (
                     <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
                       tok.oob_confirmed
                         ? 'border-green-500/30 text-green-400 bg-green-900/10'
@@ -337,6 +423,7 @@ export default function OastDashboard() {
                         ? t('pages.oastDashboard.hit_confirmed')
                         : t('pages.oastDashboard.hits_count', { count: tok.hit_count ?? 0 })}
                     </span>
+                    )}
                     <Button variant="unstyled"
                       type="button"
                       onClick={() => handlePollToken(tok.token)}
@@ -350,7 +437,7 @@ export default function OastDashboard() {
                   {t('pages.oastDashboard.callback_label')}{' '}
                   <code className="text-cyan-400/50">{tok.callback_domain ?? '—'}</code>
                 </p>
-                {tok.first_hit_at && (
+                {!tok.pollUnavailable && tok.first_hit_at && (
                   <p className="text-[10px] text-green-400/70">
                     {t('pages.oastDashboard.first_hit', { time: new Date(tok.first_hit_at).toLocaleString() })}
                   </p>

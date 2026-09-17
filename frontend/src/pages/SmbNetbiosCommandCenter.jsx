@@ -77,6 +77,7 @@ const LABELS = {
     evidence: 'Evidence trail',
     noFindings: 'No SMB/NetBIOS weaknesses observed on the wire — strong file-sharing posture.',
     runToPopulate: 'Configure target host and run the live SMB protocol assessment.',
+    historyUnavailable: 'Engine history API unavailable — run-to-populate is not a quiet empty trail.',
     related: 'Related network engines',
     relatedNetwork: 'Network Intelligence',
     relatedTls: 'PKI / TLS Command Center',
@@ -154,6 +155,7 @@ const LABELS = {
     evidence: 'שרשרת ראיות',
     noFindings: 'לא נצפו חולשות SMB/NetBIOS — תנוחת שיתוף קבצים חזקה.',
     runToPopulate: 'הגדר יעד והרץ הערכת SMB חיה.',
+    historyUnavailable: 'API היסטוריית המנוע אינו זמין — מוכן-למילוי אינו מאושר.',
     related: 'מנועי רשת קשורים',
     relatedNetwork: 'Network Intelligence',
     relatedTls: 'מרכז PKI / TLS',
@@ -326,8 +328,10 @@ function PipeMatrixPanel({ matrix, L }) {
 function MetricsTelemetryPanel({ metrics, L }) {
   if (!metrics) return null
   const m = metrics.smb_metrics || metrics.evidence || metrics
-  const rw = m.ransomware_readiness ?? 0
-  const rwColor = rw >= 70 ? '#ef4444' : rw >= 40 ? '#f97316' : '#34d399'
+  const rawRw = m.ransomware_readiness
+  const hasRw = rawRw != null && Number.isFinite(Number(rawRw))
+  const rw = hasRw ? Number(rawRw) : 0
+  const rwColor = !hasRw ? 'rgba(255,255,255,0.12)' : rw >= 70 ? '#ef4444' : rw >= 40 ? '#f97316' : '#34d399'
   const elapsed = m.scan_elapsed_ms
   const ms17 = m.ms17_010_ntstatus
   return (
@@ -348,7 +352,7 @@ function MetricsTelemetryPanel({ metrics, L }) {
         </div>
         <div>
           <div className="text-[10px] font-mono text-[var(--text-muted)]">{L.ransomwareReadiness}</div>
-          <div className="text-2xl font-black font-mono" style={{ color: rwColor }}>{rw}<span className="text-sm text-[var(--text-muted)]">/100</span></div>
+          <div className="text-2xl font-black font-mono" style={{ color: rwColor }}>{hasRw ? rw : '—'}<span className="text-sm text-[var(--text-muted)]">/100</span></div>
         </div>
         {elapsed != null && (
           <div>
@@ -494,10 +498,13 @@ function Toggle({ on, onClick, label }) {
 function PostureCard({ summary, graph, pathCount, L, running }) {
   if (!summary) return null
   const ev = summary.evidence || {}
-  const score = summary.posture_score ?? ev.posture_score ?? 0
+  const raw = summary.posture_score ?? ev.posture_score
+  const hasScore = raw != null && Number.isFinite(Number(raw))
+  const score = hasScore ? Number(raw) : 0
   const grade = summary.grade ?? ev.grade ?? ev.posture_grade ?? '—'
   const counts = summary.counts ?? ev.counts ?? {}
   const exposureGraph = graph ?? summary.exposure_graph ?? ev.exposure_graph
+  const color = hasScore ? gradeColor(grade) : 'rgba(255,255,255,0.12)'
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-blue-500/25 bg-gradient-to-br from-blue-950/30 via-orange-950/10 to-black/40 p-5 mb-6">
@@ -508,16 +515,16 @@ function PostureCard({ summary, graph, pathCount, L, running }) {
             <div className="relative w-24 h-24 shrink-0">
               <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
                 <circle cx="50" cy="50" r="44" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="8" />
-                <circle cx="50" cy="50" r="44" fill="none" stroke={gradeColor(grade)} strokeWidth="8" strokeLinecap="round" strokeDasharray={`${(score / 100) * 276.46} 276.46`} />
+                <circle cx="50" cy="50" r="44" fill="none" stroke={color} strokeWidth="8" strokeLinecap="round" strokeDasharray={hasScore ? `${(score / 100) * 276.46} 276.46` : '0 276.46'} />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-2xl font-bold" style={{ color: gradeColor(grade) }}>{score}</span>
+                <span className="text-2xl font-bold" style={{ color }}>{hasScore ? score : '—'}</span>
                 <span className="text-[9px] font-mono text-[var(--text-muted)]">/100</span>
               </div>
             </div>
             <div>
               <div className="text-[10px] font-mono text-[var(--text-muted)]">{L.grade}</div>
-              <div className="text-4xl font-black font-mono" style={{ color: gradeColor(grade) }}>{grade}</div>
+              <div className="text-4xl font-black font-mono" style={{ color }}>{grade}</div>
               {pathCount > 0 && (
                 <div className="text-[10px] font-mono text-rose-300/80 mt-1">{pathCount} attack path(s)</div>
               )}
@@ -728,11 +735,6 @@ export default function SmbNetbiosCommandCenter() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, target, buildBody, showToastMsg, L])
 
-  const handleExport = useCallback(() => {
-    const blob = new Blob([JSON.stringify({ engine: ENGINE_ID, target, findings, exported_at: new Date().toISOString() }, null, 2)], { type: 'application/json' })
-    downloadBytes(blob, `smb-netbios-${target.replace(/[^a-z0-9.-]/gi, '_')}.json`)
-  }, [target, findings])
-
   const summary = useMemo(() => findings.find(isSummary), [findings])
   const metrics = useMemo(() => findings.find(isMetrics), [findings])
   const attackPaths = useMemo(() => findings.filter((f) => f.category === 'attack_path'), [findings])
@@ -755,7 +757,19 @@ export default function SmbNetbiosCommandCenter() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE_ID, realFindings)
+
+  const handleExport = useCallback(() => {
+    if (historyUnavailable) return
+    const blob = new Blob([JSON.stringify({ engine: ENGINE_ID, target, findings, exported_at: new Date().toISOString() }, null, 2)], { type: 'application/json' })
+    downloadBytes(blob, `smb-netbios-${target.replace(/[^a-z0-9.-]/gi, '_')}.json`)
+  }, [target, findings, historyUnavailable])
+
+  const handleExportCsv = useCallback(() => {
+    if (historyUnavailable) return
+    exportCsv()
+  }, [historyUnavailable, exportCsv])
 
   useEffect(() => {
     refreshFromHistory().then((run) => {
@@ -801,10 +815,10 @@ export default function SmbNetbiosCommandCenter() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={exportCsv}
+          onExport={historyUnavailable ? undefined : handleExportCsv}
           refreshLoading={historyLoading}
           refreshDisabled={status === 'running'}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={historyUnavailable || !filteredFindings.length}
         />
       )}
     >
@@ -840,7 +854,7 @@ export default function SmbNetbiosCommandCenter() {
           <Button variant="unstyled" type="button" onClick={() => setShowParams((s) => !s)} className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]">
             {showParams ? L.hideParams : L.showParams}
           </Button>
-          {findings.length > 0 && (
+          {!historyUnavailable && findings.length > 0 && (
             <Button variant="unstyled" type="button" onClick={handleExport} className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]">
               {L.export}
             </Button>
@@ -913,28 +927,33 @@ export default function SmbNetbiosCommandCenter() {
         {lastRun && <p className="text-[10px] font-mono text-[var(--text-disabled)] mt-3">{L.lastRun}: {lastRun}</p>}
       </div>
 
-      {!clientId && <p className="text-xs font-mono text-[var(--text-muted)] mb-6">{L.runToPopulate}</p>}
+      {historyUnavailable && (
+        <p data-testid="smb-netbios-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+          {L.historyUnavailable}
+        </p>
+      )}
+      {!clientId && !historyUnavailable && <p className="text-xs font-mono text-[var(--text-muted)] mb-6">{L.runToPopulate}</p>}
 
-      {(summary || findings.length > 0) && (
+      {(summary || findings.length > 0) && !historyUnavailable && (
         <PostureCard summary={summary} graph={exposureGraph} pathCount={attackPaths.length} L={L} running={status === 'running'} />
       )}
 
-      <MetricsTelemetryPanel metrics={metrics} L={L} />
-      <CompliancePanel metrics={metrics} L={L} />
-      <PipeMatrixPanel matrix={pipeMatrix} L={L} />
+      {!historyUnavailable && <MetricsTelemetryPanel metrics={metrics} L={L} />}
+      {!historyUnavailable && <CompliancePanel metrics={metrics} L={L} />}
+      {!historyUnavailable && <PipeMatrixPanel matrix={pipeMatrix} L={L} />}
 
-      {attackPaths.length > 0 && (
+      {!historyUnavailable && attackPaths.length > 0 && (
         <div className="mb-6">
           <h3 className="text-sm font-mono text-rose-300/90 uppercase tracking-wider mb-3">{L.pathsTitle} · {attackPaths.length}</h3>
           {attackPaths.map((f, i) => <AttackPathCard key={i} finding={f} />)}
         </div>
       )}
 
-      {findings.length === 0 && status !== 'running' && (
+      {findings.length === 0 && status !== 'running' && !historyUnavailable && (
         <p className="text-xs font-mono text-[var(--text-disabled)] text-center py-12">{status === 'completed' ? L.noFindings : L.runToPopulate}</p>
       )}
 
-      {realFindings.length > 0 && <CategoryBreakdown findings={realFindings} />}
+      {!historyUnavailable && realFindings.length > 0 && <CategoryBreakdown findings={realFindings} />}
 
       <WeissmanFindingsPanel
         findings={realFindings}
@@ -951,7 +970,10 @@ export default function SmbNetbiosCommandCenter() {
         jobId={pendingJobId || lastJobId}
         accent={ACCENT}
         title={L.findingsTitle}
-        showEmptyReady={status !== 'running' && realFindings.length === 0 && findings.length === 0}
+        unavailable={historyUnavailable}
+        unavailableTitle={L.historyUnavailable}
+        unavailableBody={L.historyUnavailable}
+        showEmptyReady={status !== 'running' && realFindings.length === 0 && findings.length === 0 && !historyUnavailable}
         emptyReadyTitle={L.runToPopulate}
         emptyReadyBody={L.runToPopulate}
         emptyTitle={L.noFindings}

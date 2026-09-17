@@ -28,6 +28,23 @@ pub fn is_armored_action(kind: &str) -> bool {
     ARMORED_KINDS.contains(&kind.trim().to_ascii_lowercase().as_str())
 }
 
+async fn forensic_log(
+    pool: &PgPool,
+    cmd: &ExecuteActionCommand,
+    status: &str,
+    detail: &str,
+    execution_id: Option<Uuid>,
+) -> Option<ActionOutcome> {
+    match audit::log_execution(pool, cmd, status, detail, execution_id).await {
+        Ok(()) => None,
+        Err(_) => Some(ActionOutcome {
+            status: "failed".into(),
+            detail: "store_down".into(),
+            execution_id,
+        }),
+    }
+}
+
 /// Build command from playbook action dispatch.
 #[must_use]
 pub fn build_command(
@@ -57,32 +74,62 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
     let vuln_sig = cmd.evidence.vulnerability_signature();
     let idem = idempotency_key(&cmd.action_kind, &cmd.target_id, &vuln_sig);
 
-    if let Some(existing) = find_existing_execution(pool, cmd.tenant_id, &idem).await {
-        if existing.status == ExecutionStatus::PendingHitl.as_str()
-            && !cmd
-                .params
-                .get("_hitl_approved")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false)
-        {
+    match find_existing_execution(pool, cmd.tenant_id, &idem).await {
+        Err(_) => {
+            if let Some(o) = forensic_log(pool, &cmd, "failed", "database unavailable", None).await {
+                return o;
+            }
             return ActionOutcome {
-                status: "pending_hitl".into(),
-                detail: format!("awaiting HITL on execution {}", existing.id),
-                execution_id: Some(existing.id),
+                status: "failed".into(),
+                detail: "database unavailable".into(),
+                execution_id: None,
             };
         }
-        if existing.status == ExecutionStatus::Resolved.as_str()
-            || existing.status == ExecutionStatus::DuplicateSkipped.as_str()
-        {
-            return ActionOutcome {
-                status: "ok".into(),
-                detail: format!(
-                    "duplicate_skipped: prior execution {} ({})",
-                    existing.id, existing.status
-                ),
-                execution_id: Some(existing.id),
-            };
+        Ok(Some(existing)) => {
+            if existing.status == ExecutionStatus::PendingHitl.as_str()
+                && !cmd
+                    .params
+                    .get("_hitl_approved")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false)
+            {
+                return ActionOutcome {
+                    status: "pending_hitl".into(),
+                    detail: format!("awaiting HITL on execution {}", existing.id),
+                    execution_id: Some(existing.id),
+                };
+            }
+            if existing.status == ExecutionStatus::Resolved.as_str()
+                || existing.status == ExecutionStatus::DuplicateSkipped.as_str()
+            {
+                return ActionOutcome {
+                    status: "ok".into(),
+                    detail: format!(
+                        "duplicate_skipped: prior execution {} ({})",
+                        existing.id, existing.status
+                    ),
+                    execution_id: Some(existing.id),
+                };
+            }
+            if existing.status == ExecutionStatus::Executing.as_str()
+                || existing.status == ExecutionStatus::Verifying.as_str()
+            {
+                return ActionOutcome {
+                    status: "ok".into(),
+                    detail: format!(
+                        "duplicate_skipped: in-flight execution {} ({})",
+                        existing.id, existing.status
+                    ),
+                    execution_id: Some(existing.id),
+                };
+            }
+            if existing.status == ExecutionStatus::Failed.as_str()
+                && existing.detail == "store_down"
+            {
+                return resume_store_down_after_adapter(pool, &cmd, &existing, &idem).await;
+            }
         }
+        Ok(None) => {}
     }
 
     let isolate = cmd.action_kind.eq_ignore_ascii_case("isolate_host");
@@ -90,7 +137,9 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
         match idempotency::try_acquire_isolate_lock(&idem).await {
             Ok(g) => g,
             Err(e) => {
-                audit::log_execution(pool, &cmd, "failed", &e, None).await;
+                if let Some(o) = forensic_log(pool, &cmd, "failed", &e, None).await {
+                return o;
+            }
                 return ActionOutcome {
                     status: "failed".into(),
                     detail: e,
@@ -100,19 +149,30 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
         }
     } else {
         match idempotency::try_acquire_lock(&idem).await {
-            Some(g) => g,
-            None => {
-                audit::log_execution(
+            Ok(Some(g)) => g,
+            Ok(None) => {
+                if let Some(o) = forensic_log(
                     pool,
                     &cmd,
                     "duplicate_skipped",
                     "redis lock held or done marker",
                     None,
-                )
-                .await;
+                ).await {
+                return o;
+            }
                 return ActionOutcome {
                     status: "ok".into(),
                     detail: "duplicate_skipped: action already in-flight or completed".into(),
+                    execution_id: None,
+                };
+            }
+            Err(_) => {
+                if let Some(o) = forensic_log(pool, &cmd, "failed", "database unavailable", None).await {
+                return o;
+            }
+                return ActionOutcome {
+                    status: "failed".into(),
+                    detail: "database unavailable".into(),
                     execution_id: None,
                 };
             }
@@ -155,10 +215,21 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
 
     let execution_id = match insert_execution(pool, &cmd, &idem, &blast).await {
         Ok(id) => id,
+        Err(e) if e == "duplicate_in_flight" => {
+            return ActionOutcome {
+                status: "ok".into(),
+                detail: "duplicate_skipped: concurrent execution".into(),
+                execution_id: None,
+            };
+        }
         Err(e) => {
             return ActionOutcome {
                 status: "failed".into(),
-                detail: format!("persist execution: {e}"),
+                detail: if e == "store_down" {
+                    "database unavailable".into()
+                } else {
+                    format!("persist execution: {e}")
+                },
                 execution_id: None,
             };
         }
@@ -166,14 +237,15 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
 
     if blast.requires_hitl {
         let _ = mark_pending_hitl(pool, cmd.tenant_id, execution_id, &blast.block_reason).await;
-        audit::log_execution(
+        if let Some(o) = forensic_log(
             pool,
             &cmd,
             "pending_hitl",
             &blast.block_reason,
             Some(execution_id),
-        )
-        .await;
+        ).await {
+                return o;
+            }
         return ActionOutcome {
             status: "pending_hitl".into(),
             detail: blast.block_reason,
@@ -181,39 +253,84 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
         };
     }
     if blast.blocked {
+        let store_down = blast.block_reason == "database unavailable";
         let _ = update_status(
             pool,
             cmd.tenant_id,
             execution_id,
-            ExecutionStatus::BlockedBlastRadius,
+            if store_down {
+                ExecutionStatus::Failed
+            } else {
+                ExecutionStatus::BlockedBlastRadius
+            },
             &blast.block_reason,
         )
         .await;
-        audit::log_execution(
+        if let Some(o) = forensic_log(
             pool,
             &cmd,
-            "blocked_blast_radius",
+            if store_down {
+                "failed"
+            } else {
+                "blocked_blast_radius"
+            },
             &blast.block_reason,
             Some(execution_id),
-        )
-        .await;
+        ).await {
+                return o;
+            }
         return ActionOutcome {
-            status: "skipped".into(),
+            status: if store_down {
+                "failed".into()
+            } else {
+                "skipped".into()
+            },
             detail: blast.block_reason,
             execution_id: Some(execution_id),
         };
     }
 
-    let _ = update_status(
+    if update_status(
         pool,
         cmd.tenant_id,
         execution_id,
         ExecutionStatus::Executing,
         "dispatching adapter",
     )
-    .await;
+    .await
+    .is_err()
+    {
+        if let Some(o) = forensic_log(pool, &cmd, "failed", "store_down", Some(execution_id)).await {
+                return o;
+            }
+        return ActionOutcome {
+            status: "failed".into(),
+            detail: "store_down".into(),
+            execution_id: Some(execution_id),
+        };
+    }
 
-    let integrations = load_integrations(pool, cmd.tenant_id).await;
+    let integrations = match load_integrations(pool, cmd.tenant_id).await {
+        Ok(i) => i,
+        Err(_) => {
+            let _ = update_status(
+                pool,
+                cmd.tenant_id,
+                execution_id,
+                ExecutionStatus::Failed,
+                "database unavailable",
+            )
+            .await;
+            if let Some(o) = forensic_log(pool, &cmd, "failed", "database unavailable", Some(execution_id)).await {
+                return o;
+            }
+            return ActionOutcome {
+                status: "failed".into(),
+                detail: "database unavailable".into(),
+                execution_id: Some(execution_id),
+            };
+        }
+    };
     let prefer: Vec<&str> = match cmd.action_kind.to_ascii_lowercase().as_str() {
         "isolate_host" => vec![
             "aws_ec2",
@@ -249,7 +366,9 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
                 &msg,
             )
             .await;
-            audit::log_execution(pool, &cmd, "failed", &msg, Some(execution_id)).await;
+            if let Some(o) = forensic_log(pool, &cmd, "failed", &msg, Some(execution_id)).await {
+                return o;
+            }
             return ActionOutcome {
                 status: "skipped".into(),
                 detail: msg,
@@ -270,26 +389,75 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
             for step in &mut outcome.revert_steps {
                 step.payload = super::integrations_vault::encrypt_config(&step.payload);
             }
-            let _ = update_execution_result(
+            if update_execution_result(
                 pool,
                 cmd.tenant_id,
                 execution_id,
                 &outcome,
                 ExecutionStatus::Verifying,
             )
-            .await;
+            .await
+            .is_err()
+            {
+                if let Some(o) = forensic_log(pool, &cmd, "failed", "store_down", Some(execution_id)).await {
+                return o;
+            }
+                return ActionOutcome {
+                    status: "failed".into(),
+                    detail: "store_down".into(),
+                    execution_id: Some(execution_id),
+                };
+            }
             let steps = if outcome.revert_steps.is_empty() {
                 vec![]
             } else {
                 outcome.revert_steps.clone()
             };
             if !steps.is_empty() {
-                let _ =
-                    persist_runbook(pool, cmd.tenant_id, execution_id, &cmd.action_kind, &steps)
-                        .await;
+                if persist_runbook(pool, cmd.tenant_id, execution_id, &cmd.action_kind, &steps)
+                    .await
+                    .is_err()
+                {
+                    let _ = update_status(
+                        pool,
+                        cmd.tenant_id,
+                        execution_id,
+                        ExecutionStatus::Failed,
+                        "store_down",
+                    )
+                    .await;
+                    if let Some(o) = forensic_log(pool, &cmd, "failed", "store_down", Some(execution_id)).await {
+                return o;
+            }
+                    return ActionOutcome {
+                        status: "failed".into(),
+                        detail: "store_down".into(),
+                        execution_id: Some(execution_id),
+                    };
+                }
             }
             if let Some(probe) = probe_from_outcome(&outcome, &cmd) {
-                let _ = enqueue_verification(pool, cmd.tenant_id, execution_id, &probe).await;
+                if enqueue_verification(pool, cmd.tenant_id, execution_id, &probe)
+                    .await
+                    .is_err()
+                {
+                    let _ = update_status(
+                        pool,
+                        cmd.tenant_id,
+                        execution_id,
+                        ExecutionStatus::Failed,
+                        "store_down",
+                    )
+                    .await;
+                    if let Some(o) = forensic_log(pool, &cmd, "failed", "store_down", Some(execution_id)).await {
+                return o;
+            }
+                    return ActionOutcome {
+                        status: "failed".into(),
+                        detail: "store_down".into(),
+                        execution_id: Some(execution_id),
+                    };
+                }
             } else {
                 let _ = update_status(
                     pool,
@@ -301,8 +469,9 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
                 .await;
             }
             mark_completed(&idem, Duration::from_secs(86_400)).await;
-            audit::log_execution(pool, &cmd, "verifying", &outcome.detail, Some(execution_id))
-                .await;
+            if let Some(o) = forensic_log(pool, &cmd, "verifying", &outcome.detail, Some(execution_id)).await {
+                return o;
+            }
             ActionOutcome {
                 status: "ok".into(),
                 detail: outcome.detail,
@@ -319,7 +488,9 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
             };
             let status_str = if terminal { "skipped" } else { "failed" };
             let _ = update_status(pool, cmd.tenant_id, execution_id, exec_status, &msg).await;
-            audit::log_execution(pool, &cmd, status_str, &msg, Some(execution_id)).await;
+            if let Some(o) = forensic_log(pool, &cmd, status_str, &msg, Some(execution_id)).await {
+                return o;
+            }
             ActionOutcome {
                 status: status_str.into(),
                 detail: msg,
@@ -332,30 +503,104 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
 struct ExistingExecution {
     id: Uuid,
     status: String,
+    detail: String,
+    provider: String,
+    external_ref: Option<String>,
+}
+
+/// Adapter already ran; runbook/verify persist failed. Do not Redis-done skip as ok.
+async fn resume_store_down_after_adapter(
+    pool: &PgPool,
+    cmd: &ExecuteActionCommand,
+    existing: &ExistingExecution,
+    idem: &str,
+) -> ActionOutcome {
+    let outcome = super::types::AdapterOutcome {
+        provider: existing.provider.clone(),
+        external_ref: existing.external_ref.clone(),
+        detail: existing.detail.clone(),
+        payload: json!({}),
+        revert_steps: vec![],
+        verify_probe: None,
+    };
+    if let Some(probe) = probe_from_outcome(&outcome, cmd) {
+        if enqueue_verification(pool, cmd.tenant_id, existing.id, &probe)
+            .await
+            .is_err()
+        {
+            if let Some(o) = forensic_log(pool, cmd, "failed", "store_down", Some(existing.id)).await {
+                return o;
+            }
+            return ActionOutcome {
+                status: "failed".into(),
+                detail: "store_down".into(),
+                execution_id: Some(existing.id),
+            };
+        }
+    } else if update_status(
+        pool,
+        cmd.tenant_id,
+        existing.id,
+        ExecutionStatus::Resolved,
+        &existing.detail,
+    )
+    .await
+    .is_err()
+    {
+        if let Some(o) = forensic_log(pool, cmd, "failed", "store_down", Some(existing.id)).await {
+                return o;
+            }
+        return ActionOutcome {
+            status: "failed".into(),
+            detail: "store_down".into(),
+            execution_id: Some(existing.id),
+        };
+    }
+    mark_completed(idem, Duration::from_secs(86_400)).await;
+    if let Some(o) = forensic_log(
+        pool,
+        cmd,
+        "verifying",
+        "verification resumed after store_down",
+        Some(existing.id),
+    ).await {
+                return o;
+            }
+    ActionOutcome {
+        status: "ok".into(),
+        detail: "verification resumed after store_down".into(),
+        execution_id: Some(existing.id),
+    }
 }
 
 async fn find_existing_execution(
     pool: &PgPool,
     tenant_id: i64,
     idem: &str,
-) -> Option<ExistingExecution> {
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return None;
-    };
+) -> Result<Option<ExistingExecution>, String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let row = sqlx::query(
-        "SELECT id, status FROM soar_action_executions WHERE tenant_id = $1 AND idempotency_key = $2",
+        "SELECT id, status, COALESCE(result_detail, '') AS result_detail,
+                COALESCE(provider, '') AS provider, external_ref
+           FROM soar_action_executions WHERE tenant_id = $1 AND idempotency_key = $2",
     )
     .bind(tenant_id)
     .bind(idem)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
-    row.map(|r| ExistingExecution {
+    .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
+    Ok(row.map(|r| ExistingExecution {
         id: r.try_get("id").unwrap_or_else(|_| Uuid::nil()),
         status: r.try_get("status").unwrap_or_default(),
-    })
+        detail: r.try_get("result_detail").unwrap_or_default(),
+        provider: r.try_get("provider").unwrap_or_default(),
+        external_ref: r.try_get::<Option<String>, _>("external_ref").unwrap_or(None),
+    }))
 }
 
 async fn insert_execution(
@@ -364,9 +609,9 @@ async fn insert_execution(
     idem: &str,
     blast: &super::types::BlastRadiusReport,
 ) -> Result<Uuid, String> {
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, cmd.tenant_id).await else {
-        return Err("tenant tx".into());
-    };
+    let mut tx = crate::db::begin_tenant_tx(pool, cmd.tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let id = Uuid::new_v4();
     let evidence = serde_json::to_value(&cmd.evidence).unwrap_or(json!({}));
     let res = sqlx::query(
@@ -389,20 +634,37 @@ async fn insert_execution(
     .bind(&cmd.params)
     .execute(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|_| "store_down".to_string())?;
     if res.rows_affected() == 0 {
-        let existing: Option<Uuid> = sqlx::query_scalar(
-            "SELECT id FROM soar_action_executions WHERE tenant_id = $1 AND idempotency_key = $2",
+        let row = sqlx::query(
+            "SELECT id, status FROM soar_action_executions WHERE tenant_id = $1 AND idempotency_key = $2",
         )
         .bind(cmd.tenant_id)
         .bind(idem)
         .fetch_optional(&mut *tx)
         .await
-        .map_err(|e| e.to_string())?;
-        let _ = tx.commit().await;
-        return existing.ok_or_else(|| "conflict without row".into());
+        .map_err(|_| "store_down".to_string())?;
+        if tx.commit().await.is_err() {
+            return Err("store_down".to_string());
+        }
+        let Some(r) = row else {
+            return Err("conflict without row".into());
+        };
+        let existing: Uuid = r.try_get("id").unwrap_or_else(|_| Uuid::nil());
+        let status: String = r.try_get("status").unwrap_or_default();
+        if status == ExecutionStatus::Executing.as_str()
+            || status == ExecutionStatus::Verifying.as_str()
+            || status == ExecutionStatus::Resolved.as_str()
+            || status == ExecutionStatus::DuplicateSkipped.as_str()
+            || status == ExecutionStatus::PendingHitl.as_str()
+        {
+            return Err("duplicate_in_flight".to_string());
+        }
+        return Ok(existing);
     }
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
     Ok(id)
 }
 
@@ -413,9 +675,9 @@ async fn update_status(
     status: ExecutionStatus,
     detail: &str,
 ) -> Result<(), String> {
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return Err("tenant tx".into());
-    };
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let resolved = if status == ExecutionStatus::Resolved {
         Some(chrono::Utc::now())
     } else {
@@ -434,8 +696,10 @@ async fn update_status(
     .bind(resolved)
     .execute(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
-    let _ = tx.commit().await;
+    .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
     Ok(())
 }
 
@@ -446,9 +710,9 @@ async fn update_execution_result(
     outcome: &super::types::AdapterOutcome,
     status: ExecutionStatus,
 ) -> Result<(), String> {
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return Err("tenant tx".into());
-    };
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     sqlx::query(
         r#"UPDATE soar_action_executions
            SET status = $3, provider = $4, result_detail = $5,
@@ -465,8 +729,10 @@ async fn update_execution_result(
     .bind(outcome.payload.clone())
     .execute(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
-    let _ = tx.commit().await;
+    .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
     Ok(())
 }
 
@@ -547,20 +813,8 @@ pub async fn approve_hitl(
     }
     tx.commit().await.map_err(|e| e.to_string())?;
 
-    let ev: ThreatEvidence = serde_json::from_value(evidence).unwrap_or(ThreatEvidence {
-        finding_id: None,
-        title: String::new(),
-        severity: String::new(),
-        source: String::new(),
-        target: target_id.clone(),
-        cve: None,
-        signature_hash: None,
-        cvss: None,
-        epss: None,
-        kev: false,
-        internet_exposed: false,
-        trigger_kind: "hitl_approve".into(),
-    });
+    let ev: ThreatEvidence = serde_json::from_value(evidence)
+        .map_err(|_| "store_down".to_string())?;
     let cmd = ExecuteActionCommand {
         action_kind,
         tenant_id,

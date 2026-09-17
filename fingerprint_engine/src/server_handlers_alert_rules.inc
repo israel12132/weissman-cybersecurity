@@ -63,9 +63,15 @@ async fn api_alert_rules_list(
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false, "rules": []}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::alert_rules_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT r.id, r.name, r.condition, r.actions, r.enabled,
                   COALESCE(f.cnt, 0)::bigint AS triggered_count
              FROM weissman_alert_rules r
@@ -78,8 +84,27 @@ async fn api_alert_rules_list(
     )
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let _ = tx.commit().await;
+    {
+        Ok(r) => r,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::alert_rules_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::alert_rules_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
 
     let rules: Vec<Value> = rows
         .into_iter()
@@ -157,9 +182,19 @@ async fn api_alert_rules_create(
     .bind(body.enabled)
     .fetch_one(&mut *tx)
     .await;
-    let _ = tx.commit().await;
     match id_res {
-        Ok(id) => (StatusCode::CREATED, Json(json!({"ok": true, "id": id}))).into_response(),
+        Ok(id) => {
+            if tx.commit().await.is_err() {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::alert_rules_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
+            (StatusCode::CREATED, Json(json!({"ok": true, "id": id}))).into_response()
+        }
         Err(sqlx::Error::Database(db)) if db.is_unique_violation() => (
             StatusCode::CONFLICT,
             Json(json!({"ok": false, "detail": "a rule with this name already exists"})),
@@ -207,9 +242,17 @@ async fn api_alert_rules_put(
     .bind(auth.tenant_id)
     .execute(&mut *tx)
     .await;
-    let _ = tx.commit().await;
     match res {
         Ok(r) if r.rows_affected() > 0 => {
+            if tx.commit().await.is_err() {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::alert_rules_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
             (StatusCode::OK, Json(json!({"ok": true, "id": id}))).into_response()
         }
         Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"ok": false}))).into_response(),
@@ -255,9 +298,17 @@ async fn api_alert_rules_patch(
     .bind(auth.tenant_id)
     .execute(&mut *tx)
     .await;
-    let _ = tx.commit().await;
     match res {
         Ok(r) if r.rows_affected() > 0 => {
+            if tx.commit().await.is_err() {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::alert_rules_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
             (StatusCode::OK, Json(json!({"ok": true, "id": id, "enabled": enabled}))).into_response()
         }
         Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"ok": false}))).into_response(),
@@ -283,11 +334,19 @@ async fn api_alert_rules_delete(
     let res = sqlx::query("DELETE FROM weissman_alert_rules WHERE id = $1 AND tenant_id = $2")
         .bind(id)
         .bind(auth.tenant_id)
-        .execute(&mut *tx)
-        .await;
-    let _ = tx.commit().await;
+    .execute(&mut *tx)
+    .await;
     match res {
         Ok(r) if r.rows_affected() > 0 => {
+            if tx.commit().await.is_err() {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::alert_rules_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
             (StatusCode::OK, Json(json!({"ok": true, "id": id}))).into_response()
         }
         Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"ok": false}))).into_response(),
@@ -431,32 +490,44 @@ async fn api_alert_rules_test(
             }
             match count_findings_matching_condition(&mut tx, &eval_condition).await {
                 Ok(matched) => {
-                    let _ = tx.commit().await;
+                    if tx.commit().await.is_err() {
+                        return (
+                            StatusCode::SERVICE_UNAVAILABLE,
+                            Json(crate::http_unavailable::alert_rules_unavailable_json(
+                                "database unavailable",
+                            )),
+                        )
+                            .into_response();
+                    }
                     (
                         StatusCode::OK,
                         Json(json!({"ok": true, "success": true, "matched": matched})),
                     )
                         .into_response()
                 }
-                Err(e) => {
+                Err(_) => {
                     let _ = tx.rollback().await;
                     (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(json!({"ok": false, "success": false, "detail": scrub_internal_error(&e)})),
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(crate::http_unavailable::alert_rules_unavailable_json(
+                            "database unavailable",
+                        )),
                     )
                         .into_response()
                 }
             }
         }
         Ok(None) => {
-            let _ = tx.commit().await;
+            let _ = tx.rollback().await;
             (StatusCode::NOT_FOUND, Json(json!({"ok": false, "success": false}))).into_response()
         }
-        Err(e) => {
+        Err(_) => {
             let _ = tx.rollback().await;
             (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "success": false, "detail": scrub_internal_error(&e)})),
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::alert_rules_unavailable_json(
+                    "database unavailable",
+                )),
             )
                 .into_response()
         }

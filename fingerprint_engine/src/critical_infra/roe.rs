@@ -7,7 +7,7 @@
 
 use crate::engine_probes::extract_host;
 use hmac::{Hmac, Mac};
-use serde_json::{json, Value};
+use serde_json::Value;
 use sha2::Sha256;
 use sqlx::{PgPool, Row};
 use std::fmt;
@@ -35,6 +35,7 @@ pub enum RoeViolation {
     ContractExpired,
     ContractSignatureInvalid,
     NoActiveEngagement,
+    StoreDown,
 }
 
 impl fmt::Display for RoeViolation {
@@ -69,6 +70,7 @@ impl fmt::Display for RoeViolation {
                 f,
                 "no active engagement with critical_infra_authorized scope"
             ),
+            Self::StoreDown => write!(f, "database unavailable, cannot confirm RoE"),
         }
     }
 }
@@ -106,8 +108,8 @@ async fn preflight_live(input: &RoePreflightInput<'_>) -> Result<RoeAuthority, R
         }
     };
 
-    let client_configs = load_client_configs(input.pool, tenant_id, client_id).await;
-    let engagement = load_active_engagement(input.pool, tenant_id, client_id).await;
+    let client_configs = load_client_configs(input.pool, tenant_id, client_id).await?;
+    let engagement = load_active_engagement(input.pool, tenant_id, client_id).await?;
 
     if !industrial_ot_enabled(&client_configs) {
         return Err(RoeViolation::IndustrialOtDisabled);
@@ -184,15 +186,27 @@ pub async fn log_violation(
     target: &str,
     violation: RoeViolation,
 ) {
-    tracing::error!(
-        target: "critical_infra_roe",
-        violation = %violation,
-        engine_id = %engine_id,
-        probe_target = %target,
-        tenant_id = ?tenant_id,
-        client_id = ?client_id,
-        "RoE VIOLATION — critical infrastructure engine execution blocked"
-    );
+    if violation == RoeViolation::StoreDown {
+        tracing::error!(
+            target: "critical_infra_roe",
+            violation = %violation,
+            engine_id = %engine_id,
+            probe_target = %target,
+            tenant_id = ?tenant_id,
+            client_id = ?client_id,
+            "store_down — cannot confirm RoE for critical infrastructure engine"
+        );
+    } else {
+        tracing::error!(
+            target: "critical_infra_roe",
+            violation = %violation,
+            engine_id = %engine_id,
+            probe_target = %target,
+            tenant_id = ?tenant_id,
+            client_id = ?client_id,
+            "RoE VIOLATION — critical infrastructure engine execution blocked"
+        );
+    }
 
     let Some(pool) = pool else { return };
     let Some(tid) = tenant_id.filter(|&t| t > 0) else {
@@ -228,13 +242,17 @@ struct EngagementRow {
 }
 
 #[cfg(feature = "high_risk_engines")]
-async fn load_client_configs(pool: Option<&PgPool>, tenant_id: i64, client_id: i64) -> Value {
+async fn load_client_configs(
+    pool: Option<&PgPool>,
+    tenant_id: i64,
+    client_id: i64,
+) -> Result<Value, RoeViolation> {
     let Some(pool) = pool else {
-        return Value::Object(serde_json::Map::new());
+        return Ok(Value::Object(serde_json::Map::new()));
     };
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return Value::Object(serde_json::Map::new());
-    };
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| RoeViolation::StoreDown)?;
     let row = sqlx::query(
         "SELECT COALESCE(NULLIF(trim(client_configs), ''), '{}') AS client_configs \
          FROM clients WHERE id = $1 AND tenant_id = $2",
@@ -243,16 +261,17 @@ async fn load_client_configs(pool: Option<&PgPool>, tenant_id: i64, client_id: i
     .bind(tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
+    .map_err(|_| RoeViolation::StoreDown)?;
+    if tx.commit().await.is_err() {
+        return Err(RoeViolation::StoreDown);
+    }
     let Some(r) = row else {
-        return Value::Object(serde_json::Map::new());
+        return Ok(Value::Object(serde_json::Map::new()));
     };
     let raw: String = r
         .try_get("client_configs")
-        .unwrap_or_else(|_| "{}".to_string());
-    serde_json::from_str(&raw).unwrap_or_else(|_| Value::Object(serde_json::Map::new()))
+        .map_err(|_| RoeViolation::StoreDown)?;
+    serde_json::from_str(&raw).map_err(|_| RoeViolation::StoreDown)
 }
 
 #[cfg(feature = "high_risk_engines")]
@@ -260,11 +279,13 @@ async fn load_active_engagement(
     pool: Option<&PgPool>,
     tenant_id: i64,
     client_id: i64,
-) -> Option<EngagementRow> {
-    let pool = pool?;
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return None;
+) -> Result<Option<EngagementRow>, RoeViolation> {
+    let Some(pool) = pool else {
+        return Ok(None);
     };
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| RoeViolation::StoreDown)?;
     let row = sqlx::query(
         r#"SELECT roe_mode, scope_snapshot FROM engagements
            WHERE tenant_id = $1 AND client_id = $2 AND status = 'active'
@@ -275,17 +296,19 @@ async fn load_active_engagement(
     .bind(client_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
-    row.map(|r| EngagementRow {
-        roe_mode: r
-            .try_get("roe_mode")
-            .unwrap_or_else(|_| "safe_proofs".to_string()),
-        scope_snapshot: r
-            .try_get::<Value, _>("scope_snapshot")
-            .unwrap_or_else(|_| json!({})),
-    })
+    .map_err(|_| RoeViolation::StoreDown)?;
+    if tx.commit().await.is_err() {
+        return Err(RoeViolation::StoreDown);
+    }
+    match row {
+        None => Ok(None),
+        Some(r) => Ok(Some(EngagementRow {
+            roe_mode: r.try_get("roe_mode").map_err(|_| RoeViolation::StoreDown)?,
+            scope_snapshot: r
+                .try_get::<Value, _>("scope_snapshot")
+                .map_err(|_| RoeViolation::StoreDown)?,
+        })),
+    }
 }
 
 #[cfg(feature = "high_risk_engines")]

@@ -2704,7 +2704,7 @@ mod tests {
         assert!(can_transition("blocked", "running"));
         assert!(!can_transition("completed", "running"));
         assert!(!can_transition("draft", "paused"));
-        assert!(!CAMPAIGN_STATUSES.is_empty());
+        assert!(CAMPAIGN_STATUSES.contains(&"running"));
     }
 
     #[test]

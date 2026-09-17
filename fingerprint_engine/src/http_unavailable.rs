@@ -1,0 +1,6180 @@
+//! Store-down JSON for list APIs.
+//!
+//! A query failure must never look like a healthy empty tenant (`ok: true` + `[]`).
+//! Callers return HTTP 503 with these envelopes.
+
+use serde_json::{json, Value};
+
+fn list_envelope(collection: &'static str, detail: &str) -> Value {
+    let mut v = json!({
+        "ok": false,
+        "unavailable": true,
+        "detail": detail,
+    });
+    v[collection] = json!([]);
+    v
+}
+
+/// `GET /api/playbooks`
+pub fn playbook_list_unavailable_json(detail: &str) -> Value {
+    list_envelope("playbooks", detail)
+}
+
+/// `GET /api/playbooks/:id/runs`
+pub fn playbook_runs_unavailable_json(detail: &str) -> Value {
+    list_envelope("runs", detail)
+}
+
+/// `GET /api/clients/:id/identity-contexts`
+pub fn identity_contexts_unavailable_json(detail: &str) -> Value {
+    list_envelope("contexts", detail)
+}
+
+/// `GET /api/clients/:id/privilege-escalation`
+pub fn privilege_events_unavailable_json(detail: &str) -> Value {
+    list_envelope("events", detail)
+}
+
+/// `GET /api/clients/:id/runtime-traces`
+pub fn runtime_traces_unavailable_json(detail: &str) -> Value {
+    list_envelope("traces", detail)
+}
+
+/// `GET /api/clients/:id/containment-rules`
+pub fn containment_rules_unavailable_json(detail: &str) -> Value {
+    list_envelope("rules", detail)
+}
+
+/// `GET /api/pipeline/state`
+pub fn pipeline_state_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "run_id": null,
+        "states": [],
+        "stage_labels": [],
+        "detail": detail,
+    })
+}
+
+/// `GET /api/oast/callbacks` health object when the hit table cannot be read.
+/// `callback_count` stays null — never a live `0` on store-down.
+pub fn oast_callbacks_store_down_health() -> Value {
+    json!({
+        "configured": crate::fuzz_oob::oast_correlation_enabled(),
+        "domain": crate::fuzz_oob::oast_hook_domain().unwrap_or_default(),
+        "last_callback_at": Value::Null,
+        "callback_count": Value::Null,
+    })
+}
+
+/// `GET /api/oast/callbacks`
+pub fn oast_callbacks_unavailable_json(detail: &str, health: Value) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "callbacks": [],
+        "health": health,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/clients/:id/llm-fuzz/events`
+pub fn llm_fuzz_events_unavailable_json(detail: &str) -> Value {
+    list_envelope("events", detail)
+}
+
+/// `GET /api/clients/:id/llm-fuzz/summary`
+pub fn llm_fuzz_summary_unavailable_json(detail: &str) -> Value {
+    list_envelope("vectors", detail)
+}
+
+/// `GET /api/edge-swarm/nodes`
+pub fn edge_swarm_nodes_unavailable_json(detail: &str) -> Value {
+    list_envelope("nodes", detail)
+}
+
+/// `GET /api/clients/:id/ot-ics/fingerprints`
+pub fn ot_ics_fingerprints_unavailable_json(detail: &str) -> Value {
+    list_envelope("fingerprints", detail)
+}
+
+/// `GET /api/clients/:id/engagements`
+pub fn engagements_unavailable_json(detail: &str) -> Value {
+    list_envelope("engagements", detail)
+}
+
+/// `GET /api/clients/:id/evidence`
+pub fn evidence_unavailable_json(detail: &str) -> Value {
+    list_envelope("evidence", detail)
+}
+
+/// `GET /api/sovereign-defense/:id/chronos/events`
+pub fn chronos_events_unavailable_json(detail: &str) -> Value {
+    list_envelope("events", detail)
+}
+
+/// `GET /api/sovereign-defense/:id/cognitive/sessions`
+pub fn cognitive_sessions_unavailable_json(detail: &str) -> Value {
+    list_envelope("sessions", detail)
+}
+
+/// `GET /api/alerts/rules`
+pub fn alert_rules_unavailable_json(detail: &str) -> Value {
+    list_envelope("rules", detail)
+}
+
+/// `GET /api/enterprise/settings` — never confirm safe-mode off on store-down
+pub fn enterprise_settings_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "global_safe_mode": Value::Null,
+        "alert_webhook_url": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/audit/logs`
+pub fn audit_logs_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "entries": [],
+        "total": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/clients/:id/sbom`
+pub fn sbom_components_unavailable_json(detail: &str) -> Value {
+    list_envelope("components", detail)
+}
+
+/// `GET /api/verify-audit/:hash`
+pub fn audit_verify_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "verified": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/clients/:id/config`
+pub fn client_config_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "config": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/clients/:id/heal-requests`
+pub fn heal_requests_unavailable_json(detail: &str) -> Value {
+    list_envelope("requests", detail)
+}
+
+/// `POST /api/clients/:id/heal-revert` after the remote PR/MR already closed but
+/// `heal_requests` / forensic audit did not persist. Never `reverted: true`.
+pub fn heal_revert_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "reverted": Value::Null,
+        "remote_closed": true,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/clients/:id/risk-graph`
+pub fn risk_graph_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "nodes": [],
+        "edges": [],
+        "detail": detail,
+    })
+}
+
+/// `GET /api/baseline/summary`
+pub fn baseline_summary_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "total_assets": Value::Null,
+        "drift_score": Value::Null,
+        "last_updated": Value::Null,
+        "sample_count": Value::Null,
+        "baseline_rows": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/baseline/drift`
+pub fn baseline_drift_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "data": [],
+        "detail": detail,
+    })
+}
+
+/// `GET /api/baseline/anomalies`
+pub fn baseline_anomalies_unavailable_json(detail: &str) -> Value {
+    list_envelope("anomalies", detail)
+}
+
+/// `GET /api/roe/override-requests`
+pub fn roe_override_requests_unavailable_json(detail: &str) -> Value {
+    list_envelope("requests", detail)
+}
+
+/// `GET /api/clients` when the tenant client list cannot be read
+pub fn clients_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "clients": [],
+        "detail": detail,
+    })
+}
+
+/// `POST /api/cnapp/refresh` when the client fan-out query fails
+pub fn cnapp_refresh_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "jobs": [],
+        "jobs_queued": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/cnapp/status`
+pub fn cnapp_jobs_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "jobs": [],
+        "running": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/jobs` Jobs dashboard
+pub fn async_jobs_list_unavailable_json(detail: &str) -> Value {
+    let mut v = list_envelope("jobs", detail);
+    v["total"] = Value::Null;
+    v
+}
+
+/// `GET /api/soar` execution index
+pub fn soar_executions_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "executions": [],
+        "detail": detail,
+    })
+}
+
+/// `GET /api/agents/isolate` status list
+pub fn isolate_agents_unavailable_json(detail: &str) -> Value {
+    list_envelope("agents", detail)
+}
+
+/// `POST /api/agents/isolate` when the isolate task cannot be persisted
+pub fn agents_isolate_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "task_id": Value::Null,
+        "live_dispatched": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/heal/stats` tenant aggregates
+pub fn heal_stats_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "total": Value::Null,
+        "fixed": Value::Null,
+        "broke_app": Value::Null,
+        "still_vulnerable": Value::Null,
+        "delivered": Value::Null,
+        "attested": Value::Null,
+        "success_rate": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/evidence/:id/download` — never 404 a SQL error, never serve an empty blob as success
+pub fn evidence_download_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/clients/:id/attack-chain`
+pub fn attack_chain_unavailable_json(detail: &str) -> Value {
+    list_envelope("steps", detail)
+}
+
+/// `GET /api/clients/:id/attack-surface` graph
+pub fn asm_graph_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "nodes": [],
+        "edges": [],
+        "run_id": Value::Null,
+        "vuln_findings": [],
+        "detail": detail,
+    })
+}
+
+/// `GET /api/first-mover/nerve` when OAST hit aggregates cannot be read
+pub fn first_mover_nerve_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "detail": detail,
+        "oast": {
+            "configured": Value::Null,
+            "domain": Value::Null,
+            "last_callback_at": Value::Null,
+            "recent_callback_count": Value::Null,
+        },
+    })
+}
+
+/// `GET /api/clients/:id/semantic/state-machine`
+pub fn semantic_logs_unavailable_json(detail: &str) -> Value {
+    list_envelope("logs", detail)
+}
+
+/// `GET /api/clients/:id/semantic/reasoning`
+pub fn semantic_reasoning_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "reasoning_text": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/system/configs`
+pub fn system_configs_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "configs": [],
+        "detail": detail,
+    })
+}
+
+/// `GET /api/clients/:id/deception`
+pub fn deception_assets_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "assets": [],
+        "detail": detail,
+    })
+}
+
+/// `POST /api/clients/:id/deception/generate`
+pub fn deception_generate_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "inserted": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `POST /api/clients/:id/deception/deploy-cloud` when the deployment row cannot be confirmed
+pub fn deception_deploy_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "deployment_id": Value::Null,
+        "job_id": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// GitHub token registry cannot be read — never 400 "git_token required" on store-down
+pub fn github_token_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "error": "git_token_unavailable",
+        "detail": detail,
+        "code": "db_unavailable",
+    })
+}
+
+/// `POST /api/clients/:id/heal-batch` when findings or specs cannot be confirmed
+pub fn heal_batch_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "enqueued": Value::Null,
+        "skipped": Value::Null,
+        "results": [],
+        "detail": detail,
+    })
+}
+
+/// `POST /api/sovereign/phantom-trap` when LLM config cannot be confirmed
+pub fn phantom_trap_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "error": "DB unavailable",
+        "detail": detail,
+    })
+}
+
+/// `GET /api/command-center/ticker` — never a live-empty event wall on store-down
+pub fn command_center_ticker_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "events": [],
+        "detail": detail,
+    })
+}
+
+/// ITDR connector save/pull persist when the store cannot be confirmed
+pub fn itdr_connectors_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "connectors": {},
+        "detail": detail,
+    })
+}
+
+/// CEO strategy/HPC/vault/god-mode writes — never 400 + SQL on store-down
+pub fn ceo_write_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "detail": detail,
+        "code": "db_unavailable",
+    })
+}
+
+/// Billing usage/checkout/sync when the subscription store cannot be read
+pub fn billing_store_down_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "code": "db_unavailable",
+        "subscription": Value::Null,
+        "usage": Value::Null,
+        "checkout_url": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// God Mode snapshot when policy configs cannot be confirmed
+pub fn god_mode_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "scan_interval_secs": Value::Null,
+        "engine_matrix": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// Sovereign Operator knowledge bus — never ok:true live:true empty theater
+pub fn sovereign_operator_knowledge_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "knowledge": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// Sovereign Operator chat when tenant LLM config cannot be confirmed
+pub fn sovereign_operator_chat_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "session_id": Value::Null,
+        "reply": Value::Null,
+        "tools": [],
+        "detail": detail,
+    })
+}
+
+/// Sovereign Operator tool / tune / race when the audit (or session message) cannot persist
+pub fn sovereign_operator_tool_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "name": Value::Null,
+        "payload": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/oast/verify/:token` when hit counts cannot be confirmed
+pub fn oast_verify_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "oob_confirmed": Value::Null,
+        "hit_count": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `POST /api/oast/probe` mint when the probe row cannot be persisted
+pub fn oast_mint_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "token": Value::Null,
+        "callback_domain": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/scan/status` when running job counts cannot be confirmed
+pub fn scan_status_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "scanning_active": Value::Null,
+        "scanning_enabled": Value::Null,
+        "scan_in_progress": Value::Null,
+        "running_async_jobs": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `POST /api/system/backup` when the dump exists but the audit trail did not persist.
+/// Never `ok: true`. Keep the path so the operator can find the file.
+pub fn backup_unavailable_json(detail: &str, path: Option<&str>) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "error": "store_down",
+        "path": path,
+        "detail": detail,
+    })
+}
+
+/// `POST /api/discovery/domains` when the discovery audit trail cannot be persisted
+pub fn discovery_domains_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "domains": Value::Null,
+        "total_discovered": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/clients/:id/discovery/saas-idp` when the hunt audit trail cannot be persisted
+pub fn saas_idp_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "report": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/discovery/knowledge/stats` when the intel corpus cannot be read
+pub fn discovery_knowledge_stats_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "stored_paths": Value::Null,
+        "stored_subdomain_prefixes": Value::Null,
+        "llm_learned": Value::Null,
+        "confirmed_hits": Value::Null,
+        "seed_rows": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/self-improve/status` and self-improve writes when the queue cannot be confirmed
+pub fn self_improve_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "enabled": Value::Null,
+        "counts": Value::Null,
+        "item_id": Value::Null,
+        "apply_job_id": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// Council HITL propose/approve/reject when the queue cannot be confirmed
+pub fn council_hitl_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "id": Value::Null,
+        "job_id": Value::Null,
+        "item_id": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/ceo/strategy` when tenant strategy configs cannot be confirmed
+pub fn ceo_strategy_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "effective": Value::Null,
+        "env_fallback_snapshot": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/ceo/hpc-policy` when running job splits cannot be confirmed
+pub fn hpc_policy_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "desired": Value::Null,
+        "effective_routing": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/sovereign-defense/:id/dashboard` when 24h counts cannot be confirmed
+pub fn sovereign_defense_dashboard_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "chronos": Value::Null,
+        "liquid_matrix": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/ceo/supreme-nerve-center` when module counts cannot be confirmed
+pub fn nerve_center_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "system_modules": [],
+        "engines": [],
+        "live_jobs": [],
+        "detail": detail,
+    })
+}
+
+/// `GET /api/clients/:id/first-seen-hits` — never advertise zero pre-NVD counts on store-down
+pub fn first_seen_hits_unavailable_json(client_id: i64, detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "client_id": client_id,
+        "hits": [],
+        "first_seen_count": Value::Null,
+        "listed_count": Value::Null,
+        "skipped_count": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `POST /api/system/configs` when the store cannot take writes
+pub fn system_configs_write_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "updated": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/clients/:id/cicd-findings` and `GET /api/clients/:id/poe-findings`
+pub fn findings_unavailable_json(detail: &str) -> Value {
+    list_envelope("findings", detail)
+}
+
+/// `GET /api/findings/clusters` when the cluster query cannot be read
+pub fn findings_clusters_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "clusters": [],
+        "total": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/intel/suppressions` when the suppression table cannot be read
+pub fn intel_suppressions_unavailable_json(detail: &str) -> Value {
+    list_envelope("suppressions", detail)
+}
+
+/// `GET /api/intel/status` when KEV/EPSS mirrors cannot be counted
+pub fn intel_status_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "kev": { "rows": Value::Null, "last_refresh": Value::Null },
+        "epss": { "rows": Value::Null, "last_refresh": Value::Null },
+        "detail": detail,
+    })
+}
+
+/// `GET /api/reports` when report_runs cannot be listed
+pub fn reports_unavailable_json(detail: &str) -> Value {
+    list_envelope("reports", detail)
+}
+
+/// `GET /api/onboarding/tenant-status` when tenant config cannot be confirmed
+pub fn onboarding_tenant_status_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "llm_configured": Value::Null,
+        "oast_configured": Value::Null,
+        "ai_heavy_entitled": Value::Null,
+        "oast_listener_url": Value::Null,
+        "oast_domain": Value::Null,
+        "oast_api_key_configured": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/clients/:id/readiness` when the client/agent/tenant facts cannot be read
+pub fn client_readiness_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "readiness": Value::Null,
+        "tenant": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/tenant/brand` when tenant_brand cannot be read
+pub fn tenant_brand_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "brand": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/vngfw/status` and apply/put when policy cannot be confirmed
+pub fn vngfw_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "applied": Value::Null,
+        "policy": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// Login / MFA policy when the identity store cannot be read
+pub fn auth_degraded_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "code": "auth_degraded",
+        "detail": detail,
+    })
+}
+
+/// `GET /api/clients/:id/vulnerabilities/:id/sealed-poc`
+pub fn sealed_poc_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "detail": detail,
+    })
+}
+
+/// `POST /api/sovereign-defense/:id/liquid-matrix/rotate` when the pool UPDATE fails
+pub fn sovereign_rotate_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/rate-limits/status` when Redis is enabled but unreadable
+pub fn rate_limits_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "limits": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/rate-limits/analytics` when Redis is enabled but unreadable
+pub fn rate_limits_analytics_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "current": Value::Null,
+        "history": [],
+        "violations": [],
+        "endpoints": [],
+        "detail": detail,
+    })
+}
+
+/// `GET /api/dashboard/stats` when the store cannot be read
+pub fn dashboard_stats_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "total_vulnerabilities": Value::Null,
+        "active_scans": Value::Null,
+        "security_score": Value::Null,
+        "assets_monitored": Value::Null,
+        "threats_mitigated": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/metrics/dashboard` when postgres or tenant aggregates fail
+pub fn metrics_dashboard_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "postgres_ok": false,
+        "active_scans": Value::Null,
+        "findings_by_severity": Value::Null,
+        "jobs": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/dashboard/exec-kpis` when a severity/trend/side-KPI query fails
+pub fn exec_kpis_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "trend": Value::Null,
+        "security_score": Value::Null,
+        "severity": Value::Null,
+        "severity_delta_24h": Value::Null,
+        "open_vs_resolved": Value::Null,
+        "assets": Value::Null,
+        "agents": Value::Null,
+        "jobs": Value::Null,
+        "scan_velocity": Value::Null,
+        "mttr_hours": Value::Null,
+        "scoring": Value::Null,
+        "mitre_top": Value::Null,
+        "engines_top": Value::Null,
+        "clients_top": Value::Null,
+        "cves_top": Value::Null,
+        "last_updated_unix": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/poe-scan/:id` when the job row cannot be read
+pub fn poe_job_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "job": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/clients/:id` when the client row cannot be read — never 404 a SQL error
+pub fn client_lookup_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "detail": detail,
+        "code": "db_unavailable",
+    })
+}
+
+/// Client PDF / executive board pack when findings cannot be read — never a 200 empty/zero pack
+pub fn report_pdf_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "findings": [],
+        "critical": Value::Null,
+        "high": Value::Null,
+        "medium": Value::Null,
+        "low": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/compliance/posture` when mapped findings cannot be read
+pub fn compliance_posture_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "frameworks": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/heal-verify/:job_id/steps` when verification steps cannot be read
+pub fn heal_verify_steps_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "steps": [],
+        "detail": detail,
+    })
+}
+
+/// `GET /api/clients/:id/heal-trends` when heal_requests cannot be aggregated
+pub fn heal_trends_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "trend": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/clients/:id/heal-priorities` when open findings cannot be ranked
+pub fn heal_priorities_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "priorities": [],
+        "count": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `POST /api/clients/:id/swarm/run` when client EXISTS cannot be confirmed
+pub fn swarm_run_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "detail": detail,
+        "code": "db_unavailable",
+    })
+}
+
+/// `GET /api/heal-verify/:job_id` (status / patch / attestation) when the spec cannot be read
+pub fn heal_verify_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "job": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/heal/readiness` when tenant config cannot be confirmed
+pub fn heal_readiness_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "ready": Value::Null,
+        "llm_configured": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/clients/:id/findings/:finding_id/channel-suggestion`
+pub fn heal_channel_suggestion_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "channel": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET/POST /api/sso/idps` when `tenant_idps` cannot be read or committed
+pub fn sso_idps_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "idps": [],
+        "count": Value::Null,
+        "detail": detail,
+        "code": "db_unavailable",
+    })
+}
+
+/// `GET/POST /api/admin/users` when the identity store cannot be confirmed
+pub fn admin_users_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "users": [],
+        "detail": detail,
+        "code": "db_unavailable",
+    })
+}
+
+/// `POST /api/findings/:id/verify` when the finding or client scope cannot be read
+pub fn findings_verify_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "verdict": Value::Null,
+        "checks": [],
+        "detail": detail,
+        "code": "db_unavailable",
+    })
+}
+
+/// `POST /api/threat-ingest/run` when LLM config cannot be confirmed
+pub fn threat_ingest_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "job_id": Value::Null,
+        "detail": detail,
+        "code": "db_unavailable",
+    })
+}
+
+/// `GET /api/sovereign-defense/.../operator/logs` when the log store cannot be read
+pub fn sovereign_operator_logs_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "events": [],
+        "detail": detail,
+    })
+}
+
+/// `GET /api/sovereign-defense/:id/cognitive/poison-library` when the library cannot be read
+pub fn poison_library_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "items": [],
+        "detail": detail,
+    })
+}
+
+/// Sovereign Operator memory / forge / scripts lists when the store cannot be read
+pub fn sovereign_operator_memory_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "memory": [],
+        "detail": detail,
+    })
+}
+
+pub fn sovereign_operator_forge_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "forge": [],
+        "detail": detail,
+    })
+}
+
+pub fn sovereign_operator_scripts_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "scripts": [],
+        "detail": detail,
+    })
+}
+
+/// `GET /api/sovereign-defense/.../operator/windows` when live windows cannot be read
+pub fn sovereign_operator_windows_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "windows": Value::Null,
+        "detail": detail,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn never_ok_empty_success(v: &Value, key: &str) {
+        assert_eq!(v["ok"], false, "store-down must not be ok");
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v[key], json!([]));
+        assert!(v["detail"].as_str().unwrap().contains("store"));
+    }
+
+    #[test]
+    fn playbook_list_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&playbook_list_unavailable_json("store down"), "playbooks");
+    }
+
+    #[test]
+    fn playbook_runs_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&playbook_runs_unavailable_json("store down"), "runs");
+    }
+
+    #[test]
+    fn identity_contexts_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(
+            &identity_contexts_unavailable_json("store down"),
+            "contexts",
+        );
+    }
+
+    #[test]
+    fn privilege_events_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&privilege_events_unavailable_json("store down"), "events");
+    }
+
+    #[test]
+    fn runtime_traces_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&runtime_traces_unavailable_json("store down"), "traces");
+    }
+
+    #[test]
+    fn containment_rules_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&containment_rules_unavailable_json("store down"), "rules");
+    }
+
+    #[test]
+    fn pipeline_state_store_down_is_never_idle_success() {
+        let v = pipeline_state_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["run_id"], Value::Null);
+        assert_eq!(v["states"], json!([]));
+    }
+
+    #[test]
+    fn oast_callbacks_store_down_is_never_ok_empty_success() {
+        let v = oast_callbacks_unavailable_json("store down", oast_callbacks_store_down_health());
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["callbacks"], json!([]));
+        assert!(v["health"]["callback_count"].is_null());
+        assert_ne!(v["health"]["callback_count"], json!(0));
+    }
+
+    #[test]
+    fn llm_fuzz_events_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&llm_fuzz_events_unavailable_json("store down"), "events");
+    }
+
+    #[test]
+    fn llm_fuzz_summary_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&llm_fuzz_summary_unavailable_json("store down"), "vectors");
+    }
+
+    #[test]
+    fn edge_swarm_nodes_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&edge_swarm_nodes_unavailable_json("store down"), "nodes");
+    }
+
+    #[test]
+    fn ot_ics_fingerprints_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(
+            &ot_ics_fingerprints_unavailable_json("store down"),
+            "fingerprints",
+        );
+    }
+
+    #[test]
+    fn engagements_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&engagements_unavailable_json("store down"), "engagements");
+    }
+
+    #[test]
+    fn evidence_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&evidence_unavailable_json("store down"), "evidence");
+    }
+
+    #[test]
+    fn chronos_events_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&chronos_events_unavailable_json("store down"), "events");
+    }
+
+    #[test]
+    fn cognitive_sessions_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(
+            &cognitive_sessions_unavailable_json("store down"),
+            "sessions",
+        );
+    }
+
+    #[test]
+    fn alert_rules_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&alert_rules_unavailable_json("store down"), "rules");
+    }
+
+    #[test]
+    fn enterprise_settings_store_down_is_never_safe_mode_off() {
+        let v = enterprise_settings_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["global_safe_mode"].is_null());
+        assert_ne!(v["global_safe_mode"], json!(false));
+    }
+
+    #[test]
+    fn audit_logs_store_down_is_never_ok_empty_trail() {
+        let v = audit_logs_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["entries"], json!([]));
+        assert!(v["total"].is_null());
+        assert_ne!(v["total"], json!(0));
+    }
+
+    #[test]
+    fn sbom_components_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&sbom_components_unavailable_json("store down"), "components");
+    }
+
+    #[test]
+    fn audit_verify_store_down_is_never_verified_false() {
+        let v = audit_verify_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert!(v["verified"].is_null());
+        assert_ne!(v["verified"], json!(false));
+    }
+
+    #[test]
+    fn client_config_store_down_is_never_empty_object() {
+        let v = client_config_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert!(v["config"].is_null());
+    }
+
+    #[test]
+    fn scan_all_engines_target_lookup_is_store_down_503_not_empty_400() {
+        let src = include_str!("server_handlers_rest.inc");
+        let start = src
+            .find("async fn api_scan_all_engines")
+            .expect("api_scan_all_engines");
+        let rest = &src[start..];
+        let end = rest.find("\nasync fn ").unwrap_or(rest.len());
+        let fn_src = &rest[..end];
+        assert!(fn_src.contains("SELECT domains FROM clients"));
+        assert!(fn_src.contains("No scan target resolved for this client"));
+        let domains_idx = fn_src
+            .find("SELECT domains FROM clients")
+            .expect("domains lookup");
+        let after = &fn_src[domains_idx..];
+        assert!(after.contains("SERVICE_UNAVAILABLE"));
+        assert!(!after.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn clients_scan_run_all_domains_lookup_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_rest.inc");
+        let start = src
+            .find("async fn api_clients_scan_run_all")
+            .expect("api_clients_scan_run_all");
+        let rest = &src[start..];
+        let end = rest.find("\nasync fn ").unwrap_or(rest.len());
+        let fn_src = &rest[..end];
+        assert!(fn_src.contains("SELECT domains FROM clients"));
+        assert!(fn_src.contains("SERVICE_UNAVAILABLE"));
+        assert!(fn_src.contains("Client not found"));
+        assert!(fn_src.contains("no_domains"));
+        let domains_idx = fn_src
+            .find("SELECT domains FROM clients")
+            .expect("domains lookup");
+        let after = &fn_src[domains_idx..];
+        assert!(!after.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn mfa_status_handler_is_store_down_503_not_ok_flatten() {
+        let src = include_str!("server_handlers_mfa.inc");
+        let start = src
+            .find("async fn api_auth_mfa_status")
+            .expect("api_auth_mfa_status");
+        let rest = &src[start..];
+        let end = rest.find("\nasync fn ").unwrap_or(rest.len());
+        let fn_src = &rest[..end];
+        assert!(fn_src.contains("auth_degraded_unavailable_json"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn scan_all_engines_does_not_widen_known_engine_ids_on_store_down() {
+        let src = include_str!("server_handlers_rest.inc");
+        let start = src
+            .find("async fn api_scan_all_engines")
+            .expect("api_scan_all_engines");
+        let rest = &src[start..];
+        let end = rest.find("\nasync fn ").unwrap_or(rest.len());
+        let fn_src = &rest[..end];
+        assert!(fn_src.contains("SERVICE_UNAVAILABLE"));
+        assert!(fn_src.contains("No engines configured for this client"));
+        assert!(!fn_src.contains("KNOWN_ENGINE_IDS.iter"));
+        assert!(!fn_src.contains("&KNOWN_ENGINE_IDS"));
+    }
+
+    #[test]
+    fn history_findings_count_pending_is_null_not_invented_zero() {
+        let src = include_str!("server_handlers_sqlx.inc");
+        assert!(src.contains("fn history_findings_count"));
+        assert!(src.contains("\"pending\" | \"running\" | \"queued\" | \"held\""));
+        assert!(src.contains("Value::Null"));
+    }
+
+    #[test]
+    fn heal_requests_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&heal_requests_unavailable_json("store down"), "requests");
+    }
+
+    #[test]
+    fn heal_revert_store_down_is_never_reverted_true() {
+        let v = heal_revert_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["reverted"].is_null());
+        assert_eq!(v["remote_closed"], true);
+        assert_ne!(v["reverted"], json!(true));
+    }
+
+    #[test]
+    fn risk_graph_store_down_is_never_ok_empty_success() {
+        let v = risk_graph_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["nodes"], json!([]));
+        assert_eq!(v["edges"], json!([]));
+        assert_ne!(v["truncated"], json!(true));
+    }
+
+    #[test]
+    fn baseline_summary_store_down_is_never_zeroed_success() {
+        let v = baseline_summary_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["total_assets"].is_null());
+        assert!(v["drift_score"].is_null());
+        assert_ne!(v["total_assets"], json!(0));
+    }
+
+    #[test]
+    fn baseline_drift_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&baseline_drift_unavailable_json("store down"), "data");
+    }
+
+    #[test]
+    fn baseline_anomalies_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(
+            &baseline_anomalies_unavailable_json("store down"),
+            "anomalies",
+        );
+    }
+
+    #[test]
+    fn roe_override_requests_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(
+            &roe_override_requests_unavailable_json("store down"),
+            "requests",
+        );
+    }
+
+    #[test]
+    fn cnapp_refresh_store_down_is_never_accepted_empty() {
+        let v = cnapp_refresh_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["jobs"], json!([]));
+        assert!(v["jobs_queued"].is_null());
+    }
+
+    #[test]
+    fn clients_store_down_is_never_ok_empty_success() {
+        let v = clients_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["clients"], json!([]));
+    }
+
+    #[test]
+    fn cnapp_jobs_store_down_is_never_idle_success() {
+        let v = cnapp_jobs_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["jobs"], json!([]));
+        assert!(v["running"].is_null());
+    }
+
+    #[test]
+    fn async_jobs_list_store_down_is_never_ok_empty_success() {
+        let v = async_jobs_list_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["jobs"], json!([]));
+        assert!(v["total"].is_null());
+        assert_ne!(v["total"], json!(0));
+    }
+
+    #[test]
+    fn soar_executions_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&soar_executions_unavailable_json("store down"), "executions");
+    }
+
+    #[test]
+    fn isolate_agents_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&isolate_agents_unavailable_json("store down"), "agents");
+    }
+
+    #[test]
+    fn heal_stats_store_down_is_never_zero_success_rate() {
+        let v = heal_stats_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["total"].is_null());
+        assert!(v["success_rate"].is_null());
+        assert_ne!(v["success_rate"], json!(0.0));
+    }
+
+    #[test]
+    fn evidence_download_store_down_is_never_empty_blob_success() {
+        let v = evidence_download_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v.get("blob").is_none());
+    }
+
+    #[test]
+    fn findings_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&findings_unavailable_json("store down"), "findings");
+    }
+
+    #[test]
+    fn findings_clusters_store_down_is_never_ok_empty_success() {
+        let v = findings_clusters_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["clusters"], json!([]));
+        assert!(v["total"].is_null());
+        assert_ne!(v["total"], json!(0));
+    }
+
+    #[test]
+    fn intel_suppressions_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(
+            &intel_suppressions_unavailable_json("store down"),
+            "suppressions",
+        );
+    }
+
+    #[test]
+    fn intel_status_store_down_is_never_zero_mirror_success() {
+        let v = intel_status_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["kev"]["rows"].is_null());
+        assert!(v["epss"]["rows"].is_null());
+        assert_ne!(v["kev"]["rows"], json!(0));
+        assert_ne!(v["epss"]["rows"], json!(0));
+    }
+
+    #[test]
+    fn reports_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&reports_unavailable_json("store down"), "reports");
+    }
+
+    #[test]
+    fn onboarding_tenant_status_store_down_is_never_entitled_success() {
+        let v = onboarding_tenant_status_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["llm_configured"].is_null());
+        assert!(v["ai_heavy_entitled"].is_null());
+        assert_ne!(v["ai_heavy_entitled"], json!(true));
+        assert_ne!(v["llm_configured"], json!(false));
+    }
+
+    #[test]
+    fn client_readiness_store_down_is_never_zero_gap_success() {
+        let v = client_readiness_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["readiness"].is_null());
+        assert!(v["tenant"].is_null());
+    }
+
+    #[test]
+    fn tenant_brand_store_down_is_never_empty_brand_success() {
+        let v = tenant_brand_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["brand"].is_null());
+        assert_ne!(v["brand"], json!({}));
+    }
+
+    #[test]
+    fn vngfw_store_down_is_never_allow_all_success() {
+        let v = vngfw_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["policy"].is_null());
+        assert!(v["applied"].is_null());
+        assert_ne!(v["policy"]["default_action"], json!("allow"));
+    }
+
+    #[test]
+    fn auth_degraded_store_down_is_never_deny_success() {
+        let v = auth_degraded_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["code"], "auth_degraded");
+    }
+
+    #[test]
+    fn attack_chain_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&attack_chain_unavailable_json("store down"), "steps");
+    }
+
+    #[test]
+    fn asm_graph_store_down_is_never_empty_surface_success() {
+        let v = asm_graph_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["nodes"], json!([]));
+        assert_ne!(v["message"], json!("No ASM graph yet."));
+        assert_ne!(v["truncated"], json!(true));
+    }
+
+    #[test]
+    fn first_mover_nerve_store_down_is_never_zero_callback_success() {
+        let v = first_mover_nerve_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["oast"]["recent_callback_count"].is_null());
+        assert_ne!(v["oast"]["recent_callback_count"], json!(0));
+    }
+
+    #[test]
+    fn semantic_logs_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&semantic_logs_unavailable_json("store down"), "logs");
+    }
+
+    #[test]
+    fn semantic_reasoning_store_down_is_never_empty_text_success() {
+        let v = semantic_reasoning_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert!(v["reasoning_text"].is_null());
+    }
+
+    #[test]
+    fn system_configs_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&system_configs_unavailable_json("store down"), "configs");
+    }
+
+    #[test]
+    fn deception_assets_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&deception_assets_unavailable_json("store down"), "assets");
+    }
+
+    #[test]
+    fn deception_generate_store_down_is_never_inserted_zero_success() {
+        let v = deception_generate_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["inserted"].is_null());
+        assert_ne!(v["inserted"], json!(0));
+    }
+
+    #[test]
+    fn first_seen_hits_store_down_is_never_zero_pre_nvd_success() {
+        let v = first_seen_hits_unavailable_json(3, "store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["hits"], json!([]));
+        assert!(v["first_seen_count"].is_null());
+        assert_ne!(v["first_seen_count"], json!(0));
+        assert!(v["listed_count"].is_null());
+    }
+
+    #[test]
+    fn system_configs_write_store_down_is_never_updated_zero_success() {
+        let v = system_configs_write_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["updated"].is_null());
+        assert_ne!(v["updated"], json!(0));
+    }
+
+    #[test]
+    fn sealed_poc_store_down_is_never_not_found() {
+        let v = sealed_poc_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v.get("poc").is_none());
+        assert_ne!(v["detail"], json!("finding not found"));
+    }
+
+    #[test]
+    fn sovereign_rotate_store_down_is_never_ok_true() {
+        let v = sovereign_rotate_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_ne!(v["ok"], true);
+    }
+
+    #[test]
+    fn rate_limits_store_down_is_never_ok_zero_counters() {
+        let v = rate_limits_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["limits"], Value::Null);
+        assert!(v.get("scans").is_none());
+    }
+
+    #[test]
+    fn rate_limits_analytics_store_down_is_never_ok_zero_current() {
+        let v = rate_limits_analytics_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["current"], Value::Null);
+        assert_eq!(v["history"], json!([]));
+    }
+
+    #[test]
+    fn exec_kpis_store_down_is_never_perfect_score() {
+        let v = exec_kpis_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["trend"], Value::Null);
+        assert_eq!(v["security_score"], Value::Null);
+        assert!(v["severity"].is_null());
+        assert!(v["assets"].is_null());
+        assert!(v["agents"].is_null());
+        assert!(v["jobs"].is_null());
+        assert!(v["mttr_hours"].is_null());
+        assert!(v["severity_delta_24h"].is_null());
+        assert!(v["open_vs_resolved"].is_null());
+        assert!(v["scan_velocity"].is_null());
+        assert!(v["mitre_top"].is_null());
+        assert!(v["engines_top"].is_null());
+        assert!(v["clients_top"].is_null());
+        assert!(v["cves_top"].is_null());
+        assert!(v["scoring"].is_null());
+        assert!(v["last_updated_unix"].is_null());
+        assert_ne!(v["security_score"], json!(100));
+        assert_ne!(v["trend"], json!([]));
+        assert_ne!(v["mitre_top"], json!([]));
+        assert_ne!(v["engines_top"], json!([]));
+        assert_ne!(v["assets"], json!({"total_clients": 0, "with_findings": 0}));
+        assert_ne!(v["jobs"], json!({"pending": 0, "running": 0}));
+    }
+
+    #[test]
+    fn dashboard_stats_store_down_is_never_zeroed_score() {
+        let v = dashboard_stats_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["security_score"].is_null());
+        assert!(v["total_vulnerabilities"].is_null());
+        assert_ne!(v["security_score"], json!(0));
+        assert_ne!(v["security_score"], json!(100));
+    }
+
+    #[test]
+    fn metrics_dashboard_store_down_is_never_zeroed_severity() {
+        let v = metrics_dashboard_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["postgres_ok"], false);
+        assert!(v["findings_by_severity"].is_null());
+        assert!(v["jobs"].is_null());
+        assert_ne!(v["findings_by_severity"], json!({"critical": 0, "high": 0}));
+    }
+
+    #[test]
+    fn poe_job_store_down_is_never_not_found() {
+        let v = poe_job_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["job"], Value::Null);
+        assert_ne!(v["detail"], json!("job not found"));
+    }
+
+    fn named_fn_src<'a>(src: &'a str, sig: &str) -> &'a str {
+        let start = src.find(sig).unwrap_or_else(|| panic!("missing {sig}"));
+        let rest = &src[start..];
+        let after = &rest[sig.len()..];
+        let end_async = after.find("\nasync fn ").unwrap_or(usize::MAX);
+        let end_pub_async = after.find("\npub async fn ").unwrap_or(usize::MAX);
+        let end_fn = after.find("\nfn ").unwrap_or(usize::MAX);
+        let end_pub_fn = after.find("\npub fn ").unwrap_or(usize::MAX);
+        let rel = end_async.min(end_pub_async).min(end_fn).min(end_pub_fn);
+        if rel == usize::MAX {
+            rest
+        } else {
+            &rest[..sig.len() + rel]
+        }
+    }
+
+    fn compact_src(s: &str) -> String {
+        s.chars().filter(|c| !c.is_whitespace()).collect()
+    }
+
+    fn persist_window<'a>(fn_src: &'a str, side_effect: &str) -> &'a str {
+        let persist = fn_src
+            .find("persist_operator_audit")
+            .unwrap_or_else(|| panic!("missing persist_operator_audit before {side_effect}"));
+        let effect = fn_src
+            .find(side_effect)
+            .unwrap_or_else(|| panic!("missing {side_effect}"));
+        assert!(
+            persist < effect,
+            "persist_operator_audit must precede {side_effect}"
+        );
+        &fn_src[persist..effect]
+    }
+
+    fn persist_first_await_is_err(window: &str) {
+        let compact = compact_src(window);
+        let persist = compact
+            .find("persist_operator_audit(")
+            .expect("persist_operator_audit in window");
+        let after = &compact[persist..];
+        let await_at = after.find(".await").expect("await after persist");
+        assert!(
+            after[await_at..].starts_with(".await.is_err(){return(StatusCode::SERVICE_UNAVAILABLE"),
+            "persist_operator_audit .await.is_err() must return 503, not fall through or 202"
+        );
+    }
+
+    fn named_fn_src_until_cfg_test<'a>(src: &'a str, sig: &str) -> &'a str {
+        let start = src.find(sig).unwrap_or_else(|| panic!("missing {sig}"));
+        let rest = &src[start..];
+        let next = rest.find("\n#[cfg(test)]").unwrap_or(rest.len());
+        &rest[..next]
+    }
+
+    #[test]
+    fn client_lookup_store_down_is_never_not_found() {
+        let v = client_lookup_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["code"], "db_unavailable");
+        assert_ne!(v["detail"], json!("Client not found"));
+    }
+
+    #[test]
+    fn report_pdf_store_down_is_never_zero_board_pack() {
+        let v = report_pdf_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["critical"].is_null());
+        assert!(v["high"].is_null());
+        assert_ne!(v["critical"], json!(0));
+        assert_ne!(v["high"], json!(0));
+    }
+
+    #[test]
+    fn compliance_posture_store_down_is_never_empty_frameworks_success() {
+        let v = compliance_posture_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["frameworks"].is_null());
+        assert_ne!(v["frameworks"], json!([]));
+    }
+
+    #[test]
+    fn heal_verify_steps_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&heal_verify_steps_unavailable_json("store down"), "steps");
+    }
+
+    #[test]
+    fn heal_trends_store_down_is_never_empty_trend_success() {
+        let v = heal_trends_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["trend"].is_null());
+        assert_ne!(v["trend"], json!([]));
+    }
+
+    #[test]
+    fn heal_priorities_store_down_is_never_ok_empty_queue() {
+        let v = heal_priorities_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["priorities"], json!([]));
+        assert!(v["count"].is_null());
+        assert_ne!(v["count"], json!(0));
+    }
+
+    #[test]
+    fn swarm_run_store_down_is_never_client_not_found() {
+        let v = swarm_run_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["code"], "db_unavailable");
+        assert_ne!(v["detail"], json!("client not found"));
+    }
+
+    #[test]
+    fn clients_get_lookup_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_rest.inc");
+        let fn_src = named_fn_src(src, "async fn api_clients_get");
+        assert!(fn_src.contains("client_lookup_unavailable_json"));
+        assert!(fn_src.contains("SERVICE_UNAVAILABLE"));
+        assert!(fn_src.contains("Client not found"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn audit_export_is_store_down_503_not_500() {
+        let src = include_str!("server_handlers_rest.inc");
+        let fn_src = named_fn_src(src, "async fn api_audit_export");
+        assert!(fn_src.contains("audit_logs_unavailable_json"));
+        assert!(fn_src.contains("SERVICE_UNAVAILABLE"));
+        assert!(!fn_src.contains("INTERNAL_SERVER_ERROR"));
+        assert!(!compact_src(fn_src).contains("let_=tx.commit().await;"));
+    }
+
+    #[test]
+    fn roe_override_reject_lookup_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_roe_approvals.inc");
+        let fn_src = named_fn_src(src, "async fn api_roe_override_request_reject");
+        assert!(fn_src.contains("roe_store_down()"));
+        assert!(fn_src.contains("request not found"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+        assert!(!compact_src(fn_src).contains("let_=tx.commit().await;"));
+        let helper = named_fn_src(src, "fn roe_store_down");
+        assert!(helper.contains("SERVICE_UNAVAILABLE"));
+        assert!(helper.contains("roe_override_requests_unavailable_json"));
+    }
+
+    #[test]
+    fn roe_override_approve_writes_are_commit_checked() {
+        let src = include_str!("server_handlers_roe_approvals.inc");
+        let fn_src = named_fn_src(src, "async fn api_roe_override_request_approve");
+        assert!(fn_src.contains("roe_store_down()"));
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+        assert!(!fn_src.contains("let _ = tx.commit()"));
+        let helper = named_fn_src(src, "fn roe_store_down");
+        assert!(helper.contains("roe_override_requests_unavailable_json"));
+    }
+
+    #[test]
+    fn containment_rules_patch_select_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_phase5.inc");
+        let fn_src = named_fn_src(src, "async fn api_containment_rules_patch");
+        assert!(fn_src.contains("containment_rules_unavailable_json"));
+        assert!(fn_src.contains("SERVICE_UNAVAILABLE"));
+        assert!(!fn_src.contains("let Ok(Some(row)) = existing"));
+        assert!(!fn_src.contains("error\": e.to_string()"));
+    }
+
+    #[test]
+    fn containment_execute_lookups_are_store_down_503_not_404() {
+        let src = include_str!("server_handlers_phase5.inc");
+        let fn_src = named_fn_src(src, "async fn api_containment_execute");
+        assert!(fn_src.contains("containment_rules_unavailable_json"));
+        assert!(fn_src.contains("client_lookup_unavailable_json"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn swarm_run_exists_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_phase5.inc");
+        let fn_src = named_fn_src(src, "async fn api_swarm_run");
+        assert!(fn_src.contains("swarm_run_unavailable_json"));
+        assert!(!fn_src.contains("unwrap_or(false)"));
+    }
+
+    #[test]
+    fn client_report_pdf_lookups_are_store_down_503_not_empty_pdf() {
+        let src = include_str!("server_handlers_rest2.inc");
+        let fn_src = named_fn_src(src, "async fn api_client_report_pdf");
+        assert!(fn_src.contains("client_lookup_unavailable_json"));
+        assert!(fn_src.contains("report_pdf_unavailable_json"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+        assert!(!fn_src.contains(".fetch_all(&mut *tx)\n    .await\n    .unwrap_or_default()"));
+    }
+
+    #[test]
+    fn crypto_proof_config_is_fail_closed_on_store_down() {
+        let src = include_str!("server_handlers_rest2.inc");
+        let fn_src = named_fn_src(src, "async fn get_crypto_proof_for_client_tx");
+        assert!(fn_src.contains("store_down"));
+        assert!(fn_src.contains("map_err"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn reports_executive_is_store_down_503_not_zero_or_perfect() {
+        let src = include_str!("server_handlers_phase3.inc");
+        let fn_src = named_fn_src(src, "async fn api_reports_executive");
+        assert!(fn_src.contains("report_pdf_unavailable_json"));
+        assert!(fn_src.contains("SERVICE_UNAVAILABLE"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+        assert!(!fn_src.contains(".fetch_all(&mut *tx)\n            .await\n            .unwrap_or_default()"));
+        assert!(!fn_src.contains(".fetch_one(&mut *tx)\n            .await\n            .unwrap_or(0)"));
+    }
+
+    #[test]
+    fn compliance_posture_fetch_is_store_down_503_not_empty_200() {
+        let src = include_str!("server_handlers_phase3.inc");
+        let fn_src = named_fn_src(src, "async fn api_compliance_posture");
+        assert!(fn_src.contains("compliance_posture_unavailable_json"));
+        assert!(!fn_src.contains(".unwrap_or_default()"));
+        assert!(!fn_src.contains("{\"frameworks\": []}"));
+    }
+
+    #[test]
+    fn load_compliance_evidence_is_err_on_store_down_not_empty_ok() {
+        let src = include_str!("server_handlers_ui_aliases.inc");
+        let fn_src = named_fn_src(src, "async fn load_compliance_evidence");
+        assert!(!fn_src.contains("unwrap_or_default()"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn heal_verify_steps_is_store_down_503_not_empty_steps() {
+        let src = include_str!("server_handlers_phase4.inc");
+        let fn_src = named_fn_src(src, "async fn api_heal_verify_steps");
+        assert!(fn_src.contains("heal_verify_steps_unavailable_json"));
+        assert!(fn_src.contains("SERVICE_UNAVAILABLE"));
+        assert!(!fn_src.contains(".fetch_all(&mut *tx)\n        .await\n        .unwrap_or_default()"));
+    }
+
+    #[test]
+    fn heal_trends_is_store_down_503_not_empty_trend() {
+        let src = include_str!("server_handlers_phase4.inc");
+        let fn_src = named_fn_src(src, "async fn api_heal_trends");
+        assert!(fn_src.contains("heal_trends_unavailable_json"));
+        assert!(!fn_src.contains(".fetch_all(&mut *tx)\n        .await\n        .unwrap_or_default()"));
+    }
+
+    #[test]
+    fn heal_priorities_is_store_down_503_not_empty_queue() {
+        let src = include_str!("server_handlers_phase4.inc");
+        let fn_src = named_fn_src(src, "async fn api_heal_priorities");
+        assert!(fn_src.contains("heal_priorities_unavailable_json"));
+        assert!(!fn_src.contains(".fetch_all(&mut *tx)\n        .await\n        .unwrap_or_default()"));
+    }
+
+    #[test]
+    fn finding_brief_lookup_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_rest4.inc");
+        let fn_src = named_fn_src(src, "async fn api_finding_brief");
+        let lookup = fn_src
+            .find("FROM vulnerabilities WHERE client_id")
+            .expect("finding lookup");
+        let after = &fn_src[lookup..];
+        let serve_cache = after.find("Serve the cache").unwrap_or(after.len());
+        let lookup_src = &after[..serve_cache];
+        assert!(lookup_src.contains("findings_unavailable_json"));
+        assert!(!lookup_src.contains(".ok().flatten()"));
+        let persist = fn_src
+            .find("UPDATE vulnerabilities SET remediation_brief")
+            .expect("brief persist");
+        let persist_src = &fn_src[persist..];
+        assert!(
+            persist_src.contains("findings_unavailable_json"),
+            "brief persist store-down must be 503, not ok:true cached:false"
+        );
+        assert!(persist_src.contains("SERVICE_UNAVAILABLE"));
+        assert!(
+            !compact_src(persist_src).contains("let_=sqlx::query("),
+            "brief persist UPDATE execute must not be ignored"
+        );
+        assert!(
+            !compact_src(persist_src).contains("let_=tx.commit().await;"),
+            "brief persist commit must not be ignored"
+        );
+        assert!(
+            !compact_src(persist_src).contains("ifletOk(muttx)="),
+            "brief persist must not skip begin fail and still ok:true"
+        );
+    }
+
+    #[test]
+    fn heal_revert_lookup_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_rest4.inc");
+        let fn_src = named_fn_src(src, "async fn api_heal_revert");
+        let lookup = fn_src
+            .find("FROM heal_requests")
+            .expect("heal lookup");
+        let after = &fn_src[lookup..];
+        let github = after
+            .find("no open heal PR/MR to revert")
+            .unwrap_or(after.len());
+        let lookup_src = &after[..github];
+        assert!(lookup_src.contains("heal_requests_unavailable_json"));
+        assert!(!lookup_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn heal_verify_store_down_is_never_job_not_found() {
+        let v = heal_verify_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["job"].is_null());
+        assert_ne!(v["detail"], json!("job not found"));
+    }
+
+    #[test]
+    fn heal_readiness_store_down_is_never_not_configured() {
+        let v = heal_readiness_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["ready"].is_null());
+        assert!(v["llm_configured"].is_null());
+        assert_ne!(v["llm_configured"], json!(false));
+    }
+
+    #[test]
+    fn heal_channel_suggestion_store_down_is_never_empty_channel() {
+        let v = heal_channel_suggestion_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert!(v["channel"].is_null());
+    }
+
+    #[test]
+    fn client_integrations_get_lookup_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_phase3.inc");
+        let fn_src = named_fn_src(src, "async fn api_client_integrations_get");
+        assert!(fn_src.contains("client_lookup_unavailable_json"));
+        assert!(fn_src.contains("client not found"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn client_integrations_patch_lookup_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_phase3.inc");
+        let fn_src = named_fn_src(src, "async fn api_client_integrations_patch");
+        assert!(fn_src.contains("client_lookup_unavailable_json"));
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn client_cloud_scan_run_lookup_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_phase3.inc");
+        let fn_src = named_fn_src(src, "async fn api_client_cloud_scan_run");
+        assert!(fn_src.contains("client_lookup_unavailable_json"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn saas_idp_discovery_lookup_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_saas_idp_discovery.inc");
+        let fn_src = named_fn_src(src, "async fn api_client_saas_idp_discovery");
+        assert!(fn_src.contains("client_lookup_unavailable_json"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn engagement_patch_lookup_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_engagements.inc");
+        let fn_src = named_fn_src(src, "async fn api_engagement_patch");
+        assert!(fn_src.contains("engagements_unavailable_json"));
+        assert!(fn_src.contains("engagement not found"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+        assert!(!compact_src(fn_src).contains("let_=tx.commit().await;"));
+    }
+
+    #[test]
+    fn deception_deploy_cloud_lookup_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_phase4.inc");
+        let fn_src = named_fn_src(src, "async fn api_deception_deploy_cloud");
+        assert!(fn_src.contains("client_lookup_unavailable_json"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn heal_verify_status_lookup_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_phase4.inc");
+        let fn_src = named_fn_src(src, "async fn api_heal_verify_status");
+        assert!(fn_src.contains("heal_verify_unavailable_json"));
+        assert!(fn_src.contains("job not found"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn heal_verify_patch_lookup_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_phase4.inc");
+        let fn_src = named_fn_src(src, "async fn api_heal_verify_patch");
+        assert!(fn_src.contains("heal_verify_unavailable_json"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn heal_verify_attestation_lookup_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_phase4.inc");
+        let fn_src = named_fn_src(src, "async fn api_heal_verify_attestation");
+        assert!(fn_src.contains("heal_verify_unavailable_json"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn load_heal_report_data_spec_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_phase4.inc");
+        let fn_src = named_fn_src(src, "async fn load_heal_report_data");
+        assert!(fn_src.contains("SERVICE_UNAVAILABLE"));
+        assert!(fn_src.contains("job not found"));
+        let spec = fn_src
+            .find("FROM auto_heal_job_specs")
+            .expect("spec lookup");
+        let after = &fn_src[spec..];
+        let hr = after.find("FROM heal_requests").unwrap_or(after.len());
+        assert!(!after[..hr].contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn heal_readiness_is_store_down_503_not_not_configured() {
+        let src = include_str!("server_handlers_phase4.inc");
+        let fn_src = named_fn_src(src, "async fn api_heal_readiness");
+        assert!(fn_src.contains("heal_readiness_unavailable_json"));
+        assert!(!fn_src.contains("if let Ok(mut tx)"));
+    }
+
+    #[test]
+    fn channel_suggestion_lookup_is_store_down_503_not_empty_live() {
+        let src = include_str!("server_handlers_phase4.inc");
+        let fn_src = named_fn_src(src, "async fn api_channel_suggestion");
+        assert!(fn_src.contains("heal_channel_suggestion_unavailable_json"));
+        assert!(fn_src.contains("finding not found"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+        assert!(!fn_src.contains("None => (String::new(), String::new())"));
+    }
+
+    #[test]
+    fn health_safe_mode_query_err_is_null_not_off() {
+        let src = include_str!("server_handlers_rest.inc");
+        let fn_src = named_fn_src(src, "async fn api_health");
+        assert!(fn_src.contains("global_safe_mode"));
+        assert!(!fn_src.contains("let mut safe_mode = false"));
+        assert!(fn_src.contains("Option<bool>"));
+    }
+
+    #[test]
+    fn client_config_patch_roe_select_is_store_down_503_not_insert() {
+        let src = include_str!("server_handlers_rest.inc");
+        let fn_src = named_fn_src(src, "async fn api_client_config_patch");
+        let roe = fn_src
+            .find("FROM roe_override_requests")
+            .expect("roe select");
+        let after = &fn_src[roe..];
+        let insert = after.find("INSERT INTO roe_override_requests").unwrap_or(after.len());
+        let select_src = &after[..insert];
+        assert!(select_src.contains("roe_override_requests_unavailable_json"));
+        assert!(!select_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn alert_rules_test_is_store_down_503_not_ok_true() {
+        let src = include_str!("server_handlers_alert_rules.inc");
+        let fn_src = named_fn_src(src, "async fn api_alert_rules_test");
+        assert!(fn_src.contains("alert_rules_unavailable_json"));
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+        assert!(!fn_src.contains("let _ = tx.commit()"));
+    }
+
+    #[test]
+    fn sso_idps_store_down_is_never_ok_empty_success() {
+        let v = sso_idps_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["idps"], json!([]));
+        assert!(v["count"].is_null());
+        assert_ne!(v["count"], json!(0));
+    }
+
+    #[test]
+    fn admin_users_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&admin_users_unavailable_json("store down"), "users");
+    }
+
+    #[test]
+    fn findings_verify_store_down_is_never_400_db_leak() {
+        let v = findings_verify_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["verdict"].is_null());
+        assert_ne!(v["detail"].as_str().unwrap_or(""), "finding not found");
+    }
+
+    #[test]
+    fn threat_ingest_store_down_is_never_accepted_job() {
+        let v = threat_ingest_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["job_id"].is_null());
+    }
+
+    #[test]
+    fn cloud_integration_patch_update_err_is_503_not_404() {
+        let src = include_str!("server_handlers_phase3.inc");
+        let fn_src = named_fn_src(src, "async fn api_client_cloud_integration_patch");
+        assert!(fn_src.contains("client_lookup_unavailable_json"));
+        assert!(!fn_src.contains("unwrap_or(0)"));
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+    }
+
+    #[test]
+    fn sso_idp_delete_lookup_is_store_down_503_not_404() {
+        let src = include_str!("sso_management.rs");
+        let fn_src = named_fn_src(src, "pub async fn api_sso_idp_delete");
+        let del = fn_src
+            .find("DELETE FROM tenant_idps")
+            .expect("delete lookup");
+        let after = &fn_src[del..];
+        let next = after.find("\npub async fn").unwrap_or(after.len());
+        let body = &after[..next];
+        assert!(body.contains("sso_store_down"));
+        assert!(!body.contains(".ok().flatten()"));
+        assert!(body.contains("not_found"));
+    }
+
+    #[test]
+    fn sso_idp_test_lookup_is_store_down_503_not_404() {
+        let src = include_str!("sso_management.rs");
+        let fn_src = named_fn_src(src, "pub async fn api_sso_idp_test");
+        assert!(fn_src.contains("sso_store_down"));
+        assert!(!fn_src.contains("let Ok(Some(row)) = row else"));
+    }
+
+    #[test]
+    fn sso_idps_create_commit_before_ok_not_leak() {
+        let src = include_str!("sso_management.rs");
+        let fn_src = named_fn_src(src, "pub async fn api_sso_idps_create");
+        assert!(fn_src.contains("sso_store_down"));
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+        assert!(!fn_src.contains("e.to_string()"));
+    }
+
+    #[test]
+    fn admin_users_create_exists_is_store_down_503_not_400() {
+        let src = include_str!("admin_users.rs");
+        let fn_src = named_fn_src(src, "pub async fn api_admin_users_create");
+        assert!(fn_src.contains("admin_store_down"));
+        let client = fn_src
+            .find("assigned_client_id does not exist")
+            .expect("client miss");
+        let before = &fn_src[..client];
+        assert!(!before.contains(".ok().flatten()"));
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+    }
+
+    #[test]
+    fn admin_users_deactivate_lookup_is_store_down_503_not_404() {
+        let src = include_str!("admin_users.rs");
+        let fn_src = named_fn_src(src, "pub async fn api_admin_users_deactivate");
+        assert!(fn_src.contains("admin_store_down"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+    }
+
+    #[test]
+    fn load_finding_store_down_is_never_db_prefix_leak() {
+        let src = include_str!("finding_live_verify.rs");
+        let fn_src = named_fn_src(src, "async fn load_finding");
+        assert!(fn_src.contains("STORE_DOWN"));
+        assert!(!fn_src.contains("format!(\"db: {e}\")"));
+        assert!(fn_src.contains("finding not found"));
+    }
+
+    #[test]
+    fn load_client_domains_store_down_is_never_empty_scope() {
+        let src = include_str!("finding_live_verify.rs");
+        let fn_src = named_fn_src(src, "async fn load_client_domains");
+        assert!(fn_src.contains("Result<Vec<String>, String>"));
+        assert!(fn_src.contains("STORE_DOWN"));
+        assert!(!fn_src.contains("return Vec::new()"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn findings_verify_live_maps_store_down_to_503() {
+        let src = include_str!("server_handlers_rest2.inc");
+        let fn_src = named_fn_src(src, "async fn api_findings_verify_live");
+        assert!(fn_src.contains("findings_verify_unavailable_json"));
+        assert!(fn_src.contains("STORE_DOWN"));
+        assert!(fn_src.contains("finding not found"));
+    }
+
+    #[test]
+    fn threat_ingest_config_err_is_503_not_env_default() {
+        let src = include_str!("server_handlers_phase5.inc");
+        let fn_src = named_fn_src(src, "async fn api_threat_ingest_run");
+        assert!(fn_src.contains("threat_ingest_unavailable_json"));
+        let llm = fn_src.find("llm_base_url").expect("llm key");
+        let after = &fn_src[llm..];
+        let env = after
+            .find("WEISSMAN_LLM_BASE_URL")
+            .expect("env fallback after successful miss");
+        assert!(!after[..env].contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn evidence_upload_insert_err_is_503_not_500() {
+        let src = include_str!("server_handlers_evidence_vault.inc");
+        let fn_src = named_fn_src(src, "async fn api_client_evidence_upload");
+        assert!(fn_src.contains("evidence_unavailable_json"));
+        let insert = fn_src.find("INSERT INTO evidence_items").expect("insert");
+        assert!(!fn_src[insert..].contains(".ok().flatten()"));
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+    }
+
+    #[test]
+    fn sbom_post_insert_err_is_503_not_error_leak() {
+        let src = include_str!("server_handlers_phase5.inc");
+        let fn_src = named_fn_src(src, "async fn api_client_sbom_post");
+        assert!(fn_src.contains("sbom_components_unavailable_json"));
+        assert!(!fn_src.contains("e.to_string()"));
+    }
+
+    #[test]
+    fn containment_rules_post_insert_err_is_503_not_error_leak() {
+        let src = include_str!("server_handlers_phase5.inc");
+        let fn_src = named_fn_src(src, "async fn api_containment_rules_post");
+        assert!(fn_src.contains("containment_rules_unavailable_json"));
+        assert!(!fn_src.contains("e.to_string()"));
+    }
+
+    #[test]
+    fn oidc_begin_db_err_is_auth_degraded_not_leak() {
+        let src = include_str!("oidc_auth.rs");
+        let fn_src = named_fn_src(src, "pub async fn oidc_begin");
+        assert!(fn_src.contains("auth_store_down"));
+        assert!(!fn_src.contains("format!(\"db: {}\""));
+    }
+
+    #[test]
+    fn saml_begin_db_err_is_auth_degraded_not_leak() {
+        let src = include_str!("saml_auth.rs");
+        let fn_src = named_fn_src(src, "pub async fn saml_begin");
+        assert!(fn_src.contains("auth_store_down"));
+        assert!(!fn_src.contains("format!(\"{}\""));
+    }
+
+    #[test]
+    fn logout_revoke_fail_is_503_not_ok_true() {
+        let src = include_str!("server_handlers_auth.inc");
+        let fn_src = named_fn_src(src, "async fn api_logout");
+        assert!(fn_src.contains("auth_degraded_unavailable_json"));
+        assert!(fn_src.contains("revoke_failed"));
+    }
+
+    #[test]
+    fn auth_refresh_jti_link_fail_is_503_not_ok_true() {
+        let src = include_str!("server_handlers_auth.inc");
+        let fn_src = named_fn_src(src, "async fn api_auth_refresh");
+        assert!(fn_src.contains("auth_degraded_unavailable_json"));
+        assert!(fn_src.contains("store_refresh_access_jti"));
+        assert!(fn_src.contains("session link unavailable"));
+    }
+
+    #[test]
+    fn ceo_telemetry_safe_mode_query_err_is_null_not_off() {
+        let src = include_str!("ceo/ops_status.rs");
+        let fn_src = named_fn_src(src, "pub async fn build_ceo_telemetry_json");
+        assert!(fn_src.contains("Option<bool>"));
+        assert!(!fn_src.contains("let mut global_safe = false"));
+        assert!(!fn_src.contains("unwrap_or(0)"));
+    }
+
+    #[test]
+    fn ceo_global_safe_patch_store_down_is_503_not_400_leak() {
+        let src = include_str!("server_handlers_ceo.inc");
+        let fn_src = named_fn_src(src, "async fn api_ceo_global_safe_patch");
+        assert!(fn_src.contains("SERVICE_UNAVAILABLE"));
+        assert!(!fn_src.contains("detail\": e"));
+    }
+
+    #[test]
+    fn vngfw_save_policy_execute_is_database_unavailable_not_sql_leak() {
+        let src = include_str!("vngfw_control.rs");
+        let fn_src = named_fn_src(src, "pub async fn save_policy");
+        assert!(fn_src.contains("database unavailable"));
+        assert!(!fn_src.contains("e.to_string()"));
+    }
+
+    #[test]
+    fn sovereign_operator_logs_err_is_503_not_error_leak() {
+        let src = include_str!("server_handlers_sovereign_operator.inc");
+        let fn_src = named_fn_src(src, "async fn api_sovereign_operator_logs_get");
+        assert!(fn_src.contains("sovereign_operator_logs_unavailable_json"));
+        assert!(!fn_src.contains("e.to_string()"));
+    }
+
+    #[test]
+    fn github_token_store_down_is_never_git_token_required() {
+        let v = github_token_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["error"], "git_token_unavailable");
+        assert_eq!(v["code"], "db_unavailable");
+        assert_ne!(v["error"], json!("git_token and repo_slug required"));
+    }
+
+    #[test]
+    fn heal_batch_store_down_is_never_ok_true_accepted() {
+        let v = heal_batch_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["enqueued"].is_null());
+        assert!(v["skipped"].is_null());
+        assert_eq!(v["results"], json!([]));
+        assert_ne!(v["ok"], true);
+        assert_ne!(v["enqueued"], json!(0));
+    }
+
+    #[test]
+    fn phantom_trap_store_down_is_never_ok_bundle() {
+        let v = phantom_trap_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["error"], "DB unavailable");
+        assert_ne!(v["ok"], true);
+    }
+
+    #[test]
+    fn github_token_for_tenant_registry_is_store_down_not_env_fallback() {
+        let src = include_str!("auto_heal.rs");
+        let start = src
+            .find("pub async fn github_token_for_tenant")
+            .expect("github_token_for_tenant");
+        let rest = &src[start..];
+        let next = rest
+            .find("\npub async fn create_branch_and_pr")
+            .unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        assert!(fn_src.contains("Result<Option<String>, &'static str>"));
+        assert!(fn_src.contains("store_down"));
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+        assert!(!fn_src.contains("if let Ok(mut tx)"));
+        assert!(
+            !compact_src(fn_src).contains("from_str::<Vec<Value>>(&s).ok()"),
+            "corrupt integrations JSON must not look empty and fall back to env"
+        );
+        assert!(compact_src(fn_src).contains(
+            "from_str::<Vec<Value>>(&s).map_err(|_|\"store_down\")?"
+        ));
+    }
+
+    #[test]
+    fn auto_heal_git_token_is_store_down_503_not_400() {
+        let src = include_str!("server_handlers_rest4.inc");
+        let fn_src = named_fn_src(src, "async fn api_auto_heal");
+        let tok = fn_src
+            .find("github_token_for_tenant")
+            .expect("token resolve");
+        let after = &fn_src[tok..];
+        let req = after
+            .find("git_token and repo_slug required")
+            .unwrap_or(after.len());
+        let resolve = &after[..req];
+        assert!(resolve.contains("github_token_unavailable_json"));
+        assert!(resolve.contains("Err(_)"));
+        assert!(!resolve.contains(".await\n                .unwrap_or_default()"));
+    }
+
+    #[test]
+    fn heal_revert_git_token_is_store_down_503_not_400() {
+        let src = include_str!("server_handlers_rest4.inc");
+        let fn_src = named_fn_src(src, "async fn api_heal_revert");
+        let tok = fn_src
+            .find("github_token_for_tenant")
+            .expect("token resolve");
+        let after = &fn_src[tok..];
+        let req = after
+            .find("git_token and repo_slug required")
+            .unwrap_or(after.len());
+        let resolve = &after[..req];
+        assert!(resolve.contains("github_token_unavailable_json"));
+        assert!(resolve.contains("Err(_)"));
+        assert!(!resolve.contains(".await\n                .unwrap_or_default()"));
+    }
+
+    #[test]
+    fn heal_batch_git_token_is_store_down_503_not_400() {
+        let src = include_str!("server_handlers_rest4.inc");
+        let fn_src = named_fn_src(src, "async fn api_heal_batch");
+        let tok = fn_src
+            .find("github_token_for_tenant")
+            .expect("token resolve");
+        let after = &fn_src[tok..];
+        let req = after
+            .find("git_token and repo_slug required")
+            .unwrap_or(after.len());
+        let resolve = &after[..req];
+        assert!(resolve.contains("github_token_unavailable_json"));
+        assert!(resolve.contains("Err(_)"));
+        assert!(!resolve.contains(".await\n                .unwrap_or_default()"));
+    }
+
+    #[test]
+    fn heal_batch_finding_store_down_is_503_not_ok_true() {
+        let src = include_str!("server_handlers_rest4.inc");
+        let fn_src = named_fn_src(src, "async fn api_heal_batch");
+        assert!(fn_src.contains("heal_batch_unavailable_json"));
+        assert!(!fn_src.contains("\"status\": \"db_error\""));
+        assert!(!fn_src.contains("\"status\": \"insert_failed\""));
+        assert!(!fn_src.contains("\"status\": \"persist_failed\""));
+        assert!(fn_src.contains("enqueue_failed"));
+        let enq = fn_src.find("enqueue_failed").expect("enqueue skip");
+        let enq_src = &fn_src[enq..];
+        assert!(!enq_src.contains("e.to_string()"));
+        assert!(enq_src.contains("scrub_internal_error"));
+    }
+
+    #[test]
+    fn heal_readiness_github_token_is_store_down_503_not_not_configured() {
+        let src = include_str!("server_handlers_phase4.inc");
+        let fn_src = named_fn_src(src, "async fn api_heal_readiness");
+        let tok = fn_src
+            .find("github_token_for_tenant")
+            .expect("token resolve");
+        let after = &fn_src[tok..];
+        assert!(after.contains("heal_readiness_unavailable_json"));
+        assert!(!after.contains(".await\n        .is_some()"));
+    }
+
+    #[test]
+    fn deception_generate_llm_is_store_down_503_not_empty_config() {
+        let src = include_str!("server_handlers_rest4.inc");
+        let fn_src = named_fn_src(src, "async fn api_deception_generate");
+        let llm = fn_src.find("llm_base_url").expect("llm key");
+        let after = &fn_src[llm..];
+        let records = after
+            .find("generate_deception_assets")
+            .unwrap_or(after.len());
+        let llm_src = &after[..records];
+        assert!(llm_src.contains("deception_generate_unavailable_json"));
+        assert!(!llm_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn phantom_trap_llm_is_store_down_503_not_empty_config() {
+        let src = include_str!("server_handlers_rest4.inc");
+        let fn_src = named_fn_src(src, "async fn api_sovereign_phantom_trap");
+        assert!(fn_src.contains("phantom_trap_unavailable_json"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+        let llm = fn_src.find("llm_base_url").expect("llm key");
+        let after = &fn_src[llm..];
+        let factory = after.find("build_phantom_bundle").unwrap_or(after.len());
+        assert!(!after[..factory].contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn identity_contexts_add_insert_err_is_503_not_sql_leak() {
+        let src = include_str!("server_handlers_rest4.inc");
+        let fn_src = named_fn_src(src, "async fn api_identity_contexts_add");
+        assert!(fn_src.contains("identity_contexts_unavailable_json"));
+        assert!(!fn_src.contains("e.to_string()"));
+    }
+
+    #[test]
+    fn identity_contexts_delete_err_is_503_not_sql_leak() {
+        let src = include_str!("server_handlers_rest4.inc");
+        let fn_src = named_fn_src(src, "async fn api_identity_contexts_delete");
+        assert!(fn_src.contains("identity_contexts_unavailable_json"));
+        assert!(!fn_src.contains("e.to_string()"));
+    }
+
+    #[test]
+    fn ticker_store_down_is_never_empty_ok() {
+        let v = command_center_ticker_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["events"], json!([]));
+        assert_ne!(v["ok"], true);
+    }
+
+    #[test]
+    fn itdr_connectors_store_down_is_never_empty_ok() {
+        let v = itdr_connectors_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["connectors"], json!({}));
+        assert_ne!(v["ok"], true);
+    }
+
+    #[test]
+    fn ceo_write_store_down_is_never_400() {
+        let v = ceo_write_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["code"], "db_unavailable");
+        assert_ne!(v["ok"], true);
+    }
+
+    #[test]
+    fn billing_store_down_is_never_live_subscription() {
+        let v = billing_store_down_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["subscription"].is_null());
+        assert!(v["usage"].is_null());
+        assert!(v["checkout_url"].is_null());
+        assert_ne!(v["ok"], true);
+    }
+
+    #[test]
+    fn god_mode_store_down_is_never_default_interval() {
+        let v = god_mode_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["scan_interval_secs"].is_null());
+        assert!(v["engine_matrix"].is_null());
+        assert_ne!(v["scan_interval_secs"], json!(60));
+    }
+
+    #[test]
+    fn knowledge_store_down_is_never_live_true() {
+        let v = sovereign_operator_knowledge_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["knowledge"].is_null());
+        assert_ne!(v["ok"], true);
+    }
+
+    #[test]
+    fn chat_store_down_is_never_ok_session() {
+        let v = sovereign_operator_chat_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["session_id"].is_null());
+        assert!(v["reply"].is_null());
+        assert_ne!(v["ok"], true);
+    }
+
+    #[test]
+    fn tool_store_down_is_never_ok_true() {
+        let v = sovereign_operator_tool_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["name"].is_null());
+        assert!(v["payload"].is_null());
+        assert_ne!(v["ok"], true);
+    }
+
+    #[test]
+    fn oast_verify_store_down_is_never_zero_hits() {
+        let v = oast_verify_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["oob_confirmed"].is_null());
+        assert!(v["hit_count"].is_null());
+        assert_ne!(v["hit_count"], json!(0));
+        assert_ne!(v["oob_confirmed"], json!(false));
+    }
+
+    #[test]
+    fn ticker_handler_begin_fail_is_503_not_empty_events() {
+        let src = include_str!("http/serve.rs");
+        let start = src
+            .find("async fn api_command_center_ticker")
+            .expect("ticker");
+        let rest = &src[start..];
+        let next = rest
+            .find("\nstruct EnterpriseSettingsPatch")
+            .unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        assert!(fn_src.contains("command_center_ticker_unavailable_json"));
+        assert!(fn_src.contains("SERVICE_UNAVAILABLE"));
+        assert!(!fn_src.contains("json!({ \"events\": [] })"));
+        let begin = fn_src.find("begin_tenant_tx").expect("begin");
+        let begin_src = &fn_src[begin..fn_src.find("let rows").expect("rows")];
+        assert!(begin_src.contains("command_center_ticker_unavailable_json"));
+    }
+
+    #[test]
+    fn dashboard_page_count_err_is_503_not_zero() {
+        let src = include_str!("http/serve.rs");
+        assert!(src.contains("Dashboard store unavailable"));
+        let helper = named_fn_src(src, "fn dashboard_store_down_html");
+        assert!(helper.contains("SERVICE_UNAVAILABLE"));
+        assert!(helper.contains("Dashboard store unavailable"));
+        let fn_src = named_fn_src(src, "async fn dashboard_page");
+        assert!(fn_src.contains("dashboard_store_down_html"));
+        let vuln = fn_src.find("FROM vulnerabilities").expect("vuln count");
+        let clients = fn_src.find("FROM clients").expect("client count");
+        let vuln_src = &fn_src[vuln..clients];
+        assert!(vuln_src.contains("dashboard_store_down_html"));
+        assert!(!vuln_src.contains("unwrap_or(0)"));
+        let client_src = &fn_src[clients..fn_src.find("FROM report_runs").unwrap_or(fn_src.len())];
+        assert!(client_src.contains("dashboard_store_down_html"));
+        assert!(!client_src.contains("unwrap_or(0)"));
+    }
+
+    #[test]
+    fn engagements_create_commit_err_is_503_not_ok_true() {
+        let src = include_str!("server_handlers_engagements.inc");
+        let fn_src = named_fn_src(src, "async fn api_client_engagements_create");
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+        let commit = fn_src.find("tx.commit().await.is_err()").expect("commit");
+        let after = &fn_src[commit..];
+        assert!(after.contains("engagements_unavailable_json"));
+        assert!(after.contains("\"ok\": true"));
+        let unavail = after.find("engagements_unavailable_json").expect("503");
+        let ok_true = after.find("\"ok\": true").expect("ok true");
+        assert!(unavail < ok_true);
+    }
+
+    #[test]
+    fn evidence_delete_commit_err_is_503_not_ok_true() {
+        let src = include_str!("server_handlers_evidence_vault.inc");
+        let fn_src = named_fn_src(src, "async fn api_evidence_delete");
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+        let commit = fn_src.find("tx.commit().await.is_err()").expect("commit");
+        let after = &fn_src[commit..];
+        assert!(after.contains("evidence_unavailable_json"));
+        let unavail = after.find("evidence_unavailable_json").expect("503");
+        let ok_true = after.find("\"ok\": true").expect("ok true");
+        assert!(unavail < ok_true);
+    }
+
+    #[test]
+    fn decrypt_sealed_poc_commit_err_is_503_not_ok_true() {
+        let src = include_str!("server_handlers_phase6.inc");
+        let fn_src = named_fn_src(src, "async fn api_decrypt_sealed_poc");
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+        let commit = fn_src.find("tx.commit().await.is_err()").expect("commit");
+        let after = &fn_src[commit..];
+        assert!(after.contains("sealed_poc_unavailable_json"));
+        let unavail = after.find("sealed_poc_unavailable_json").expect("503");
+        let ok_true = after.find("\"ok\": true").expect("ok true");
+        assert!(unavail < ok_true);
+    }
+
+    #[test]
+    fn itdr_put_pull_store_down_is_503_constructor() {
+        let src = include_str!("server_handlers_supreme.inc");
+        let put = named_fn_src(src, "async fn api_itdr_connectors_put");
+        assert!(put.contains("itdr_connectors_unavailable_json"));
+        let pull = named_fn_src(src, "async fn api_itdr_connectors_pull");
+        assert!(pull.contains("itdr_connectors_unavailable_json"));
+        let persist = named_fn_src(include_str!("itdr_connectors.rs"), "async fn persist_events");
+        assert!(persist.contains("return Err(\"database unavailable\""));
+        assert!(persist.contains("rollback"));
+        assert!(!persist.contains("let _ = res"));
+    }
+
+    #[test]
+    fn slack_heal_repo_select_err_is_store_down_not_env_default() {
+        let src = include_str!("server_handlers_phase4.inc");
+        let fn_src = named_fn_src(src, "async fn enqueue_heal_from_slack");
+        let repo = fn_src.find("auto_heal_repo_slug").expect("repo key");
+        let repo_src = &fn_src[repo..fn_src.find("WEISSMAN_AUTOHEAL_REPO").expect("env")];
+        assert!(repo_src.contains("store_down"));
+        assert!(!repo_src.contains(".ok().flatten()"));
+        assert!(fn_src.contains("map_err(|_| \"store_down\""));
+        assert!(!fn_src.contains("map_err(|e| e.to_string())"));
+    }
+
+    #[test]
+    fn ceo_write_err_maps_store_down_to_503() {
+        let src = include_str!("server_handlers_ceo.inc");
+        let helper = named_fn_src(src, "fn ceo_write_err");
+        assert!(helper.contains("ceo_write_unavailable_json"));
+        assert!(helper.contains("store_down"));
+        for sig in [
+            "async fn api_ceo_strategy_patch",
+            "async fn api_ceo_hpc_policy_put",
+            "async fn api_ceo_vault_match",
+            "async fn api_ceo_sovereign_trigger_post",
+            "async fn api_ceo_suspended_resume",
+            "async fn api_ceo_god_mode_scan_interval_patch",
+            "async fn api_ceo_tenant_engines_put",
+        ] {
+            let fn_src = named_fn_src(src, sig);
+            assert!(fn_src.contains("ceo_write_err"), "{sig}");
+        }
+    }
+
+    #[test]
+    fn god_mode_config_reads_are_result_not_ok_flatten() {
+        let src = include_str!("ceo/god_mode.rs");
+        let start = src.find("async fn get_config_tx_str").expect("get_config");
+        let rest = &src[start..];
+        let next = rest
+            .find("\nfn tenant_active_engine_set")
+            .unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        assert!(fn_src.contains("Result<Option<String>, sqlx::Error>"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+        let interval = src
+            .find("pub async fn default_scan_interval_secs_get")
+            .expect("interval get");
+        let rest = &src[interval..];
+        let next = rest
+            .find("\npub async fn default_scan_interval_secs_set")
+            .unwrap_or(rest.len());
+        let get_src = &rest[..next];
+        assert!(get_src.contains("Result<u64, sqlx::Error>"));
+        assert!(get_src.contains(".await?"));
+    }
+
+    #[test]
+    fn knowledge_snapshot_store_down_is_503_not_live_empty() {
+        let src = include_str!("sovereign_operator/knowledge.rs");
+        let start = src.find("pub async fn build_snapshot").expect("snapshot");
+        let rest = &src[start..];
+        let next = rest
+            .find("\npub fn snapshot_prompt_text")
+            .unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        assert!(!fn_src.contains("unwrap_or_default()"));
+        assert!(fn_src.contains("store_down"));
+        let clusters = named_fn_src(src, "async fn recent_clusters");
+        assert!(!clusters.contains("return Ok(vec![])"));
+        let handler = named_fn_src(
+            include_str!("server_handlers_sovereign_operator.inc"),
+            "async fn api_sovereign_operator_knowledge_get",
+        );
+        assert!(handler.contains("sovereign_operator_knowledge_unavailable_json"));
+        assert!(!handler.contains("\"detail\": e"));
+    }
+
+    #[test]
+    fn chat_llm_config_store_down_is_503_not_env_default() {
+        let src = include_str!("sovereign_operator/chat.rs");
+        let start = src.find("pub async fn load_llm_config").expect("load_llm");
+        let rest = &src[start..];
+        let next = rest
+            .find("\npub async fn ensure_session")
+            .unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        assert!(!fn_src.contains(".ok()\n        .flatten()"));
+        assert!(fn_src.contains("store_down"));
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+        let handler = named_fn_src(
+            include_str!("server_handlers_sovereign_operator.inc"),
+            "async fn api_sovereign_operator_chat",
+        );
+        assert!(handler.contains("sovereign_operator_chat_unavailable_json"));
+        assert!(handler.contains("e == \"store_down\""));
+    }
+
+    #[test]
+    fn sovereign_operator_chat_audit_store_down_is_not_ok_true() {
+        let src = named_fn_src(
+            include_str!("server_handlers_sovereign_operator.inc"),
+            "async fn api_sovereign_operator_chat",
+        );
+        assert!(src.contains("persist_operator_audit"));
+        assert!(src.contains("sovereign_operator_chat_unavailable_json"));
+        let compact = compact_src(src);
+        assert!(!compact.contains("ifletOk(muttx)="));
+        assert!(!compact.contains("let_=tx.commit().await;"));
+        assert!(!compact.contains("let_=audit_log::insert_audit"));
+        assert!(!compact.contains("let_=persist_operator_audit"));
+        let window = persist_window(src, "\"ok\": true");
+        persist_first_await_is_err(window);
+        let unavail = src
+            .find("sovereign_operator_chat_unavailable_json")
+            .expect("chat 503");
+        let ok_true = src.find("\"ok\": true").expect("ok true");
+        assert!(unavail < ok_true);
+    }
+
+    #[test]
+    fn sovereign_operator_tool_tune_race_audit_store_down_is_not_ok() {
+        let src = include_str!("server_handlers_sovereign_operator.inc");
+        for (sig, action) in [
+            (
+                "async fn api_sovereign_operator_tools_post",
+                "sovereign_operator_tool",
+            ),
+            (
+                "async fn api_sovereign_operator_tune_post",
+                "sovereign_operator_tune",
+            ),
+            (
+                "async fn api_sovereign_operator_race_post",
+                "sovereign_operator_race",
+            ),
+        ] {
+            let fn_src = named_fn_src(src, sig);
+            assert!(fn_src.contains("persist_operator_audit"), "{sig}");
+            assert!(fn_src.contains(action), "{sig}");
+            assert!(
+                fn_src.contains("sovereign_operator_tool_unavailable_json"),
+                "{sig}"
+            );
+            let compact = compact_src(fn_src);
+            assert!(!compact.contains("ifletOk(muttx)="), "{sig}");
+            assert!(!compact.contains("let_=tx.commit().await;"), "{sig}");
+            assert!(!compact.contains("let_=audit_log::insert_audit"), "{sig}");
+            assert!(!compact.contains("let_=persist_operator_audit"), "{sig}");
+            let window = persist_window(fn_src, "\"ok\": out.ok");
+            persist_first_await_is_err(window);
+        }
+        let tools = named_fn_src(src, "async fn api_sovereign_operator_tools_post");
+        let compact_tools = compact_src(tools);
+        assert!(!compact_tools.contains("let_=sov_chat::insert_message"));
+        let ins = compact_tools
+            .find("sov_chat::insert_message")
+            .expect("insert_message");
+        let after_ins = &compact_tools[ins..];
+        let await_at = after_ins.find(".await").expect("insert await");
+        assert!(
+            after_ins[await_at..]
+                .starts_with(".await.is_err(){return(StatusCode::SERVICE_UNAVAILABLE"),
+            "insert_message must .await.is_err() return 503, not swallow"
+        );
+    }
+
+    #[test]
+    fn sovereign_operator_routes_are_wired() {
+        let fragments = include_str!("http/handler_fragments.rs");
+        assert!(fragments.contains("server_handlers_sovereign_operator.inc"));
+        let routes = include_str!("http/serve_route_groups.rs");
+        assert!(routes.contains("/api/sovereign/operator/chat"));
+        assert!(routes.contains("api_sovereign_operator_chat"));
+        assert!(routes.contains("/api/sovereign/operator/tools"));
+        assert!(routes.contains("/api/sovereign/operator/tune"));
+        assert!(routes.contains("/api/sovereign/operator/race"));
+        assert!(routes.contains("/api/sovereign/operator/stream"));
+    }
+
+    #[test]
+    fn oast_verify_count_err_is_503_not_zero_hits() {
+        let src = include_str!("council_hitl.rs");
+        let start = src.find("pub async fn poll_oast_token").expect("poll");
+        let rest = &src[start..];
+        let next = rest.find("\n#[cfg(test)]").unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        let count = fn_src.find("SELECT COUNT(*)").expect("count");
+        let min = fn_src.find("SELECT MIN(").expect("min");
+        let count_src = &fn_src[count..min];
+        assert!(!count_src.contains("unwrap_or(0)"));
+        assert!(count_src.contains(".await?"));
+        let min_src = &fn_src[min..fn_src.find("prev_hit_count").expect("prev")];
+        assert!(!min_src.contains(".ok()"));
+        assert!(min_src.contains(".await?"));
+        let handler = named_fn_src(
+            include_str!("server_handlers_rest4.inc"),
+            "async fn api_oast_probe_verify",
+        );
+        assert!(handler.contains("oast_verify_unavailable_json"));
+        assert!(!handler.contains("e.to_string()"));
+    }
+
+    #[test]
+    fn billing_usage_checkout_sync_store_down_is_503() {
+        let src = include_str!("server_handlers_onboarding_billing.inc");
+        let helper = named_fn_src(src, "fn billing_store_down");
+        assert!(helper.contains("billing_store_down_unavailable_json"));
+        for sig in [
+            "async fn api_billing_usage",
+            "async fn api_billing_checkout_session",
+            "async fn api_billing_sync_paddle",
+        ] {
+            let fn_src = named_fn_src(src, sig);
+            assert!(fn_src.contains("store_down"), "{sig}");
+            assert!(fn_src.contains("billing_store_down"), "{sig}");
+        }
+    }
+
+    #[test]
+    fn deception_deploy_store_down_is_never_ok_queued() {
+        let v = deception_deploy_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["deployment_id"].is_null());
+        assert!(v["job_id"].is_null());
+        assert_ne!(v["ok"], true);
+    }
+
+    #[test]
+    fn agents_isolate_store_down_is_never_ok_task() {
+        let v = agents_isolate_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["task_id"].is_null());
+        assert!(v["live_dispatched"].is_null());
+        assert_ne!(v["ok"], true);
+    }
+
+    #[test]
+    fn deception_deploy_cloud_insert_commit_is_503_not_ok_true() {
+        let src = include_str!("server_handlers_phase4.inc");
+        let fn_src = named_fn_src(src, "async fn api_deception_deploy_cloud");
+        let ins = fn_src
+            .find("INSERT INTO deception_cloud_deployments")
+            .expect("insert");
+        let after = &fn_src[ins..];
+        assert!(after.contains("deception_deploy_unavailable_json"));
+        let commit = after.find("tx.commit().await.is_err()").expect("commit");
+        let ok_true = after.find("\"ok\": true").expect("accepted");
+        assert!(commit < ok_true);
+    }
+
+    #[test]
+    fn client_config_patch_roe_create_commit_is_503_not_created() {
+        let src = include_str!("server_handlers_rest.inc");
+        let fn_src = named_fn_src(src, "async fn api_client_config_patch");
+        let created = fn_src.find("A request was created").expect("created");
+        let insert = fn_src[..created]
+            .rfind("INSERT INTO roe_override_requests")
+            .expect("insert");
+        let create_src = &fn_src[insert..created];
+        assert!(create_src.contains("tx.commit().await.is_err()"));
+        assert!(create_src.contains("roe_override_requests_unavailable_json"));
+        assert!(!create_src.contains("let _ = tx.commit()"));
+    }
+
+    #[test]
+    fn agents_isolate_err_is_503_not_sql_leak() {
+        let src = include_str!("server_handlers_supreme.inc");
+        let fn_src = named_fn_src(src, "async fn api_agents_isolate");
+        assert!(fn_src.contains("agents_isolate_unavailable_json"));
+        assert!(!fn_src.contains("e.to_string()"));
+    }
+
+    #[test]
+    fn war_room_sse_err_is_not_sql_leak() {
+        let src = include_str!("ceo/war_room.rs");
+        let start = src.find("pub fn sse_war_room_stream").expect("sse");
+        let rest = &src[start..];
+        let next = rest.find("\nasync fn fetch_events_since").unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        assert!(fn_src.contains("database unavailable"));
+        assert!(fn_src.contains("unavailable"));
+        assert!(!fn_src.contains("e.to_string()"));
+    }
+
+    #[test]
+    fn sovereign_sse_err_is_not_sql_leak() {
+        let src = include_str!("server_handlers_sovereign_operator.inc");
+        let start = src
+            .find("async fn api_sovereign_operator_stream(")
+            .expect("stream");
+        let rest = &src[start..];
+        let next = rest
+            .find("\nasync fn api_sovereign_operator_memory")
+            .or_else(|| rest.find("\nasync fn api_sovereign_operator_forge"))
+            .unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        assert!(fn_src.contains("database unavailable"));
+        assert!(!fn_src.contains("e.to_string()"));
+    }
+
+    #[test]
+    fn ws_command_center_count_err_is_unavailable_not_init_zero() {
+        let fn_src = named_fn_src(
+            include_str!("http/serve.rs"),
+            "async fn handle_ws_command_center",
+        );
+        assert!(fn_src.contains("ws_command_center_store_down"));
+        let vuln = fn_src.find("FROM vulnerabilities").expect("vuln");
+        let clients = fn_src.find("FROM clients").expect("clients");
+        assert!(!&fn_src[vuln..clients].contains("unwrap_or(0)"));
+        let reports = fn_src.find("FROM report_runs").expect("reports");
+        let commit = fn_src.find("tx.commit().await.is_err()").expect("commit");
+        let report_src = &fn_src[reports..commit];
+        assert!(!report_src.contains(".flatten()"));
+        assert!(report_src.contains("ws_command_center_store_down"));
+        let init = fn_src.find("\"type\": \"init\"").expect("init");
+        assert!(commit < init);
+    }
+
+    #[test]
+    fn hpc_running_jobs_fetch_is_not_live_zero() {
+        let src = include_str!("ceo/hpc.rs");
+        let start = src.find("pub async fn get_hpc_policy").expect("hpc");
+        let rest = &src[start..];
+        let next = rest.find("\n#[derive(Deserialize)]").unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        assert!(fn_src.contains(".fetch_all(pool)\n    .await?"));
+        assert!(!fn_src.contains(".await\n    .unwrap_or_default()"));
+        let handler = named_fn_src(
+            include_str!("server_handlers_ceo.inc"),
+            "async fn api_ceo_hpc_policy_get",
+        );
+        assert!(handler.contains("hpc_policy_unavailable_json"));
+        assert!(!handler.contains("INTERNAL_SERVER_ERROR"));
+    }
+
+    #[test]
+    fn strategy_get_is_503_not_env_fallback() {
+        let src = include_str!("ceo/strategy.rs");
+        let start = src
+            .find("pub async fn load_genesis_runtime_params")
+            .expect("load");
+        let rest = &src[start..];
+        let next = rest
+            .find("\npub async fn get_ceo_strategy_json")
+            .unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        assert!(fn_src.contains("Result<GenesisRuntimeParams"));
+        assert!(!fn_src.contains("load_env_fallback()"));
+        let handler = named_fn_src(
+            include_str!("server_handlers_ceo.inc"),
+            "async fn api_ceo_strategy_get",
+        );
+        assert!(handler.contains("ceo_strategy_unavailable_json"));
+        let exec = include_str!("async_job_executor.rs");
+        assert!(exec.contains("Err(_) => crate::ceo::strategy::load_env_fallback()"));
+        let telem = include_str!("ceo/ops_status.rs");
+        assert!(telem.contains("\"unavailable\": true"));
+        assert!(telem.contains("Value::Null"));
+    }
+
+    #[test]
+    fn sovereign_defense_dashboard_counts_are_not_live_zeros() {
+        let src = include_str!("sovereign_defense_store.rs");
+        let start = src.find("pub async fn dashboard_snapshot").expect("dash");
+        let rest = &src[start..];
+        let next = rest.find("\n#[cfg(test)]").unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        assert!(!fn_src.contains("unwrap_or(0)"));
+        assert!(!fn_src.contains("tenant tx:"));
+        assert!(fn_src.contains("store_down"));
+        let handler = named_fn_src(
+            include_str!("server_handlers_sovereign_defense.inc"),
+            "async fn api_sovereign_defense_dashboard",
+        );
+        assert!(handler.contains("sovereign_defense_dashboard_unavailable_json"));
+        assert!(!handler.contains("\"error\": e"));
+    }
+
+    #[test]
+    fn scan_status_job_count_err_is_503_not_zero() {
+        let fn_src = named_fn_src(
+            include_str!("server_handlers_rest.inc"),
+            "async fn api_scan_status",
+        );
+        assert!(fn_src.contains("scan_status_unavailable_json"));
+        assert!(!fn_src.contains("unwrap_or(0)"));
+        let v = scan_status_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert!(v["running_async_jobs"].is_null());
+        assert_ne!(v["running_async_jobs"], json!(0));
+    }
+
+    #[test]
+    fn discovery_knowledge_stats_err_is_not_default_zero() {
+        let src = include_str!("discovery_knowledge.rs");
+        let start = src.find("pub async fn stats").expect("stats");
+        let rest = &src[start..];
+        let next = rest
+            .find("\npub async fn seed_public_knowledge")
+            .unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        assert!(fn_src.contains("Result<CorpusStats"));
+        assert!(!fn_src.contains("CorpusStats::default()"));
+        let handler = named_fn_src(
+            include_str!("server_handlers_rest4.inc"),
+            "async fn api_discovery_knowledge_stats",
+        );
+        assert!(handler.contains("discovery_knowledge_stats_unavailable_json"));
+        let v = discovery_knowledge_stats_unavailable_json("store down");
+        assert!(v["confirmed_hits"].is_null());
+        assert_ne!(v["confirmed_hits"], json!(0));
+    }
+
+    #[test]
+    fn self_improve_status_is_503_not_zero_counts() {
+        let src = include_str!("self_improve.rs");
+        let start = src.find("pub async fn status_summary").expect("status");
+        let rest = &src[start..];
+        let next = rest
+            .find("\npub async fn insert_proposals")
+            .unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        assert!(fn_src.contains("Result<Value"));
+        assert!(!fn_src.contains("unwrap_or(0)"));
+        let handler = named_fn_src(
+            include_str!("server_handlers_rest4.inc"),
+            "async fn api_self_improve_status",
+        );
+        assert!(handler.contains("self_improve_unavailable_json"));
+        let v = self_improve_unavailable_json("store down");
+        assert!(v["counts"].is_null());
+        assert!(v["enabled"].is_null());
+    }
+
+    #[test]
+    fn compliance_frameworks_list_err_is_503_not_fallback() {
+        let fn_src = named_fn_src(
+            include_str!("server_handlers_ui_aliases.inc"),
+            "async fn api_compliance_frameworks_list",
+        );
+        assert!(fn_src.contains("catalog_unavailable"));
+        assert!(!fn_src.contains("FALLBACK_FRAMEWORKS"));
+        let slugs = named_fn_src(
+            include_str!("server_handlers_ui_aliases.inc"),
+            "async fn listed_framework_slugs",
+        );
+        assert!(!slugs.contains("FALLBACK_FRAMEWORKS"));
+        assert!(slugs.contains("catalog_unavailable"));
+    }
+
+    #[test]
+    fn nerve_module_counts_are_not_healthy_on_store_down() {
+        let fn_src = named_fn_src(
+            include_str!("supreme_nerve_center.rs"),
+            "async fn build_system_modules",
+        );
+        let pending = fn_src.find("status = 'pending'").expect("pending");
+        let running = fn_src.find("status = 'running'").expect("running");
+        assert!(!&fn_src[pending..running].contains("unwrap_or(0)"));
+        assert!(fn_src.contains("Result<Vec<Value>"));
+        let handler = named_fn_src(
+            include_str!("server_handlers_ceo.inc"),
+            "async fn api_ceo_supreme_nerve_center_get",
+        );
+        assert!(handler.contains("nerve_center_unavailable_json"));
+        assert!(!handler.contains("INTERNAL_SERVER_ERROR"));
+    }
+
+    #[test]
+    fn rest4_writes_are_503_not_sql_leak() {
+        let src = include_str!("server_handlers_rest4.inc");
+        for sig in [
+            "async fn api_pipeline_state_patch",
+            "async fn api_risk_graph_build",
+            "async fn api_runtime_traces_ingest",
+            "async fn api_deception_triggered",
+            "async fn api_council_hitl_propose",
+            "async fn api_council_hitl_approve",
+            "async fn api_council_hitl_reject",
+            "async fn api_self_improve_toggle",
+            "async fn api_self_improve_approve",
+            "async fn api_self_improve_reject",
+            "async fn api_oast_probe_mint",
+        ] {
+            let fn_src = named_fn_src(src, sig);
+            assert!(
+                !fn_src.contains("e.to_string()") && !fn_src.contains("err.to_string()"),
+                "{sig} still leaks Display"
+            );
+            assert!(
+                fn_src.contains("SERVICE_UNAVAILABLE") || fn_src.contains("_unavailable_json"),
+                "{sig} missing 503"
+            );
+        }
+        let build = named_fn_src(src, "async fn api_risk_graph_build");
+        assert!(!build.contains("unwrap_or(0)"));
+        assert!(build.contains("risk_graph_unavailable_json"));
+        let v = oast_mint_unavailable_json("store down");
+        assert!(v["token"].is_null());
+        assert_eq!(v["ok"], false);
+        let hitl = council_hitl_unavailable_json("store down");
+        assert!(hitl["job_id"].is_null());
+        let hpc = hpc_policy_unavailable_json("store down");
+        assert!(hpc["effective_routing"].is_null());
+        let strat = ceo_strategy_unavailable_json("store down");
+        assert!(strat["effective"].is_null());
+    }
+
+    #[test]
+    fn sovereign_rotate_store_down_is_503_not_sql_or_ok_true() {
+        let src = include_str!("sovereign_defense_store.rs");
+        for sig in [
+            "pub async fn ensure_routing_token",
+            "pub async fn rotate_liquid_matrix",
+        ] {
+            let start = src.find(sig).unwrap_or_else(|| panic!("missing {sig}"));
+            let rest = &src[start..];
+            let next = rest.find("\npub async fn ").unwrap_or(rest.len());
+            let fn_src = if next == 0 { rest } else { &rest[..next] };
+            assert!(!fn_src.contains("e.to_string()"), "{sig}");
+            assert!(!fn_src.contains("tenant tx:"));
+            assert!(fn_src.contains("tx.commit().await.is_err()"), "{sig}");
+            assert!(!fn_src.contains("let _ = tx.commit()"), "{sig}");
+        }
+        let handler = named_fn_src(
+            include_str!("server_handlers_sovereign_defense.inc"),
+            "async fn api_sovereign_defense_rotate",
+        );
+        assert!(handler.contains("sovereign_rotate_unavailable_json"));
+        assert!(!handler.contains("\"error\": e"));
+        assert!(!handler.contains("INTERNAL_SERVER_ERROR"));
+    }
+
+    #[test]
+    fn risk_graph_build_optional_sources_are_not_empty_success() {
+        let src = include_str!("risk_graph.rs");
+        let start = src
+            .find("pub async fn build_risk_graph_for_client")
+            .expect("build");
+        let rest = &src[start..];
+        let next = rest
+            .find("\npub async fn fusion_ot_it_graph_edges_llm")
+            .unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        assert!(!fn_src.contains("fetch_all(&mut **tx)\n        .await\n        .unwrap_or_default()"));
+        assert!(!fn_src.contains("fetch_all(&mut **tx)\n    .await\n    .unwrap_or_default()"));
+        let nodes = fn_src.find("FROM risk_graph_nodes").expect("nodes count");
+        let count_src = &fn_src[nodes..];
+        assert!(!count_src.contains("unwrap_or(0)"));
+        assert!(count_src.contains(".await?"));
+    }
+
+    #[test]
+    fn chronos_cognitive_insert_commit_is_store_down() {
+        let src = include_str!("sovereign_defense_store.rs");
+        for sig in [
+            "pub async fn insert_chronos_event",
+            "pub async fn insert_cognitive_session",
+        ] {
+            let start = src.find(sig).unwrap_or_else(|| panic!("missing {sig}"));
+            let rest = &src[start..];
+            let next = rest.find("\npub async fn ").unwrap_or(rest.len());
+            let fn_src = &rest[..next];
+            assert!(!fn_src.contains("e.to_string()"), "{sig}");
+            assert!(!fn_src.contains("tenant tx:"));
+            assert!(fn_src.contains("tx.commit().await.is_err()"), "{sig}");
+            assert!(!fn_src.contains("let _ = tx.commit()"), "{sig}");
+        }
+    }
+
+    #[test]
+    fn self_improve_gather_signals_and_run_now_are_not_zero_success() {
+        let src = include_str!("self_improve.rs");
+        let start = src.find("async fn gather_signals").expect("gather");
+        let rest = &src[start..];
+        let next = rest
+            .find("\nfn deterministic_proposals")
+            .unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        assert!(fn_src.contains("Result<Vec<(String, i64)>"));
+        assert!(!fn_src.contains("unwrap_or(0)"));
+        let handler = named_fn_src(
+            include_str!("server_handlers_rest4.inc"),
+            "async fn api_self_improve_run_now",
+        );
+        assert!(handler.contains("self_improve_unavailable_json"));
+        assert!(!handler.contains("\"error\": e"));
+    }
+
+    #[test]
+    fn llm_fuzz_and_cloud_scan_persist_commit_is_not_ok_true() {
+        let src = include_str!("async_job_executor.rs");
+        let fuzz = src.find("\"llm_fuzz_run\"").expect("fuzz");
+        let cloud = src.find("\"cloud_scan_run\"").expect("cloud");
+        let payload = src.find("\"payload_sync\"").expect("payload");
+        let fuzz_src = &src[fuzz..cloud];
+        assert!(fuzz_src.contains("tx.commit().await.is_err()"));
+        assert!(!fuzz_src.contains("let _ = tx.commit()"));
+        let cloud_src = &src[cloud..payload];
+        assert!(cloud_src.contains("tx.commit().await.is_err()"));
+        assert!(!cloud_src.contains("let _ = sqlx::query(\"DELETE FROM cloud_scan_findings"));
+        let persist_commit = cloud_src
+            .rfind("tx.commit().await.is_err()")
+            .expect("persist commit");
+        let ok_true = cloud_src.find("\"ok\": true").expect("ok");
+        assert!(persist_commit < ok_true);
+    }
+
+    #[test]
+    fn poison_library_and_operator_lists_are_503_not_sql() {
+        let poison = named_fn_src(
+            include_str!("server_handlers_sovereign_defense.inc"),
+            "async fn api_sovereign_defense_poison_library",
+        );
+        assert!(poison.contains("poison_library_unavailable_json"));
+        assert!(!poison.contains("\"error\": e"));
+        let src = include_str!("sovereign_defense_store.rs");
+        let start = src.find("pub async fn load_poison_library").expect("poison");
+        let rest = &src[start..];
+        let next = rest
+            .find("\npub async fn dashboard_snapshot")
+            .unwrap_or(rest.len());
+        assert!(!&rest[..next].contains("e.to_string()"));
+        let op = include_str!("server_handlers_sovereign_operator.inc");
+        for (sig, ctor) in [
+            (
+                "async fn api_sovereign_operator_memory_get",
+                "sovereign_operator_memory_unavailable_json",
+            ),
+            (
+                "async fn api_sovereign_operator_forge_get",
+                "sovereign_operator_forge_unavailable_json",
+            ),
+            (
+                "async fn api_sovereign_operator_scripts_get",
+                "sovereign_operator_scripts_unavailable_json",
+            ),
+        ] {
+            let fn_src = named_fn_src(op, sig);
+            assert!(fn_src.contains(ctor), "{sig}");
+            assert!(!fn_src.contains("\"detail\": e"), "{sig}");
+        }
+        let exec = include_str!("async_job_executor.rs");
+        for needle in ["\"swarm_run\" =>", "\"feedback_fuzz\" =>"] {
+            let start = exec.find(needle).unwrap_or_else(|| panic!("missing {needle}"));
+            let slice = &exec[start..start + 1800.min(exec.len() - start)];
+            let exists = slice.find("SELECT EXISTS").expect("exists");
+            assert!(
+                !&slice[exists..exists + 350].contains("unwrap_or(false)"),
+                "{needle}"
+            );
+            assert!(&slice[exists..exists + 350].contains("store_down"), "{needle}");
+        }
+    }
+
+    #[test]
+    fn chronos_live_reads_are_error_not_empty_ok_on_store_down() {
+        let src = include_str!("chronos_engine.rs");
+        let start = src
+            .find("pub async fn run_chronos_result")
+            .expect("run_chronos_result");
+        let rest = &src[start..];
+        let next = rest
+            .find("\npub async fn run_chronos(")
+            .unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        let compact = compact_src(fn_src);
+        assert!(!fn_src.contains("format!(\"db: {e}\")"));
+        assert!(!compact.contains("fetch_all(&mut*tx).await.unwrap_or_default()"));
+        assert!(!fn_src.contains("let _ = tx.commit()"));
+        assert!(fn_src.contains("EngineResult::error(\"store_down\")"));
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+        assert!(fn_src.contains("empty_ok("));
+        let last_store = fn_src
+            .rfind("EngineResult::error(\"store_down\")")
+            .expect("store_down return");
+        let agent = fn_src
+            .find("run_agent_required_engine")
+            .expect("agent path");
+        let empty = fn_src.find("empty_ok(").expect("empty_ok");
+        assert!(last_store < agent, "store-down must not continue to agent");
+        assert!(last_store < empty, "empty_ok must follow store-down returns");
+    }
+
+    #[test]
+    fn defense_fusion_telemetry_counts_are_not_live_zeros_on_store_down() {
+        let src = include_str!("sovereign_active_defense_fusion_engine.rs");
+        let start = src
+            .find("async fn load_defense_telemetry")
+            .expect("load_defense_telemetry");
+        let rest = &src[start..];
+        let next = rest.find("\nfn maturity_grade").unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        let compact = compact_src(fn_src);
+        assert!(fn_src.contains("Result<DefenseTelemetry, String>"));
+        assert!(!fn_src.contains("return DefenseTelemetry::default()"));
+        assert!(fn_src.contains("return Ok(DefenseTelemetry::default())"));
+        assert!(!compact.contains("unwrap_or(0)"));
+        assert!(!compact.contains("unwrap_or_default()"));
+        assert!(!fn_src.contains("let Ok(mut tx)"));
+        assert!(fn_src.contains("map_err(|_| \"store_down\".to_string())"));
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+        let run_start = src
+            .find("pub async fn run_sovereign_active_defense_fusion_result")
+            .expect("run fusion");
+        let run_rest = &src[run_start..];
+        let run_next = run_rest
+            .find("\npub async fn run_sovereign_active_defense_fusion(")
+            .unwrap_or(run_rest.len());
+        let run_src = &run_rest[..run_next];
+        assert!(run_src.contains("Err(_) => return EngineResult::error(\"store_down\")"));
+        assert!(run_src.contains("Ok(DefenseTelemetry::default())"));
+    }
+
+    #[test]
+    fn identity_itdr_loader_is_not_empty_success_on_store_down() {
+        let src = include_str!("identity_attack_chain_engine.rs");
+        let start = src
+            .find("async fn itdr_findings_from_db")
+            .expect("itdr_findings_from_db");
+        let rest = &src[start..];
+        let next = rest
+            .find("\npub async fn run_identity_attack_chain_result")
+            .unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        let compact = compact_src(fn_src);
+        assert!(fn_src.contains("Result<Vec<Value>, String>"));
+        assert!(fn_src.contains("return Ok(Vec::new())"));
+        assert!(!fn_src.contains("let Ok(mut tx)"));
+        assert!(!compact.contains("fetch_all(&mut*tx).await.unwrap_or_default()"));
+        assert!(fn_src.contains("map_err(|_| \"store_down\".to_string())"));
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+        let run_start = src
+            .find("pub async fn run_identity_attack_chain_result")
+            .expect("run identity");
+        let run_rest = &src[run_start..];
+        let run_next = run_rest
+            .find("\npub async fn run_identity_attack_chain(")
+            .unwrap_or(run_rest.len());
+        let run_src = &run_rest[..run_next];
+        assert!(run_src.contains("Err(_) => return EngineResult::error(\"store_down\")"));
+        assert!(run_src.contains("empty_ok("));
+    }
+
+    #[test]
+    fn cognitive_poison_library_load_is_not_empty_ok_on_store_down() {
+        let src = include_str!("cognitive_starvation_engine.rs");
+        let start = src
+            .find("pub async fn run_cognitive_starvation_result")
+            .expect("cognitive");
+        let rest = &src[start..];
+        let next = rest
+            .find("\npub async fn run_cognitive_starvation(")
+            .unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        let compact = compact_src(fn_src);
+        assert!(!compact.contains("load_poison_library(pool.as_ref(),20).await.unwrap_or_default()"));
+        assert!(fn_src.contains("EngineResult::error(\"store_down\")"));
+        assert!(fn_src.contains("empty_ok("));
+        let store = fn_src
+            .find("EngineResult::error(\"store_down\")")
+            .expect("store_down");
+        let empty = fn_src.find("empty_ok(").expect("empty_ok");
+        assert!(store < empty);
+    }
+
+    #[test]
+    fn orchestrator_cycle_reads_are_not_empty_success_on_store_down() {
+        let src = include_str!("orchestrator/mod.rs");
+        let ident_start = src
+            .find("async fn load_identity_contexts")
+            .expect("identity");
+        let ident_rest = &src[ident_start..];
+        let ident_next = ident_rest
+            .find("\nfn client_auto_harvest_enabled")
+            .unwrap_or(ident_rest.len());
+        let ident = &ident_rest[..ident_next];
+        let ident_c = compact_src(ident);
+        assert!(ident.contains("Result<Vec<identity_engine::AuthContext>, sqlx::Error>"));
+        assert!(!ident_c.contains("fetch_all(&mut**tx).await.unwrap_or_default()"));
+        assert!(ident_c.contains("fetch_all(&mut**tx).await?"));
+        assert!(src.contains("get_config_tx_strict"));
+        let cycle_start = src
+            .find("async fn run_cycle_for_tenant_inner")
+            .expect("cycle");
+        let cycle = &src[cycle_start..];
+        assert!(cycle.contains("get_config_tx_strict(&mut tx, tenant_id, \"global_safe_mode\")"));
+        assert!(!cycle.contains("get_config_tx(&mut tx, tenant_id, \"global_safe_mode\")"));
+        let clients = cycle
+            .find("SELECT id, name, domains")
+            .expect("clients select");
+        let clients_slice = &cycle[clients..clients + 280];
+        assert!(clients_slice.contains(".await?"));
+        assert!(!clients_slice.contains("unwrap_or_default()"));
+        let audit = cycle
+            .find("FROM vulnerabilities WHERE run_id")
+            .expect("audit");
+        let audit_slice = &cycle[audit..audit + 350];
+        assert!(audit_slice.contains(".await?"));
+        assert!(!audit_slice.contains("unwrap_or_default()"));
+    }
+
+    #[test]
+    fn ueba_threat_intel_exists_is_not_false_on_store_down() {
+        let src = include_str!("ueba_onboarding.rs");
+        let start = src.find("pub async fn threat_intel_hit").expect("ti");
+        let rest = &src[start..];
+        let next = rest
+            .find("\npub async fn fleet_consensus_hit")
+            .unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        let compact = compact_src(fn_src);
+        assert!(fn_src.contains("Result<bool, String>"));
+        assert!(!compact.contains("fetch_one(&mut**tx).await.unwrap_or(false)"));
+        assert!(fn_src.contains("map_err(|_| \"store_down\".to_string())"));
+        let det = include_str!("ueba_detector.rs");
+        let call = det
+            .find("crate::ueba_onboarding::threat_intel_hit")
+            .expect("caller");
+        let call_src = &det[call..call + 280];
+        assert!(call_src.contains("map_err(|_| \"store_down\".to_string())?"));
+    }
+
+    #[test]
+    fn nexus_endpoint_agent_count_is_not_live_zero_on_store_down() {
+        let src = include_str!("nexus_sovereign_swarm_engine.rs");
+        let start = src.find("async fn count_endpoint_agents").expect("count");
+        let rest = &src[start..];
+        let next = rest.find("\nfn signal_to_finding").unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        let compact = compact_src(fn_src);
+        assert!(fn_src.contains("Result<u32, String>"));
+        assert!(fn_src.contains("return Ok(0)"));
+        assert!(!fn_src.contains("return 0;"));
+        assert!(!compact.contains("unwrap_or(0)"));
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+        let run_hit = src
+            .find("match count_endpoint_agents(ctx).await")
+            .expect("caller");
+        let caller = &src[run_hit..run_hit + 220];
+        assert!(caller.contains("EngineResult::error(\"store_down\")"));
+    }
+
+    #[test]
+    fn store_down_engine_error_is_fail_fast_not_waf_skip() {
+        let src = include_str!("engine_resilience.rs");
+        let classify = named_fn_src(src, "pub fn classify_failure");
+        assert!(classify.contains("FailureClass::StoreDown"));
+        assert!(classify.contains("store_down"));
+        let store_idx = classify.find("store_down").expect("store_down token");
+        let waf_503 = classify.find("contains(\"503\")").expect("waf 503");
+        assert!(store_idx < waf_503, "StoreDown must be classified before WAF 503");
+        let iff = named_fn_src(src, "pub fn is_fail_fast");
+        assert!(iff.contains("StoreDown"));
+        let as_str = named_fn_src(src, "pub fn as_str");
+        assert!(as_str.contains("StoreDown => \"store_down\""));
+    }
+
+    #[test]
+    fn persist_kev_and_exposure_are_not_confirmed_false_on_store_down() {
+        let kev = include_str!("intel_kev.rs");
+        let start = kev
+            .find("pub async fn kev_listed_for_cves")
+            .expect("kev_listed_for_cves");
+        let rest = &kev[start..];
+        let next = rest
+            .find("\npub fn bootstrap_kev_catalog")
+            .unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        let compact = compact_src(fn_src);
+        assert!(fn_src.contains("Result<std::collections::HashMap<String, KevEntry>, String>"));
+        assert!(!compact.contains("fetch_all(pool).await.unwrap_or_default()"));
+        assert!(fn_src.contains("map_err(|_| \"store_down\".to_string())"));
+        let persist = include_str!("findings_persist.rs");
+        let exp_start = persist
+            .find("async fn resolve_internet_exposed")
+            .expect("exposed");
+        let exp_rest = &persist[exp_start..];
+        let exp_next = exp_rest.find("\nfn extract_array").unwrap_or(exp_rest.len());
+        let exp = &exp_rest[..exp_next];
+        let exp_c = compact_src(exp);
+        assert!(exp.contains("Result<bool, String>"));
+        assert!(!exp_c.contains("fetch_one(&mut*conn).await.unwrap_or(false)"));
+        assert!(persist.contains(
+            "intel_kev::kev_listed_for_cves(pool, &scan_cves)\n        .await\n        .map_err(|_| \"store_down\".to_string())?"
+        ));
+    }
+
+    #[test]
+    fn risk_superposition_raw_findings_are_not_empty_ok_on_store_down() {
+        let src = include_str!("risk_superposition_collapse_engine.rs");
+        let start = src
+            .find("pub async fn run_risk_superposition_collapse_result")
+            .expect("run");
+        let rest = &src[start..];
+        let next = rest
+            .find("\npub async fn run_risk_superposition_collapse(")
+            .unwrap_or(rest.len());
+        let run_src = &rest[..next];
+        assert!(!run_src.contains("unwrap_or_default()"));
+        assert!(!run_src.contains("cluster load failed:"));
+        assert!(run_src.contains("EngineResult::error(\"store_down\")"));
+        let raw = src.find("async fn load_raw_findings").expect("raw");
+        let raw_rest = &src[raw..];
+        let raw_next = raw_rest.find("\nfn cluster_as_finding").unwrap_or(raw_rest.len());
+        let raw_src = &raw_rest[..raw_next];
+        assert!(!raw_src.contains("let _ = tx.commit()"));
+        assert!(raw_src.contains("tx.commit().await.is_err()"));
+        assert!(!raw_src.contains("format!(\"tenant tx: {e}\")"));
+    }
+
+    #[test]
+    fn nexus_surface_extras_are_not_empty_ok_on_store_down() {
+        let src = include_str!("nexus_sovereign_swarm_engine.rs");
+        let start = src
+            .find("async fn load_db_surface_extras")
+            .expect("extras");
+        let rest = &src[start..];
+        let next = rest.find("\nfn assign_agents_cycle").unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        let compact = compact_src(fn_src);
+        assert!(fn_src.contains("Result<(Vec<String>, Vec<String>), String>"));
+        assert!(!compact.contains("fetch_all(&mut*tx).await.unwrap_or_default()"));
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+        assert!(src.contains("Err(_) => return EngineResult::error(\"store_down\")"));
+    }
+
+    #[test]
+    fn billing_gates_store_down_is_503_not_quota_deny() {
+        let billing = include_str!("billing/mod.rs");
+        let impl_src = billing.split("#[cfg(test)]").next().expect("impl");
+        let compact = compact_src(impl_src);
+        assert!(impl_src.contains("map_err(|_| \"store_down\".to_string())"));
+        assert!(impl_src.contains("Result<Option<String>, String>"));
+        assert!(!compact.contains("ifletOk(Some(s))=sqlx::query_scalar"));
+        let handlers = include_str!("server_handlers_onboarding_billing.inc");
+        let pay = named_fn_src(handlers, "fn payment_or_store_down");
+        assert!(pay.contains("detail == \"store_down\""));
+        assert!(pay.contains("billing_store_down"));
+        assert!(pay.contains("PAYMENT_REQUIRED"));
+        let register = named_fn_src(handlers, "async fn api_onboarding_register");
+        assert!(register.contains("e == \"store_down\""));
+        assert!(register.contains("billing_store_down"));
+        let rest = include_str!("server_handlers_rest.inc");
+        assert!(rest.contains("payment_or_store_down(detail)"));
+        assert!(!rest.contains("StatusCode::PAYMENT_REQUIRED"));
+        let payload = named_fn_src(
+            include_str!("server_handlers_rest4.inc"),
+            "async fn api_payload_sync_run",
+        );
+        assert!(payload.contains("detail == \"store_down\""));
+        assert!(payload.contains("billing_store_down"));
+        let webhook = named_fn_src(handlers, "fn paddle_webhook_error_response");
+        assert!(webhook.contains("msg == \"store_down\""));
+        assert!(webhook.contains("PaddleWebhookError::Sql"));
+        assert!(webhook.contains("billing_store_down"));
+        for inc in [
+            "server_handlers_phase3.inc",
+            "server_handlers_phase5.inc",
+            "server_handlers_phase6.inc",
+            "server_handlers_sqlx.inc",
+            "server_handlers_rest4.inc",
+        ] {
+            let src = match inc {
+                "server_handlers_phase3.inc" => include_str!("server_handlers_phase3.inc"),
+                "server_handlers_phase5.inc" => include_str!("server_handlers_phase5.inc"),
+                "server_handlers_phase6.inc" => include_str!("server_handlers_phase6.inc"),
+                "server_handlers_sqlx.inc" => include_str!("server_handlers_sqlx.inc"),
+                _ => include_str!("server_handlers_rest4.inc"),
+            };
+            assert!(src.contains("payment_or_store_down(detail)"), "{inc}");
+        }
+        assert!(impl_src.contains(
+            "bcrypt::hash(password, bcrypt::DEFAULT_COST).map_err(|e| e.to_string())"
+        ));
+        assert!(impl_src.contains("Subscription not provisioned for tenant"));
+        let paddle_wh = include_str!("billing/webhook.rs");
+        assert!(paddle_wh.contains("Result<Option<i64>, String>"));
+        assert!(!compact_src(paddle_wh).contains(".await.ok()?"));
+        assert!(paddle_wh.contains("map_err(|_| \"store_down\".to_string())"));
+    }
+
+    #[test]
+    fn fp_feedback_store_down_is_not_full_confidence_or_empty_cache() {
+        let src = include_str!("fp_feedback.rs");
+        let pool_fn = named_fn_src(src, "pub async fn confidence_multiplier(");
+        assert!(pool_fn.contains("Result<f64, String>"));
+        assert!(pool_fn.contains("return Ok(1.0)"));
+        assert!(!pool_fn.contains("pub async fn confidence_multiplier_tx"));
+        let tx_fn = named_fn_src(src, "pub async fn confidence_multiplier_tx");
+        assert!(tx_fn.contains("Result<f64, String>"));
+        assert!(tx_fn.contains("store_down"));
+        assert!(!compact_src(tx_fn).contains(".ok().flatten()"));
+        let batch = named_fn_src(src, "pub async fn confidence_multipliers_batch");
+        assert!(batch.contains("Result<HashMap<(String, String), f64>, String>"));
+        assert!(!compact_src(batch).contains("fetch_all(&mut*tx).await.unwrap_or_default()"));
+        assert!(batch.contains("tx.commit().await.is_err()"));
+        let load = named_fn_src(src, "async fn load_suppression_rules_from_db");
+        assert!(load.contains("Result<Vec<SuppressionRule>, String>"));
+        assert!(!compact_src(load).contains("unwrap_or_default()"));
+        assert!(load.contains("Err(\"store_down\".to_string())"));
+        let insert_idx = load.find("SUPPRESSION_CACHE.insert").expect("cache insert");
+        let first_err = load.find("return Err(\"store_down\".to_string())").expect("err");
+        assert!(first_err < insert_idx, "must not cache rules before store-down return");
+        let persist = include_str!("findings_persist.rs");
+        assert!(persist.contains(
+            "fp_feedback::active_suppressions_for_engine(pool, tenant_id, engine)\n            .await\n            .map_err(|_| \"store_down\".to_string())?"
+        ));
+        assert!(persist.contains(
+            "fp_feedback::confidence_multiplier_tx(&mut tx, tenant_id, engine, &signature_hash)\n                .await\n                .map_err(|_| \"store_down\".to_string())?"
+        ));
+        let findings = named_fn_src(
+            include_str!("server_handlers_sqlx.inc"),
+            "async fn api_findings(",
+        );
+        assert!(findings.contains("confidence_multipliers_batch"));
+        assert!(findings.contains("match crate::fp_feedback::confidence_multipliers_batch"));
+        assert!(findings.contains("findings_unavailable_json"));
+    }
+
+    #[test]
+    fn auto_heal_running_dupe_count_store_down_is_not_zero() {
+        let src = include_str!("auto_heal_job.rs");
+        let start = src
+            .find("SELECT count(*)::bigint FROM auto_heal_job_specs")
+            .expect("dupe count");
+        let slice = &src[start..start + 700];
+        assert!(slice.contains("Err(_) => return Err(\"store_down\".to_string())"));
+        assert!(!slice.contains("unwrap_or(0)"));
+    }
+
+    #[test]
+    fn soar_blast_and_idempotency_store_down_is_not_live_zero() {
+        let blast = include_str!("soar/blast_radius.rs");
+        let eval = named_fn_src(blast, "pub async fn evaluate");
+        assert!(!compact_src(eval).contains("fetch_all(&mut*tx).await.unwrap_or_default()"));
+        assert!(eval.contains("unavailable_blast"));
+        assert!(!eval.contains("apply_blast_decision") || eval.contains("unavailable_blast"));
+        let apply_idx = eval.find("apply_blast_decision").expect("apply after live rows");
+        let unavail = eval.find("unavailable_blast").expect("fail closed");
+        assert!(unavail < apply_idx);
+        let ublast_start = blast.find("fn unavailable_blast()").expect("unavailable_blast");
+        let ublast_rest = &blast[ublast_start..];
+        let ublast_next = ublast_rest
+            .find("\npub fn apply_blast_decision")
+            .unwrap_or(ublast_rest.len());
+        let unavail_fn = &ublast_rest[..ublast_next];
+        assert!(unavail_fn.contains("report.blocked = true"));
+        assert!(!unavail_fn.contains("force_approved"));
+        let engine = include_str!("soar/engine.rs");
+        let find = named_fn_src(engine, "async fn find_existing_execution");
+        assert!(find.contains("Result<Option<ExistingExecution>, String>"));
+        assert!(!compact_src(find).contains(".ok().flatten()"));
+        assert!(engine.contains("detail: \"database unavailable\".into()"));
+        let insert = named_fn_src(engine, "async fn insert_execution");
+        assert!(!insert.contains("let _ = tx.commit()"));
+        assert!(insert.contains("tx.commit().await.is_err()"));
+        assert!(insert.contains("duplicate_in_flight"));
+        let exec = named_fn_src(engine, "pub async fn execute_armored_action");
+        assert!(exec.contains("duplicate_skipped: in-flight execution"));
+        assert!(exec.contains("duplicate_in_flight"));
+        assert!(exec.contains("match load_integrations"));
+        assert!(
+            !compact_src(exec).contains(
+                "ifexisting.status==ExecutionStatus::Acquired.as_str()||existing.status==ExecutionStatus::Executing"
+            ),
+            "stuck Acquired must resume to Executing, not ok-skip as in-flight"
+        );
+        assert!(
+            !compact_src(insert).contains(
+                "ifstatus==ExecutionStatus::Acquired.as_str()||status==ExecutionStatus::Executing"
+            ),
+            "ON CONFLICT Acquired must return Ok(existing), not duplicate_in_flight"
+        );
+        let blocked = exec.find("if blast.blocked").expect("blast.blocked");
+        let blast_slice = &exec[blocked..(blocked + 2000).min(exec.len())];
+        assert!(
+            blast_slice.contains("database unavailable"),
+            "unavailable_blast must not look like a live blast skip"
+        );
+        assert!(
+            blast_slice.contains("status: if store_down"),
+            "database unavailable blast must return failed, not skipped"
+        );
+        assert!(
+            exec.contains("resume_store_down_after_adapter"),
+            "Failed store_down after adapter must resume verify, not Redis-done ok-skip"
+        );
+        assert_eq!(
+            exec.matches("mark_completed(").count(),
+            1,
+            "persist_runbook/enqueue_verification store-down must not mark Redis done"
+        );
+        let lock = named_fn_src(
+            include_str!("soar/idempotency.rs"),
+            "pub async fn try_acquire_lock",
+        );
+        assert!(lock.contains("Result<Option<SoarLockGuard>, String>"));
+        assert!(lock.contains("store_down"));
+        assert!(!compact_src(lock).contains(".ok().unwrap_or(false)"));
+        assert!(!lock.contains("pub async fn mark_completed"));
+        let iso = named_fn_src(
+            include_str!("soar/idempotency.rs"),
+            "pub async fn try_acquire_isolate_lock",
+        );
+        assert!(iso.contains("Result<SoarLockGuard, String>"));
+        assert!(!iso.contains("pub async fn try_acquire_lock"));
+        assert!(!compact_src(iso).contains(".ok().unwrap_or(false)"));
+        let integ = include_str!("soar/integrations.rs");
+        let load = named_fn_src(integ, "pub async fn load_integrations");
+        assert!(load.contains("Result<Vec<IntegrationRecord>, String>"));
+        assert!(load.contains("store_down"));
+        assert!(!compact_src(load).contains(".ok().flatten()"));
+        assert!(
+            !compact_src(load).contains("letOk(arr)=serde_json::from_str"),
+            "corrupt integrations JSON must not empty-ok as no integrations"
+        );
+        assert!(compact_src(load).contains(
+            "from_str::<Vec<Value>>(&s).map_err(|_|\"store_down\".to_string())?"
+        ));
+    }
+
+    #[test]
+    fn pipeline_pause_store_down_does_not_scan_as_unpaused() {
+        let src = include_str!("orchestrator/mod.rs");
+        let fn_src = named_fn_src(src, "async fn pipeline_get_state");
+        assert!(fn_src.contains("Result<Option<(u8, bool, Option<u8>)>, sqlx::Error>"));
+        assert!(!fn_src.contains(".ok()??"));
+        assert!(fn_src.contains(".await?"));
+        assert!(src.contains(
+            "pipeline_get_state(&mut tx, tenant_id, run_id, &cid).await?"
+        ));
+        let persist_n = named_fn_src(src, "async fn persist_and_notify_findings");
+        assert!(persist_n.contains("return 0;"));
+        let failed = persist_n.find("findings_persist failed").expect("persist err");
+        let bcast = persist_n.find("broadcast_finding_created").expect("broadcast");
+        assert!(failed < bcast);
+        let err_arm = &persist_n[failed..bcast];
+        assert!(err_arm.contains("return 0"));
+    }
+
+    #[test]
+    fn heal_recent_open_pr_store_down_is_not_confirmed_miss() {
+        let src = include_str!("auto_heal_job.rs");
+        let recent = named_fn_src(src, "async fn recent_open_pr");
+        assert!(recent.contains("Result<Option<(String, Option<i64>, String)>, String>"));
+        assert!(recent.contains("store_down"));
+        assert!(!compact_src(recent).contains("begin_tenant_tx(pool, tenant_id).await.ok()?"));
+        assert!(!compact_src(recent).contains("fetch_optional(&mut*tx).await.ok().flatten()"));
+        assert!(src.contains("Err(_) => return Err(\"store_down\".to_string())"));
+    }
+
+    #[test]
+    fn ueba_epss_fair_verify_heal_store_down_is_not_live_miss() {
+        let ingest = named_fn_src(
+            include_str!("ueba_detector.rs"),
+            "pub async fn ingest_sample",
+        );
+        assert!(ingest.contains("SELECT enrolled_at FROM endpoint_agents"));
+        assert!(!compact_src(ingest).contains("fetch_optional(&mut*tx).await.ok().flatten()"));
+        assert!(ingest.contains("map_err(|_| \"store_down\".to_string())?"));
+        let det = include_str!("ueba_detector.rs");
+        let sov_call = det
+            .find("crate::ueba_onboarding::on_sovereign_binary_allowlist_tx")
+            .expect("sov caller");
+        let sov_call_src = &det[sov_call..sov_call + 280];
+        assert!(sov_call_src.contains("map_err(|_| \"store_down\".to_string())?"));
+
+        let ueba = include_str!("ueba_onboarding.rs");
+        let sov_start = ueba
+            .find("pub async fn on_sovereign_binary_allowlist_tx")
+            .expect("sov");
+        let sov_rest = &ueba[sov_start..];
+        let sov_next = sov_rest
+            .find("\npub fn item_binary_hash")
+            .unwrap_or(sov_rest.len());
+        let sov = &sov_rest[..sov_next];
+        assert!(sov.contains("Result<bool, String>"));
+        assert!(!compact_src(sov).contains(".ok().flatten()"));
+        assert!(sov.contains("map_err(|_| \"store_down\".to_string())?"));
+
+        let epss = include_str!("intel_epss.rs");
+        let epss_start = epss
+            .find("pub async fn fetch_epss_for_cves")
+            .expect("fetch_epss");
+        let epss_rest = &epss[epss_start..];
+        let epss_next = epss_rest.find("\nfn parse_score").unwrap_or(epss_rest.len());
+        let epss_fn = &epss_rest[..epss_next];
+        assert!(epss_fn.contains("Result<HashMap<String, EpssScore>, String>"));
+        assert!(!compact_src(epss_fn).contains("fetch_all(pool).await.unwrap_or_default()"));
+        assert!(epss_fn.contains("map_err(|_| \"store_down\".to_string())?"));
+        let persist = include_str!("findings_persist.rs");
+        assert!(persist.contains(
+            "intel_epss::fetch_epss_for_cves(pool, &scan_cves)\n        .await\n        .map_err(|_| \"store_down\".to_string())?"
+        ));
+
+        let fair = include_str!("financial_risk.rs");
+        let fair_start = fair
+            .find("pub async fn compute_and_store")
+            .expect("compute_and_store");
+        let fair_rest = &fair[fair_start..];
+        let fair_next = fair_rest
+            .find("\npub async fn latest_snapshot")
+            .unwrap_or(fair_rest.len());
+        let fair_fn = &fair_rest[..fair_next];
+        assert!(!compact_src(fair_fn).contains(".ok().flatten()"));
+        assert!(fair_fn.contains("Err(_) => return Err(\"store_down\".to_string())"));
+
+        let verify = include_str!("soar/verification.rs");
+        let claim_start = verify
+            .find("pub async fn claim_due_tasks")
+            .expect("claim_due_tasks");
+        let claim_rest = &verify[claim_start..];
+        let claim_next = claim_rest
+            .find("\npub async fn mark_verified")
+            .unwrap_or(claim_rest.len());
+        let claim = &claim_rest[..claim_next];
+        assert!(claim.contains("Result<Vec<PendingVerifyTask>, String>"));
+        assert!(!compact_src(claim).contains("fetch_all(&mut*tx).await.unwrap_or_default()"));
+        assert!(claim.contains("store_down"));
+        assert!(!claim.contains("return Vec::new()"));
+        let cycle = named_fn_src(include_str!("soar/worker.rs"), "async fn run_cycle");
+        assert!(cycle.contains("claim_due_tasks(app_pool, tenant_id, 8).await?"));
+        assert!(!compact_src(cycle).contains("let tasks=claim_due_tasks(app_pool,tenant_id,8).await;"));
+
+        let heal = include_str!("auto_heal_job.rs");
+        let ctx = named_fn_src(heal, "async fn load_finding_context");
+        assert!(ctx.contains("Result<Option<(String, String, String)>, String>"));
+        assert!(ctx.contains("store_down"));
+        assert!(!compact_src(ctx).contains(".ok().flatten()"));
+        assert!(heal.contains(
+            "load_finding_context(app_pool.as_ref(), tenant_id, client_id, &finding_id).await?"
+        ));
+    }
+
+    #[test]
+    fn soar_playbook_github_status_isolate_verify_are_not_ok_on_store_down() {
+        let pb = include_str!("soar_playbook.rs");
+        let cool = named_fn_src(pb, "async fn in_cooldown");
+        assert!(cool.contains("Result<bool, String>"));
+        assert!(!compact_src(cool).contains(".ok().flatten()"));
+        assert!(cool.contains("store_down"));
+        assert!(
+            cool.contains("status IN ('success', 'partial')"),
+            "failed playbook runs must not cooldown-skip the next live event"
+        );
+        let rec = named_fn_src(pb, "async fn record_run");
+        assert!(rec.contains("Result<(), String>"));
+        assert!(!compact_src(rec).contains("let_=tx.commit().await;"));
+        assert!(rec.contains("store_down"));
+        let dispatch = named_fn_src(pb, "pub async fn dispatch_event");
+        assert!(dispatch.contains("skipped_store_down"));
+        assert!(dispatch.contains("record_run(pool, &pb, &event, &dedup, &actions, &status).await.is_err()"));
+        let act = named_fn_src(pb, "async fn execute_action");
+        assert!(
+            !act.contains("WEISSMAN_ALERT_WEBHOOK_URL"),
+            "empty playbook webhook url must not silently use the platform env webhook"
+        );
+        let soar_meta = include_str!("soar/dispatch_record.rs");
+        let merge = named_fn_src(soar_meta, "async fn merge_soar_metadata");
+        assert!(
+            merge.contains("skipped_store_down"),
+            "cooldown store-down must not land as soar_dispatch.status ok"
+        );
+        assert!(compact_src(merge).contains("status==\"skipped_store_down\""));
+        let record = named_fn_src(soar_meta, "pub async fn record_post_persist_dispatch");
+        assert!(
+            compact_src(record).contains("r.status==\"skipped_store_down\""),
+            "skipped_store_down must notify, not only failed/partial"
+        );
+        let hitl = named_fn_src(
+            include_str!("soar/engine.rs"),
+            "pub async fn approve_hitl",
+        );
+        assert!(
+            !compact_src(hitl).contains("from_value(evidence).unwrap_or("),
+            "corrupt HITL evidence must not become empty ThreatEvidence"
+        );
+        assert!(hitl.contains("map_err(|_| \"store_down\".to_string())?"));
+
+        let gh = include_str!("soar/adapters/github.rs");
+        let open = named_fn_src(gh, "async fn open_pr");
+        assert!(open.contains("if tx.commit().await.is_err()"));
+        assert!(!compact_src(open).contains("let_=tx.commit().await;"));
+        let enqueue = open.find("enqueue_with_max_attempts").expect("enqueue after commit");
+        let commit = open.find("if tx.commit().await.is_err()").expect("commit checked");
+        assert!(commit < enqueue, "must not enqueue until spec commit succeeds");
+
+        let engine = include_str!("soar/engine.rs");
+        let upd = named_fn_src(engine, "async fn update_status");
+        assert!(!compact_src(upd).contains("let_=tx.commit().await;"));
+        assert!(upd.contains("store_down"));
+        let ures = named_fn_src(engine, "async fn update_execution_result");
+        assert!(!compact_src(ures).contains("let_=tx.commit().await;"));
+        assert!(ures.contains("store_down"));
+        let exec = named_fn_src(engine, "pub async fn execute_armored_action");
+        assert!(!compact_src(exec).contains(
+            "let_=update_status(pool,cmd.tenant_id,execution_id,ExecutionStatus::Executing"
+        ));
+        assert!(!compact_src(exec).contains("let_=update_execution_result"));
+        let persist = exec
+            .find("if update_execution_result")
+            .expect("result persist checked");
+        assert!(
+            exec[persist..].contains("status: \"ok\".into()"),
+            "ok only after execution result persist is checked"
+        );
+
+        let aws = include_str!("soar/adapters/aws_ec2.rs");
+        let probe_start = aws
+            .find("async fn tcp_probe_unreachable(")
+            .expect("tcp_probe");
+        let probe_rest = &aws[probe_start..];
+        let probe_next = probe_rest
+            .find("\npub async fn tcp_probe_unreachable_batch")
+            .unwrap_or(probe_rest.len());
+        let probe = &probe_rest[..probe_next];
+        assert!(probe.contains("Result<bool, super::AdapterError>"));
+        assert!(probe.contains("isolate probe timeout — not confirmed"));
+        assert!(!probe.contains("return true;"));
+        let agent = named_fn_src(
+            include_str!("soar/adapters/weissman_agent.rs"),
+            "async fn verify_isolated",
+        );
+        assert!(agent.contains("tcp_probe_unreachable_batch"));
+        assert!(!agent.contains("tcp_open"));
+    }
+
+    #[test]
+    fn worker_ingest_enqueue_leader_store_down_is_not_empty_ok() {
+        let worker = include_str!("soar/worker.rs");
+        let cycle = named_fn_src(worker, "async fn run_cycle");
+        assert!(!compact_src(cycle).contains("fetch_all(auth_pool).await.unwrap_or_default()"));
+        assert!(cycle.contains("map_err(|_| \"store_down\".to_string())?"));
+        assert!(cycle.contains("verify_heal_job(app_pool, tenant_id, &task.target).await?"));
+        let heal = named_fn_src(worker, "async fn verify_heal_job");
+        assert!(heal.contains("Result<bool, String>"));
+        assert!(!compact_src(heal).contains(".ok().flatten()"));
+        assert!(heal.contains("store_down"));
+        let leader = named_fn_src(worker, "async fn try_acquire_leader");
+        assert!(leader.contains("Result<bool, String>"));
+        assert!(!compact_src(leader).contains(".ok().unwrap_or(false)"));
+        assert!(worker.contains("leader election store_down"));
+
+        let ingest = named_fn_src(
+            include_str!("endpoint_agents.rs"),
+            "pub async fn store_finding_for_task",
+        );
+        assert!(!ingest.contains("let _ = crate::ueba_detector::ingest_sample"));
+        assert!(ingest.contains("map_err(|e| sqlx::Error::Protocol(e))?"));
+
+        let exec = named_fn_src(
+            include_str!("soar/engine.rs"),
+            "pub async fn execute_armored_action",
+        );
+        assert!(!compact_src(exec).contains("let_=enqueue_verification"));
+        assert!(exec.contains("enqueue_verification(pool, cmd.tenant_id, execution_id, &probe)"));
+        assert!(exec.contains("status: \"failed\".into()"));
+
+        let merge = named_fn_src(include_str!("auto_heal_job.rs"), "async fn maybe_auto_merge_pr");
+        assert!(!compact_src(merge).contains(".ok().flatten().unwrap_or_default()"));
+
+        let persist_rb = named_fn_src(include_str!("soar/revert.rs"), "pub async fn persist_runbook");
+        assert!(persist_rb.contains("Result<Uuid, String>"));
+        assert!(!compact_src(persist_rb).contains("let_=tx.commit().await;"));
+        assert!(persist_rb.contains("store_down"));
+        assert!(persist_rb.contains("serde_json::to_value(steps).map_err"));
+        assert!(
+            !persist_rb.contains("unwrap_or(json!([]))"),
+            "non-empty runbook steps must not serde-fail into empty json!([])"
+        );
+
+        assert!(!compact_src(exec).contains("let_=persist_runbook"));
+        let persist_idx = exec
+            .find("persist_runbook(")
+            .expect("execute_armored_action must persist a runbook");
+        let enqueue_rel = exec[persist_idx..]
+            .find("enqueue_verification(")
+            .expect("enqueue follows persist");
+        assert!(
+            exec[persist_idx..persist_idx + enqueue_rel].contains("store_down"),
+            "persist_runbook Err must become failed/store_down before enqueue"
+        );
+    }
+
+    #[test]
+    fn execute_revert_commit_fail_is_store_down() {
+        let src = named_fn_src(include_str!("soar/revert.rs"), "pub async fn execute_revert");
+        assert!(src.contains("Result<String, String>"));
+        let last = src
+            .rfind("tx.commit()")
+            .expect("execute_revert must commit the reverted UPDATE");
+        assert!(
+            src[last.saturating_sub(80)..].contains("is_err()"),
+            "final revert commit fail must be checked"
+        );
+        assert!(
+            src.contains("store_down"),
+            "execute_revert commit fail must be store_down, not Ok(details)"
+        );
+    }
+
+    #[test]
+    fn claim_due_schedule_ids_store_down_not_empty_ok() {
+        let src = named_fn_src(
+            include_str!("scan_schedule_worker.rs"),
+            "async fn claim_due_schedule_ids",
+        );
+        assert!(
+            src.contains("Result<Vec<i64>, String>"),
+            "claim_due_schedule_ids must return Result so tick cannot treat store-down as no due scans"
+        );
+        assert!(
+            !src.contains("return Vec::new()"),
+            "claim_due_schedule_ids must not empty-ok begin fail as a bare empty vec"
+        );
+        assert!(
+            !compact_src(src).contains("fetch_all(&mut*tx).await.unwrap_or_default()"),
+            "claim_due_schedule_ids must not unwrap_or_default a due-id SELECT as empty"
+        );
+        assert!(
+            src.contains("store_down"),
+            "claim_due_schedule_ids begin/fetch/commit fail must be store_down"
+        );
+        let tick = named_fn_src(include_str!("scan_schedule_worker.rs"), "async fn tick");
+        assert!(
+            !tick.contains("for schedule_id in claim_due_schedule_ids("),
+            "tick must not iterate claim_due_schedule_ids as if it were Vec"
+        );
+        assert!(
+            tick.contains("match claim_due_schedule_ids("),
+            "tick must match claim_due_schedule_ids Err instead of treating it as no due work"
+        );
+        assert!(
+            !compact_src(tick).contains("fetch_all(auth_pool).await.unwrap_or_default()"),
+            "scan schedule tenant list store-down must not look like an idle tick"
+        );
+        assert!(
+            tick.contains("tenant list store_down"),
+            "scan schedule tick must warn tenant list store_down instead of empty-ok"
+        );
+    }
+
+    #[test]
+    fn stale_soar_begin_fail_is_store_down_not_ok_zero() {
+        let exec = named_fn_src(
+            include_str!("soar/stale.rs"),
+            "async fn alert_stale_executions",
+        );
+        let ver = named_fn_src(
+            include_str!("soar/stale.rs"),
+            "async fn alert_stale_verifications",
+        );
+        for (name, src) in [
+            ("alert_stale_executions", exec),
+            ("alert_stale_verifications", ver),
+        ] {
+            assert!(
+                !src.contains("return Ok(0)"),
+                "{name} must not empty-ok begin fail as zero stale work"
+            );
+            assert!(
+                src.contains("store_down"),
+                "{name} begin/commit fail must be store_down"
+            );
+        }
+    }
+
+    #[test]
+    fn pentest_memory_prior_winners_store_down_not_empty_ok() {
+        let src = named_fn_src(include_str!("pentest_memory.rs"), "pub async fn prior_winners");
+        assert!(
+            src.contains("Result<Vec<WinningPath>, String>"),
+            "prior_winners must return Result so store-down is not an empty winner list"
+        );
+        assert!(
+            !compact_src(src).contains("fetch_all(&mut*tx).await.unwrap_or_default()"),
+            "prior_winners must not unwrap_or_default a winner SELECT as empty"
+        );
+        assert!(
+            src.contains("store_down"),
+            "prior_winners begin/fetch/commit fail must be store_down"
+        );
+        let live = include_str!("engine_dispatch.rs");
+        assert!(
+            live.contains("EngineResult::error(\"store_down\")"),
+            "live engine dispatch must fail closed when pentest memory store is down"
+        );
+        let stats = named_fn_src(
+            include_str!("pentest_memory.rs"),
+            "pub async fn memory_stats",
+        );
+        assert!(stats.contains("Result<MemoryStats, String>"));
+        assert!(
+            !compact_src(stats).contains("let_=tx.commit().await;"),
+            "memory_stats commit fail must not look like a complete zero rollup"
+        );
+        assert!(
+            !compact_src(stats).contains("returnOk(MemoryStats{winning_paths:0"),
+            "COUNT row missing must not look like zero winning paths"
+        );
+        assert!(stats.contains("store_down"));
+        assert!(stats.contains("tx.commit().await.is_err()"));
+    }
+
+    #[test]
+    fn alert_evaluator_fire_insert_store_down_is_not_duplicate_skip() {
+        let src = named_fn_src(
+            include_str!("alert_evaluator_worker.rs"),
+            "async fn evaluate_tenant",
+        );
+        assert!(
+            !compact_src(src).contains(".ok().flatten()"),
+            "fire INSERT store-down must not look like ON CONFLICT skip (missed alert)"
+        );
+        assert!(
+            !compact_src(src).contains("let_=tx.commit().await;"),
+            "evaluate_tenant commit must not be ignored even if rustfmt line-breaks it"
+        );
+        assert!(
+            src.contains("store_down"),
+            "evaluate_tenant begin/fetch/insert/commit fail must be store_down"
+        );
+        assert!(
+            src.contains("RETURNING id"),
+            "dedup still uses INSERT ... RETURNING so None after Ok is a real conflict skip"
+        );
+        assert!(
+            compact_src(src).contains(
+                "deliver_alert(app_pool,tenant_id,&rule_info,&finding_info,&channels).await?"
+            ),
+            "delivery-config store-down must roll back the fire INSERT, not look delivered-false"
+        );
+        let tick = named_fn_src(
+            include_str!("alert_evaluator_worker.rs"),
+            "async fn tick",
+        );
+        assert!(
+            !compact_src(tick).contains("fetch_all(auth_pool).await.unwrap_or_default()"),
+            "alert evaluator tenant list store-down must not look like an idle tick"
+        );
+        assert!(tick.contains("tenant list store_down"));
+    }
+
+    #[test]
+    fn pending_task_push_store_down_is_not_idle_zero() {
+        let src = named_fn_src(
+            include_str!("endpoint_agents.rs"),
+            "pub async fn push_pending_tasks_to_online",
+        );
+        assert!(src.contains("Result<u32, String>"));
+        assert!(!src.contains("return 0"));
+        assert!(!compact_src(src).contains("if let Ok(pending)"));
+        assert!(src.contains("store_down"));
+        let pusher = named_fn_src(
+            include_str!("endpoint_agents.rs"),
+            "pub fn spawn_pending_task_pusher",
+        );
+        assert!(!pusher.contains("let _ = push_pending_tasks_to_online"));
+    }
+
+    #[test]
+    fn ueba_baseline_scheduler_store_down_is_not_already_done() {
+        let src = named_fn_src(
+            include_str!("endpoint_agents.rs"),
+            "pub fn spawn_ueba_baseline_scheduler",
+        );
+        assert!(!compact_src(src).contains("fetch_one(&mut*tx).await.unwrap_or(true)"));
+        assert!(!src.contains("let Ok(tenants) = weissman_db::active_tenant_ids"));
+        assert!(src.contains("store_down"));
+    }
+
+    #[test]
+    fn certstream_load_scope_store_down_is_not_empty_apexes() {
+        let src = named_fn_src(include_str!("certstream_watcher.rs"), "async fn load_scope");
+        assert!(src.contains("Result<Vec<ScopeRow>, String>"));
+        assert!(!compact_src(src).contains("fetch_all(&mut*tx).await.unwrap_or_default()"));
+        assert!(
+            !compact_src(src).contains("fetch_all(auth_pool).await.unwrap_or_default()"),
+            "tenant list store-down must not look like an empty authorized apex set"
+        );
+        assert!(src.contains("store_down"));
+        let conn = named_fn_src(
+            include_str!("certstream_watcher.rs"),
+            "async fn connect_and_read",
+        );
+        assert!(conn.contains("store_down"));
+    }
+
+    #[test]
+    fn self_improve_is_enabled_store_down_is_not_disabled() {
+        let src = named_fn_src(include_str!("self_improve.rs"), "pub async fn is_enabled");
+        assert!(src.contains("Result<bool, String>"));
+        assert!(!compact_src(src).contains(".ok().flatten()"));
+        assert!(!src.contains("return false"));
+        assert!(src.contains("store_down"));
+        let loop_src = named_fn_src(
+            include_str!("self_improve.rs"),
+            "pub fn spawn_self_improve_loop",
+        );
+        assert!(loop_src.contains("enabled toggle store_down"));
+    }
+
+    #[test]
+    fn dispatch_inflight_check_store_down_is_not_coalesced_skip() {
+        let src = named_fn_src(
+            include_str!("orchestrator/dispatch.rs"),
+            "pub async fn dispatch_all_tenant_scans",
+        );
+        assert!(!src.contains("in-flight scan check failed — skipping this tenant for now"));
+        assert!(src.contains("in-flight scan check store_down"));
+        assert!(
+            src.contains("return Err(e)"),
+            "inflight-check store-down must fail the dispatch, not skipped+=1"
+        );
+    }
+
+    #[test]
+    fn threat_ingest_sbom_store_down_is_not_empty_hits() {
+        let src = named_fn_src(
+            include_str!("threat_intel_ingestor.rs"),
+            "pub async fn run_ingest_cycle",
+        );
+        assert!(!compact_src(src).contains("Err(_)=>continue"));
+        assert!(src.contains("sbom match store_down"));
+        assert!(
+            !compact_src(src).contains("fetch_all(auth_pool.as_ref()).await.unwrap_or_default()"),
+            "tenant list store-down must not look like a complete empty ingest"
+        );
+        assert!(src.contains("tenant list store_down"));
+    }
+
+    #[test]
+    fn cluster_ingest_empty_claim_commit_fail_is_store_down() {
+        let src = named_fn_src(include_str!("cluster_ingest.rs"), "async fn drain_once");
+        assert!(!compact_src(src).contains("let_=tx.commit().await;returnOk(0)"));
+        assert!(src.contains("store_down"));
+    }
+
+    #[test]
+    fn audit_checkpoint_begin_fail_is_store_down_not_skip_ok() {
+        let src = named_fn_src(
+            include_str!("audit_log.rs"),
+            "pub fn spawn_audit_checkpoint_worker",
+        );
+        assert!(!src.contains("if let Ok(mut tx) = crate::db::begin_tenant_tx"));
+        assert!(src.contains("checkpoint begin store_down"));
+        assert!(
+            !compact_src(src).contains("fetch_all(auth_pool.as_ref()).await.unwrap_or_default()"),
+            "audit checkpoint tenant list store-down must not look like an idle tick"
+        );
+        assert!(src.contains("tenant list store_down"));
+    }
+
+    #[test]
+    fn hydrate_stored_job_payload_store_down_is_not_stripped_ok() {
+        let hydrate = named_fn_src(
+            include_str!("scan_routing.rs"),
+            "pub async fn hydrate_stored_job_payload",
+        );
+        assert!(hydrate.contains("Result<(), String>"));
+        assert!(!hydrate.contains("if let Ok(Some(creds))"));
+        assert!(!hydrate.contains("if let Ok(secrets)"));
+        assert!(hydrate.contains("Err(e) => return Err(e)"));
+        let route = named_fn_src(include_str!("scan_routing.rs"), "pub async fn route_scan_job");
+        assert!(!route.contains("if let Ok(Some(creds))"));
+        assert!(!route.contains("if let Ok(secrets)"));
+        assert!(route.contains("RouteError::Internal { detail: e }"));
+        let exec = include_str!("async_job_executor.rs");
+        assert!(!exec.contains("continuing with stripped payload"));
+        let unscoped = named_fn_src(exec, "async fn execute_job_unscoped");
+        assert!(unscoped.contains("hydrate_stored_job_payload"));
+        assert!(compact_src(unscoped).contains(
+            "hydrate_stored_job_payload(app_pool.as_ref(),tid,&mutjob_payload,).await?"
+        ));
+        let creds = named_fn_src(
+            include_str!("scan_routing.rs"),
+            "async fn load_client_credentials",
+        );
+        assert!(
+            !compact_src(creds).contains("from_str(&config_str).unwrap_or(json!({}))"),
+            "corrupt client_configs must not hydrate as empty onboarding"
+        );
+        assert!(compact_src(creds).contains(
+            "from_str(&config_str).map_err(|_|\"store_down\".to_string())?"
+        ));
+    }
+
+    #[test]
+    fn cfg_string_tx_store_down_is_not_none_ok() {
+        let src = named_fn_src(include_str!("async_job_executor.rs"), "async fn cfg_string_tx");
+        assert!(src.contains("Result<Option<String>, String>"));
+        assert!(!src.contains(".ok().flatten()"));
+        assert!(!compact_src(src).contains(".ok().flatten()"));
+        assert!(src.contains("store_down"));
+    }
+
+    #[test]
+    fn restore_ec2_security_groups_role_select_store_down_is_not_missing_arn() {
+        let src = named_fn_src(
+            include_str!("soar/revert.rs"),
+            "async fn restore_ec2_security_groups",
+        );
+        assert!(src.contains("store_down"));
+        assert!(!src.contains(".ok().flatten()"));
+        assert!(!compact_src(src).contains(".ok().flatten()"));
+        assert!(src.contains("tx.commit().await.is_err()"));
+    }
+
+    #[test]
+    fn remediation_verify_prior_status_store_down_is_not_open() {
+        let src = named_fn_src(
+            include_str!("remediation_verify.rs"),
+            "pub async fn run_verification",
+        );
+        assert!(!src.contains(".ok().flatten().unwrap_or_else(|| \"OPEN\""));
+        assert!(!compact_src(src).contains(".ok().flatten()"));
+        assert!(src.contains("map_err(|_| \"store_down\".to_string())?"));
+        assert!(src.contains("unwrap_or_else(|| \"OPEN\".to_string())"));
+    }
+
+    #[test]
+    fn auto_heal_persist_helpers_store_down_is_not_ok_true() {
+        let heal = include_str!("auto_heal_job.rs");
+        let insert = named_fn_src(heal, "async fn insert_heal_request_row");
+        assert!(insert.contains("Result<(), String>"));
+        assert!(!insert.contains("if let Ok(mut tx)"));
+        assert!(!insert.contains("let _ = tx.commit()"));
+        assert!(!compact_src(insert).contains("let_=tx.commit().await;"));
+        assert!(insert.contains("store_down"));
+        let artifact = named_fn_src(heal, "async fn store_result_artifact");
+        assert!(artifact.contains("Result<(), String>"));
+        assert!(!artifact.contains("if let Ok(mut tx)"));
+        assert!(!artifact.contains("let _ = tx.commit()"));
+        assert!(!compact_src(artifact).contains("let_=tx.commit().await;"));
+        let finalize = named_fn_src(heal, "async fn finalize_spec");
+        assert!(finalize.contains("Result<(), String>"));
+        assert!(!finalize.contains("if let Ok(mut tx)"));
+        assert!(!finalize.contains("let _ = tx.commit()"));
+        assert!(!compact_src(finalize).contains("let_=tx.commit().await;"));
+        assert!(!heal.contains("let _ = insert_heal_request_row"));
+        assert!(!heal.contains("let _ = store_result_artifact"));
+        assert!(!heal.contains("let _ = finalize_spec"));
+        assert!(heal.contains("insert_heal_request_row("));
+        assert!(heal.contains(".await?"));
+    }
+
+    #[test]
+    fn playbook_execute_action_status_and_honeytoken_commit_fail_is_not_ok() {
+        let src = named_fn_src(include_str!("soar_playbook.rs"), "async fn execute_action");
+        assert!(!src.contains("let _ = tx.commit()"));
+        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
+        assert!(!src.contains("honeytoken issued"));
+        assert!(!src.contains("\"tenant tx\""));
+        assert!(src.contains("honeytoken deployed at"));
+        assert!(src.contains("store_down"));
+    }
+
+    #[test]
+    fn pool_metrics_self_heal_counts_store_down_is_not_idle_zero() {
+        let src = named_fn_src(
+            include_str!("observability.rs"),
+            "pub fn spawn_pool_metrics_loop",
+        );
+        let compact = compact_src(src);
+        assert!(
+            !compact.contains("fetch_one(app_pool.as_ref()).await.unwrap_or(0)"),
+            "pending/registered COUNTs must not unwrap_or(0) into HealthSnapshot"
+        );
+        assert!(
+            !src.contains(".unwrap_or(sh_registered)"),
+            "online COUNT store-down must not assume the whole fleet is live"
+        );
+        assert!(src.contains("counts_live"));
+        assert!(src.contains("postgres_up: pg_up && counts_live"));
+        assert!(src.contains("self-heal agent/backlog counts store_down"));
+    }
+
+    #[test]
+    fn async_jobs_list_query_store_down_is_not_ok_empty() {
+        let src = named_fn_src(
+            include_str!("server_handlers_jobs.inc"),
+            "async fn api_async_jobs_list",
+        );
+        assert!(src.contains("async_jobs_list_unavailable_json"));
+        assert!(!compact_src(src).contains("fetch_all(&mut*tx).await.unwrap_or_default()"));
+        assert!(!src.contains("fetch_one(&mut *tx)\n    .await\n    .unwrap_or(0)"));
+        assert!(!compact_src(src).contains("fetch_one(&mut*tx).await.unwrap_or(0)"));
+        assert!(src.contains("tx.commit().await.is_err()"));
+        assert!(!src.contains("let _ = tx.commit()"));
+        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
+    }
+
+    #[test]
+    fn verification_step_persist_store_down_is_not_fixed_empty_trail() {
+        let src = include_str!("verification_sandbox.rs");
+        let push = named_fn_src(src, "async fn push_step");
+        assert!(push.contains("Result<(), String>"));
+        assert!(push.contains("store_down"));
+        assert!(
+            push.contains("INSERT INTO heal_verification_steps"),
+            "step trail INSERT must be present"
+        );
+        assert!(
+            !compact_src(push).contains("let_=sqlx::query("),
+            "heal_verification_steps INSERT execute must not be ignored"
+        );
+        assert!(
+            !compact_src(push).contains("let_=tx.commit().await;"),
+            "push_step commit must not be ignored after INSERT"
+        );
+        let collect = named_fn_src(src, "async fn collect_steps_only");
+        assert!(collect.contains("Result<Vec<VerificationStep>, String>"));
+        assert!(!compact_src(collect).contains("fetch_all(&mut*tx).await.unwrap_or_default()"));
+        assert!(!collect.contains("let _ = tx.commit()"));
+        assert!(!compact_src(collect).contains("let_=tx.commit().await;"));
+        assert!(!collect.contains("return Vec::new()"));
+        assert!(collect.contains("store_down"));
+        let attach = named_fn_src(src, "async fn attach_steps");
+        assert!(attach.contains("verified = false"));
+        assert!(attach.contains("store_down"));
+        let rec = named_fn_src(src, "pub async fn record_step");
+        assert!(rec.contains("Result<(), String>"));
+    }
+
+    #[test]
+    fn task_scan_job_id_store_down_is_not_missing_parent() {
+        let src = named_fn_src(
+            include_str!("endpoint_agents.rs"),
+            "pub async fn task_scan_job_id",
+        );
+        assert!(src.contains("Result<Option<String>, sqlx::Error>"));
+        assert!(!compact_src(src).contains(".await.ok()?"));
+        assert!(!compact_src(src).contains(".ok().flatten()"));
+        assert!(src.contains("store_down"));
+        let persist = named_fn_src(
+            include_str!("endpoint_agents.rs"),
+            "pub async fn store_finding_for_task",
+        );
+        assert!(compact_src(persist).contains("task_scan_job_id(pool,tenant_id,tid).await?"));
+        assert!(
+            compact_src(persist).contains("persist_engine_findings("),
+            "agent finding persist must run"
+        );
+        assert!(
+            !persist.contains("if let Err(e) = crate::findings_persist::persist_engine_findings"),
+            "persist_engine_findings store-down must not log-and-Ok(())"
+        );
+        assert!(
+            compact_src(persist).contains(".await.map_err(|e|{"),
+            "persist_engine_findings Err must map_err into the Result"
+        );
+        assert!(
+            persist.contains("sqlx::Error::Protocol(e)"),
+            "persist_engine_findings String Err must become Protocol, not Ok(())"
+        );
+    }
+
+    #[test]
+    fn agent_enqueue_store_down_is_not_ok_empty() {
+        let src = include_str!("engine_dispatch_agent.rs");
+        let start = src
+            .find("async fn dispatch_to_agent")
+            .expect("dispatch_to_agent");
+        let rest = &src[start..];
+        let tests = rest.find("\n#[cfg(test)]").unwrap_or(rest.len());
+        let dispatch = &rest[..tests];
+        assert!(
+            dispatch.contains("Err(_) => return EngineResult::error(\"store_down\")"),
+            "agent enqueue store-down must be EngineResult::error, not ok empty"
+        );
+        assert!(
+            !dispatch.contains("agent task enqueue failed"),
+            "enqueue fail must not stay an ok empty-findings message"
+        );
+        let merge = named_fn_src(src, "pub(crate) fn merge_agent_hybrid");
+        assert!(
+            merge.contains("agent.status != \"ok\""),
+            "hybrid merge must fail-closed when agent dispatch is not ok"
+        );
+        assert!(
+            merge.contains("EngineResult::error(\"store_down\")"),
+            "hybrid merge must not ok-wrap remote findings over agent store-down"
+        );
+    }
+
+    #[test]
+    fn enqueue_capable_store_down_is_not_all_fleet() {
+        let src = named_fn_src(
+            include_str!("endpoint_agents.rs"),
+            "pub async fn enqueue_and_dispatch_fleet",
+        );
+        assert!(
+            src.contains("Err(e) => return Err(e)"),
+            "capable-agent lookup store-down must not fall through as empty-capable"
+        );
+        assert!(
+            !compact_src(src).contains("Ok(capable)if!capable.is_empty()=>capable,_=>agent_uuids_for_client"),
+            "store-down on capable SELECT must not widen dispatch to the whole fleet"
+        );
+    }
+
+    #[test]
+    fn nexus_bridge_store_down_is_not_zero_agents() {
+        let bridge = named_fn_src(
+            include_str!("endpoint_agents.rs"),
+            "pub async fn bridge_nssi_fleet",
+        );
+        assert!(
+            bridge.contains("Result<u32, sqlx::Error>"),
+            "NSSI bridge must return Result so store-down is not a live 0"
+        );
+        assert!(!bridge.contains("let Ok(agents)"));
+        assert!(bridge.contains(".await?"));
+        let nexus = include_str!("nexus_sovereign_swarm_engine.rs");
+        let run = named_fn_src(nexus, "pub async fn run_nexus_sovereign_swarm_result");
+        let call = run
+            .find("bridge_nssi_fleet(")
+            .expect("run_nexus must still call bridge_nssi_fleet");
+        let bridge_arm = &run[call..(call + 420).min(run.len())];
+        assert!(
+            bridge_arm.contains("Err(_) => return EngineResult::error(\"store_down\")"),
+            "NSSI endpoint bridge store-down must fail the swarm, not count 0 agents"
+        );
+    }
+
+    #[test]
+    fn forge_draft_prove_commit_store_down_is_not_ok_true() {
+        let src = include_str!("sovereign_operator/forge.rs");
+        let draft = named_fn_src(src, "pub async fn forge_draft");
+        assert!(!draft.contains("let _ = tx.commit()"));
+        assert!(
+            !compact_src(draft).contains("let_=tx.commit().await;"),
+            "forge_draft commit must not be ignored even if rustfmt line-breaks it"
+        );
+        assert!(draft.contains("detail: \"store_down\".into()"));
+        let prove = named_fn_src(src, "pub async fn forge_prove");
+        assert!(prove.contains("detail: \"store_down\".into()"));
+        assert!(
+            compact_src(prove).contains("live_finding=$3"),
+            "forge_prove must persist live_finding"
+        );
+        assert!(
+            !compact_src(prove).contains("let_=sqlx::query(\"UPDATEweissman_sovereign_forgeSETstatus=$2,live_finding=$3"),
+            "live-proof UPDATE execute must not be ignored"
+        );
+        assert!(
+            !compact_src(prove).contains("let_=sqlx::query(\"UPDATEweissman_sovereign_forgeSETstatus='rejected'"),
+            "rejected live-proof UPDATE execute must not be ignored"
+        );
+        assert!(
+            !compact_src(prove).contains("let_=tx.commit().await;"),
+            "forge_prove commit must not be ignored"
+        );
+        let github = named_fn_src(src, "pub async fn forge_github");
+        assert!(github.contains("detail: \"store_down\".into()"));
+        assert!(
+            !compact_src(github).contains("let_=tx.commit().await;"),
+            "forge_github SELECT/github_queued commit must not be ignored"
+        );
+        assert!(
+            !compact_src(github).contains("ifletOk(muttx)="),
+            "github_queued persist must not skip begin fail and still ok:true"
+        );
+        assert!(
+            !compact_src(github).contains(
+                "let_=sqlx::query(\"UPDATEweissman_sovereign_forgeSETstatus='github_queued'"
+            ),
+            "github_queued UPDATE execute must not be ignored"
+        );
+        let wait = named_fn_src(src, "async fn wait_live_finding");
+        assert!(
+            wait.contains("Result<Value, String>"),
+            "wait_live_finding must return Result so COUNT store-down is not rejected"
+        );
+        assert!(
+            !compact_src(wait).contains("ifletOk(n)="),
+            "finding-log COUNT store-down must not leave finding_logs at 0"
+        );
+        assert!(
+            !compact_src(wait).contains("ifletOk(muttx)="),
+            "begin fail must not skip the snapshot and still reject"
+        );
+        assert!(
+            !compact_src(wait).contains("let_=tx.commit().await;"),
+            "wait_live_finding commit must not be ignored"
+        );
+        assert!(wait.contains("store_down"));
+        assert!(
+            !compact_src(prove).contains(
+                "wait_live_finding(pool,tenant_id,job_id,&engine_id,&target).await;"
+            ),
+            "forge_prove must not ignore wait_live_finding store-down and persist rejected"
+        );
+    }
+
+    #[test]
+    fn intel_backfill_tenant_fetch_store_down_is_not_complete_zero() {
+        let src = named_fn_src(
+            include_str!("intel_findings_backfill.rs"),
+            "pub async fn run_findings_intel_backfill",
+        );
+        assert!(!compact_src(src).contains("fetch_all(auth_pool).await.unwrap_or_default()"));
+        assert!(src.contains("map_err(|_| \"store_down\".to_string())?"));
+        assert!(
+            !compact_src(src).contains("let_=sqlx::query("),
+            "KEV floor / CVE UPDATE execute must not be ignored"
+        );
+        assert!(!src.contains("if res.is_ok()"));
+    }
+
+    #[test]
+    fn script_persist_store_down_is_not_durable_id() {
+        let src = named_fn_src(
+            include_str!("sovereign_operator/scripts.rs"),
+            "pub async fn run_script",
+        );
+        assert!(!src.contains("let script_id = id.ok()"));
+        assert!(src.contains("detail: \"store_down\".into()"));
+        assert!(!compact_src(src).contains("let_=tx.commit().await;letscript_id=id.ok()"));
+    }
+
+    #[test]
+    fn poe_job_status_commit_store_down_is_not_200() {
+        let src = named_fn_src(
+            include_str!("server_handlers_jobs.inc"),
+            "async fn api_async_job_status",
+        );
+        assert!(!src.contains("let _ = tx.commit()"));
+        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
+        assert!(src.contains("poe_job_unavailable_json"));
+        assert!(src.contains("SERVICE_UNAVAILABLE"));
+    }
+
+    #[test]
+    fn auto_heal_winning_patch_persist_store_down_is_not_verified() {
+        let src = include_str!("auto_heal_job.rs");
+        let needle = "UPDATE auto_heal_job_specs SET patch_text = $3";
+        let start = src.find(needle).expect("winning patch persist");
+        let rest = &src[start..];
+        let end = rest
+            .find("// Sign a tamper-evident")
+            .unwrap_or(rest.len().min(1200));
+        let patch = &rest[..end];
+        assert!(
+            patch.contains("SET patch_text = $3"),
+            "winning patch persist must be present"
+        );
+        assert!(
+            compact_src(patch).contains("execute(&mut*tx).await.map_err(|_|\"store_down\".to_string())?"),
+            "winning patch UPDATE execute fail must be store_down"
+        );
+        assert!(
+            !compact_src(patch).contains("let_=sqlx::query("),
+            "winning patch UPDATE execute must not be ignored"
+        );
+        assert!(
+            !compact_src(patch).contains("let_=tx.commit().await;"),
+            "winning patch commit must not be ignored"
+        );
+        let job_start = src
+            .find("pub async fn run_auto_heal_job")
+            .expect("run_auto_heal_job");
+        let rest = &src[job_start..];
+        let tests = rest.find("\n#[cfg(test)]").unwrap_or(rest.len());
+        let job = &rest[..tests];
+        assert!(
+            !job.contains("if let Ok(mut tx) = db::begin_tenant_tx(app_pool.as_ref(), tenant_id).await"),
+            "winning patch persist must not skip begin fail"
+        );
+        assert!(
+            !compact_src(job).contains("let_=tx.commit().await;"),
+            "already-completed / already-failed / concurrent-skip commit must not be ignored"
+        );
+    }
+
+    #[test]
+    fn playbook_corrupt_trigger_is_not_match_all() {
+        let src = named_fn_src(include_str!("soar_playbook.rs"), "pub async fn load_enabled");
+        assert!(!src.contains("serde_json::from_value(trig).unwrap_or_default()"));
+        assert!(!src.contains("serde_json::from_value(acts).unwrap_or_default()"));
+        assert!(!compact_src(src).contains("from_value(trig).unwrap_or_default()"));
+        assert!(!compact_src(src).contains("from_value(acts).unwrap_or_default()"));
+        assert!(src.contains("Err(_) => continue"));
+    }
+
+    #[test]
+    fn revert_corrupt_steps_and_fake_pr_close_are_store_down() {
+        let src = named_fn_src(include_str!("soar/revert.rs"), "pub async fn execute_revert");
+        assert!(!src.contains("serde_json::from_value(steps).unwrap_or_default()"));
+        assert!(src.contains("serde_json::from_value(steps)"));
+        assert!(src.contains("if msg == \"store_down\""));
+        let close = named_fn_src(include_str!("soar/revert.rs"), "async fn close_github_pr");
+        assert!(!close.contains("queued: close PR"));
+        assert!(close.contains("store_down"));
+    }
+
+    #[test]
+    fn deception_asset_fetch_store_down_is_not_not_found() {
+        let src = named_fn_src(
+            include_str!("deception_cloud_deploy_job.rs"),
+            "pub async fn run_deception_cloud_deploy",
+        );
+        assert!(!compact_src(src).contains("fetch_optional(&mut*tx).await.ok().flatten()"));
+        assert!(!src.contains("let _ = sqlx::query(\n                    r#\"UPDATE deception_assets"));
+        assert!(
+            !compact_src(src).contains("let_=sqlx::query(r#\"UPDATEdeception_assets"),
+            "deception_assets UPDATE execute must not be ignored regardless of wrapping"
+        );
+        assert!(src.contains("deployed += 1"));
+        assert!(compact_src(src).contains("execute(&mut*tx).await.map_err(|e|e.to_string())?"));
+        assert!(
+            !compact_src(src).contains("let_=tx.commit().await;"),
+            "already-active commit must not be ignored"
+        );
+    }
+
+    #[test]
+    fn agent_uuid_list_commit_store_down_is_not_ok_rows() {
+        let capable = named_fn_src(
+            include_str!("endpoint_agents.rs"),
+            "pub async fn agent_uuids_capable_for_client",
+        );
+        assert!(!capable.contains("let _ = tx.commit()"));
+        assert!(!compact_src(capable).contains("let_=tx.commit().await;"));
+        assert!(capable.contains("sqlx::Error::Protocol(\"store_down\""));
+        let all = named_fn_src(
+            include_str!("endpoint_agents.rs"),
+            "pub async fn agent_uuids_for_client",
+        );
+        assert!(!all.contains("let _ = tx.commit()"));
+        assert!(!compact_src(all).contains("let_=tx.commit().await;"));
+        assert!(all.contains("sqlx::Error::Protocol(\"store_down\""));
+    }
+
+    #[test]
+    fn platform_posture_sql_store_down_is_not_invented_fail() {
+        let src = named_fn_src(
+            include_str!("security_posture.rs"),
+            "pub async fn compute_platform_posture",
+        );
+        assert!(!src.contains(".unwrap_or(false);\n    checks.push(PostureCheck {\n        id: \"jwt_revocation_table\""));
+        assert!(src.contains("detail: \"store_down\".into()"));
+        assert!(
+            compact_src(src).matches("detail:\"store_down\".into()").count() >= 3,
+            "catalog/RLS/enrollment EXISTS Err must be store_down, not invented missing"
+        );
+    }
+
+    #[test]
+    fn persist_findings_store_down_is_not_ok_zero() {
+        let exec = include_str!("async_job_executor.rs");
+        let persist = named_fn_src(exec, "async fn persist_findings_best_effort");
+        assert!(persist.contains("Result<u64, String>"));
+        assert!(
+            !compact_src(persist).contains("unwrap_or_else"),
+            "persist_engine_findings Err must not become findings_persisted: 0"
+        );
+        assert!(persist.contains("\"store_down\".to_string()"));
+        assert!(!exec.contains("let _ = persist_findings_best_effort"));
+        assert!(!exec.contains("let _ = crate::superposition_followup::enqueue_after_batch"));
+    }
+
+    #[test]
+    fn seed_public_knowledge_count_store_down_is_not_seeded() {
+        let src = named_fn_src(
+            include_str!("discovery_knowledge.rs"),
+            "pub async fn seed_public_knowledge",
+        );
+        assert!(!compact_src(src).contains("fetch_one(pool).await.unwrap_or(0)"));
+        assert!(src.contains("seed count store_down"));
+        assert!(src.contains("seed chunk store_down"));
+        assert!(!src.contains("seed chunk skipped"));
+        assert!(
+            !compact_src(src).contains(
+                "seed_kind_chunks(pool,KIND_PATH,all_http_paths()).await;seed_kind_chunks"
+            ),
+            "failed seed chunk must not continue into SEED_DONE"
+        );
+        assert!(src.contains(".is_err()"));
+    }
+
+    #[test]
+    fn superposition_count_commit_store_down_is_not_coalesced_skip() {
+        let src = named_fn_src(
+            include_str!("superposition_followup.rs"),
+            "async fn maybe_enqueue",
+        );
+        assert!(
+            !compact_src(src).contains("let_=tx.commit().await;returnOk(None)"),
+            "cluster COUNT commit fail must not look like not-enough-clusters"
+        );
+        assert!(
+            !compact_src(src).contains("let_=tx.commit().await;ifinflight>0"),
+            "dedup COUNT commit fail must not look like already-inflight skip"
+        );
+        assert!(
+            !compact_src(src).contains("let_=tx.commit().await;"),
+            "maybe_enqueue commit must not be ignored even with a statement between commit and return"
+        );
+        let spawn = named_fn_src(
+            include_str!("superposition_followup.rs"),
+            "pub fn spawn_after_persist",
+        );
+        assert!(!spawn.contains("\"skip\""));
+        assert!(spawn.contains("store_down"));
+    }
+
+    #[test]
+    fn redteam_cron_tenant_list_store_down_is_not_idle_tick() {
+        let src = named_fn_src(
+            include_str!("redteam_background_worker.rs"),
+            "pub fn spawn_cron_worker",
+        );
+        assert!(
+            !compact_src(src).contains("fetch_all(auth_pool.as_ref()).await.unwrap_or_default()"),
+            "redteam cron tenant list store-down must not look like an idle tick"
+        );
+        assert!(src.contains("tenant list store_down"));
+    }
+
+    #[test]
+    fn alert_delivery_config_store_down_is_not_unconfigured() {
+        let src = include_str!("alert_delivery.rs");
+        let cfg = named_fn_src(src, "async fn config_value");
+        assert!(cfg.contains("Result<Option<String>, String>"));
+        assert!(!compact_src(cfg).contains(".await.ok()?"));
+        assert!(!compact_src(cfg).contains(".ok().flatten()"));
+        assert!(!compact_src(cfg).contains("let_=tx.commit().await;"));
+        assert!(cfg.contains("store_down"));
+        let load = named_fn_src(src, "async fn load_delivery_config");
+        assert!(load.contains("Result<DeliveryConfig, String>"));
+        assert!(
+            !compact_src(load).contains("from_str::<Vec<Value>>(&raw).ok()"),
+            "corrupt integrations JSON must not look like no channels configured"
+        );
+        assert!(compact_src(load).contains(
+            "from_str::<Vec<Value>>(&raw).map_err(|_|\"store_down\".to_string())?"
+        ));
+        let deliver = named_fn_src(src, "pub async fn deliver_alert");
+        assert!(deliver.contains("Result<bool, String>"));
+        assert!(compact_src(deliver).contains("load_delivery_config(pool,tenant_id).await?"));
+        let title = named_fn_src(src, "async fn heal_finding_title");
+        assert!(title.contains("Result<Option<String>, String>"));
+        assert!(!compact_src(title).contains(".ok().flatten()"));
+        assert!(!compact_src(title).contains("let_=tx.commit().await;"));
+        let slack = named_fn_src(src, "pub async fn post_heal_slack");
+        assert!(slack.contains("heal Slack delivery config store_down"));
+        assert!(slack.contains("heal finding title store_down"));
+    }
+
+    #[test]
+    fn roe_client_config_store_down_is_not_ot_disabled() {
+        let roe = include_str!("critical_infra/roe.rs");
+        assert!(
+            roe.contains("StoreDown"),
+            "RoE must distinguish store-down from industrial OT off"
+        );
+        assert!(roe.contains("database unavailable, cannot confirm RoE"));
+        let configs = named_fn_src(roe, "async fn load_client_configs");
+        assert!(configs.contains("Result<Value, RoeViolation>"));
+        assert!(!compact_src(configs).contains(".ok().flatten()"));
+        assert!(!compact_src(configs).contains("let_=tx.commit().await;"));
+        assert!(
+            !compact_src(configs).contains("from_str(&raw).unwrap_or_else"),
+            "corrupt client_configs must not look like industrial_ot_enabled false"
+        );
+        assert!(configs.contains("RoeViolation::StoreDown"));
+        let eng = named_fn_src(roe, "async fn load_active_engagement");
+        assert!(eng.contains("Result<Option<EngagementRow>, RoeViolation>"));
+        assert!(!compact_src(eng).contains(".ok().flatten()"));
+        assert!(!compact_src(eng).contains("let_=tx.commit().await;"));
+        let live = named_fn_src(roe, "async fn preflight_live");
+        assert!(compact_src(live).contains("load_client_configs(input.pool,tenant_id,client_id).await?"));
+        assert!(compact_src(live).contains(
+            "load_active_engagement(input.pool,tenant_id,client_id).await?"
+        ));
+        let inner = named_fn_src(
+            include_str!("engine_dispatch.rs"),
+            "async fn run_engine_inner",
+        );
+        assert!(
+            compact_src(inner).contains("RoeViolation::StoreDown"),
+            "dispatch must not wrap store-down as a RoE policy violation"
+        );
+        assert!(compact_src(inner).contains("EngineResult::error(\"store_down\")"));
+    }
+
+    #[test]
+    fn poe_webhook_store_down_is_not_unconfigured() {
+        let src = include_str!("notifications.rs");
+        let db = named_fn_src(src, "async fn webhook_url_from_db");
+        assert!(db.contains("Result<Option<String>, String>"));
+        assert!(!compact_src(db).contains(".ok().flatten()"));
+        assert!(!compact_src(db).contains("let_=tx.commit().await;"));
+        assert!(db.contains("store_down"));
+        let eff = named_fn_src(src, "async fn webhook_url_effective");
+        assert!(eff.contains("Result<Option<String>, String>"));
+        assert!(compact_src(eff).contains("Err(e)=>returnErr(e)"));
+        assert!(compact_src(eff).contains("Ok(None)=>{}"));
+        assert!(!compact_src(eff).contains("Err(_)=>{}"));
+        let spawn = named_fn_src(src, "pub fn spawn_critical_poe_alert");
+        assert!(spawn.contains("critical PoE webhook store_down"));
+    }
+
+    #[test]
+    fn tenant_oast_config_store_down_is_not_unconfigured() {
+        let src = named_fn_src(
+            include_str!("engine_dispatch.rs"),
+            "pub async fn load_tenant_oast_configs",
+        );
+        assert!(src.contains("Result<(Option<String>, Option<String>, Option<String>), String>"));
+        assert!(!compact_src(src).contains(".ok().flatten()"));
+        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
+        assert!(src.contains("store_down"));
+    }
+
+    #[test]
+    fn refresh_reuse_revoke_store_down_is_not_family_revoked() {
+        let src = include_str!("auth_refresh.rs");
+        let start = src
+            .find("Reuse detection (OAuth 2.0 Security BCP")
+            .expect("reuse");
+        let rest = &src[start..];
+        let end = rest.find("let old_id:").unwrap_or(rest.len());
+        let reuse = &rest[..end];
+        assert!(!compact_src(reuse).contains("fetch_all(&mut*tx).await.unwrap_or_default()"));
+        assert!(!compact_src(reuse).contains("let_=sqlx::query("));
+        assert!(!compact_src(reuse).contains("let_=tx.commit().await;"));
+        assert!(!compact_src(reuse).contains("ifletOk(Some(reused))="));
+        assert!(reuse.contains("revoked entire token family"));
+    }
+
+    #[test]
+    fn hourly_tune_list_store_down_is_not_idle_zero() {
+        let src = named_fn_src(
+            include_str!("sovereign_operator/tools.rs"),
+            "pub async fn hourly_tune_cycle",
+        );
+        assert!(!compact_src(src).contains("unwrap_or_default()"));
+        assert!(src.contains(".await?"));
+    }
+
+    #[test]
+    fn fleet_consensus_hit_store_down_is_not_confirmed_miss() {
+        let src = named_fn_src(
+            include_str!("ueba_onboarding.rs"),
+            "pub async fn fleet_consensus_hit",
+        );
+        assert!(src.contains("Result<bool, String>"));
+        assert!(!compact_src(src).contains("fetch_one(&mut**tx).await.unwrap_or(false)"));
+        assert!(src.contains("store_down"));
+    }
+
+    #[test]
+    fn dashboard_default_tenant_store_down_is_not_empty_ok() {
+        let src = include_str!("http/serve.rs");
+        let tid = named_fn_src(src, "async fn default_tenant_id");
+        assert!(tid.contains("Result<Option<i64>, String>"));
+        assert!(!compact_src(tid).contains(".ok().flatten()"));
+        let dash = named_fn_src(src, "async fn dashboard_page");
+        assert!(dash.contains("Err(_) => return dashboard_store_down_html()"));
+        assert!(dash.contains("Ok(None)"));
+        assert!(dash.contains("No default tenant"));
+    }
+
+    #[test]
+    fn cicd_event_persist_store_down_is_not_gate_ok() {
+        let src = include_str!("cicd_interceptor.rs");
+        let log = named_fn_src(src, "async fn log_cicd_event");
+        assert!(log.contains("Result<(), String>"));
+        assert!(!compact_src(log).contains("let_=sqlx::query("));
+        assert!(!compact_src(log).contains("let_=tx.commit().await;"));
+        assert!(log.contains("store_down"));
+        let down = named_fn_src(src, "fn cicd_store_down");
+        assert!(compact_src(down).contains("\"audit_persisted\":false"));
+        assert!(compact_src(down).contains("\"blocked\":blocked"));
+        assert!(down.contains("StatusCode::FORBIDDEN"));
+        assert!(down.contains("StatusCode::SERVICE_UNAVAILABLE"));
+        assert!(!down.contains("StatusCode::OK"));
+        assert!(src.contains("cicd_store_down(blocked, &findings)"));
+        for sig in [
+            "pub async fn github_push_hook",
+            "pub async fn gitlab_push_hook",
+            "pub async fn bitbucket_push_hook",
+            "pub async fn generic_cicd_scan",
+        ] {
+            let hook = named_fn_src(src, sig);
+            let persist_at = hook.find("log_cicd_event").expect("log_cicd_event");
+            let persist = &hook[persist_at..];
+            let gate = persist.find("gate_response").expect("gate_response");
+            let before_gate = &persist[..gate];
+            assert!(
+                before_gate.contains(".await\n    .is_err()")
+                    || compact_src(before_gate).contains(".await.is_err()"),
+                "{sig} must fail closed before gate_response"
+            );
+            assert!(
+                before_gate.contains("cicd_store_down(blocked, &findings)"),
+                "{sig} persist fail must not reach gate_response"
+            );
+        }
+    }
+
+    #[test]
+    fn soar_forensic_log_store_down_is_not_ok_unaudited() {
+        let audit = include_str!("soar/audit.rs");
+        let dec = named_fn_src(audit, "pub async fn log_decision");
+        assert!(dec.contains("Result<(), String>"));
+        assert!(!compact_src(dec).contains("let_=tx.commit().await;"));
+        assert!(!compact_src(dec).contains("ifletOk(muttx)="));
+        assert!(dec.contains("store_down"));
+        let exec = named_fn_src(audit, "pub async fn log_execution");
+        assert!(exec.contains("Result<(), String>"));
+        let engine = include_str!("soar/engine.rs");
+        let armored = named_fn_src(engine, "pub async fn execute_armored_action");
+        assert!(
+            compact_src(armored).contains("ifletSome(o)=forensic_log(pool,&cmd,\"verifying\""),
+            "ok/verifying must not skip forensic persist"
+        );
+        assert!(compact_src(armored).contains("returno;"));
+        assert!(!compact_src(armored).contains("let_=forensic_log"));
+        assert!(!armored.contains("audit::log_execution"));
+    }
+
+    #[test]
+    fn ws_ticker_store_down_is_not_silent_no_finding() {
+        let src = include_str!("http/serve.rs");
+        let helper = named_fn_src(src, "fn cc_ticker_store_down");
+        assert!(helper.contains("\"store_down\""));
+        assert!(!helper.contains("\"type\": \"refresh\""));
+        let ws = named_fn_src(src, "async fn handle_ws_command_center");
+        let tick_at = ws.find("_ = ticker.tick()").expect("ticker");
+        let tick = &ws[tick_at..];
+        assert!(tick.contains("cc_ticker_store_down()"));
+        assert!(!compact_src(tick).contains(".ok().flatten()"));
+        assert!(!compact_src(tick).contains("let_=tx.commit().await;"));
+        assert!(!tick.contains("else { continue; }"));
+    }
+
+    #[test]
+    fn login_session_audit_store_down_is_not_ok_true() {
+        let src = include_str!("server_handlers_sqlx.inc");
+        let login = named_fn_src(src, "async fn api_login");
+        let session_at = login.find("\"session created\"").expect("session audit");
+        let session = &login[session_at..];
+        assert!(session.contains("auth_degraded_unavailable_json"));
+        assert!(!compact_src(session).contains("let_=audit_log::insert_audit"));
+        assert!(!compact_src(session).contains("let_=tx.commit().await;"));
+        let commit = session.find("tx.commit().await.is_err()").expect("commit");
+        let ok_true = session.find("\"ok\": true").expect("ok true");
+        assert!(commit < ok_true);
+    }
+
+    #[test]
+    fn mfa_verify_audit_store_down_is_not_ok_true() {
+        let src = include_str!("server_handlers_mfa.inc");
+        let verify = named_fn_src(src, "async fn api_auth_mfa_verify");
+        let audit_at = verify.find("\"mfa_verify\"").expect("mfa audit");
+        let audit = &verify[audit_at..];
+        assert!(audit.contains("auth_degraded"));
+        assert!(!compact_src(audit).contains("let_=audit_log::insert_audit"));
+        assert!(!compact_src(audit).contains("let_=tx.commit().await;"));
+        let commit = audit.find("tx.commit().await.is_err()").expect("commit");
+        let ok_true = audit.find("\"ok\": true").expect("ok true");
+        assert!(commit < ok_true);
+    }
+
+    #[test]
+    fn saml_acs_audit_store_down_is_not_redirect_ok() {
+        let src = include_str!("saml_auth.rs");
+        let acs = named_fn_src(src, "pub async fn saml_acs");
+        let audit_at = acs.find("SAML session created").expect("saml audit");
+        let audit = &acs[audit_at..];
+        assert!(audit.contains("auth_store_down"));
+        assert!(!compact_src(audit).contains("ifletOk(muttx)="));
+        assert!(!compact_src(audit).contains("let_=tx.commit().await;"));
+        assert!(!compact_src(audit).contains("let_=audit_log::insert_audit"));
+        let commit = audit.find("tx.commit().await.map_err").expect("commit");
+        let redirect = audit.find("Redirect::to").expect("redirect");
+        assert!(commit < redirect);
+    }
+
+    #[test]
+    fn oidc_callback_audit_store_down_is_not_redirect_ok() {
+        let src = include_str!("oidc_auth.rs");
+        let cb = named_fn_src(src, "pub async fn oidc_callback");
+        let audit_at = cb.find("OIDC session created").expect("oidc audit");
+        let audit = &cb[audit_at..];
+        assert!(audit.contains("auth_store_down"));
+        assert!(!compact_src(audit).contains("ifletOk(muttx)="));
+        assert!(!compact_src(audit).contains("let_=tx.commit().await;"));
+        assert!(!compact_src(audit).contains("let_=audit_log::insert_audit"));
+        let commit = audit.find("tx.commit().await.map_err").expect("commit");
+        let redirect = audit.find("Redirect::to").expect("redirect");
+        assert!(commit < redirect);
+    }
+
+    #[test]
+    fn onboarding_register_audit_store_down_is_not_session_ok() {
+        let src = include_str!("server_handlers_onboarding_billing.inc");
+        let register = named_fn_src(src, "async fn api_onboarding_register");
+        let audit_at = register
+            .find("self-serve tenant provisioned")
+            .expect("onboarding audit");
+        let audit = &register[audit_at..];
+        assert!(audit.contains("auth_degraded_unavailable_json"));
+        assert!(!compact_src(audit).contains("ifletOk(muttx)="));
+        assert!(!compact_src(audit).contains("let_=tx.commit().await;"));
+        let commit = audit.find("tx.commit().await.is_err()").expect("commit");
+        let created = audit.find("StatusCode::CREATED").expect("created");
+        assert!(commit < created);
+    }
+
+    #[test]
+    fn evidence_download_audit_store_down_is_not_200_blob() {
+        let src = include_str!("server_handlers_evidence_vault.inc");
+        let dl = named_fn_src(src, "async fn api_evidence_download");
+        let audit_at = dl.find("evidence_downloaded").expect("download audit");
+        let audit = &dl[audit_at..];
+        assert!(audit.contains("evidence_download_unavailable_json"));
+        assert!(!compact_src(audit).contains("let_=audit_log::insert_audit"));
+        assert!(!compact_src(audit).contains("let_=tx.commit().await;"));
+        let commit = audit.find("tx.commit().await.is_err()").expect("commit");
+        let blob = audit.find("Body::from(blob)").expect("blob");
+        assert!(commit < blob);
+    }
+
+    #[test]
+    fn scan_start_stop_audit_store_down_is_not_in_memory_ok() {
+        let src = include_str!("server_handlers_rest.inc");
+        let start = named_fn_src(src, "async fn api_scan_start");
+        assert!(start.contains("scan_status_unavailable_json"));
+        assert!(!compact_src(start).contains("ifletOk(muttx)="));
+        assert!(!compact_src(start).contains("let_=tx.commit().await;"));
+        let start_commit = start.find("tx.commit().await.is_err()").expect("start commit");
+        let start_toggle = start.find("set_scanning_active(true)").expect("start toggle");
+        assert!(start_commit < start_toggle);
+        let stop = named_fn_src(src, "async fn api_scan_stop");
+        assert!(stop.contains("scan_status_unavailable_json"));
+        assert!(!compact_src(stop).contains("ifletOk(muttx)="));
+        assert!(!compact_src(stop).contains("let_=tx.commit().await;"));
+        let stop_commit = stop.find("tx.commit().await.is_err()").expect("stop commit");
+        let stop_toggle = stop.find("set_scanning_active(false)").expect("stop toggle");
+        assert!(stop_commit < stop_toggle);
+    }
+
+    #[test]
+    fn persist_operator_audit_is_fail_closed() {
+        let src = named_fn_src(
+            include_str!("server_handlers_rest.inc"),
+            "async fn persist_operator_audit",
+        );
+        let compact = compact_src(src);
+        assert!(src.contains("Result<(), ()>"));
+        assert!(src.contains("audit_log::insert_audit"));
+        assert!(src.contains("tx.commit().await.is_err()"));
+        assert!(compact.contains("begin_tenant_tx(app_pool,tenant_id).await.map_err(|_|())?"));
+        assert!(
+            compact
+                .matches(".await.is_err(){returnErr(());}")
+                .count()
+                >= 2
+        );
+        assert!(!compact.contains("let_=tx.commit().await;"));
+        assert!(!compact.contains("let_=audit_log::insert_audit"));
+        assert!(!compact.contains("ifletOk(muttx)="));
+        assert!(!compact.contains("letOk(muttx)="));
+    }
+
+    #[test]
+    fn backup_audit_store_down_is_not_ok_true() {
+        let src = named_fn_src(
+            include_str!("server_handlers_rest.inc"),
+            "async fn api_system_backup",
+        );
+        assert!(src.contains("persist_operator_audit"));
+        assert!(src.contains("backup_unavailable_json"));
+        assert!(!compact_src(src).contains("ifletOk(muttx)="));
+        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
+        assert!(!compact_src(src).contains("let_=audit_log::insert_audit"));
+        assert!(!compact_src(src).contains("let_=persist_operator_audit"));
+        let window = persist_window(src, "\"ok\": true");
+        persist_first_await_is_err(window);
+        let v = backup_unavailable_json("store down", Some("/tmp/weissman.dump"));
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["path"], "/tmp/weissman.dump");
+        assert_ne!(v["ok"], json!(true));
+    }
+
+    #[test]
+    fn scan_enqueue_audit_store_down_is_not_202_empty_ok() {
+        let src = include_str!("server_handlers_rest.inc");
+        for sig in [
+            "async fn api_clients_scan_run_all",
+            "async fn api_scan_run_all",
+            "async fn api_scan(",
+            "async fn api_scan_all_engines",
+            "async fn api_scan_discovered_domains",
+        ] {
+            let fn_src = named_fn_src(src, sig);
+            assert!(fn_src.contains("persist_operator_audit"), "{sig}");
+            assert!(
+                fn_src.matches("scan_status_unavailable_json").count() >= 2,
+                "{sig} persist + enqueue must both emit scan_status_unavailable_json"
+            );
+            assert!(!compact_src(fn_src).contains("ifletOk(muttx)="), "{sig}");
+            assert!(!compact_src(fn_src).contains("let_=tx.commit().await;"), "{sig}");
+            assert!(!compact_src(fn_src).contains("let_=audit_log::insert_audit"), "{sig}");
+            assert!(!compact_src(fn_src).contains("let_=persist_operator_audit"), "{sig}");
+            let window = persist_window(fn_src, "StatusCode::ACCEPTED");
+            persist_first_await_is_err(window);
+            let enq = fn_src
+                .find("crate::async_jobs::enqueue")
+                .unwrap_or_else(|| panic!("{sig} enqueue"));
+            let after_enq = &fn_src[enq..];
+            assert!(
+                after_enq.contains("scan_status_unavailable_json"),
+                "{sig} enqueue Err must be 503 not 202 empty"
+            );
+            assert!(
+                after_enq.contains("StatusCode::SERVICE_UNAVAILABLE"),
+                "{sig} enqueue Err must be SERVICE_UNAVAILABLE not ACCEPTED"
+            );
+            assert!(!fn_src.contains("StatusCode::INTERNAL_SERVER_ERROR"), "{sig}");
+        }
+    }
+
+    #[test]
+    fn discovery_domains_audit_store_down_is_not_ok_true() {
+        let src = named_fn_src(
+            include_str!("server_handlers_rest.inc"),
+            "async fn api_discovery_domains",
+        );
+        assert!(src.contains("persist_operator_audit"));
+        assert!(src.contains("discovery_domains_unavailable_json"));
+        assert!(!compact_src(src).contains("ifletOk(muttx)="));
+        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
+        assert!(!compact_src(src).contains("let_=persist_operator_audit"));
+        let persist = src.find("persist_operator_audit").expect("audit");
+        let empty = src.find("target required").expect("empty target");
+        assert!(empty < persist);
+        let window = persist_window(src, "run_auto_discovery");
+        persist_first_await_is_err(window);
+        let v = discovery_domains_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["domains"].is_null());
+    }
+
+    #[test]
+    fn saas_idp_audit_store_down_is_not_ok_true() {
+        let src = named_fn_src(
+            include_str!("server_handlers_saas_idp_discovery.inc"),
+            "async fn api_client_saas_idp_discovery",
+        );
+        assert!(src.contains("persist_operator_audit"));
+        assert!(src.contains("saas_idp_unavailable_json"));
+        assert!(!compact_src(src).contains("ifletOk(muttx)="));
+        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
+        assert!(!compact_src(src).contains("let_=persist_operator_audit"));
+        let window = persist_window(src, "saas_idp_discovery::discover");
+        persist_first_await_is_err(window);
+        let hunt = src.find("saas_idp_discovery::discover").expect("hunt");
+        let ok_true = src.find("\"ok\": true").expect("ok true");
+        assert!(hunt < ok_true);
+        let v = saas_idp_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert!(v["report"].is_null());
+    }
+
+    #[test]
+    fn evidence_list_commit_store_down_is_not_empty_ok() {
+        let src = named_fn_src(
+            include_str!("server_handlers_evidence_vault.inc"),
+            "async fn api_client_evidence_list",
+        );
+        assert!(src.contains("evidence_unavailable_json"));
+        assert!(src.contains("tx.commit().await.is_err()"));
+        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
+        let commit = src.find("tx.commit().await.is_err()").expect("commit");
+        let ok_list = src.find("\"evidence\": evidence").expect("list");
+        assert!(commit < ok_list);
+    }
+
+    #[test]
+    fn llm_fuzz_run_commit_and_enqueue_store_down_is_not_404_or_202() {
+        let src = named_fn_src(
+            include_str!("server_handlers_phase6.inc"),
+            "async fn api_llm_fuzz_run",
+        );
+        assert!(src.contains("scan_status_unavailable_json"));
+        assert!(src.contains("tx.commit().await.is_err()"));
+        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
+        assert!(!src.contains("StatusCode::INTERNAL_SERVER_ERROR"));
+        let commit = src.find("tx.commit().await.is_err()").expect("commit");
+        let miss = src.find("client not found").expect("404");
+        let accepted = src.find("StatusCode::ACCEPTED").expect("202");
+        assert!(commit < miss);
+        assert!(commit < accepted);
+    }
+
+    #[test]
+    fn listing_commit_store_down_is_not_empty_ok() {
+        for (src, sig, envelope, body) in [
+            (
+                include_str!("server_handlers_phase6.inc"),
+                "async fn api_llm_fuzz_events",
+                "llm_fuzz_events_unavailable_json",
+                "\"events\": events",
+            ),
+            (
+                include_str!("server_handlers_phase6.inc"),
+                "async fn api_llm_fuzz_summary",
+                "llm_fuzz_summary_unavailable_json",
+                "\"vectors\": vectors",
+            ),
+            (
+                include_str!("server_handlers_engagements.inc"),
+                "async fn api_client_engagements_list",
+                "engagements_unavailable_json",
+                "\"engagements\": engagements",
+            ),
+            (
+                include_str!("server_handlers_phase7.inc"),
+                "async fn api_edge_swarm_nodes",
+                "edge_swarm_nodes_unavailable_json",
+                "\"nodes\": nodes",
+            ),
+            (
+                include_str!("server_handlers_phase7.inc"),
+                "async fn api_client_ot_ics_fingerprints",
+                "ot_ics_fingerprints_unavailable_json",
+                "\"fingerprints\": fingerprints",
+            ),
+            (
+                include_str!("server_handlers_roe_approvals.inc"),
+                "async fn api_roe_override_requests_list",
+                "roe_override_requests_unavailable_json",
+                "\"requests\": requests",
+            ),
+            (
+                include_str!("server_handlers_sovereign_defense.inc"),
+                "async fn api_sovereign_defense_chronos_events",
+                "chronos_events_unavailable_json",
+                "Value::Array(out)",
+            ),
+            (
+                include_str!("server_handlers_sovereign_defense.inc"),
+                "async fn api_sovereign_defense_cognitive_sessions",
+                "cognitive_sessions_unavailable_json",
+                "Value::Array(out)",
+            ),
+        ] {
+            let fn_src = named_fn_src(src, sig);
+            assert!(fn_src.contains(envelope), "{sig}");
+            assert!(fn_src.contains("tx.commit().await.is_err()"), "{sig}");
+            assert!(!compact_src(fn_src).contains("let_=tx.commit().await;"), "{sig}");
+            let commit = fn_src.find("tx.commit().await.is_err()").expect(sig);
+            let body_at = fn_src.find(body).unwrap_or_else(|| panic!("missing body in {sig}"));
+            assert!(commit < body_at, "{sig}");
+        }
+    }
+
+    #[test]
+    fn engagement_get_commit_store_down_is_not_404() {
+        let src = named_fn_src(
+            include_str!("server_handlers_engagements.inc"),
+            "async fn api_engagement_get",
+        );
+        assert!(src.contains("engagements_unavailable_json"));
+        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
+        let commit = src.find("tx.commit().await.is_err()").expect("commit");
+        let miss = src.find("StatusCode::NOT_FOUND").expect("404");
+        assert!(commit < miss);
+    }
+
+    #[test]
+    fn roe_override_list_expire_store_down_is_not_empty_ok() {
+        let src = named_fn_src(
+            include_str!("server_handlers_roe_approvals.inc"),
+            "async fn api_roe_override_requests_list",
+        );
+        assert!(compact_src(src).contains("execute(&mut*tx).await.is_err()"));
+        assert!(!compact_src(src).contains("let_=sqlx::query(\"UPDATEroe_override_requests"));
+        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
+    }
+
+    #[test]
+    fn findings_status_verify_enqueue_store_down_is_not_ok_true() {
+        let src = named_fn_src(
+            include_str!("server_handlers_rest2.inc"),
+            "async fn api_findings_update_status",
+        );
+        let enq = src.find("remediation_verify").expect("verify job");
+        let after = &src[enq..];
+        assert!(after.contains("findings_unavailable_json"));
+        let unavail = after.find("findings_unavailable_json").expect("503");
+        let ok_true = after.find("\"ok\": true").expect("ok true");
+        assert!(unavail < ok_true);
+    }
+
+    #[test]
+    fn evidence_download_miss_commit_store_down_is_not_404() {
+        let src = named_fn_src(
+            include_str!("server_handlers_evidence_vault.inc"),
+            "async fn api_evidence_download",
+        );
+        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
+        let miss_at = src.find("\"error\": \"not found\"").expect("miss 404");
+        let miss = &src[..miss_at];
+        assert!(miss.contains("tx.commit().await.is_err()"));
+        assert!(miss.contains("evidence_download_unavailable_json"));
+        let commit = miss.rfind("tx.commit().await.is_err()").expect("miss commit");
+        let unavail = miss
+            .rfind("evidence_download_unavailable_json")
+            .expect("miss 503");
+        assert!(commit < miss_at);
+        assert!(unavail < miss_at);
+    }
+
+    #[test]
+    fn evidence_delete_miss_commit_store_down_is_not_404() {
+        let src = named_fn_src(
+            include_str!("server_handlers_evidence_vault.inc"),
+            "async fn api_evidence_delete",
+        );
+        let miss_at = src.find("\"detail\": \"not found\"").expect("miss 404");
+        let miss = &src[..miss_at];
+        assert!(miss.contains("tx.commit().await.is_err()"));
+        assert!(miss.contains("evidence_unavailable_json"));
+        assert!(!compact_src(miss).contains("let_=tx.commit().await;"));
+    }
+
+    #[test]
+    fn evidence_delete_hit_audit_store_down_is_not_ok_true() {
+        let src = named_fn_src(
+            include_str!("server_handlers_evidence_vault.inc"),
+            "async fn api_evidence_delete",
+        );
+        let action = src.find("\"evidence_deleted\"").expect("hit action");
+        let insert = src[..action]
+            .rfind("audit_log::insert_audit")
+            .expect("insert before action");
+        let after = &src[insert..];
+        let compact_hit = compact_src(after);
+        assert!(!compact_hit.contains("let_=audit_log::insert_audit"));
+        assert!(compact_hit.contains("audit_log::insert_audit"));
+        let ins = compact_hit
+            .find("audit_log::insert_audit")
+            .expect("insert compact");
+        let after_ins = &compact_hit[ins..];
+        let await_at = after_ins.find(".await").expect("await after insert");
+        assert!(
+            after_ins[await_at..].starts_with(".await.is_err(){return(StatusCode::SERVICE_UNAVAILABLE"),
+            "insert_audit must .await.is_err() return 503, not empty if"
+        );
+        assert!(after.contains("evidence_unavailable_json"));
+        let unavail = after.find("evidence_unavailable_json").expect("503");
+        let ok_true = after.find("\"ok\": true").expect("ok true");
+        assert!(unavail < ok_true);
+        assert!(after.contains("tx.commit().await.is_err()"));
+    }
+
+    #[test]
+    fn auto_heal_audit_store_down_is_not_remote_ok() {
+        let src = named_fn_src(
+            include_str!("server_handlers_rest4.inc"),
+            "async fn api_auto_heal",
+        );
+        let vulns = src.find("FROM vulnerabilities").expect("finding select");
+        let token = src.find("resolved_git_token").expect("git token");
+        let finding = &src[vulns..token];
+        assert!(finding.contains("tx.commit().await.is_err()"));
+        assert!(finding.contains("heal_requests_unavailable_json"));
+        assert!(!compact_src(finding).contains("let_=tx.commit().await;"));
+        let persist = src.find("persist_operator_audit").expect("audit");
+        let skip = src.find("WEISSMAN_AUTOHEAL_SKIP_SANDBOX").expect("skip");
+        assert!(persist < skip);
+        let window = persist_window(src, "WEISSMAN_AUTOHEAL_SKIP_SANDBOX");
+        persist_first_await_is_err(window);
+        assert!(!compact_src(src).contains("let_=persist_operator_audit"));
+        let audit = &src[persist.saturating_sub(200)..skip];
+        assert!(audit.contains("destructive_auto_heal_initiated"));
+        assert!(audit.contains("heal_requests_unavailable_json"));
+        assert!(!compact_src(audit).contains("ifletOk(muttx)="));
+        assert!(!compact_src(audit).contains("let_=tx.commit().await;"));
+        assert!(!compact_src(audit).contains("let_=audit_log::insert_audit"));
+    }
+
+    #[test]
+    fn heal_batch_audit_store_down_is_not_202_ok() {
+        let src = named_fn_src(
+            include_str!("server_handlers_rest4.inc"),
+            "async fn api_heal_batch",
+        );
+        assert!(src.contains("persist_operator_audit"));
+        assert!(src.contains("heal_batch_unavailable_json"));
+        assert!(!compact_src(src).contains("let_=persist_operator_audit"));
+        let window = persist_window(src, "StatusCode::ACCEPTED");
+        persist_first_await_is_err(window);
+        assert!(window.contains("destructive_heal_batch"));
+        assert!(!compact_src(window).contains("ifletOk(muttx)="));
+        assert!(!compact_src(window).contains("let_=tx.commit().await;"));
+        assert!(!compact_src(window).contains("let_=audit_log::insert_audit"));
+    }
+
+    #[test]
+    fn heal_revert_persist_store_down_is_not_ok_reverted() {
+        let src = include_str!("server_handlers_rest4.inc");
+        let revert = named_fn_src(src, "async fn api_heal_revert");
+        let persist_at = revert.find("match result").expect("adapter result");
+        let persist = &revert[persist_at..];
+        assert!(persist.contains("heal_revert_unavailable_json"));
+        assert!(!compact_src(persist).contains("ifletOk(muttx)="));
+        assert!(!compact_src(persist).contains("let_=sqlx::query("));
+        assert!(!compact_src(persist).contains("let_=audit_log::insert_audit"));
+        assert!(!compact_src(persist).contains("let_=tx.commit().await;"));
+        let commit = persist.find("tx.commit().await.is_err()").expect("commit");
+        let ok_true = persist.find("\"ok\": true").expect("ok true");
+        assert!(commit < ok_true);
+    }
+
+    #[test]
+    fn heal_stats_commit_store_down_is_not_zero_success_rate() {
+        let src = include_str!("server_handlers_rest4.inc");
+        let stats = named_fn_src(src, "async fn api_heal_stats");
+        assert!(stats.contains("heal_stats_unavailable_json"));
+        assert!(stats.contains("tx.commit().await.is_err()"));
+        assert!(!compact_src(stats).contains("let_=tx.commit().await;"));
+        assert!(!stats.contains("unwrap_or((0, 0))"));
+        assert!(stats.contains("heal stats aggregate missing"));
+    }
+
+    #[test]
+    fn kev_materialize_update_store_down_is_not_ok_count() {
+        let src = include_str!("intel_kev.rs");
+        let refresh = named_fn_src(src, "pub async fn refresh_kev_catalog");
+        let mat_at = refresh.find("Materialise kev flags").expect("materialise");
+        let mat = &refresh[mat_at..];
+        assert!(mat.contains("map_err(|e| e.to_string())?"));
+        assert!(!compact_src(mat).contains("let_=sqlx::query("));
+    }
+
+    #[test]
+    fn epss_materialize_update_store_down_is_not_ok_cycle() {
+        let src = include_str!("intel_epss.rs");
+        let cycle = named_fn_src(src, "async fn run_one_cycle");
+        let mat_at = cycle.find("materialise scores").expect("materialise");
+        let mat = &cycle[mat_at..];
+        assert!(mat.contains("map_err(|e| e.to_string())?"));
+        assert!(!compact_src(mat).contains("let_=sqlx::query("));
+    }
+
+    #[test]
+    fn portfolio_posture_commit_store_down_is_not_complete_rollup() {
+        let src = named_fn_src(
+            include_str!("portfolio_posture.rs"),
+            "pub async fn load_portfolio",
+        );
+        assert!(src.contains("tx.commit().await.map_err"));
+        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
+    }
+
+    #[test]
+    fn hourly_last_hour_failures_commit_store_down_is_not_idle_ok() {
+        let src = named_fn_src(
+            include_str!("sovereign_operator/tools.rs"),
+            "pub async fn last_hour_failures",
+        );
+        assert!(src.contains("tx.commit().await?"));
+        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
+    }
+
+    #[test]
+    fn discovery_knowledge_load_store_down_is_not_empty_skip() {
+        let src = include_str!("discovery_knowledge.rs");
+        let load = named_fn_src(src, "pub async fn load(");
+        assert!(load.contains("Result<Vec<String>, String>"));
+        assert!(!load.contains("load skipped"));
+        assert!(load.contains("store_down"));
+        let learned = named_fn_src(src, "pub async fn load_learned");
+        assert!(learned.contains("Result<Vec<String>, String>"));
+        assert!(!learned.contains("load_learned skipped"));
+        let asm = named_fn_src(
+            include_str!("asm_engine.rs"),
+            "pub async fn run_asm_result_ctx",
+        );
+        assert!(asm.contains("EngineResult::error(\"store_down\")"));
+        assert!(
+            compact_src(asm).contains("load_learned_paths(pool).await"),
+            "ASM learned paths must not ignore store-down"
+        );
+        assert!(!compact_src(asm).contains("load_learned_paths(pool).await;"));
+    }
+
+    #[test]
+    fn sovereign_memory_hydrate_store_down_is_not_healthy_empty_slice() {
+        let src = named_fn_src(
+            include_str!("sovereign_operator/memory.rs"),
+            "pub async fn hydrate",
+        );
+        let compact = compact_src(src);
+        assert!(src.contains("Result<LiveSlice, String>"));
+        assert!(src.contains("store_down"));
+        assert!(!src.contains("LiveSlice::default()"));
+        assert!(!compact.contains("let_=tx.commit().await;"));
+        assert!(!compact.contains("letOk(muttx)="));
+        assert!(!compact.contains("ifletOk(muttx)="));
+        assert!(!compact.contains("fetch_all(&mut*tx).await.ok()"));
+        assert!(src.contains("tx.commit().await.is_err()"));
+        assert!(compact.contains(
+            "crate::db::begin_tenant_tx(pool,tenant_id).await.map_err(|_|\"store_down\".to_string())?"
+        ));
+        assert!(compact.contains(
+            "fetch_all(&mut*tx).await.map_err(|_|\"store_down\".to_string())?"
+        ));
+        assert!(!compact.contains("fetch_all(&mut*tx).await.unwrap_or"));
+        let dispatch = named_fn_src(include_str!("engine_dispatch.rs"), "pub async fn run_engine");
+        assert!(compact_src(dispatch).contains(
+            "matchcrate::sovereign_operator::memory::hydrate(pool.as_ref(),tid,engine_id,target,).await{Ok(s)=>s,Err(_)=>returnEngineResult::error(\"store_down\"),}"
+        ));
+    }
+
+    #[test]
+    fn supreme_council_memory_store_down_is_not_empty_prior_wins() {
+        let src = named_fn_src(
+            include_str!("council.rs"),
+            "async fn fetch_supreme_memory_context",
+        );
+        let compact = compact_src(src);
+        assert!(src.contains("Result<String, String>"));
+        assert!(src.contains("\"store_down\".to_string()"));
+        assert!(!compact.contains("letOk(muttx)=crate::db::begin_tenant_tx"));
+        assert!(!compact.contains("ifletOk(muttx)="));
+        assert!(
+            compact
+                .matches(
+                    "begin_tenant_tx(pool,tenant_id).await.map_err(|_|\"store_down\".to_string())?"
+                )
+                .count()
+                >= 2
+        );
+        assert!(compact.contains(
+            "fetch_all(&mut*tx).await.map_err(|_|\"store_down\".to_string())?"
+        ));
+        assert!(!compact.contains("let_=tx.commit().await;"));
+        assert!(src.contains("tx.commit().await.is_err()"));
+        let debate = named_fn_src(
+            include_str!("council.rs"),
+            "pub async fn run_supreme_council_debate",
+        );
+        assert!(compact_src(debate).contains(
+            "fetch_supreme_memory_context(pool,cfg,&client,tenant_id,target_brief).await.map_err(|_|LlmError::Unreachable(\"store_down\".into()))?"
+        ));
+    }
+
+    #[test]
+    fn ephemeral_payload_store_down_is_not_confirmed_miss_then_hunt() {
+        let get = named_fn_src(
+            include_str!("exploit_synthesis_engine.rs"),
+            "async fn get_ephemeral_payload",
+        );
+        assert!(get.contains("Result<Option<String>, String>"));
+        assert!(get.contains("\"store_down\".to_string()"));
+        assert!(!get.contains(".ok().flatten()"));
+        assert!(!compact_src(get).contains("unwrap_or(None)"));
+        assert!(!compact_src(get).contains("unwrap_or_else"));
+        assert!(!compact_src(get).contains("unwrap_or_default()"));
+        assert!(compact_src(get).contains(
+            "fetch_optional(pool).await.map_err(|_|\"store_down\".to_string())}"
+        ));
+        assert!(!compact_src(get).contains(".or(Ok(None))"));
+        assert!(!compact_src(get).contains("Err(_)=>Ok(None)"));
+        let extend = named_fn_src(
+            include_str!("exploit_synthesis_engine.rs"),
+            "pub async fn extend_gadget_chains_with_ephemeral_and_hunt_async",
+        );
+        assert!(extend.contains("Result<HashMap<String, String>, String>"));
+        assert!(!compact_src(extend).contains("ifletSome(payload)=get_ephemeral"));
+        assert!(compact_src(extend).contains("Err(e)=>returnErr(e)"));
+        let run = named_fn_src_until_cfg_test(
+            include_str!("exploit_synthesis_engine.rs"),
+            "pub async fn run_exploit_synthesis_async",
+        );
+        assert!(compact_src(run).contains(
+            "letgadget_chains=matchextend_gadget_chains_with_ephemeral_and_hunt_async(config,&fingerprint).await{Ok(m)=>m,Err(_)=>returnEngineResult::error(\"store_down\"),}"
+        ));
+    }
+
+    #[test]
+    fn orchestrator_non_llm_config_store_down_is_not_default_catalog() {
+        let src = include_str!("orchestrator/mod.rs");
+        let engines = named_fn_src(src, "async fn active_engines_list");
+        assert!(engines.contains("Result<Vec<String>, sqlx::Error>"));
+        assert!(compact_src(engines).contains(
+            "get_config_tx_strict(tx,tenant_id,\"active_engines\").await?"
+        ));
+        assert!(!engines.contains("get_config_tx("));
+        let ports = named_fn_src(src, "async fn asm_ports_from_config");
+        assert!(compact_src(ports).contains(
+            "get_config_tx_strict(tx,tenant_id,\"asm_ports\").await?"
+        ));
+        assert!(!ports.contains("get_config_tx("));
+        let recon = named_fn_src(src, "async fn recon_subdomain_prefixes_from_config");
+        assert!(compact_src(recon).contains(
+            "get_config_tx_strict(tx,tenant_id,\"recon_subdomain_prefixes\").await?"
+        ));
+        assert!(!recon.contains("get_config_tx("));
+        let threat = named_fn_src(src, "async fn load_threat_intel_config");
+        assert!(compact_src(threat).contains(
+            "get_config_tx_strict(tx,tenant_id,\"enable_zero_day_probing\").await?"
+        ));
+        assert!(compact_src(threat).contains(
+            "get_config_tx_strict(tx,tenant_id,\"custom_feed_urls\").await?"
+        ));
+        assert!(threat.contains("get_config_tx(tx, tenant_id, \"llm_base_url\")"));
+        assert!(threat.contains("Result<threat_intel_engine::ThreatIntelConfig, sqlx::Error>"));
+        let poe = named_fn_src(src, "async fn load_poe_config");
+        let poe_c = compact_src(poe);
+        assert!(poe_c.contains(
+            "get_config_tx_strict(tx,tenant_id,\"enable_poe_synthesis\").await?"
+        ));
+        assert!(poe_c.contains(
+            "get_config_tx_strict(tx,tenant_id,\"poe_safety_rails_no_shells\").await?"
+        ));
+        assert!(poe_c.contains(
+            "get_config_tx_strict(tx,tenant_id,\"poe_max_poc_length\").await?"
+        ));
+        assert!(poe_c.contains(
+            "get_config_tx_strict(tx,tenant_id,\"poe_use_raw_tcp\").await?"
+        ));
+        assert!(poe_c.contains(
+            "get_config_tx_strict(tx,tenant_id,\"poe_entropy_leak_threshold\").await?"
+        ));
+        assert!(poe_c.contains(
+            "get_config_tx_strict(tx,tenant_id,\"poe_gadget_chains\").await?"
+        ));
+        assert!(!poe_c.contains("ifletOk(rows)=sqlx::query("));
+        assert!(poe_c.contains("fetch_all(intel_pool.as_ref()).await?"));
+        let cycle = named_fn_src(src, "async fn run_cycle_for_tenant_inner");
+        let cycle_c = compact_src(cycle);
+        assert!(cycle_c.contains("active_engines_list(&muttx,tenant_id).await?"));
+        assert!(cycle_c.contains("asm_ports_from_config(&muttx,tenant_id).await?"));
+        assert!(cycle_c.contains(
+            "recon_subdomain_prefixes_from_config(&muttx,tenant_id).await?"
+        ));
+        assert!(cycle_c.contains("load_threat_intel_config(&muttx,tenant_id).await?"));
+        assert!(cycle_c.contains(
+            "load_poe_config(&muttx,tenant_id,intel_pool.clone()).await?"
+        ));
+        assert!(cycle_c.contains(
+            "get_config_tx_strict(&muttx,tenant_id,\"github_token\").await?"
+        ));
+        assert!(
+            cycle_c
+                .matches("get_config_tx_strict(&muttx,tenant_id,\"github_token\").await?")
+                .count()
+                >= 2
+        );
+        assert!(!cycle.contains("get_config_tx(&mut tx, tenant_id, \"github_token\")"));
+        let http = named_fn_src(src, "pub async fn load_poe_config_http");
+        assert!(compact_src(http).contains(
+            "begin_tenant_tx(app_pool,tenant_id).await?"
+        ));
+        assert!(compact_src(http).contains("tx.commit().await?"));
+        assert!(compact_src(http).contains(
+            "load_poe_config(&muttx,tenant_id,intel_pool).await?"
+        ));
+        let stealth = named_fn_src(src, "async fn load_stealth_config");
+        assert!(stealth.contains("get_config_tx("));
+        assert!(!stealth.contains("get_config_tx_strict"));
+        let semantic = named_fn_src(src, "async fn load_semantic_config");
+        assert!(semantic.contains("get_config_tx("));
+        assert!(!semantic.contains("get_config_tx_strict"));
+    }
+
+    #[test]
+    fn semantic_fuzz_log_persist_store_down_is_not_empty_graph_ok() {
+        let exec = include_str!("async_job_executor.rs");
+        let persist = named_fn_src(exec, "async fn persist_semantic_fuzz_log");
+        assert!(persist.contains("Result<(), String>"));
+        assert!(persist.contains("\"store_down\".to_string()"));
+        assert!(!compact_src(persist).contains("let_=tx.commit().await;"));
+        assert!(persist.contains("tx.commit().await.is_err()"));
+        assert!(!persist.contains("if let Ok(mut tx)"));
+        let unscoped = named_fn_src(exec, "async fn execute_job_unscoped");
+        assert!(compact_src(unscoped).contains(
+            "persist_semantic_fuzz_log(app_pool.as_ref(),tid,cid,&log).await?"
+        ));
+        assert!(!unscoped.contains("INSERT INTO semantic_fuzz_log"));
+        assert!(!compact_src(unscoped).contains(
+            "ifletOk(muttx)=db::begin_tenant_tx(app_pool.as_ref(),tid).await"
+        ));
+        let cycle = named_fn_src(
+            include_str!("orchestrator/mod.rs"),
+            "async fn run_cycle_for_tenant_inner",
+        );
+        assert!(cycle.contains("INSERT INTO semantic_fuzz_log"));
+        assert!(compact_src(cycle).contains(
+            "INSERTINTOsemantic_fuzz_log(tenant_id,client_id,run_id,log_text)VALUES($1,$2,$3,$4)\",).bind(tenant_id).bind(db_client_id).bind(run_id).bind(log).execute(&mut*tx).await?"
+        ));
+        assert!(!compact_src(cycle).contains(
+            "let_=sqlx::query(\"INSERTINTOsemantic_fuzz_log"
+        ));
+    }
+
+    #[test]
+    fn top_tier_health_poe_config_store_down_is_not_missing_config() {
+        let exec = include_str!("async_job_executor.rs");
+        let unscoped = named_fn_src(exec, "async fn execute_job_unscoped");
+        assert!(!compact_src(unscoped).contains(
+            "load_poe_config_http(app_pool.as_ref(),tid,intel_pool.clone(),).await.ok()"
+        ));
+        assert!(compact_src(unscoped).contains(
+            "load_poe_config_http(app_pool.as_ref(),tid,intel_pool.clone(),).await.map_err(|_|\"store_down\".to_string())?"
+        ));
+        assert!(!unscoped.contains("poe_synthesis config unavailable"));
+    }
+
+    #[test]
+    fn health_running_jobs_count_store_down_is_not_live_zero() {
+        let src = named_fn_src(
+            include_str!("server_handlers_rest.inc"),
+            "async fn api_health",
+        );
+        assert!(src.contains("Option<i64>"));
+        assert!(!compact_src(src).contains("count_running_jobs(state.app_pool.as_ref()).await.unwrap_or(0)"));
+        assert!(src.contains("running_async_jobs = None"));
+    }
+
+    #[test]
+    fn public_status_redis_is_ping_not_configured_ok() {
+        let src = named_fn_src(
+            include_str!("server_handlers_rest.inc"),
+            "async fn public_status",
+        );
+        assert!(src.contains("rate_limit_redis::ping_ok()"));
+        assert!(!src.contains("rate_limit_redis::is_enabled()"));
+        assert!(src.contains("\"unavailable\""));
+        assert!(!compact_src(src).contains("fetch_one(state.app_pool.as_ref()).await.ok().flatten()"));
+    }
+
+    #[test]
+    fn nerve_redis_module_is_ping_not_configured_healthy() {
+        let src = named_fn_src(
+            include_str!("supreme_nerve_center.rs"),
+            "async fn build_system_modules",
+        );
+        assert!(src.contains("rate_limit_redis::ping_ok()"));
+        assert!(src.contains("redis_up"));
+        assert!(!compact_src(src).contains("ifredis_enabled{\"healthy\"}"));
+    }
+
+    #[test]
+    fn dashboard_scan_pill_store_down_is_not_stopped() {
+        let src = named_fn_src(include_str!("http/serve.rs"), "async fn dashboard_page");
+        assert!(src.contains("el.textContent = 'Unavailable'"));
+        assert!(src.contains("setStatus(null)"));
+        assert!(src.contains("d.scanning_active === null"));
+        assert!(compact_src(src).contains(
+            "d.unavailable||d.scanning_active===null){{setStatus(null);"
+        ));
+        assert!(!compact_src(src).contains(
+            "d.unavailable||d.scanning_active===null){{setStatus(false)"
+        ));
+        assert!(src.contains(".catch(function() {{ setStatus(null); }})"));
+        assert!(!compact_src(src).contains(
+            "d.unavailable){{setStatus(false)"
+        ));
+        assert!(src.contains("if (!r.ok || !d || d.ok === false || d.unavailable) {{ setStatus(null); return; }}"));
+        assert!(src.contains("fetch('/api/scan/status')"));
+    }
+
+    #[test]
+    fn api_ready_redis_is_ping_not_configured_ok() {
+        let src = named_fn_src(
+            include_str!("server_handlers_rest.inc"),
+            "async fn api_ready",
+        );
+        let compact = compact_src(src);
+        assert!(compact.contains(
+            "letredis_live=crate::http::rate_limit_redis::ping_ok().await"
+        ));
+        assert!(compact.contains(
+            "letredis_ok=ifredis_required||redis_enabled{redis_live}else{true}"
+        ));
+        assert!(compact.contains(
+            "letready=postgres_ok&&(!redis_required||redis_live)"
+        ));
+        assert!(!compact.contains("letredis_ok=!redis_required||"));
+    }
+
+    #[test]
+    fn platform_posture_redis_is_ping_not_configured_ok() {
+        let src = named_fn_src(
+            include_str!("security_posture.rs"),
+            "pub async fn compute_platform_posture",
+        );
+        assert!(compact_src(src).contains(
+            "letredis_live=crate::http::rate_limit_redis::ping_ok().await;let(redis_passed,redis_detail)=ifredis_configured{ifredis_live{(true,\"RedisPINGok\")}else{(false,\"REDIS_URLsetbutRedisPINGfailed\")}}"
+        ));
+        assert!(src.contains("REDIS_URL set but Redis PING failed"));
+    }
+
+    #[test]
+    fn onboarding_launch_scan_store_down_is_not_202_empty_jobs() {
+        let src = named_fn_src(
+            include_str!("server_handlers_platform.inc"),
+            "async fn api_onboarding_launch_scan",
+        );
+        assert!(src.contains("scan_status_unavailable_json"));
+        assert!(src.contains("job_ids.is_empty()"));
+        let empty_at = src.find("job_ids.is_empty()").expect("empty jobs");
+        let after_empty = compact_src(&src[empty_at..]);
+        let unavail = after_empty
+            .find("StatusCode::SERVICE_UNAVAILABLE")
+            .expect("empty-jobs 503");
+        let accepted = after_empty
+            .find("StatusCode::ACCEPTED")
+            .expect("202 after empty check");
+        assert!(
+            unavail < accepted,
+            "empty job_ids must be 503 not 202"
+        );
+    }
+
+    #[test]
+    fn poe_spawn_config_store_down_is_not_running_ok() {
+        let src = named_fn_src(
+            include_str!("server_handlers_rest4.inc"),
+            "fn poe_spawn_job",
+        );
+        let cfg = src.find("load_poe_config_http").expect("cfg load");
+        let run = src
+            .find("run_exploit_synthesis_async")
+            .expect("run after cfg");
+        assert!(cfg < run);
+        let window = &src[cfg..run];
+        let compact = compact_src(window);
+        assert!(window.contains("\"store_down\""));
+        assert!(window.contains("\"failed\""));
+        assert!(compact.contains("Ok(c)=>c,Err(_)=>{"));
+        assert!(compact.contains(
+            "return;}};letresult=exploit_synthesis_engine::"
+        ));
+        assert!(!compact.contains("ifletOk(c)="));
+        assert!(!compact.contains("ifletOk(muttx)="));
+        assert!(!compact.contains("let_=sqlx"));
+        assert!(!compact.contains("let_=tx.commit().await;"));
+    }
+
+    #[test]
+    fn deception_canary_lookup_store_down_is_not_zero_triggers() {
+        let src = named_fn_src_until_cfg_test(
+            include_str!("deception_eventbridge.rs"),
+            "pub async fn handle_aws_canary_eventbridge",
+        );
+        assert!(
+            !compact_src(src).contains("fetch_all(app_pool).await.unwrap_or_default()"),
+            "canary lookup store-down must not look like zero triggers"
+        );
+        assert!(src.contains("SERVICE_UNAVAILABLE"));
+        assert!(src.contains("store_down"));
+    }
+
+    #[test]
+    fn self_defense_audit_security_events_store_down_is_not_empty_trail() {
+        let src = named_fn_src_until_cfg_test(
+            include_str!("strategy_engine.rs"),
+            "pub async fn run_self_defense_audit",
+        );
+        assert!(
+            !compact_src(src).contains("fetch_all(pool).await.unwrap_or_default()"),
+            "security_events store-down must not look like a confirmed-empty audit trail"
+        );
+        assert!(src.contains("security_events store_down"));
+        let handler = named_fn_src(
+            include_str!("server_handlers_rest4.inc"),
+            "async fn api_general_self_audit",
+        );
+        assert!(handler.contains("SERVICE_UNAVAILABLE"));
+        assert!(handler.contains("store_down"));
+    }
+
+    #[test]
+    fn cem_dago_present_signals_store_down_is_not_empty_ready_wave() {
+        let src = include_str!("cem_dago/mesh.rs");
+        assert!(
+            !compact_src(src).contains("present_signals().await.unwrap_or_default()"),
+            "present_signals store-down must not look like an empty signal set"
+        );
+        let exec = named_fn_src(src, "pub async fn execute_mesh");
+        assert!(exec.contains("present_signals store_down"));
+        assert!(exec.contains("signals_unavailable"));
+    }
+}

@@ -20,9 +20,9 @@ vi.mock('../utils/apiFetch', () => ({
   apiFetch: (...args) => apiFetch(...args),
 }))
 
-const launchEngineScan = vi.fn()
-vi.mock('../lib/launchEngineScan', () => ({
-  launchEngineScan: (...args) => launchEngineScan(...args),
+const launchScan = vi.fn()
+vi.mock('../hooks/useLaunchEngineScan', () => ({
+  useLaunchEngineScan: () => launchScan,
 }))
 
 vi.mock('./PageShell', () => ({
@@ -78,7 +78,7 @@ function mappedPayload(extra = {}) {
 describe('CortexProvenBridge', () => {
   beforeEach(() => {
     apiFetch.mockReset()
-    launchEngineScan.mockReset()
+    launchScan.mockReset()
   })
   afterEach(cleanup)
 
@@ -163,7 +163,7 @@ describe('CortexProvenBridge', () => {
 
   it('queues the live coverage engine without inventing findings', async () => {
     apiFetch.mockResolvedValue(mappedPayload())
-    launchEngineScan.mockResolvedValue({ ok: true, status: 202, data: { job_id: 'job-9' } })
+    launchScan.mockResolvedValue({ ok: true, status: 202, data: { job_id: 'job-9' } })
     render(
       <MemoryRouter>
         <CortexProvenBridge />
@@ -172,7 +172,7 @@ describe('CortexProvenBridge', () => {
     expect(await screen.findByText('Open Redis')).toBeInTheDocument()
     fireEvent.click(screen.getByText('pages.cortexProvenBridge.run_coverage'))
     expect(await screen.findByText('pages.cortexProvenBridge.scan_queued:job-9')).toBeInTheDocument()
-    expect(launchEngineScan).toHaveBeenCalledWith(expect.objectContaining({
+    expect(launchScan).toHaveBeenCalledWith(expect.objectContaining({
       engineId: 'cortex_proven_finding_bridge',
       clientId: 7,
     }))

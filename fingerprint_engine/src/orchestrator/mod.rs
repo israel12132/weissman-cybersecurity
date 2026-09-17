@@ -84,7 +84,7 @@ async fn persist_and_notify_findings(
         Ok(n) => n as usize,
         Err(e) => {
             eprintln!("[Weissman][Orchestrator] findings_persist failed ({engine}): {e}");
-            0
+            return 0;
         }
     };
     for f in findings {
@@ -243,6 +243,22 @@ async fn get_config_tx(
     .ok()
     .flatten()
     .filter(|s: &String| !s.is_empty())
+}
+
+/// Read a string config; query failure is `Err`, missing/empty key is `Ok(None)`.
+async fn get_config_tx_strict(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tenant_id: i64,
+    key: &str,
+) -> Result<Option<String>, sqlx::Error> {
+    sqlx::query_scalar::<_, String>(
+        "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = $2",
+    )
+    .bind(tenant_id)
+    .bind(key)
+    .fetch_optional(&mut **tx)
+    .await
+    .map(|opt| opt.filter(|s: &String| !s.is_empty()))
 }
 
 use weissman_core::models::engine::{
@@ -500,12 +516,13 @@ fn broadcast_pipeline_stage(
 }
 
 /// Read pipeline state for (run_id, client_id). Returns (current_stage, paused, skip_to_stage).
+/// Query errors abort the cycle; a missing row is `Ok(None)` (client not paused).
 async fn pipeline_get_state(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     tenant_id: i64,
     run_id: i64,
     client_id: &str,
-) -> Option<(u8, bool, Option<u8>)> {
+) -> Result<Option<(u8, bool, Option<u8>)>, sqlx::Error> {
     let row = sqlx::query(
         "SELECT current_stage, paused, skip_to_stage FROM pipeline_run_state WHERE tenant_id = $1 AND run_id = $2 AND client_id = $3",
     )
@@ -513,12 +530,18 @@ async fn pipeline_get_state(
     .bind(run_id)
     .bind(client_id)
     .fetch_optional(&mut **tx)
-    .await
-    .ok()??;
-    let current_stage: i32 = row.try_get("current_stage").ok()?;
-    let paused: bool = row.try_get("paused").ok()?;
-    let skip_to_stage: Option<i32> = row.try_get("skip_to_stage").ok()?;
-    Some((current_stage as u8, paused, skip_to_stage.map(|s| s as u8)))
+    .await?;
+    let Some(row) = row else {
+        return Ok(None);
+    };
+    let current_stage: i32 = row.try_get("current_stage")?;
+    let paused: bool = row.try_get("paused")?;
+    let skip_to_stage: Option<i32> = row.try_get("skip_to_stage")?;
+    Ok(Some((
+        current_stage as u8,
+        paused,
+        skip_to_stage.map(|s| s as u8),
+    )))
 }
 
 /// Insert or update pipeline state. Sets current_stage; clears skip_to_stage.
@@ -630,40 +653,47 @@ fn canonical_active_engine_id(s: &str) -> &str {
 async fn active_engines_list(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     tenant_id: i64,
-) -> Vec<String> {
-    let json = get_config_tx(tx, tenant_id, "active_engines")
-        .await
-        .unwrap_or_else(|| {
-            r#"["osint","asm","supply_chain","bola_idor","llm_path_fuzz","semantic_ai_fuzz"]"#
-                .to_string()
-        });
-    let arr: Vec<String> = match serde_json::from_str(&json) {
-        Ok(a) => a,
-        _ => {
-            return filter_production_engine_ids(
+) -> Result<Vec<String>, sqlx::Error> {
+    let json = match get_config_tx_strict(tx, tenant_id, "active_engines").await? {
+        Some(j) => j,
+        None => {
+            return Ok(filter_production_engine_ids(
                 DEFAULT_ORCHESTRATOR_ENGINES
                     .iter()
                     .map(|s| (*s).to_string())
                     .collect(),
-            )
+            ));
         }
     };
-    filter_production_engine_ids(arr.into_iter().map(|x| x.trim().to_string()).collect())
+    let arr: Vec<String> = match serde_json::from_str(&json) {
+        Ok(a) => a,
+        _ => {
+            return Ok(filter_production_engine_ids(
+                DEFAULT_ORCHESTRATOR_ENGINES
+                    .iter()
+                    .map(|s| (*s).to_string())
+                    .collect(),
+            ))
+        }
+    };
+    Ok(filter_production_engine_ids(
+        arr.into_iter().map(|x| x.trim().to_string()).collect(),
+    ))
 }
 
 /// Load identity contexts for a client from DB (used at start and after auto-harvest).
 async fn load_identity_contexts(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     client_id: i64,
-) -> Vec<identity_engine::AuthContext> {
+) -> Result<Vec<identity_engine::AuthContext>, sqlx::Error> {
     let rows = sqlx::query(
         "SELECT role_name, privilege_order, token_type, token_value FROM identity_contexts WHERE client_id = $1 ORDER BY privilege_order DESC",
     )
     .bind(client_id)
     .fetch_all(&mut **tx)
-    .await
-    .unwrap_or_default();
-    rows.into_iter()
+    .await?;
+    Ok(rows
+        .into_iter()
         .filter_map(|r| {
             Some(identity_engine::AuthContext {
                 role_name: r.try_get("role_name").ok()?,
@@ -672,7 +702,7 @@ async fn load_identity_contexts(
                 token_value: r.try_get("token_value").ok()?,
             })
         })
-        .collect()
+        .collect())
 }
 
 fn client_auto_harvest_enabled(client_configs_json: &str) -> bool {
@@ -761,22 +791,29 @@ fn client_industrial_ot_enabled(client_configs_json: &str) -> bool {
 async fn asm_ports_from_config(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     tenant_id: i64,
-) -> Option<Vec<u16>> {
-    let json = get_config_tx(tx, tenant_id, "asm_ports").await?;
-    serde_json::from_str::<Vec<u16>>(&json).ok()
+) -> Result<Option<Vec<u16>>, sqlx::Error> {
+    let Some(json) = get_config_tx_strict(tx, tenant_id, "asm_ports").await? else {
+        return Ok(None);
+    };
+    Ok(serde_json::from_str::<Vec<u16>>(&json).ok())
 }
 
 /// Parse recon_subdomain_prefixes JSON array from system_configs. None = use DEFAULT_SUBDOMAINS in ASM.
 async fn recon_subdomain_prefixes_from_config(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     tenant_id: i64,
-) -> Option<Vec<String>> {
-    let json = get_config_tx(tx, tenant_id, "recon_subdomain_prefixes").await?;
-    let v: Vec<String> = serde_json::from_str(&json).ok()?;
+) -> Result<Option<Vec<String>>, sqlx::Error> {
+    let Some(json) = get_config_tx_strict(tx, tenant_id, "recon_subdomain_prefixes").await? else {
+        return Ok(None);
+    };
+    let v: Vec<String> = match serde_json::from_str(&json) {
+        Ok(v) => v,
+        Err(_) => return Ok(None),
+    };
     if v.is_empty() {
-        None
+        Ok(None)
     } else {
-        Some(v)
+        Ok(Some(v))
     }
 }
 
@@ -811,27 +848,27 @@ async fn load_semantic_config(
 async fn load_threat_intel_config(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     tenant_id: i64,
-) -> threat_intel_engine::ThreatIntelConfig {
+) -> Result<threat_intel_engine::ThreatIntelConfig, sqlx::Error> {
     let llm_base_url = get_config_tx(tx, tenant_id, "llm_base_url")
         .await
         .unwrap_or_else(|| "http://127.0.0.1:8000/v1".to_string());
     let llm_model = get_config_tx(tx, tenant_id, "llm_model")
         .await
         .unwrap_or_default();
-    let enable = get_config_tx(tx, tenant_id, "enable_zero_day_probing")
-        .await
+    let enable = get_config_tx_strict(tx, tenant_id, "enable_zero_day_probing")
+        .await?
         .map(|s| s.to_lowercase() == "true" || s == "1")
         .unwrap_or(true);
-    let urls_json = get_config_tx(tx, tenant_id, "custom_feed_urls")
-        .await
+    let urls_json = get_config_tx_strict(tx, tenant_id, "custom_feed_urls")
+        .await?
         .unwrap_or_else(|| "[]".to_string());
     let custom_feed_urls: Vec<String> = serde_json::from_str(&urls_json).unwrap_or_default();
-    threat_intel_engine::ThreatIntelConfig {
+    Ok(threat_intel_engine::ThreatIntelConfig {
         llm_base_url,
         llm_model,
         enable_zero_day_probing: enable,
         custom_feed_urls,
-    }
+    })
 }
 
 /// Load AI Red Team config from system_configs (Module 6).
@@ -892,51 +929,52 @@ async fn load_poe_config(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     tenant_id: i64,
     intel_pool: Arc<PgPool>,
-) -> exploit_synthesis_engine::PoEConfig {
+) -> Result<exploit_synthesis_engine::PoEConfig, sqlx::Error> {
     let llm_base_url = get_config_tx(tx, tenant_id, "llm_base_url")
         .await
         .unwrap_or_else(|| "http://127.0.0.1:8000/v1".to_string());
     let llm_model = get_config_tx(tx, tenant_id, "llm_model")
         .await
         .unwrap_or_default();
-    let enable = get_config_tx(tx, tenant_id, "enable_poe_synthesis")
-        .await
+    let enable = get_config_tx_strict(tx, tenant_id, "enable_poe_synthesis")
+        .await?
         .map(|s| s.to_lowercase() == "true" || s == "1")
         .unwrap_or(true);
-    let no_shells = get_config_tx(tx, tenant_id, "poe_safety_rails_no_shells")
-        .await
+    let no_shells = get_config_tx_strict(tx, tenant_id, "poe_safety_rails_no_shells")
+        .await?
         .map(|s| s.to_lowercase() == "true" || s == "1")
         .unwrap_or(true);
-    let max_len: usize = get_config_tx(tx, tenant_id, "poe_max_poc_length")
-        .await
+    let max_len: usize = get_config_tx_strict(tx, tenant_id, "poe_max_poc_length")
+        .await?
         .and_then(|s| s.parse().ok())
         .unwrap_or(104857600);
-    let use_raw_tcp = get_config_tx(tx, tenant_id, "poe_use_raw_tcp")
-        .await
+    let use_raw_tcp = get_config_tx_strict(tx, tenant_id, "poe_use_raw_tcp")
+        .await?
         .map(|s| s.to_lowercase() == "true" || s == "1")
         .unwrap_or(true);
-    let entropy_threshold: f64 = get_config_tx(tx, tenant_id, "poe_entropy_leak_threshold")
-        .await
+    let entropy_threshold: f64 = get_config_tx_strict(tx, tenant_id, "poe_entropy_leak_threshold")
+        .await?
         .and_then(|s| s.parse().ok())
         .unwrap_or(7.0);
     let mut gadget_chains: std::collections::HashMap<String, String> =
-        get_config_tx(tx, tenant_id, "poe_gadget_chains")
-            .await
+        get_config_tx_strict(tx, tenant_id, "poe_gadget_chains")
+            .await?
             .and_then(|s| serde_json::from_str(&s).ok())
             .unwrap_or_default();
-    if let Ok(rows) = sqlx::query(
+    let rows = sqlx::query(
         "SELECT target_library, payload_data FROM intel.dynamic_payloads WHERE added_at >= now() - interval '60 days'",
     )
     .fetch_all(intel_pool.as_ref())
-    .await
-    {
-        for r in rows {
-            if let (Ok(lib), Ok(data)) = (r.try_get::<String, _>("target_library"), r.try_get::<String, _>("payload_data")) {
-                gadget_chains.insert(lib, data);
-            }
+    .await?;
+    for r in rows {
+        if let (Ok(lib), Ok(data)) = (
+            r.try_get::<String, _>("target_library"),
+            r.try_get::<String, _>("payload_data"),
+        ) {
+            gadget_chains.insert(lib, data);
         }
     }
-    exploit_synthesis_engine::PoEConfig {
+    Ok(exploit_synthesis_engine::PoEConfig {
         llm_base_url,
         llm_model,
         enable_poe_synthesis: enable,
@@ -946,7 +984,7 @@ async fn load_poe_config(
         entropy_leak_threshold: entropy_threshold,
         gadget_chains,
         intel_pool: Some(intel_pool),
-    }
+    })
 }
 
 /// Load PoE config for HTTP handlers (short-lived tenant transaction).
@@ -956,7 +994,7 @@ pub async fn load_poe_config_http(
     intel_pool: Arc<PgPool>,
 ) -> Result<exploit_synthesis_engine::PoEConfig, sqlx::Error> {
     let mut tx = crate::db::begin_tenant_tx(app_pool, tenant_id).await?;
-    let cfg = load_poe_config(&mut tx, tenant_id, intel_pool).await;
+    let cfg = load_poe_config(&mut tx, tenant_id, intel_pool).await?;
     tx.commit().await?;
     Ok(cfg)
 }
@@ -1161,12 +1199,12 @@ async fn run_cycle_for_tenant_inner(
     let wr = war_mirror.as_ref();
     let _tenant_depth = TenantScanCounterGuard::new();
     let mut tx = crate::db::begin_tenant_tx_arc(app_pool.clone(), tenant_id).await?;
-    let engines = active_engines_list(&mut tx, tenant_id).await;
-    let asm_ports = asm_ports_from_config(&mut tx, tenant_id).await;
-    let recon_subdomains = recon_subdomain_prefixes_from_config(&mut tx, tenant_id).await;
+    let engines = active_engines_list(&mut tx, tenant_id).await?;
+    let asm_ports = asm_ports_from_config(&mut tx, tenant_id).await?;
+    let recon_subdomains = recon_subdomain_prefixes_from_config(&mut tx, tenant_id).await?;
     let mut stealth_config = load_stealth_config(&mut tx, tenant_id).await;
-    let global_safe_mode = get_config_tx(&mut tx, tenant_id, "global_safe_mode")
-        .await
+    let global_safe_mode = get_config_tx_strict(&mut tx, tenant_id, "global_safe_mode")
+        .await?
         .map(|s| s == "true" || s == "1")
         .unwrap_or(false);
     if global_safe_mode {
@@ -1183,8 +1221,8 @@ async fn run_cycle_for_tenant_inner(
     let semantic_config = load_semantic_config(&mut tx, tenant_id).await;
     let timing_config = load_timing_config(&mut tx, tenant_id).await;
     let ai_redteam_config = load_ai_redteam_config(&mut tx, tenant_id).await;
-    let threat_intel_config = load_threat_intel_config(&mut tx, tenant_id).await;
-    let poe_config = load_poe_config(&mut tx, tenant_id, intel_pool.clone()).await;
+    let threat_intel_config = load_threat_intel_config(&mut tx, tenant_id).await?;
+    let poe_config = load_poe_config(&mut tx, tenant_id, intel_pool.clone()).await?;
     eprintln!(
         "[Weissman][Orchestrator] Config tenant={}: engines={}, stealth(jitter={}-{}ms), zero_day={}",
         tenant_id,
@@ -1197,8 +1235,7 @@ async fn run_cycle_for_tenant_inner(
         "SELECT id, name, domains, COALESCE(NULLIF(trim(ip_ranges),''),'[]') AS ip_ranges, COALESCE(client_configs,'') AS client_configs FROM clients",
     )
     .fetch_all(&mut *tx)
-    .await
-    .unwrap_or_default();
+    .await?;
     let clients: Vec<(i64, String, String, String, String)> = client_rows
         .into_iter()
         .filter_map(|r| {
@@ -1390,7 +1427,7 @@ async fn run_cycle_for_tenant_inner(
         );
         let cid = db_client_id.to_string();
         if let Some((_cur, paused, skip_to_stage)) =
-            pipeline_get_state(&mut tx, tenant_id, run_id, &cid).await
+            pipeline_get_state(&mut tx, tenant_id, run_id, &cid).await?
         {
             if paused {
                 eprintln!("[Weissman][Orchestrator] Client {} paused; skipping.", cid);
@@ -1417,7 +1454,7 @@ async fn run_cycle_for_tenant_inner(
             "started",
             wr,
         );
-        let mut identity_contexts = load_identity_contexts(&mut tx, db_client_id).await;
+        let mut identity_contexts = load_identity_contexts(&mut tx, db_client_id).await?;
         let mut client_had_crash = false;
         let mut target_list: Vec<String> = client_targets.clone();
         let mut discovery_ctx = pipeline_context::DiscoveryContext::new();
@@ -1702,7 +1739,7 @@ async fn run_cycle_for_tenant_inner(
                             )
                             .await;
                         }
-                        identity_contexts = load_identity_contexts(&mut tx, db_client_id).await;
+                        identity_contexts = load_identity_contexts(&mut tx, db_client_id).await?;
                         if !harvested.is_empty() {
                             broadcast_engine_progress(
                                 telemetry_tx.as_ref(),
@@ -1729,8 +1766,8 @@ async fn run_cycle_for_tenant_inner(
                     (r, None)
                 }
                 "leak_hunter" => {
-                    let github_token = get_config_tx(&mut tx, tenant_id, "github_token")
-                        .await
+                    let github_token = get_config_tx_strict(&mut tx, tenant_id, "github_token")
+                        .await?
                         .unwrap_or_default();
                     tx.commit().await?;
                     let r = engine_leak_hunter(target_list.clone(), stealth_config.clone()).await;
@@ -1866,11 +1903,12 @@ async fn run_cycle_for_tenant_inner(
                     )
                     .await;
                     tx = crate::db::begin_tenant_tx_arc(app_pool.clone(), tenant_id).await?;
-                    let log = if sem.reasoning_log.is_empty() {
-                        None
-                    } else {
-                        Some(sem.reasoning_log)
-                    };
+                    let encoded = crate::semantic_log::encode_semantic_fuzz_log(
+                        &sem.reasoning_log,
+                        &sem.state_nodes,
+                        &sem.state_edges,
+                    );
+                    let log = if encoded.is_empty() { None } else { Some(encoded) };
                     (sem.result, log)
                 }
                 "microsecond_timing" => {
@@ -1922,8 +1960,8 @@ async fn run_cycle_for_tenant_inner(
                     (r, None)
                 }
                 other if is_production_engine_id(other) => {
-                    let github_token = get_config_tx(&mut tx, tenant_id, "github_token")
-                        .await
+                    let github_token = get_config_tx_strict(&mut tx, tenant_id, "github_token")
+                        .await?
                         .filter(|s| !s.is_empty());
                     tx.commit().await?;
                     crate::ws_intelligence_bus::merge_params_artifacts(
@@ -2003,7 +2041,7 @@ async fn run_cycle_for_tenant_inner(
                 }
             }
             if let Some(log) = semantic_log {
-                let _ = sqlx::query(
+                sqlx::query(
                     "INSERT INTO semantic_fuzz_log (tenant_id, client_id, run_id, log_text) VALUES ($1, $2, $3, $4)",
                 )
                 .bind(tenant_id)
@@ -2011,7 +2049,7 @@ async fn run_cycle_for_tenant_inner(
                 .bind(run_id)
                 .bind(log)
                 .execute(&mut *tx)
-                .await;
+                .await?;
             }
             for f in &result.findings {
                 if let Some(obj) = f.as_object() {
@@ -2318,8 +2356,7 @@ async fn run_cycle_for_tenant_inner(
     .bind(run_id)
     .bind(tenant_id)
     .fetch_all(&mut *tx)
-    .await
-    .unwrap_or_default();
+    .await?;
     let audit_rows: Vec<crypto_engine::AuditFindingRow> = audit_raw
         .into_iter()
         .filter_map(|r| {

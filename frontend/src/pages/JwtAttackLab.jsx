@@ -9,6 +9,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import EmptyState from '../components/ui/EmptyState'
 import { SkeletonBar, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch } from '../utils/apiFetch'
+import { classifyEngineHistory } from '../hooks/useEngineHistory'
 import { useJobPoll, resolveJobFindings, extractFindingsFromJob, uiJobStatus } from '../lib/useJobPoll'
 import SupremeIntelligencePanels, { extractSupremeFromFindings } from '../components/engine/SupremeIntelligencePanels'
 import Button from '../components/ui/Button'
@@ -283,6 +284,7 @@ export default function JwtAttackLab() {
   const [severityFilter, setSeverityFilter] = useState('all')
   const [lastUpdated, setLastUpdated] = useState(null)
   const [historyLoading, setHistoryLoading] = useState(true)
+  const [historyUnavailable, setHistoryUnavailable] = useState(false)
 
   const set = useCallback((patch) => setParams((p) => ({ ...p, ...patch })), [])
 
@@ -290,16 +292,21 @@ export default function JwtAttackLab() {
     setHistoryLoading(true)
     try {
       const d = await apiFetch('/api/engines/history/jwt_attack?limit=1')
-      const runs = Array.isArray(d) ? d : Array.isArray(d?.runs) ? d.runs : []
-      const last = runs[0]
+      const classified = classifyEngineHistory(d)
+      if (classified.kind === 'unavailable') {
+        setHistoryUnavailable(true)
+        return
+      }
+      setHistoryUnavailable(false)
+      const last = classified.last
       if (!last) return
-      const findings = Array.isArray(last.findings) ? last.findings : []
+      const findings = classified.findings
       if (findings.length || last.job_id) {
         setScanResult({ findings, job_id: last.job_id, status: last.status })
         setLastUpdated(last.completed_at || last.updated_at || last.created_at || null)
       }
     } catch {
-      /* honest empty — no seeded history */
+      setHistoryUnavailable(true)
     } finally {
       setHistoryLoading(false)
     }
@@ -425,17 +432,18 @@ export default function JwtAttackLab() {
   }, [displayFindings, searchQuery, severityFilter])
 
   const handleExportCsv = useCallback(() => {
+    if (historyUnavailable) return
     if (!filteredDisplayFindings.length) return
     exportFindingsCsv(filteredDisplayFindings, 'weissman-jwt-findings')
-  }, [filteredDisplayFindings])
+  }, [filteredDisplayFindings, historyUnavailable])
 
   const shellActions = (
     <ShellScanActions
       onRefresh={loadLastRun}
-      onExport={handleExportCsv}
+      onExport={historyUnavailable ? undefined : handleExportCsv}
       refreshLoading={historyLoading}
       refreshDisabled={scanning}
-      exportDisabled={!filteredDisplayFindings.length}
+      exportDisabled={historyUnavailable || !filteredDisplayFindings.length}
     />
   )
 
@@ -539,7 +547,7 @@ export default function JwtAttackLab() {
             </div>
           )}
 
-          {scanResult && !scanResult.pending && (
+          {scanResult && !scanResult.pending && !historyUnavailable && (
             <KpiStrip
               counts={counts}
               total={sortedFindings.length}
@@ -557,7 +565,7 @@ export default function JwtAttackLab() {
             </div>
           )}
 
-          {scanResult && !scanResult.pending && (
+          {scanResult && !scanResult.pending && !historyUnavailable && (
             <>
               <SupremeIntelligencePanels
                 findings={scanResult.findings}
@@ -614,7 +622,16 @@ export default function JwtAttackLab() {
             </>
           )}
 
-          {!scanResult && !historyLoading && (
+          {!historyLoading && historyUnavailable && (
+            <div data-testid="jwt-attack-lab-history-unavailable">
+              <EmptyState
+                title={t('pages.jwtLab.history_unavailable_title')}
+                body={t('pages.jwtLab.history_unavailable')}
+              />
+            </div>
+          )}
+
+          {!scanResult && !historyLoading && !historyUnavailable && (
             <EmptyState
               title={!selectedClientId ? t('pages.jwtLab.empty_no_client_title') : t('pages.jwtLab.empty_ready_title')}
               body={!selectedClientId ? t('pages.jwtLab.empty_no_client') : t('pages.jwtLab.empty_ready')}

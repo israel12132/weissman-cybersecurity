@@ -101,10 +101,10 @@ pub enum StepSink {
     },
 }
 
-async fn push_step(sink: &Option<StepSink>, step: &str, detail: Option<String>) {
+async fn push_step(sink: &Option<StepSink>, step: &str, detail: Option<String>) -> Result<(), String> {
     let ts = chrono::Utc::now().timestamp();
     match sink {
-        None => {}
+        None => Ok(()),
         Some(StepSink::Memory(m)) => {
             let mut g = m.lock().await;
             g.push(VerificationStep {
@@ -112,6 +112,7 @@ async fn push_step(sink: &Option<StepSink>, step: &str, detail: Option<String>) 
                 detail,
                 ts,
             });
+            Ok(())
         }
         Some(StepSink::Postgres {
             pool,
@@ -121,31 +122,27 @@ async fn push_step(sink: &Option<StepSink>, step: &str, detail: Option<String>) 
         }) => {
             let idx = seq.fetch_add(1, Ordering::SeqCst);
             let detail_ref = detail.as_deref();
-            match crate::db::begin_tenant_tx(pool, *tenant_id).await {
-                Ok(mut tx) => {
-                    if let Err(e) = sqlx::query(
-                        r#"INSERT INTO heal_verification_steps
+            let mut tx = crate::db::begin_tenant_tx(pool, *tenant_id)
+                .await
+                .map_err(|_| "store_down".to_string())?;
+            sqlx::query(
+                r#"INSERT INTO heal_verification_steps
                            (tenant_id, job_id, step_index, step_label, detail, step_ts)
                            VALUES ($1, $2, $3, $4, $5, $6)"#,
-                    )
-                    .bind(*tenant_id)
-                    .bind(*job_id)
-                    .bind(idx)
-                    .bind(step)
-                    .bind(detail_ref)
-                    .bind(ts)
-                    .execute(&mut *tx)
-                    .await
-                    {
-                        tracing::error!(target: "verification_sandbox", error = %e, "heal_verification_steps insert");
-                    } else if let Err(e) = tx.commit().await {
-                        tracing::error!(target: "verification_sandbox", error = %e, "heal_verification_steps commit");
-                    }
-                }
-                Err(e) => {
-                    tracing::error!(target: "verification_sandbox", error = %e, "begin_tenant_tx for step log")
-                }
+            )
+            .bind(*tenant_id)
+            .bind(*job_id)
+            .bind(idx)
+            .bind(step)
+            .bind(detail_ref)
+            .bind(ts)
+            .execute(&mut *tx)
+            .await
+            .map_err(|_| "store_down".to_string())?;
+            if tx.commit().await.is_err() {
+                return Err("store_down".to_string());
             }
+            Ok(())
         }
     }
 }
@@ -694,35 +691,15 @@ pub async fn verify_patch_ephemeral_docker(
 
     macro_rules! step {
         ($n:expr, $d:expr) => {
-            push_step(&sink, $n, $d).await;
+            if let Err(e) = push_step(&sink, $n, $d).await {
+                return fail(&sink, e).await;
+            }
         };
     }
 
     if patch_content.len() > MAX_PATCH_BYTES {
-        push_step(
-            &sink,
-            "failed",
-            Some(format!("patch exceeds {} bytes", MAX_PATCH_BYTES)),
-        )
-        .await;
-        return VerificationResult {
-            verified: false,
-            verdict: HealVerdict::Inconclusive,
-            container_id: None,
-            baseline_status: 0,
-            after_patch_status: 0,
-            baseline_was_vulnerable: false,
-            exploit_neutralized: false,
-            health_after_ok: false,
-            health_status: 0,
-            changed_files: Vec::new(),
-            deleted_paths: Vec::new(),
-            tests_ran: false,
-            tests_passed: false,
-            test_output: String::new(),
-            error: Some(format!("patch exceeds {} bytes", MAX_PATCH_BYTES)),
-            steps: collect_steps_only(&sink).await,
-        };
+        let msg = format!("patch exceeds {} bytes", MAX_PATCH_BYTES);
+        return fail(&sink, msg).await;
     }
 
     step!("init", Some("Starting 200% verification pipeline".into()));
@@ -897,27 +874,31 @@ pub async fn verify_patch_ephemeral_docker(
             "failed",
             Some("Baseline was not a successful 2xx — cannot prove remediation".into())
         );
-        return VerificationResult {
-            verified: false,
-            verdict: HealVerdict::Inconclusive,
-            container_id: Some(id),
-            baseline_status,
-            after_patch_status: 0,
-            baseline_was_vulnerable: false,
-            exploit_neutralized: false,
-            health_after_ok: false,
-            health_status: 0,
-            changed_files: Vec::new(),
-            deleted_paths: Vec::new(),
-            tests_ran: false,
-            tests_passed: false,
-            test_output: String::new(),
-            error: Some(
-                "Baseline did not return 2xx; set WEISSMAN_VERIFY_REQUIRE_BEFORE_SUCCESS=0 to override"
-                    .into(),
-            ),
-            steps: collect_steps_only(&sink).await,
-        };
+        return attach_steps(
+            &sink,
+            VerificationResult {
+                verified: false,
+                verdict: HealVerdict::Inconclusive,
+                container_id: Some(id),
+                baseline_status,
+                after_patch_status: 0,
+                baseline_was_vulnerable: false,
+                exploit_neutralized: false,
+                health_after_ok: false,
+                health_status: 0,
+                changed_files: Vec::new(),
+                deleted_paths: Vec::new(),
+                tests_ran: false,
+                tests_passed: false,
+                test_output: String::new(),
+                error: Some(
+                    "Baseline did not return 2xx; set WEISSMAN_VERIFY_REQUIRE_BEFORE_SUCCESS=0 to override"
+                        .into(),
+                ),
+                steps: Vec::new(),
+            },
+        )
+        .await;
     }
 
     step!("apply_patch_host", Some("patch -p1 in cloned repo".into()));
@@ -1069,39 +1050,43 @@ pub async fn verify_patch_ephemeral_docker(
     };
     step!(verdict_step, Some(verdict_detail));
 
-    VerificationResult {
-        verified,
-        verdict,
-        container_id: Some(id),
-        baseline_status,
-        after_patch_status: after_status,
-        baseline_was_vulnerable,
-        exploit_neutralized,
-        health_after_ok,
-        health_status,
-        changed_files,
-        deleted_paths,
-        tests_ran,
-        tests_passed,
-        test_output,
-        error: if verified {
-            None
-        } else {
-            Some(format!(
-                "verdict={} (exploit HTTP {}, health HTTP {})",
-                verdict.as_str(),
-                after_status,
-                health_status
-            ))
+    attach_steps(
+        &sink,
+        VerificationResult {
+            verified,
+            verdict,
+            container_id: Some(id),
+            baseline_status,
+            after_patch_status: after_status,
+            baseline_was_vulnerable,
+            exploit_neutralized,
+            health_after_ok,
+            health_status,
+            changed_files,
+            deleted_paths,
+            tests_ran,
+            tests_passed,
+            test_output,
+            error: if verified {
+                None
+            } else {
+                Some(format!(
+                    "verdict={} (exploit HTTP {}, health HTTP {})",
+                    verdict.as_str(),
+                    after_status,
+                    health_status
+                ))
+            },
+            steps: Vec::new(),
         },
-        steps: collect_steps_only(&sink).await,
-    }
+    )
+    .await
 }
 
 /// Append a named step to a live sink (reuses the sink's shared sequence counter), so callers
 /// outside this module (e.g. the self-repair loop) can annotate the verification timeline.
-pub async fn record_step(sink: &StepSink, step: &str, detail: Option<String>) {
-    push_step(&Some(sink.clone()), step, detail).await;
+pub async fn record_step(sink: &StepSink, step: &str, detail: Option<String>) -> Result<(), String> {
+    push_step(&Some(sink.clone()), step, detail).await
 }
 
 async fn cleanup_container(docker: &Docker, id: &str) {
@@ -1114,40 +1099,60 @@ async fn cleanup_container(docker: &Docker, id: &str) {
 }
 
 async fn fail(sink: &Option<StepSink>, msg: String) -> VerificationResult {
-    push_step(sink, "failed", Some(msg.clone())).await;
-    VerificationResult {
-        verified: false,
-        verdict: HealVerdict::Inconclusive,
-        container_id: None,
-        baseline_status: 0,
-        after_patch_status: 0,
-        baseline_was_vulnerable: false,
-        exploit_neutralized: false,
-        health_after_ok: false,
-        health_status: 0,
-        changed_files: Vec::new(),
-        deleted_paths: Vec::new(),
-        tests_ran: false,
-        tests_passed: false,
-        test_output: String::new(),
-        error: Some(msg),
-        steps: collect_steps_only(sink).await,
+    let _ = push_step(sink, "failed", Some(msg.clone())).await;
+    attach_steps(
+        sink,
+        VerificationResult {
+            verified: false,
+            verdict: HealVerdict::Inconclusive,
+            container_id: None,
+            baseline_status: 0,
+            after_patch_status: 0,
+            baseline_was_vulnerable: false,
+            exploit_neutralized: false,
+            health_after_ok: false,
+            health_status: 0,
+            changed_files: Vec::new(),
+            deleted_paths: Vec::new(),
+            tests_ran: false,
+            tests_passed: false,
+            test_output: String::new(),
+            error: Some(msg),
+            steps: Vec::new(),
+        },
+    )
+    .await
+}
+
+async fn attach_steps(sink: &Option<StepSink>, mut result: VerificationResult) -> VerificationResult {
+    match collect_steps_only(sink).await {
+        Ok(s) => {
+            result.steps = s;
+            result
+        }
+        Err(_) => {
+            result.verified = false;
+            result.verdict = HealVerdict::Inconclusive;
+            result.error = Some("store_down".into());
+            result.steps = Vec::new();
+            result
+        }
     }
 }
 
-async fn collect_steps_only(sink: &Option<StepSink>) -> Vec<VerificationStep> {
+async fn collect_steps_only(sink: &Option<StepSink>) -> Result<Vec<VerificationStep>, String> {
     match sink {
-        None => Vec::new(),
-        Some(StepSink::Memory(m)) => m.lock().await.clone(),
+        None => Ok(Vec::new()),
+        Some(StepSink::Memory(m)) => Ok(m.lock().await.clone()),
         Some(StepSink::Postgres {
             pool,
             tenant_id,
             job_id,
             ..
         }) => {
-            let Ok(mut tx) = crate::db::begin_tenant_tx(pool, *tenant_id).await else {
-                return Vec::new();
-            };
+            let mut tx = crate::db::begin_tenant_tx(pool, *tenant_id)
+                .await
+                .map_err(|_| "store_down".to_string())?;
             let rows = sqlx::query(
                 r#"SELECT step_label, detail, step_ts FROM heal_verification_steps
                    WHERE tenant_id = $1 AND job_id = $2
@@ -1157,7 +1162,7 @@ async fn collect_steps_only(sink: &Option<StepSink>) -> Vec<VerificationStep> {
             .bind(*job_id)
             .fetch_all(&mut *tx)
             .await
-            .unwrap_or_default();
+            .map_err(|_| "store_down".to_string())?;
             let steps = rows
                 .into_iter()
                 .filter_map(|r| {
@@ -1168,8 +1173,10 @@ async fn collect_steps_only(sink: &Option<StepSink>) -> Vec<VerificationStep> {
                     })
                 })
                 .collect();
-            let _ = tx.commit().await;
-            steps
+            if tx.commit().await.is_err() {
+                return Err("store_down".to_string());
+            }
+            Ok(steps)
         }
     }
 }

@@ -131,7 +131,7 @@ export default function CeoVaccineVault() {
         />
       )}
 
-      {selected && (
+      {selected && !err && (
         <div className="border-t border-white/10 bg-[var(--bg-0)]/80 p-4 space-y-3">
           <div className="flex flex-wrap gap-2 items-center justify-between">
             <span className="text-xs font-mono text-[var(--text-tertiary)]">

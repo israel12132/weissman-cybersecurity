@@ -13,10 +13,10 @@ Detailed Q&A is in [`SIG_CAIQ_PREP_QA.md`](SIG_CAIQ_PREP_QA.md); SLA in
 
 | Metric | Value | Audit script |
 |--------|-------|--------------|
-| Production engine IDs | **592** | `scripts/verify_engine_wiring.mjs` |
+| Production engine IDs | **594** | `scripts/verify_engine_wiring.mjs` |
 | Command Center routes | **155** | `scripts/weissman-ui-audit.mjs` |
 | UI pages audited | **142/142** | same |
-| Engine kinds | 330 real_probe (322 distinct impls), 204 alias, 58 agent_required, 0 no_path | `scripts/engine_reality_audit.mjs` |
+| Engine kinds | 332 real_probe (324 distinct impls), 204 alias, 58 agent_required, 0 no_path | `scripts/engine_reality_audit.mjs` |
 
 Global release gate: **`bash scripts/full_audit_gate.sh`** (G1–G7, exit 0).
 Inspection-day script: **`docs/operations/INSPECTION-DAY-RUNBOOK.md`**.
