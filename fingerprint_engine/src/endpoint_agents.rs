@@ -1236,8 +1236,7 @@ pub fn spawn_ioc_feed_scheduler(pool: Arc<PgPool>, registry: Arc<AgentRegistry>)
             .clamp(1, 168);
         // Small startup delay so feed fetches don't contend with boot.
         tokio::time::sleep(std::time::Duration::from_secs(90)).await;
-        let mut tick =
-            tokio::time::interval(std::time::Duration::from_secs(interval_hours * 3600));
+        let mut tick = tokio::time::interval(std::time::Duration::from_secs(interval_hours * 3600));
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
             tick.tick().await;
@@ -1253,7 +1252,8 @@ pub fn spawn_ioc_feed_scheduler(pool: Arc<PgPool>, registry: Arc<AgentRegistry>)
             );
 
             // 2. Build the bounded endpoint push payload once (global store).
-            let endpoint_params = crate::ioc::store::endpoint_match_payload(pool.as_ref(), 1500).await;
+            let endpoint_params =
+                crate::ioc::store::endpoint_match_payload(pool.as_ref(), 1500).await;
             let has_indicators = ["sha256", "ipv4", "ipv6", "cidr"].iter().any(|k| {
                 endpoint_params
                     .get(*k)
