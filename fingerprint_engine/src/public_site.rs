@@ -317,7 +317,9 @@ mod tests {
         assert!(!json_leaks_tenant(&v));
         let s = v.to_string();
         assert!(!s.contains("tenant_id"));
-        assert!(!s.contains("password"));
+        // Guard against a serialized secret FIELD (e.g. "password":"…"), not the bare
+        // token — legitimate engine ids like "password_spray" contain the word.
+        assert!(!s.contains("\"password\":"));
     }
 
     #[test]

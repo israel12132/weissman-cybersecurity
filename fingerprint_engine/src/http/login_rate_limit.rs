@@ -181,29 +181,18 @@ pub async fn login_rate_limit_middleware(
                 rate_limit_metrics::record_login_allowed(&ip);
                 return next.run(request).await;
             }
-            super::rate_limit_redis::StrictOp::Unavailable
-                if super::rate_limit_redis::distributed_state_required() =>
-            {
-                tracing::error!(
-                    target: "rate_limit",
-                    client_ip = %ip,
-                    path = %path,
-                    kind = label,
-                    "Redis unavailable for required distributed rate limit (fail-closed)"
-                );
-                return super::rate_limit_redis::distributed_store_unavailable_response();
+            // Redis outage on the request path must DEGRADE to the local in-process
+            // governor and emit a SOC signal — it must never 503 a legitimate login
+            // (self-inflicted DoS). MFA/lockout stores that cannot degrade keep the
+            // fail-closed 503. See the rate_limit_redis module docs.
+            super::rate_limit_redis::StrictOp::Unavailable => {
+                if super::rate_limit_redis::redis_degraded() {
+                    super::rate_limit_redis::notify_redis_degraded("login_governor");
+                }
             }
-            super::rate_limit_redis::StrictOp::Unavailable => {}
         }
-    } else if super::rate_limit_redis::distributed_state_required() {
-        tracing::error!(
-            target: "rate_limit",
-            client_ip = %ip,
-            path = %path,
-            kind = label,
-            "REDIS_URL required but Redis rate limiter not initialized (fail-closed)"
-        );
-        return super::rate_limit_redis::distributed_store_unavailable_response();
+    } else if super::rate_limit_redis::redis_degraded() {
+        super::rate_limit_redis::notify_redis_degraded("login_governor");
     }
 
     if let Err(neg) = limiter.check_key(&ip) {

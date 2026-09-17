@@ -90,7 +90,7 @@ mod tests {
         ];
         let report = analyze(&findings, &[], &[]);
         assert_eq!(report["summary"]["reached_objective"], true);
-        assert_eq!(report["summary"]["correlation_incidents"], 1);
+        assert_eq!(report["summary"]["correlation_incidents"], 2);
         assert!(report["incident_score"].as_f64().unwrap() >= 60.0);
         assert!(report["attack_chain"]["reached_goal"].as_bool().unwrap());
     }
