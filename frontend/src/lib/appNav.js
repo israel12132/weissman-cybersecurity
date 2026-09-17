@@ -11,6 +11,7 @@ import { canCreateClients, isClientUser, isPortalBlockedPath } from './clientSco
 /** Production-ready surfaces — always visible at the top of the sidebar. */
 export const PRIMARY_NAV = [
   { to: '/clients', labelKey: 'nav.clients', icon: '🏢' },
+  { to: '/messages', labelKey: 'nav.messages', icon: '✉️' },
   { to: '/vuln-intel', labelKey: 'nav.vuln_intel', icon: '🔬' },
   { to: '/engines', labelKey: 'nav.engines', icon: '⬡' },
   { to: '/billing', labelKey: 'nav.billing', icon: '💳' },

@@ -150,3 +150,7 @@ include!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/src/server_handlers_ioc.inc"
 ));
+include!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/src/server_handlers_messaging.inc"
+));

@@ -156,6 +156,9 @@ const SELF_SERVICE_PREFIXES: &[&str] = &[
     "/api/ask",
     "/api/telemetry",
     "/api/preferences",
+    // Per-client message board + help: every employee (incl. read-only viewers)
+    // may post. Client isolation is still enforced by the scope middleware + RLS.
+    "/api/messages",
 ];
 
 fn path_in(prefixes: &[&str], path: &str) -> bool {

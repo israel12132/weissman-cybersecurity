@@ -140,6 +140,7 @@
     "dashboard": "לוח בקרה",
     "engines": "חדר המנועים",
     "clients": "לקוחות",
+    "messages": "הודעות",
     "findings": "ממצאים",
     "finding_clusters": "אשכולות ממצאים",
     "scan_finding_spine": "עמוד שדרה סריקה-ממצאים",
@@ -926,7 +927,9 @@
     "attack_surface": "משטח התקפה",
     "attack_surface_desc": "צפה בגרף ASM",
     "integrations": "אינטגרציות",
-    "sector": "ענף"
+    "sector": "ענף",
+    "change_logo": "החלף לוגו",
+    "logo_failed": "העלאת הלוגו נכשלה"
   },
   "clients": {
     "title": "לקוחות",
@@ -1035,7 +1038,10 @@
     "client_portal": "פורטל לקוח",
     "signed_in": "מחובר",
     "bound_workspace": "סביבת לקוח קשורה",
-    "tenant": "סביבת עבודה"
+    "tenant": "סביבת עבודה",
+    "change_photo": "החלף תמונה",
+    "uploading": "מעלה…",
+    "avatar_failed": "העלאת התמונה נכשלה"
   },
   "audit": {
     "title": "Audit Log",
@@ -2498,6 +2504,26 @@
       "rules_unavailable": "מאגר כללי ההתראה לא זמין — הרשימה הריקה אינה מאושרת.",
       "unavailable_title": "כללי התראה אינם זמינים",
       "unavailable_body": "GET /api/alerts/rules לא אושר. אפס כללים אינו גלאי שקט."
+    },
+    "messages": {
+      "title": "הודעות ועזרה",
+      "subtitle": "לוח הודעות פנימי לכל לקוח — נשאר בתוך הלקוח בלבד",
+      "client": "לקוח",
+      "client_placeholder": "בחר לקוח…",
+      "pick_client": "בחר לקוח כדי לפתוח את לוח ההודעות שלו.",
+      "tab_all": "הכול",
+      "tab_help": "בקשות עזרה",
+      "help_badge": "עזרה",
+      "loading": "טוען הודעות…",
+      "empty": "אין עדיין הודעות. פתח את השיחה.",
+      "unknown_sender": "לא ידוע",
+      "placeholder": "כתוב הודעה… (Enter לשליחה)",
+      "help_placeholder": "תאר במה אתה צריך עזרה…",
+      "send_as_help": "שלח כבקשת עזרה",
+      "send": "שלח",
+      "sending": "שולח…",
+      "load_failed": "טעינת ההודעות נכשלה",
+      "send_failed": "שליחת ההודעה נכשלה"
     },
     "adminManagement": {
       "search_users": "חיפוש משתמשים…",

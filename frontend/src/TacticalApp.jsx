@@ -79,6 +79,7 @@ import {
   DigitalTwinSimulator,
   FindingsCommandCenter,
   AdminManagement,
+  Messages,
   DomainDiscovery,
   ThreatIntelHub,
   IncidentResponseCenter,
@@ -324,6 +325,8 @@ export default function TacticalApp() {
           <Route path="engine-catalog" element={<EngineClientCatalog />} />
           <Route path="engine-reliability" element={<EngineReliability />} />
           <Route path="admin" element={<RequireRole min="ceo"><AdminManagement /></RequireRole>} />
+          {/* Per-client message + help board — available to every employee. */}
+          <Route path="messages" element={<Messages />} />
           <Route path="clients" element={<Clients />} />
           <Route path="clients/new" element={<RequireRole min="ceo"><ClientNew /></RequireRole>} />
           <Route path="clients/:id" element={<ClientDetail />} />
