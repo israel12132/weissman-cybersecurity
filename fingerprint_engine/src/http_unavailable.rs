@@ -3934,13 +3934,16 @@ mod tests {
 
     #[test]
     fn ueba_epss_fair_verify_heal_store_down_is_not_live_miss() {
-        let ingest = named_fn_src(
+        // The enrolled_at grace-window read lives in analyze_sample_in_tx (shared by the
+        // single-row ingest and the binary-COPY batch path); it must fail-visible on a
+        // store outage, never silently treat the agent as out-of-grace (a live miss).
+        let analyze = named_fn_src(
             include_str!("ueba_detector.rs"),
-            "pub async fn ingest_sample",
+            "pub async fn analyze_sample_in_tx",
         );
-        assert!(ingest.contains("SELECT enrolled_at FROM endpoint_agents"));
-        assert!(!compact_src(ingest).contains("fetch_optional(&mut*tx).await.ok().flatten()"));
-        assert!(ingest.contains("map_err(|_| \"store_down\".to_string())?"));
+        assert!(analyze.contains("SELECT enrolled_at FROM endpoint_agents"));
+        assert!(!compact_src(analyze).contains("fetch_optional(&mut*tx).await.ok().flatten()"));
+        assert!(analyze.contains("map_err(|_| \"store_down\".to_string())?"));
         let det = include_str!("ueba_detector.rs");
         let sov_call = det
             .find("crate::ueba_onboarding::on_sovereign_binary_allowlist_tx")

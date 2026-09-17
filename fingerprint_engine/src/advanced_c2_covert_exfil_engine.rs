@@ -327,8 +327,18 @@ async fn fetch_bytes(client: &reqwest::Client, url: &str, max: usize) -> Option<
 /// run **alongside** Z-score. `beacon_samples=3` cannot disable the periodogram.
 #[must_use]
 pub(crate) fn beacon_sample_count(cfg: &ArsenalConfig) -> usize {
-    cfg.usize_or("beacon_samples", MIN_BEACON_SAMPLES)
-        .clamp(MIN_BEACON_SAMPLES, MAX_BEACON_SAMPLES)
+    // An explicit operator override wins but is floored to MIN (so the Lomb–Scargle /
+    // FFT spectral pass always has enough stamps to run) and capped at MAX. With no
+    // override, the intensity preset picks the budget: aggressive → MAX, else → MIN.
+    if cfg.raw().get("beacon_samples").is_some() {
+        return cfg
+            .usize_or("beacon_samples", MIN_BEACON_SAMPLES)
+            .clamp(MIN_BEACON_SAMPLES, MAX_BEACON_SAMPLES);
+    }
+    match cfg.intensity() {
+        Intensity::Aggressive => MAX_BEACON_SAMPLES,
+        _ => MIN_BEACON_SAMPLES,
+    }
 }
 
 // ── Layer 1: Encrypted C2 beaconing / masquerade ─────────────────────────────

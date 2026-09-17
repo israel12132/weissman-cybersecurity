@@ -62,7 +62,9 @@ fn is_api_path(path: &str) -> bool {
 /// session recovery compete with authenticated traffic.
 #[must_use]
 fn counts_toward_api_bucket(method: &axum::http::Method, path: &str) -> bool {
-    is_api_path(path) && !super::login_rate_limit::is_login_post(method, path)
+    is_api_path(path)
+        && !super::login_rate_limit::is_login_post(method, path)
+        && !(method == axum::http::Method::POST && path == "/api/auth/refresh")
 }
 
 pub async fn api_rate_limit_middleware(

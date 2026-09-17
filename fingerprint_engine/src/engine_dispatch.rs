@@ -360,7 +360,9 @@ async fn run_engine_inner(engine_id: &str, target: &str, ctx: &EngineRunContext)
         let extra = trie.payloads_for_target(target);
         crate::pentest_memory::prepend_memory_payloads(&mut ctx.memory_payloads, &extra);
     }
-    let mut result = dispatch_engine_match(canonical, target, &ctx).await;
+    // `dispatch_engine_match` is a 350+-arm async match; its future is large enough to
+    // overflow the default 2 MB test-thread stack in debug builds. Box it onto the heap.
+    let mut result = Box::pin(dispatch_engine_match(canonical, target, &ctx)).await;
     if raw != canonical || !result.findings.is_empty() {
         for f in &mut result.findings {
             if let Some(obj) = f.as_object_mut() {
@@ -389,7 +391,8 @@ pub(crate) async fn dispatch_canonical_engine(
     target: &str,
     ctx: &EngineRunContext,
 ) -> EngineResult {
-    dispatch_engine_match(canonical, target, ctx).await
+    // Boxed for the same large-future stack reason as in `run_engine`.
+    Box::pin(dispatch_engine_match(canonical, target, ctx)).await
 }
 
 async fn run_poe_synthesis_dispatch(target: &str, ctx: &EngineRunContext) -> EngineResult {

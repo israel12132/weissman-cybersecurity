@@ -137,15 +137,8 @@ async fn dispatch_to_agent(
     .await
     {
         Ok(pair) => pair,
-        Err(e) => {
-            tracing::warn!(
-                target: "engine_dispatch_agent",
-                engine = %engine,
-                error = %e,
-                "agent task enqueue failed"
-            );
-            return EngineResult::error("store_down");
-        }
+        // Enqueue store-down must fail visibly, never an ok empty-findings result.
+        Err(_) => return EngineResult::error("store_down"),
     };
     EngineResult::waiting_for_agent(format!(
         "{}: task {} {} — waiting for host evidence (no invented host findings)",

@@ -42,6 +42,10 @@ pub const RO_SELECT_TABLES: &[&str] = &[
     "kev_intel",
     "audit_logs",
     "report_runs",
+    "ot_ics_fingerprints",
+    "ot_ics_safety_events",
+    "ot_ics_protocol_baselines",
+    "ot_ics_asset_ranges",
 ];
 
 /// Ask Weissman hard statement timeout (milliseconds).
@@ -309,8 +313,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ro_select_list_is_exactly_thirteen() {
-        assert_eq!(RO_SELECT_TABLES.len(), 13);
+    fn ro_select_list_is_exactly_seventeen() {
+        // 13 core read tables + the 4 ot_ics_* telemetry tables the
+        // 20260827160000_ot_ics_hardening_safety migration GRANTs to weissman_ro.
+        assert_eq!(RO_SELECT_TABLES.len(), 17);
         let mut seen = std::collections::HashSet::new();
         for t in RO_SELECT_TABLES {
             assert!(seen.insert(*t), "duplicate {t}");
