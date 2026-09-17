@@ -239,6 +239,10 @@ pub struct CouncilConfig {
     pub supreme_phase2_cpus: Vec<usize>,
     pub supreme_memory_top_k: usize,
     pub supreme_embedding_model: String,
+    /// Per-tenant daily LLM TOKEN budget (OWASP LLM04/LLM10). `0` = unlimited (default,
+    /// preserving historical behavior). Resolved from `system_configs` key
+    /// `llm_daily_token_budget` or the `WEISSMAN_LLM_DAILY_TOKEN_BUDGET` env default.
+    pub daily_token_budget: u64,
 }
 
 impl CouncilConfig {
@@ -264,6 +268,15 @@ impl CouncilConfig {
         .await
         .map_err(|e| e.to_string())?
         .unwrap_or_default();
+        // Optional per-tenant daily token budget (enforced pre-call in the debate entrypoints).
+        let configured_budget: Option<u64> = sqlx::query_scalar::<_, String>(
+            "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'llm_daily_token_budget'",
+        )
+        .bind(tenant_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?
+        .and_then(|s| s.trim().parse::<u64>().ok());
         let _ = tx.commit().await.map_err(|e| e.to_string())?;
 
         let base = openai_chat::normalize_openai_base_url(base.trim());
@@ -370,6 +383,9 @@ impl CouncilConfig {
             supreme_phase2_cpus,
             supreme_memory_top_k,
             supreme_embedding_model,
+            daily_token_budget: crate::http::ai_quota_mem::resolve_daily_token_budget(
+                configured_budget,
+            ),
         })
     }
 
@@ -424,7 +440,7 @@ async fn llm(
     tenant_id: i64,
     op: &'static str,
 ) -> Result<String, LlmError> {
-    openai_chat::chat_completion_text(
+    let out = openai_chat::chat_completion_detailed(
         client,
         cfg.base_url.as_str(),
         model,
@@ -436,7 +452,10 @@ async fn llm(
         op,
         true,
     )
-    .await
+    .await?;
+    // Feed the in-process daily counter so the pre-call token-budget gate is live.
+    crate::http::ai_quota_mem::add_usage(tenant_id, out.prompt_tokens, out.completion_tokens);
+    Ok(out.text)
 }
 
 /// Single completion: Alpha returns exactly 3 strategies in one JSON object.
@@ -596,6 +615,57 @@ async fn step_gamma(
     parse_gamma(&text)
 }
 
+/// Internal ultra-guard enforcement toggle for the platform's OWN LLM calls that ingest
+/// attacker-influenced scanned content. OFF by default (historical behavior: basic
+/// `llm_sanitize` nonce-fence only). Set `WEISSMAN_INTERNAL_LLM_GUARD=1` to enforce.
+fn internal_llm_guard_enabled() -> bool {
+    matches!(
+        std::env::var("WEISSMAN_INTERNAL_LLM_GUARD").as_deref(),
+        Ok("1") | Ok("true") | Ok("yes")
+    )
+}
+
+/// Pre-call gate for a council debate that ingests attacker-influenced `target_brief`:
+/// (1) per-tenant daily TOKEN budget (OWASP LLM04/LLM10), and (2) an optional
+/// `llm_ultra_guard` prompt-injection / jailbreak / codec brake on the brief itself.
+/// Both preserve historical behavior by default (budget `0` = unlimited; guard OFF unless
+/// `WEISSMAN_INTERNAL_LLM_GUARD` is truthy). On a Block/Quarantine verdict the debate is
+/// refused honestly rather than forwarding the attacker-influenced content to the councils.
+async fn guard_council_debate_precall(
+    cfg: &CouncilConfig,
+    tenant_id: i64,
+    target_brief: &str,
+) -> Result<(), LlmError> {
+    crate::http::ai_quota_mem::check_daily_token_budget(tenant_id, cfg.daily_token_budget)
+        .map_err(|e| LlmError::Decode(e.to_string()))?;
+    if internal_llm_guard_enabled() {
+        let gctx = crate::llm_ultra_guard::GuardContext {
+            tenant_id: Some(tenant_id),
+            source: "council_debate",
+            ..crate::llm_ultra_guard::GuardContext::default()
+        };
+        let report =
+            crate::llm_ultra_guard::inspect_prompt_async(target_brief.to_string(), gctx).await;
+        if report.holds_from_generation() {
+            warn!(
+                target: "council",
+                tenant_id,
+                verdict = report.verdict.as_str(),
+                injection = report.injection_score as f64,
+                jailbreak = report.jailbreak_score as f64,
+                "council debate input held by llm_ultra_guard — refusing to send attacker-influenced brief"
+            );
+            return Err(LlmError::Decode(format!(
+                "council input refused by llm_ultra_guard: verdict={} injection={:.2} jailbreak={:.2}",
+                report.verdict.as_str(),
+                report.injection_score,
+                report.jailbreak_score
+            )));
+        }
+    }
+    Ok(())
+}
+
 /// Full adversarial debate: Alpha → Beta → Gamma. `prior_failure_log` feeds self-correction when re-running.
 pub async fn run_adversarial_debate(
     cfg: &CouncilConfig,
@@ -604,6 +674,7 @@ pub async fn run_adversarial_debate(
     council_round: u32,
     prior_failure_log: Option<&str>,
 ) -> Result<CouncilDebateResult, LlmError> {
+    guard_council_debate_precall(cfg, tenant_id, target_brief).await?;
     let client = cfg.http_client();
     let alpha = if cfg.parallel_alpha {
         step_alpha_parallel(&client, cfg, tenant_id, target_brief, prior_failure_log).await?
@@ -1389,6 +1460,7 @@ pub async fn run_supreme_council_debate(
     council_round: u32,
     prior_failure_log: Option<&str>,
 ) -> Result<SupremeCouncilDebateResult, LlmError> {
+    guard_council_debate_precall(cfg, tenant_id, target_brief).await?;
     let client = cfg.http_client();
     let memory_ctx = fetch_supreme_memory_context(pool, cfg, &client, tenant_id, target_brief)
         .await
@@ -1681,7 +1753,7 @@ async fn llm_command_json(
     tenant_id: i64,
     op: &'static str,
 ) -> Result<String, LlmError> {
-    openai_chat::chat_completion_text_json_object(
+    let out = openai_chat::chat_completion_detailed_json_object(
         client,
         cfg.base_url.as_str(),
         model,
@@ -1693,7 +1765,10 @@ async fn llm_command_json(
         op,
         false,
     )
-    .await
+    .await?;
+    // Feed the in-process daily counter so the pre-call token-budget gate is live.
+    crate::http::ai_quota_mem::add_usage(tenant_id, out.prompt_tokens, out.completion_tokens);
+    Ok(out.text)
 }
 
 fn parse_mission_brief_json(text: &str) -> Result<MissionBrief, LlmError> {
@@ -1721,6 +1796,7 @@ pub async fn process_mission(
     target_operational_brief: &str,
     actor_user_id: Option<i64>,
 ) -> Result<SupremeCommandProtocolOutput, LlmError> {
+    guard_council_debate_precall(cfg, tenant_id, target_operational_brief).await?;
     let client = cfg.http_client();
     let mission_id = Uuid::new_v4().to_string();
     let shared: SharedMissionState = Arc::new(RwLock::new(SupremeCommandMissionState {

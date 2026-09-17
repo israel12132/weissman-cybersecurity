@@ -1882,6 +1882,10 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>, job_control_pool: Arc<
             app_pool.clone(),
             auth_pool.clone(),
         );
+        // Durable retry worker for the alert-delivery outbox: redelivers pending/failed
+        // notifications with exponential backoff and dead-letters after the max attempts, so a
+        // transient webhook/Slack/PagerDuty 5xx can no longer silently drop a security alert.
+        crate::notification_outbox::spawn_notification_outbox_worker(app_pool.clone());
         crate::soar::worker::spawn_soar_verification_worker(app_pool.clone(), auth_pool.clone());
         crate::threat_intel_ingestor::spawn_ingest_worker(
             app_pool.clone(),

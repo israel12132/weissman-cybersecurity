@@ -614,6 +614,9 @@ jobs:
       - name: i18n templated-key resolution gate
         run: node scripts/verify_i18n_template_keys.mjs
 
+      - name: handler store-down honesty ratchet
+        run: node scripts/verify_handler_honesty.mjs
+
       - name: Build frontend production bundle
         run: npm run build
         working-directory: frontend
