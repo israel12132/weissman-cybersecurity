@@ -58,7 +58,7 @@ pub const ANALYTICS_STATEMENT_TIMEOUT_MS: u64 = 15_000;
 pub const ANALYTICS_SELECT_TABLES: &[&str] = &["billing_plans", "weissman_billing_usage_snapshot"];
 
 /// Job-bus tables `weissman_worker` may DML. Keep in lock-step with
-/// `20260829120000_hermetic_analytics_worker_roles.sql`.
+/// `20260829120001_hermetic_analytics_worker_roles.sql`.
 pub const WORKER_JOB_BUS_TABLES: &[&str] = &[
     "weissman_async_jobs",
     "weissman_job_events",
