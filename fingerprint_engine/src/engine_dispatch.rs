@@ -907,6 +907,9 @@ async fn dispatch_engine_match(
         "first_mover_delta_fusion" => {
             crate::first_mover_delta_fusion::run_first_mover_delta_fusion_result(target, ctx).await
         }
+        "adversary_exposure_delta" => {
+            crate::adversary_exposure_delta::run_adversary_exposure_delta_result(target, ctx).await
+        }
         "first_seen_osv_nvd" => {
             crate::first_seen_osv_nvd_engine::run_first_seen_osv_nvd_result(target, ctx).await
         }
@@ -941,9 +944,6 @@ async fn dispatch_engine_match(
         "liquid_matrix" => crate::liquid_matrix_engine::run_liquid_matrix_result(target, ctx).await,
         "cognitive_starvation" => {
             crate::cognitive_starvation_engine::run_cognitive_starvation_result(target, ctx).await
-        }
-        "adversary_exposure_delta" => {
-            crate::adversary_exposure_delta::run_adversary_exposure_delta_result(target, ctx).await
         }
         "sovereign_active_defense_fusion" => {
             crate::sovereign_active_defense_fusion_engine::run_sovereign_active_defense_fusion_result(

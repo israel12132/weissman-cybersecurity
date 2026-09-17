@@ -24925,6 +24925,56 @@ export const GENERATED_PARAM_DEFS = {
       ]
     }
   ],
+  "ioc_endpoint_match": [
+    {
+      "key": "intensity",
+      "label": "Scan Intensity",
+      "type": "select",
+      "defaultVal": "normal",
+      "options": [
+        "light",
+        "normal",
+        "aggressive"
+      ]
+    },
+    {
+      "key": "campaign_name",
+      "label": "Campaign Name",
+      "type": "text",
+      "defaultVal": "",
+      "placeholder": "Red Team Q2"
+    },
+    {
+      "key": "stealth_mode",
+      "label": "Stealth Mode",
+      "type": "select",
+      "defaultVal": "low",
+      "options": [
+        "off",
+        "low",
+        "high"
+      ]
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    },
+    {
+      "key": "evidence_mode",
+      "label": "Evidence Mode",
+      "type": "select",
+      "defaultVal": "standard",
+      "options": [
+        "standard",
+        "strict",
+        "forensic"
+      ]
+    }
+  ],
   "ngfw_posture": [
     {
       "key": "ports",

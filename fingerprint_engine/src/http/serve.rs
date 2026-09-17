@@ -1757,10 +1757,22 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>, job_control_pool: Arc<
             app_pool.clone(),
             state.endpoint_agents.clone(),
         );
+        crate::endpoint_agents::spawn_ioc_feed_scheduler(
+            app_pool.clone(),
+            state.endpoint_agents.clone(),
+        );
     }
     crate::agent_registry_sync::spawn_agent_registry_redis_sync(state.endpoint_agents.clone());
     crate::suppression_cache_sync::spawn_suppression_cache_redis_sync(app_pool.clone());
     crate::path_templates::spawn_prewarm(app_pool.clone());
+    // Every replica: warm the dashboard-managed IOC feed credential cache so the
+    // credentials API and enabled-feeds view reflect stored keys immediately.
+    {
+        let cred_pool = app_pool.clone();
+        tokio::spawn(async move {
+            crate::ioc::creds::refresh_from_db(cred_pool.as_ref()).await;
+        });
+    }
     // Every replica: Ask Weissman hash-chain is per-process mpsc + DB sweep.
     // FOR UPDATE lives here, never on the HTTP insert path.
     crate::nl_audit_chain::spawn(app_pool.clone());

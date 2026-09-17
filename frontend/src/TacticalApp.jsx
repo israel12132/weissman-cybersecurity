@@ -91,7 +91,9 @@ import {
   AttackCoverage,
   SecurityPosture,
   IocFeed,
+  ThreatFeeds,
   UebaAnomalies,
+  EntityRisk,
   FindingSuppressions,
   FindingClusters,
   ScanFindingSpine,
@@ -302,7 +304,9 @@ export default function TacticalApp() {
           <Route path="attack-coverage" element={<AttackCoverage />} />
           <Route path="security-posture" element={<SecurityPosture />} />
           <Route path="iocs" element={<IocFeed />} />
+          <Route path="threat-feeds" element={<ThreatFeeds />} />
           <Route path="ueba" element={<UebaAnomalies />} />
+          <Route path="entity-risk" element={<EntityRisk />} />
           <Route path="suppressions" element={<FindingSuppressions />} />
           <Route path="crypto-posture" element={<CryptoPosture />} />
           <Route path="live-feed" element={<LiveFeed />} />

@@ -4829,6 +4829,15 @@ export const ENGINES_REGISTRY = [
     requiresAgent: true,
   },
   {
+    id: 'ioc_endpoint_match',
+    label: 'Endpoint IOC Match',
+    group: 'apt',
+    mitre: 'T1071',
+    description: 'Agent-side IOC execution — matches live host peers and process hashes against the feed store on the edge; idle if no indicators',
+    requiresTarget: false,
+    requiresAgent: true,
+  },
+  {
     id: 'ngfw_posture',
     label: 'NGFW Policy Posture',
     group: 'network',

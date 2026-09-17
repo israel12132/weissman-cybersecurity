@@ -1,8 +1,9 @@
 //! API route mounting — split from serve.rs for maintainability.
 use super::*;
 use axum::{
-    Router, middleware,
+    middleware,
     routing::{delete, get, patch, post, put},
+    Router,
 };
 use std::sync::Arc;
 
@@ -158,6 +159,25 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             post(api_itdr_auth_ingest).get(api_itdr_auth_events_list),
         )
         .route("/api/ueba/anomalies", get(api_ueba_anomalies))
+        // Extended UEBA: decayed entity risk + peer-group (cohort) outliers.
+        .route("/api/ueba/entity-risk", get(api_ueba_entity_risk))
+        .route("/api/ueba/peer-anomalies", get(api_ueba_peer_anomalies))
+        // IOC feed store: indicators, feed health, sightings, watchlist, ops.
+        .route("/api/ioc/indicators", get(api_ioc_indicators))
+        .route("/api/ioc/feeds", get(api_ioc_feeds))
+        .route("/api/ioc/sightings", get(api_ioc_sightings))
+        .route(
+            "/api/ioc/watchlist",
+            get(api_ioc_watchlist).post(api_ioc_watchlist_add),
+        )
+        .route("/api/ioc/watchlist/:id", delete(api_ioc_watchlist_delete))
+        .route("/api/ioc/match", post(api_ioc_match))
+        .route("/api/ioc/ingest/run", post(api_ioc_ingest_run))
+        .route("/api/ioc/retrohunt/run", post(api_ioc_retrohunt_run))
+        .route(
+            "/api/ioc/credentials",
+            get(api_ioc_credentials).put(api_ioc_credentials_set),
+        )
         .route("/api/baseline/summary", get(api_baseline_summary))
         .route("/api/baseline/drift", get(api_baseline_drift))
         .route("/api/baseline/anomalies", get(api_baseline_anomalies))
@@ -697,15 +717,30 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/campaigns/:id/remediate",
             post(api_campaigns_remediate),
         )
-        .route("/api/discovery-lab/runs", get(api_discovery_lab_runs_list).post(api_discovery_lab_run_create))
-        .route("/api/discovery-lab/runs/:id", get(api_discovery_lab_run_get))
-        .route("/api/discovery-lab/candidates", get(api_discovery_lab_candidates_list))
-        .route("/api/discovery-lab/candidates/:id", get(api_discovery_lab_candidate_get).patch(api_discovery_lab_candidate_action))
+        .route(
+            "/api/discovery-lab/runs",
+            get(api_discovery_lab_runs_list).post(api_discovery_lab_run_create),
+        )
+        .route(
+            "/api/discovery-lab/runs/:id",
+            get(api_discovery_lab_run_get),
+        )
+        .route(
+            "/api/discovery-lab/candidates",
+            get(api_discovery_lab_candidates_list),
+        )
+        .route(
+            "/api/discovery-lab/candidates/:id",
+            get(api_discovery_lab_candidate_get).patch(api_discovery_lab_candidate_action),
+        )
         .route(
             "/api/discovery-lab/candidates/:id/disclosure",
             post(api_discovery_lab_disclosure_create),
         )
-        .route("/api/discovery-lab/disclosures", get(api_discovery_lab_disclosures_list))
+        .route(
+            "/api/discovery-lab/disclosures",
+            get(api_discovery_lab_disclosures_list),
+        )
         .route(
             "/api/discovery-lab/disclosures/:id",
             get(api_discovery_lab_disclosure_get).patch(api_discovery_lab_disclosure_update),
@@ -734,10 +769,22 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/honey-routing/:client_id/sessions/:session_id/isolate-approve",
             post(api_honey_routing_isolate_approve),
         )
-        .route("/api/llm-ultra-guard/inspect", post(api_llm_ultra_guard_inspect))
-        .route("/api/llm-ultra-guard/status", get(api_llm_ultra_guard_status))
-        .route("/api/llm-ultra-guard/events", get(api_llm_ultra_guard_events))
-        .route("/api/llm-ultra-guard/rag-integrity", get(api_llm_ultra_guard_rag))
+        .route(
+            "/api/llm-ultra-guard/inspect",
+            post(api_llm_ultra_guard_inspect),
+        )
+        .route(
+            "/api/llm-ultra-guard/status",
+            get(api_llm_ultra_guard_status),
+        )
+        .route(
+            "/api/llm-ultra-guard/events",
+            get(api_llm_ultra_guard_events),
+        )
+        .route(
+            "/api/llm-ultra-guard/rag-integrity",
+            get(api_llm_ultra_guard_rag),
+        )
         .route(
             "/api/stealthy-persistence-evasion/catalog",
             get(api_stealthy_persistence_catalog),
