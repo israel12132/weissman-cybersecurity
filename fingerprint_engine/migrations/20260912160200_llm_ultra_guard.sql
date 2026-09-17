@@ -34,8 +34,8 @@ ALTER TABLE llm_guard_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE llm_guard_events FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS llm_guard_events_tenant ON llm_guard_events;
 CREATE POLICY llm_guard_events_tenant ON llm_guard_events FOR ALL
-    USING      (tenant_id = current_setting('app.current_tenant_id', true)::bigint)
-    WITH CHECK (tenant_id = current_setting('app.current_tenant_id', true)::bigint);
+    USING      (tenant_id = public.app_current_tenant_id())
+    WITH CHECK (tenant_id = public.app_current_tenant_id());
 
 GRANT SELECT, INSERT ON llm_guard_events TO weissman_app;
 GRANT USAGE, SELECT ON SEQUENCE llm_guard_events_id_seq TO weissman_app;
@@ -57,8 +57,8 @@ ALTER TABLE llm_guard_quarantine ENABLE ROW LEVEL SECURITY;
 ALTER TABLE llm_guard_quarantine FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS llm_guard_quarantine_tenant ON llm_guard_quarantine;
 CREATE POLICY llm_guard_quarantine_tenant ON llm_guard_quarantine FOR ALL
-    USING      (tenant_id = current_setting('app.current_tenant_id', true)::bigint)
-    WITH CHECK (tenant_id = current_setting('app.current_tenant_id', true)::bigint);
+    USING      (tenant_id = public.app_current_tenant_id())
+    WITH CHECK (tenant_id = public.app_current_tenant_id());
 
 GRANT SELECT, INSERT, UPDATE ON llm_guard_quarantine TO weissman_app;
 GRANT USAGE, SELECT ON SEQUENCE llm_guard_quarantine_id_seq TO weissman_app;
@@ -82,8 +82,8 @@ ALTER TABLE rag_vector_integrity ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rag_vector_integrity FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS rag_vector_integrity_tenant ON rag_vector_integrity;
 CREATE POLICY rag_vector_integrity_tenant ON rag_vector_integrity FOR ALL
-    USING      (tenant_id = current_setting('app.current_tenant_id', true)::bigint)
-    WITH CHECK (tenant_id = current_setting('app.current_tenant_id', true)::bigint);
+    USING      (tenant_id = public.app_current_tenant_id())
+    WITH CHECK (tenant_id = public.app_current_tenant_id());
 
 GRANT SELECT, INSERT ON rag_vector_integrity TO weissman_app;
 GRANT USAGE, SELECT ON SEQUENCE rag_vector_integrity_id_seq TO weissman_app;

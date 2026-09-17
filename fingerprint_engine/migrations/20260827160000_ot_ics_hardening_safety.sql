@@ -25,8 +25,8 @@ ALTER TABLE ot_ics_safety_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ot_ics_safety_events FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS ot_ics_safety_events_tenant ON ot_ics_safety_events;
 CREATE POLICY ot_ics_safety_events_tenant ON ot_ics_safety_events FOR ALL
-    USING (tenant_id = current_setting('app.current_tenant_id', true)::bigint)
-    WITH CHECK (tenant_id = current_setting('app.current_tenant_id', true)::bigint);
+    USING (tenant_id = public.app_current_tenant_id())
+    WITH CHECK (tenant_id = public.app_current_tenant_id());
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON ot_ics_safety_events TO weissman_app;
 GRANT USAGE, SELECT ON SEQUENCE ot_ics_safety_events_id_seq TO weissman_app;
@@ -53,8 +53,8 @@ ALTER TABLE ot_ics_protocol_baselines ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ot_ics_protocol_baselines FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS ot_ics_protocol_baselines_tenant ON ot_ics_protocol_baselines;
 CREATE POLICY ot_ics_protocol_baselines_tenant ON ot_ics_protocol_baselines FOR ALL
-    USING (tenant_id = current_setting('app.current_tenant_id', true)::bigint)
-    WITH CHECK (tenant_id = current_setting('app.current_tenant_id', true)::bigint);
+    USING (tenant_id = public.app_current_tenant_id())
+    WITH CHECK (tenant_id = public.app_current_tenant_id());
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON ot_ics_protocol_baselines TO weissman_app;
 GRANT USAGE, SELECT ON SEQUENCE ot_ics_protocol_baselines_id_seq TO weissman_app;
@@ -81,8 +81,8 @@ ALTER TABLE ot_ics_asset_ranges ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ot_ics_asset_ranges FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS ot_ics_asset_ranges_tenant ON ot_ics_asset_ranges;
 CREATE POLICY ot_ics_asset_ranges_tenant ON ot_ics_asset_ranges FOR ALL
-    USING (tenant_id = current_setting('app.current_tenant_id', true)::bigint)
-    WITH CHECK (tenant_id = current_setting('app.current_tenant_id', true)::bigint);
+    USING (tenant_id = public.app_current_tenant_id())
+    WITH CHECK (tenant_id = public.app_current_tenant_id());
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON ot_ics_asset_ranges TO weissman_app;
 GRANT USAGE, SELECT ON SEQUENCE ot_ics_asset_ranges_id_seq TO weissman_app;

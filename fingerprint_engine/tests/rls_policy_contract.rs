@@ -186,9 +186,16 @@ const RLS_FORCE_ALLOWLIST: &[&str] = &[
     "endpoint_agent_enroll_attempts",
     "ephemeral_payloads",
     "epss_intel",
+    // intel.discovery_knowledge — global recon dictionary (paths / subdomain prefixes), no
+    // tenant_id column; shared seed data, not per-tenant. The test extracts the bare schema
+    // identifier "intel" from `CREATE TABLE intel.discovery_knowledge`.
+    "intel",
     "kev_intel",
     "oast_interaction_hits",
     "pending_signups",
+    // public_contact_leads — public flagship-site contact-form submissions, captured before any
+    // tenant identity exists; no tenant_id column. Guarded by app-level admin access, not RLS.
+    "public_contact_leads",
     "stripe_webhook_events",
     "weissman_self_heal_gate",
     "ueba_sovereign_binary_allowlist",
