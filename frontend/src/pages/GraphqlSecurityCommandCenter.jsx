@@ -10,7 +10,7 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
 import { apiFetch } from '../utils/apiFetch'
 import { openSseStream } from '../lib/sseStream'
-import { buildSimpleTextPdf, downloadBytes } from '../lib/pdfExport'
+import { renderTextPdf, downloadBytes } from '../lib/pdfExport'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import Button from '../components/ui/Button'
 
@@ -878,7 +878,7 @@ export default function GraphqlSecurityCommandCenter() {
     for (const c of card?.categories || []) {
       lines.push(`- ${c.category} ${c.grade} (${c.score}) — ${c.label}`)
     }
-    downloadBytes(buildSimpleTextPdf(lines), `graphql-executive-${Date.now()}.pdf`, 'application/pdf')
+    downloadBytes(renderTextPdf(lines), `graphql-executive-${Date.now()}.pdf`, 'application/pdf')
   }, [historyUnavailable, target, metrics])
 
 

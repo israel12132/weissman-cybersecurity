@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router'
 import { apiFetch } from '../utils/apiFetch'
-import { buildSimpleTextPdf, downloadBytes } from '../lib/pdfExport'
+import { renderTextPdf, downloadBytes } from '../lib/pdfExport'
 import { normalizeIntegrations, TOP_TIER_PARAM_ROUTES } from '../lib/engineClientPrefill'
 import { getTopTierProfile, isTopTierEngine } from '../lib/topTierEngineProfiles'
 import { useEngineScanParams } from '../hooks/useEngineScanParams'
@@ -314,7 +314,7 @@ export default function TopTierEngineProfile() {
       lines.push(`Status: ${liveJob.status || '-'}`)
       lines.push(`Attempt: ${liveJob.attempt_count || 0}`)
     }
-    const bytes = buildSimpleTextPdf(lines)
+    const bytes = renderTextPdf(lines)
     downloadBytes(bytes, `top-tier-${engineId}-export.pdf`, 'application/pdf')
   }
 
