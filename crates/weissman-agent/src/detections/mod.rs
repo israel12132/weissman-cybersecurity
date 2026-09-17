@@ -11,6 +11,7 @@ mod exfil_local;
 mod hardware_local;
 mod host_isolation;
 mod infostealer;
+mod ioc_endpoint_match;
 mod log_integrity;
 mod malware_local;
 mod mobile_local;
@@ -109,6 +110,7 @@ pub fn all_capability_ids() -> Vec<&'static str> {
         "host_privilege_escalation",
         "ebpf_sensor",
         "ioc_yara_hunt",
+        "ioc_endpoint_match",
         "syscall_evasion",
         "stealthy_persistence_evasion",
     ]
@@ -207,6 +209,7 @@ pub fn run_detection(engine: &str, target: Option<&str>, params: &Value) -> Dete
             }
             "ebpf_sensor" => ebpf_sensor::run(&engine, &params).await,
             "ioc_yara_hunt" => yara_hunt::run(&engine, &params).await,
+            "ioc_endpoint_match" => ioc_endpoint_match::run(&engine, &params).await,
             "syscall_evasion" => syscall_hooks::run(&engine).await,
             "stealthy_persistence_evasion" => stealth_integrity::run(&engine, &params).await,
             other => Err(anyhow::anyhow!(
@@ -307,6 +310,7 @@ mod tests {
         "host_privilege_escalation",
         "ebpf_sensor",
         "ioc_yara_hunt",
+        "ioc_endpoint_match",
         "syscall_evasion",
         "stealthy_persistence_evasion",
     ];

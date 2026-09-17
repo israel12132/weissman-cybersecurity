@@ -72,6 +72,7 @@ pub const AGENT_REQUIRED_ENGINES: &[&str] = &[
     "host_privilege_escalation",
     "ebpf_sensor",
     "ioc_yara_hunt",
+    "ioc_endpoint_match",
 ];
 
 /// True when `id` must dispatch to the endpoint agent fleet for host-resident collection.
@@ -130,7 +131,8 @@ pub fn swarm_attach_category(id: &str) -> &'static str {
         | "log_tampering_engine"
         | "timestomping"
         | "ebpf_sensor"
-        |         "ioc_yara_hunt"
+        | "ioc_yara_hunt"
+        | "ioc_endpoint_match"
         | "chronos"
         | "stealthy_persistence_evasion" => "scan",
         _ => "findings",
