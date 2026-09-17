@@ -14,8 +14,9 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createColumnHelper } from '@tanstack/react-table'
-import { Radar, Search, RefreshCw, Trash2, Plus } from 'lucide-react'
+import { Radar, Search, RefreshCw, Trash2, Plus, KeyRound, Check, Save } from 'lucide-react'
 import PageShell from './PageShell'
+import { useAuth } from '../context/AuthContext'
 import EmptyState from '../components/ui/EmptyState'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
@@ -34,6 +35,8 @@ const WATCHLIST_TYPES = ['ipv4', 'domain', 'url', 'sha256', 'sha1', 'md5', 'emai
 
 export default function ThreatFeeds() {
   const { t } = useTranslation()
+  const { hasRole } = useAuth()
+  const isAdmin = hasRole('admin')
   const [indicators, setIndicators] = useState([])
   const [feeds, setFeeds] = useState({ runs: [], stats: {}, enabled_feeds: [] })
   const [sightings, setSightings] = useState([])
@@ -46,6 +49,10 @@ export default function ThreatFeeds() {
   const [notice, setNotice] = useState('')
   const [wlType, setWlType] = useState('ipv4')
   const [wlValue, setWlValue] = useState('')
+  const [creds, setCreds] = useState([])
+  const [credDrafts, setCredDrafts] = useState({})
+  const [credBusy, setCredBusy] = useState('')
+  const [credSaved, setCredSaved] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -76,6 +83,40 @@ export default function ThreatFeeds() {
   useEffect(() => {
     load()
   }, [load])
+
+  const loadCreds = useCallback(async () => {
+    if (!isAdmin) return
+    try {
+      const d = await apiFetch('/api/ioc/credentials')
+      setCreds(Array.isArray(d?.credentials) ? d.credentials : [])
+    } catch {
+      setCreds([])
+    }
+  }, [isAdmin])
+
+  useEffect(() => {
+    loadCreds()
+  }, [loadCreds])
+
+  const saveCred = useCallback(
+    async (key, clear = false) => {
+      setCredBusy(key)
+      setCredSaved('')
+      try {
+        const value = clear ? '' : credDrafts[key] ?? ''
+        await api.put('/api/ioc/credentials', { key, value })
+        setCredDrafts((d) => ({ ...d, [key]: '' }))
+        setCredSaved(key)
+        await loadCreds()
+        setTimeout(() => setCredSaved(''), 2000)
+      } catch (e) {
+        setNotice(e.message || t(`${NS}.creds_save_failed`))
+      } finally {
+        setCredBusy('')
+      }
+    },
+    [credDrafts, loadCreds, t],
+  )
 
   const syncFeeds = useCallback(async () => {
     setSyncing(true)
@@ -273,6 +314,75 @@ export default function ThreatFeeds() {
               <ExecutiveWidget label={t(`${NS}.kpi_crit_high`)} value={stats.critHigh} accent="#f43f5e" />
               <ExecutiveWidget label={t(`${NS}.kpi_sightings`)} value={stats.sightings} accent="#f59e0b" />
             </div>
+
+            {/* Feed credentials (admin only) */}
+            {isAdmin && (
+              <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)] mb-1">
+                  <KeyRound className="w-4 h-4 text-amber-400/80" />
+                  {t(`${NS}.creds_title`)}
+                </h3>
+                <p className="text-[11px] text-[var(--text-muted)] mb-3">{t(`${NS}.creds_help`)}</p>
+                <div className="space-y-3">
+                  {creds.map((c) => (
+                    <div key={c.key} className="flex flex-wrap items-center gap-2">
+                      <div className="min-w-[220px] flex-1">
+                        <div className="flex items-center gap-2">
+                          <code className="text-[11px] font-mono text-cyan-300/80">{c.key}</code>
+                          {c.configured ? (
+                            <span
+                              className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/5 text-emerald-300/80 uppercase"
+                              title={t(`${NS}.creds_source`, { source: c.source })}
+                            >
+                              {t(`${NS}.creds_set`)} · {c.source}
+                            </span>
+                          ) : (
+                            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-[var(--border-default)] text-[var(--text-muted)] uppercase">
+                              {t(`${NS}.creds_unset`)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-[var(--text-tertiary)]">
+                          {c.label}
+                          {c.preview && (
+                            <span className="ml-2 font-mono text-[var(--text-muted)]">{c.preview}</span>
+                          )}
+                        </div>
+                      </div>
+                      <input
+                        type={c.secret ? 'password' : 'text'}
+                        value={credDrafts[c.key] ?? ''}
+                        onChange={(e) => setCredDrafts((d) => ({ ...d, [c.key]: e.target.value }))}
+                        aria-label={`${c.label} ${t(`${NS}.creds_value`)}`}
+                        placeholder={c.configured ? t(`${NS}.creds_replace`) : t(`${NS}.creds_enter`)}
+                        autoComplete="off"
+                        className="flex-1 min-w-[180px] bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[12px] text-[var(--text-primary)] font-mono focus:outline-none focus:border-amber-500/40"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => saveCred(c.key)}
+                        disabled={credBusy === c.key || !(credDrafts[c.key] ?? '').trim()}
+                        className="inline-flex items-center gap-1.5 text-[12px] font-medium px-3 py-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-40"
+                      >
+                        {credSaved === c.key ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+                        {t(`${NS}.creds_save`)}
+                      </button>
+                      {c.configured && c.source === 'db' && (
+                        <button
+                          type="button"
+                          onClick={() => saveCred(c.key, true)}
+                          disabled={credBusy === c.key}
+                          aria-label={t(`${NS}.creds_clear`)}
+                          className="inline-flex items-center gap-1 text-[12px] px-2 py-1.5 rounded-lg border border-rose-500/30 text-rose-300/80 hover:bg-rose-950/30 disabled:opacity-40"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
 
             {/* Feed health + sync */}
             <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">

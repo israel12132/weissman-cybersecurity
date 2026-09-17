@@ -398,3 +398,65 @@ async fn api_ueba_peer_anomalies(
         }
     }
 }
+
+// ─── Feed credentials (admin) ───────────────────────────────────────────────
+
+/// GET /api/ioc/credentials — masked status of every configurable feed key.
+/// Admin only; NEVER returns a secret value (only configured/source + a hint).
+async fn api_ioc_credentials(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_admin(&auth) {
+        return r;
+    }
+    let list = crate::ioc::creds::status(&state.app_pool).await;
+    (
+        StatusCode::OK,
+        Json(json!({"ok": true, "credentials": list})),
+    )
+        .into_response()
+}
+
+/// PUT /api/ioc/credentials — set or clear one feed credential (admin only).
+/// Body: `{ "key": "ABUSECH_AUTH_KEY", "value": "<secret>" }`. An empty value
+/// clears the key (the connector then falls back to the environment variable).
+async fn api_ioc_credentials_set(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Json(body): Json<Value>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_admin(&auth) {
+        return r;
+    }
+    let key = body.get("key").and_then(Value::as_str).unwrap_or("").trim();
+    if !crate::ioc::creds::is_allowed(key) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "detail": "unknown feed credential key"})),
+        )
+            .into_response();
+    }
+    // `value` absent or null is treated as an explicit clear.
+    let value = body.get("value").and_then(Value::as_str).unwrap_or("");
+    let updated_by = format!("user:{}", auth.user_id);
+    match crate::ioc::creds::set(&state.app_pool, key, value, &updated_by).await {
+        Ok(()) => {
+            let cleared = value.trim().is_empty();
+            tracing::info!(target: "ioc", key = %key, cleared, by = %updated_by, "feed credential updated");
+            (
+                StatusCode::OK,
+                Json(json!({"ok": true, "key": key, "cleared": cleared})),
+            )
+                .into_response()
+        }
+        Err(e) => {
+            tracing::warn!(target: "ioc", error = %e, "feed credential write failed");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"ok": false, "detail": "write failed"})),
+            )
+                .into_response()
+        }
+    }
+}

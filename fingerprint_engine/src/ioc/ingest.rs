@@ -42,6 +42,9 @@ pub struct IngestReport {
 /// Run every configured feed once. Never panics; a failing feed is recorded and
 /// the cycle continues with the others.
 pub async fn run_all_feeds(pool: &PgPool) -> IngestReport {
+    // Load dashboard-managed feed credentials (DB) into the process cache before
+    // deciding which feeds are configured / fetching them.
+    super::creds::refresh_from_db(pool).await;
     let feeds_to_run = feeds::enabled_feeds();
     let mut report = IngestReport {
         outcomes: Vec::new(),

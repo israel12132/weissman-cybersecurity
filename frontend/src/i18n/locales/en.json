@@ -1771,7 +1771,18 @@
       "empty_title": "No indicators yet",
       "empty_body": "Indicators appear once a feed sync runs. Trigger one with Sync Feeds or wait for the scheduled cycle.",
       "no_match_title": "No matches",
-      "no_match_body": "No indicator matches your filter."
+      "no_match_body": "No indicator matches your filter.",
+      "creds_title": "Feed Credentials",
+      "creds_help": "Paste your feed API keys here (stored encrypted). A key set here overrides the environment variable of the same name. Leave blank to keep using the environment.",
+      "creds_set": "Set",
+      "creds_unset": "Not set",
+      "creds_source": "Source: {{source}}",
+      "creds_value": "value",
+      "creds_replace": "Enter a new value to replace…",
+      "creds_enter": "Enter value…",
+      "creds_save": "Save",
+      "creds_clear": "Clear stored value",
+      "creds_save_failed": "Failed to save credential."
     },
     "entityRisk": {
       "title": "UEBA Entity Risk",

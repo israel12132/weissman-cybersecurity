@@ -13,7 +13,10 @@ use super::{guess_type, Indicator, IocType};
 use serde_json::{json, Value};
 use std::time::Duration;
 
-const ABUSE_CH_AUTH_ENV: &str = "ABUSE_CH_AUTH_KEY";
+// Matches the platform-wide abuse.ch key name already used by
+// adversary_gap_mirror / adversary_exposure_delta / public_leak_osint, so one
+// key serves every abuse.ch consumer.
+const ABUSE_CH_AUTH_ENV: &str = "ABUSECH_AUTH_KEY";
 const OTX_KEY_ENV: &str = "OTX_API_KEY";
 const MISP_URL_ENV: &str = "MISP_URL";
 const MISP_KEY_ENV: &str = "MISP_API_KEY";
@@ -64,10 +67,10 @@ impl FeedSource {
     }
 }
 
+/// Resolve "is this credential configured" through the DB-first credential
+/// store (dashboard-managed), falling back to the environment variable.
 fn env_present(key: &str) -> bool {
-    std::env::var(key)
-        .map(|v| !v.trim().is_empty())
-        .unwrap_or(false)
+    super::creds::is_set(key)
 }
 
 /// Feeds that are configured and should run this cycle.
@@ -129,13 +132,10 @@ pub async fn fetch(source: FeedSource) -> Result<Vec<Indicator>, FeedError> {
 
 // ──────────────────────────────── ThreatFox ────────────────────────────────
 
-/// Fetch recent ThreatFox IOCs (abuse.ch). Requires `ABUSE_CH_AUTH_KEY`.
+/// Fetch recent ThreatFox IOCs (abuse.ch). Requires `ABUSECH_AUTH_KEY`.
 pub async fn fetch_threatfox(days: u32) -> Result<Vec<Indicator>, FeedError> {
-    let key = std::env::var(ABUSE_CH_AUTH_ENV)
-        .ok()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .ok_or(FeedError::NotConfigured(ABUSE_CH_AUTH_ENV))?;
+    let key =
+        super::creds::get(ABUSE_CH_AUTH_ENV).ok_or(FeedError::NotConfigured(ABUSE_CH_AUTH_ENV))?;
     let body = json!({"query": "get_iocs", "days": days.clamp(1, 7)});
     let resp = client()?
         .post(THREATFOX_URL)
@@ -207,13 +207,10 @@ pub fn parse_threatfox(v: &Value) -> Vec<Indicator> {
 
 // ───────────────────────────────── URLhaus ─────────────────────────────────
 
-/// Fetch URLhaus recent malware URLs (abuse.ch). Requires `ABUSE_CH_AUTH_KEY`.
+/// Fetch URLhaus recent malware URLs (abuse.ch). Requires `ABUSECH_AUTH_KEY`.
 pub async fn fetch_urlhaus() -> Result<Vec<Indicator>, FeedError> {
-    let key = std::env::var(ABUSE_CH_AUTH_ENV)
-        .ok()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .ok_or(FeedError::NotConfigured(ABUSE_CH_AUTH_ENV))?;
+    let key =
+        super::creds::get(ABUSE_CH_AUTH_ENV).ok_or(FeedError::NotConfigured(ABUSE_CH_AUTH_ENV))?;
     let resp = client()?
         .get(URLHAUS_URL)
         .header("Auth-Key", key)
@@ -340,11 +337,7 @@ pub fn parse_feodo(v: &Value) -> Vec<Indicator> {
 
 /// Fetch subscribed AlienVault OTX pulses. Requires `OTX_API_KEY`.
 pub async fn fetch_otx() -> Result<Vec<Indicator>, FeedError> {
-    let key = std::env::var(OTX_KEY_ENV)
-        .ok()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .ok_or(FeedError::NotConfigured(OTX_KEY_ENV))?;
+    let key = super::creds::get(OTX_KEY_ENV).ok_or(FeedError::NotConfigured(OTX_KEY_ENV))?;
     let url = format!("{OTX_SUBSCRIBED_URL}?limit=50&modified_since=");
     let resp = client()?
         .get(&url)
@@ -418,16 +411,11 @@ fn map_otx_type(t: &str) -> Option<IocType> {
 
 /// Fetch recent MISP attributes via `restSearch`. Requires `MISP_URL` + `MISP_API_KEY`.
 pub async fn fetch_misp() -> Result<Vec<Indicator>, FeedError> {
-    let base = std::env::var(MISP_URL_ENV)
-        .ok()
-        .map(|s| s.trim().trim_end_matches('/').to_string())
+    let base = super::creds::get(MISP_URL_ENV)
+        .map(|s| s.trim_end_matches('/').to_string())
         .filter(|s| !s.is_empty())
         .ok_or(FeedError::NotConfigured(MISP_URL_ENV))?;
-    let key = std::env::var(MISP_KEY_ENV)
-        .ok()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .ok_or(FeedError::NotConfigured(MISP_KEY_ENV))?;
+    let key = super::creds::get(MISP_KEY_ENV).ok_or(FeedError::NotConfigured(MISP_KEY_ENV))?;
     let url = format!("{base}/attributes/restSearch");
     let body = json!({"returnFormat": "json", "to_ids": 1, "last": "7d", "limit": 2000});
     let resp = client()?
@@ -497,9 +485,7 @@ pub fn parse_misp(v: &Value) -> Vec<Indicator> {
 /// `IOC_CUSTOM_BLOCKLIST_URLS` is a comma-separated list; each entry may be
 /// `url` (type auto-guessed) or `type=url` to pin a class (e.g. `ipv4=https://…`).
 pub async fn fetch_custom_blocklists() -> Result<Vec<Indicator>, FeedError> {
-    let raw = std::env::var(CUSTOM_BLOCKLIST_ENV)
-        .ok()
-        .filter(|s| !s.trim().is_empty())
+    let raw = super::creds::get(CUSTOM_BLOCKLIST_ENV)
         .ok_or(FeedError::NotConfigured(CUSTOM_BLOCKLIST_ENV))?;
     let cl = client()?;
     let mut out = Vec::new();

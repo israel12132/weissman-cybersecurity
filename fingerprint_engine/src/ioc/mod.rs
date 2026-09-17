@@ -22,6 +22,7 @@
 //! `outbound_http` client and fails visibly (logged, empty result) when an
 //! API key is absent — it never fabricates indicators.
 
+pub mod creds;
 pub mod decay;
 pub mod feeds;
 pub mod ingest;
