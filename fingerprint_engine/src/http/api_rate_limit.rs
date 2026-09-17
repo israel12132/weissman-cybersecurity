@@ -57,14 +57,15 @@ fn is_api_path(path: &str) -> bool {
     (path.starts_with("/api/") && path != "/api/health") || path.starts_with("/scim/")
 }
 
-/// Login / refresh already sit in the dedicated unauth login bucket (8/min).
-/// Counting them in the 30/s API Redis bucket makes a parallel UI crawl's
-/// session recovery compete with authenticated traffic.
+/// Login POSTs are governed by per-email account lockout, so they skip the 30/s API
+/// bucket — a parallel UI crawl's shared-NAT logins must not 429. `/api/auth/refresh`
+/// is deliberately NOT excluded: it has no dedicated login-bucket throttle
+/// (`unauth_post_kind` returns `None` for it), so the API bucket is its only rate
+/// limit. Excluding it would leave the per-request DB token-rotate entirely
+/// unthrottled — an unauthenticated DoS / DB-load vector.
 #[must_use]
 fn counts_toward_api_bucket(method: &axum::http::Method, path: &str) -> bool {
-    is_api_path(path)
-        && !super::login_rate_limit::is_login_post(method, path)
-        && !(method == axum::http::Method::POST && path == "/api/auth/refresh")
+    is_api_path(path) && !super::login_rate_limit::is_login_post(method, path)
 }
 
 pub async fn api_rate_limit_middleware(
@@ -157,12 +158,13 @@ mod tests {
     use axum::http::Method;
 
     #[test]
-    fn login_and_refresh_skip_the_api_bucket() {
+    fn login_skips_but_refresh_stays_in_the_api_bucket() {
+        // Login is protected by per-email account lockout, so it skips the API bucket.
         assert!(!counts_toward_api_bucket(&Method::POST, "/api/login"));
-        assert!(!counts_toward_api_bucket(
-            &Method::POST,
-            "/api/auth/refresh"
-        ));
+        // /api/auth/refresh has NO dedicated login-bucket throttle (unauth_post_kind
+        // returns None for it), so it must stay in the API bucket — excluding it would
+        // leave the per-request DB token-rotate entirely unthrottled.
+        assert!(counts_toward_api_bucket(&Method::POST, "/api/auth/refresh"));
         assert!(counts_toward_api_bucket(&Method::GET, "/api/clients"));
         assert!(counts_toward_api_bucket(&Method::GET, "/api/billing/usage"));
         assert!(!counts_toward_api_bucket(&Method::GET, "/api/health"));

@@ -183,8 +183,10 @@ pub async fn login_rate_limit_middleware(
             }
             // Redis outage on the request path must DEGRADE to the local in-process
             // governor (the `limiter.check_key` below) and emit a SOC signal — it must
-            // never 503 a legitimate login (self-inflicted DoS). MFA/lockout stores that
-            // cannot degrade keep the fail-closed 503. See the rate_limit_redis module docs.
+            // never 503 legitimate unauthenticated POSTs (enroll / agent-session reach
+            // here; a login POST already passed through above). A self-inflicted DoS is
+            // worse than a degraded local cap. MFA/lockout stores that cannot degrade
+            // keep the fail-closed 503. See the rate_limit_redis module docs.
             super::rate_limit_redis::StrictOp::Unavailable => {
                 if super::rate_limit_redis::redis_degraded() {
                     super::rate_limit_redis::notify_redis_degraded("login_governor");

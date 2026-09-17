@@ -26,8 +26,9 @@ pub const WORKER_ROLE: &str = "weissman_worker";
 /// Global billing / quota aggregation role — metrics SELECT only.
 pub const ANALYTICS_ROLE: &str = "weissman_analytics";
 
-/// Tables `weissman_ro` may `SELECT`. Keep in lock-step with
-/// `20260827115800_hermetic_db_roles.sql`.
+/// Tables `weissman_ro` may `SELECT`. Keep in lock-step with the migrations that
+/// `GRANT SELECT ... TO weissman_ro`: `20260827115800_hermetic_db_roles.sql` (the 13
+/// core tables) and `20260827160000_ot_ics_hardening_safety.sql` (the 4 ot_ics_* tables).
 pub const RO_SELECT_TABLES: &[&str] = &[
     "vulnerabilities",
     "weissman_finding_clusters",
