@@ -190,6 +190,15 @@ const RLS_FORCE_ALLOWLIST: &[&str] = &[
     // tenant_id column; shared seed data, not per-tenant. The test extracts the bare schema
     // identifier "intel" from `CREATE TABLE intel.discovery_knowledge`.
     "intel",
+    // IOC feed platform (PR #375): the shared indicator store and its platform-level feed
+    // run-log / credentials tables have no tenant_id — the connectors authenticate with the
+    // PLATFORM's own feed accounts and populate a GLOBAL indicator store, so these are
+    // platform settings, not per-tenant data (see 20260913120000_ioc_feeds_ueba_expansion.sql
+    // and 20260917120000_ioc_feed_credentials.sql). The per-tenant IOC tables (ioc_sightings,
+    // ioc_watchlist) correctly FORCE RLS and are deliberately NOT here.
+    "ioc_feed_credentials",
+    "ioc_feed_runs",
+    "ioc_indicators",
     "kev_intel",
     "oast_interaction_hits",
     "pending_signups",
