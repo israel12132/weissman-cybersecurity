@@ -125,9 +125,9 @@ DROP POLICY IF EXISTS ioc_sightings_tenant ON ioc_sightings;
 -- returns TRUE for unscoped staff/owner sessions and FALSE for a NULL client_id
 -- under a scoped session — the correct fail-closed behavior.)
 CREATE POLICY ioc_sightings_tenant ON ioc_sightings FOR ALL
-    USING       (tenant_id = current_setting('app.current_tenant_id', true)::bigint
+    USING       (tenant_id = public.app_current_tenant_id()
                  AND public.weissman_client_row_visible(client_id))
-    WITH CHECK  (tenant_id = current_setting('app.current_tenant_id', true)::bigint
+    WITH CHECK  (tenant_id = public.app_current_tenant_id()
                  AND public.weissman_client_row_visible(client_id));
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON ioc_sightings TO weissman_app;
@@ -158,8 +158,8 @@ ALTER TABLE ioc_watchlist ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ioc_watchlist FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS ioc_watchlist_tenant ON ioc_watchlist;
 CREATE POLICY ioc_watchlist_tenant ON ioc_watchlist FOR ALL
-    USING       (tenant_id = current_setting('app.current_tenant_id', true)::bigint)
-    WITH CHECK  (tenant_id = current_setting('app.current_tenant_id', true)::bigint);
+    USING       (tenant_id = public.app_current_tenant_id())
+    WITH CHECK  (tenant_id = public.app_current_tenant_id());
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON ioc_watchlist TO weissman_app;
 GRANT USAGE, SELECT, UPDATE ON SEQUENCE ioc_watchlist_id_seq TO weissman_app;
@@ -194,8 +194,8 @@ ALTER TABLE ueba_peer_baselines ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ueba_peer_baselines FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS ueba_peer_baselines_tenant ON ueba_peer_baselines;
 CREATE POLICY ueba_peer_baselines_tenant ON ueba_peer_baselines FOR ALL
-    USING       (tenant_id = current_setting('app.current_tenant_id', true)::bigint)
-    WITH CHECK  (tenant_id = current_setting('app.current_tenant_id', true)::bigint);
+    USING       (tenant_id = public.app_current_tenant_id())
+    WITH CHECK  (tenant_id = public.app_current_tenant_id());
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON ueba_peer_baselines TO weissman_app;
 
@@ -228,9 +228,9 @@ ALTER TABLE ueba_entity_risk FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS ueba_entity_risk_tenant ON ueba_entity_risk;
 -- Same customer-isolation invariant as ioc_sightings (client_id present here).
 CREATE POLICY ueba_entity_risk_tenant ON ueba_entity_risk FOR ALL
-    USING       (tenant_id = current_setting('app.current_tenant_id', true)::bigint
+    USING       (tenant_id = public.app_current_tenant_id()
                  AND public.weissman_client_row_visible(client_id))
-    WITH CHECK  (tenant_id = current_setting('app.current_tenant_id', true)::bigint
+    WITH CHECK  (tenant_id = public.app_current_tenant_id()
                  AND public.weissman_client_row_visible(client_id));
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON ueba_entity_risk TO weissman_app;

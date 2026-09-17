@@ -289,10 +289,14 @@ pub async fn resolve_and_pin_public_http(raw: &str) -> Result<PinnedHttpTarget, 
     let port = parsed
         .port_or_known_default()
         .unwrap_or(if parsed.scheme() == "https" { 443 } else { 80 });
+    // Mirror validate_poe_target_url's policy (checked at the top of this fn): private/reserved
+    // addresses are blocked unless WEISSMAN_ALLOW_PRIVATE_SCAN_TARGETS=1, which only tests /
+    // benchmarks set to reach a local fixture. Production leaves it unset, so the block still holds.
+    let allow_private = allow_private_scan_targets();
     let mut addrs: Vec<SocketAddr> = Vec::new();
     let mut seen = HashSet::new();
     if let Ok(ip) = host.parse::<IpAddr>() {
-        if is_private_or_reserved_ip(&ip) {
+        if !allow_private && is_private_or_reserved_ip(&ip) {
             return Err(format!("blocked private/reserved pin target {ip}"));
         }
         addrs.push(SocketAddr::new(ip, port));
@@ -302,7 +306,7 @@ pub async fn resolve_and_pin_public_http(raw: &str) -> Result<PinnedHttpTarget, 
             .map_err(|e| format!("dns pin resolve failed: {e}"))?;
         for sa in resolved {
             let ip = sa.ip();
-            if is_private_or_reserved_ip(&ip) {
+            if !allow_private && is_private_or_reserved_ip(&ip) {
                 return Err(format!(
                     "dns pin rejected: {host} resolved to blocked address {ip}"
                 ));

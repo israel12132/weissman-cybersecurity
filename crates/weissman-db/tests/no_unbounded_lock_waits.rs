@@ -77,6 +77,14 @@ const ROW_LOCK_ALLOWED: &[&str] = &[
     // for every tenant transaction. Both of these begin with `begin_tenant_tx`.
     "fingerprint_engine/src/council_hitl.rs",
     "fingerprint_engine/src/self_improve.rs",
+    // Campaign lifecycle takes `FOR UPDATE` on the campaign row in `lock_campaign`; every caller
+    // (`pause_campaign`, `tick_one`, and the tick-loop failure path) opens the tx with
+    // `crate::db::begin_tenant_tx` -> `weissman_db::set_tenant_tx`, so `lock_timeout` is set.
+    "fingerprint_engine/src/adversary_campaign.rs",
+    // Discovery Lab takes `FOR UPDATE` on the candidate / disclosure-pack rows in
+    // `apply_candidate_action`, `create_disclosure_pack` and `update_disclosure`; each opens the
+    // tx with `crate::db::begin_tenant_tx` -> `weissman_db::set_tenant_tx`, so `lock_timeout` is set.
+    "fingerprint_engine/src/discovery_lab.rs",
     // HITL approve takes FOR UPDATE on the execution row; the tx starts with
     // `begin_tenant_tx` so `lock_timeout` is set.
     "fingerprint_engine/src/soar/engine.rs",

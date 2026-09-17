@@ -24,8 +24,8 @@ ALTER TABLE osv_first_seen_hits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE osv_first_seen_hits FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS osv_first_seen_hits_tenant ON osv_first_seen_hits;
 CREATE POLICY osv_first_seen_hits_tenant ON osv_first_seen_hits FOR ALL
-    USING (tenant_id = current_setting('app.current_tenant_id', true)::bigint)
-    WITH CHECK (tenant_id = current_setting('app.current_tenant_id', true)::bigint);
+    USING (tenant_id = public.app_current_tenant_id())
+    WITH CHECK (tenant_id = public.app_current_tenant_id());
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON osv_first_seen_hits TO weissman_app;
 GRANT USAGE, SELECT ON SEQUENCE osv_first_seen_hits_id_seq TO weissman_app;

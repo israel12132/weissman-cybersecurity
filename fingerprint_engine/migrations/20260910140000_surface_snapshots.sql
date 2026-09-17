@@ -19,8 +19,8 @@ ALTER TABLE surface_snapshots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE surface_snapshots FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS surface_snapshots_tenant ON surface_snapshots;
 CREATE POLICY surface_snapshots_tenant ON surface_snapshots FOR ALL
-    USING (tenant_id = current_setting('app.current_tenant_id', true)::bigint)
-    WITH CHECK (tenant_id = current_setting('app.current_tenant_id', true)::bigint);
+    USING (tenant_id = public.app_current_tenant_id())
+    WITH CHECK (tenant_id = public.app_current_tenant_id());
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON surface_snapshots TO weissman_app;
 GRANT USAGE, SELECT ON SEQUENCE surface_snapshots_id_seq TO weissman_app;

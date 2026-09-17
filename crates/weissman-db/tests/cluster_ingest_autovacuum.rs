@@ -34,9 +34,9 @@ fn cluster_ingest_autovacuum_is_enforced_in_both_sqlx_trees() {
     );
 }
 
-const UNLOGGED_DB: &str = include_str!("../migrations/20260829120000_cluster_ingest_unlogged.sql");
+const UNLOGGED_DB: &str = include_str!("../migrations/20260829120050_cluster_ingest_unlogged.sql");
 const UNLOGGED_ENGINE: &str = include_str!(
-    "../../../fingerprint_engine/migrations/20260829120000_cluster_ingest_unlogged.sql"
+    "../../../fingerprint_engine/migrations/20260829120050_cluster_ingest_unlogged.sql"
 );
 
 #[test]
