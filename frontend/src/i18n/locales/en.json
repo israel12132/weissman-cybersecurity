@@ -2528,7 +2528,9 @@
       "deactivate_confirm": "Deactivate user {{email}}? They will lose access immediately.",
       "deactivate_action": "Deactivate",
       "role_client": "Customer portal",
+      "role_owner": "Owner",
       "assigned_client": "Bound customer",
+      "assigned_client_optional": "optional — with none assigned the user sees nothing",
       "assigned_client_placeholder": "Select the customer this login belongs to",
       "assigned_client_required": "Customer-portal users must be bound to a client",
       "users_unavailable": "User directory unavailable — store could not be confirmed."

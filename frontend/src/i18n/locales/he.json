@@ -2528,7 +2528,9 @@
       "deactivate_confirm": "להשבית את המשתמש {{email}}? הגישה תיחסם מיידית.",
       "deactivate_action": "השבת",
       "role_client": "פורטל לקוח",
+      "role_owner": "בעלים",
       "assigned_client": "לקוח קשור",
+      "assigned_client_optional": "רשות — ללא שיוך המשתמש לא יראה כלום",
       "assigned_client_placeholder": "בחר את הלקוח שחשבון זה שייך אליו",
       "assigned_client_required": "משתמשי פורטל לקוח חייבים להיות קשורים ללקוח",
       "users_unavailable": "ספריית המשתמשים אינה זמינה — לא ניתן לאשר את המחסן."

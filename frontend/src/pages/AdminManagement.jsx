@@ -49,6 +49,21 @@ export default function AdminManagement() {
   const editModalRef = useRef(null)
   useFocusTrap(editModalRef, !!editingUser && !usersUnavailable)
 
+  // Roles that confine a user to a single client: the portal `client` role and
+  // any role below admin (viewer / analyst / operator). For `client` a client is
+  // required; for the others it is optional (unassigned ⇒ they see nothing).
+  const roleCanScope = useCallback(
+    (r) => ['client', 'viewer', 'analyst', 'operator'].includes(String(r || '').toLowerCase()),
+    [],
+  )
+  const roleRequiresClient = useCallback(
+    (r) => String(r || '').toLowerCase() === 'client',
+    [],
+  )
+  // Only an existing owner (or superadmin) may grant the owner role.
+  const canAssignOwner =
+    session?.is_superadmin === true || String(session?.role || '').toLowerCase() === 'owner'
+
   const loadUsers = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -95,8 +110,9 @@ export default function AdminManagement() {
           email: newEmail.trim(),
           password: newPassword,
           role: newRole,
-          is_superadmin: newRole === 'client' ? false : newIsSuperadmin,
-          assigned_client_id: newRole === 'client' ? Number(newAssignedClientId) : null,
+          is_superadmin: roleCanScope(newRole) ? false : newIsSuperadmin,
+          assigned_client_id:
+            roleCanScope(newRole) && newAssignedClientId ? Number(newAssignedClientId) : null,
         },
       })
       setSuccessMsg(`User ${newEmail} created successfully`)
@@ -131,8 +147,11 @@ export default function AdminManagement() {
         method: 'PATCH',
         body: {
           role: editRole,
-          is_superadmin: editRole === 'client' ? false : editIsSuperadmin,
-          assigned_client_id: editRole === 'client' ? Number(editAssignedClientId) || null : null,
+          is_superadmin: roleCanScope(editRole) ? false : editIsSuperadmin,
+          assigned_client_id:
+            roleCanScope(editRole) && editAssignedClientId
+              ? Number(editAssignedClientId) || null
+              : null,
         },
       })
       setSuccessMsg(`User ${editingUser.email} updated`)
@@ -184,7 +203,7 @@ export default function AdminManagement() {
 
   const listFindings = useMemo(() => users.map((user) => ({
     id: user.id,
-    severity: user.is_active === false ? 'high' : user.role === 'ceo' ? 'critical' : 'info',
+    severity: user.is_active === false ? 'high' : ['ceo', 'owner'].includes(user.role) ? 'critical' : 'info',
     title: user.email,
     type: user.role || 'viewer',
     description: user.is_superadmin
@@ -242,7 +261,9 @@ export default function AdminManagement() {
         return (
           <span
             className={`px-2 py-0.5 rounded text-xs font-medium uppercase ${
-              role === 'ceo'
+              role === 'owner'
+                ? 'bg-rose-500/20 text-rose-300'
+                : role === 'ceo'
                 ? 'bg-amber-500/20 text-amber-400'
                 : role === 'admin'
                 ? 'bg-violet-500/20 text-violet-400'
@@ -452,22 +473,28 @@ export default function AdminManagement() {
                 <option value="operator">Operator</option>
                 <option value="admin">Admin</option>
                 <option value="ceo">CEO</option>
+                {canAssignOwner && <option value="owner">{t('pages.adminManagement.role_owner')}</option>}
                 <option value="client">{t('pages.adminManagement.role_client')}</option>
               </select>
             </div>
-            {newRole === 'client' && (
+            {roleCanScope(newRole) && (
             <div>
               <label
                 htmlFor="adminmgmt-new-client"
                 className="block text-xs uppercase tracking-widest text-[var(--text-muted)] mb-2"
               >
                 {t('pages.adminManagement.assigned_client')}
+                {!roleRequiresClient(newRole) && (
+                  <span className="text-[var(--text-muted)] normal-case tracking-normal ml-1">
+                    ({t('pages.adminManagement.assigned_client_optional')})
+                  </span>
+                )}
               </label>
               <select
                 id="adminmgmt-new-client"
                 value={newAssignedClientId}
                 onChange={(e) => setNewAssignedClientId(e.target.value)}
-                required
+                required={roleRequiresClient(newRole)}
                 className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-white focus:border-cyan-500/50 focus:outline-none text-sm"
               >
                 <option value="">{t('pages.adminManagement.assigned_client_placeholder')}</option>
@@ -477,7 +504,7 @@ export default function AdminManagement() {
               </select>
             </div>
             )}
-            {newRole !== 'client' && (
+            {!roleCanScope(newRole) && (
             <div className="flex flex-col justify-end">
               <label className="flex items-center gap-2 mb-2 cursor-pointer">
                 <input
@@ -584,16 +611,24 @@ export default function AdminManagement() {
                     <option value="operator">Operator</option>
                     <option value="admin">Admin</option>
                     <option value="ceo">CEO</option>
+                    {(canAssignOwner || String(editRole).toLowerCase() === 'owner') && (
+                      <option value="owner">{t('pages.adminManagement.role_owner')}</option>
+                    )}
                     <option value="client">{t('pages.adminManagement.role_client')}</option>
                   </select>
                 </div>
-                {editRole === 'client' && (
+                {roleCanScope(editRole) && (
                 <div>
                   <label
                     htmlFor="adminmgmt-edit-client"
                     className="block text-xs uppercase tracking-widest text-[var(--text-muted)] mb-2"
                   >
                     {t('pages.adminManagement.assigned_client')}
+                    {!roleRequiresClient(editRole) && (
+                      <span className="text-[var(--text-muted)] normal-case tracking-normal ml-1">
+                        ({t('pages.adminManagement.assigned_client_optional')})
+                      </span>
+                    )}
                   </label>
                   <select
                     id="adminmgmt-edit-client"
@@ -608,7 +643,7 @@ export default function AdminManagement() {
                   </select>
                 </div>
                 )}
-                {editRole !== 'client' && (
+                {!roleCanScope(editRole) && (
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     id="adminmgmt-edit-superadmin"
