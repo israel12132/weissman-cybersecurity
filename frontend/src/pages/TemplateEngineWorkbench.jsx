@@ -327,7 +327,7 @@ function TemplateEngineWorkbenchBody() {
                   </div>
                   <div className="rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-3 text-center">
                     <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t(`${NS}.result_steps`)}</div>
-                    <div className="text-lg font-semibold text-white mt-1">{stepCount}</div>
+                    <div className="text-lg font-semibold text-[var(--text-primary)] mt-1">{stepCount}</div>
                     <div className="text-[10px] font-mono text-[var(--text-muted)]">
                       {t(`${NS}.steps_matched`, { matched: matchedSteps, total: stepCount })}
                     </div>

@@ -180,7 +180,7 @@ export default function RoeApprovals() {
                           {t('pages.roeApprovals.approvals_count', { count: approvalsHave(req) })}
                         </span>
                       </div>
-                      <p className="mt-2 text-sm font-medium text-white">{f.title}</p>
+                      <p className="mt-2 text-sm font-medium text-[var(--text-primary)]">{f.title}</p>
                       <p className="mt-1 text-[11px] font-mono text-[var(--text-muted)]">{f.description}</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">

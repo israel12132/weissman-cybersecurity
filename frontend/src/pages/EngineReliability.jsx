@@ -47,7 +47,7 @@ function StatCard({ label, value, tone, icon, hint }) {
         <span className="text-xs text-[var(--text-tertiary)]">{label}</span>
         {icon}
       </div>
-      <div className="text-2xl font-bold" style={tone ? { color: tone } : { color: '#fff' }}>
+      <div className="text-2xl font-bold" style={tone ? { color: tone } : { color: 'var(--text-primary)' }}>
         {value}
       </div>
     </div>

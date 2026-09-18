@@ -158,7 +158,7 @@ export default function ScanScheduler() {
               <span className="text-sm text-[var(--text-tertiary)]">{t('pages.scanScheduler.total_schedules')}</span>
               <Calendar className="w-4 h-4 text-cyan-400" />
             </div>
-            <div className="text-2xl font-bold text-white">{stats.total}</div>
+            <div className="text-2xl font-bold text-[var(--text-primary)]">{stats.total}</div>
           </div>
 
           <div className="bg-green-500/10 backdrop-blur-md border border-green-500/30 rounded-xl p-4">
@@ -218,7 +218,7 @@ export default function ScanScheduler() {
         {/* Schedules List */}
         <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
           <div className="p-4 border-b border-[var(--border-default)] space-y-3">
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
               <Calendar className="w-4 h-4 text-cyan-400" />
               {t('pages.scanScheduler.schedules_heading', { count: filteredSchedules.length })}
             </h3>
@@ -497,7 +497,7 @@ function ScheduleModal({ schedule, template, onClose, onSave }) {
     >
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={schedule ? 'Edit scan schedule' : 'Create scan schedule'} className="bg-[var(--bg-1)] border border-[var(--border-default)] rounded-xl max-w-2xl w-full p-6">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-bold text-white">
+          <h3 className="text-lg font-bold text-[var(--text-primary)]">
             {schedule ? 'Edit Schedule' : 'Create Scan Schedule'}
           </h3>
           <Button variant="unstyled"

@@ -279,7 +279,7 @@ export default function SocialEngineering() {
               <span className="text-sm text-[var(--text-tertiary)]">{t('pages.socialEngineering.active_campaigns')}</span>
               <Mail className="w-4 h-4 text-cyan-400" />
             </div>
-            <div className="text-2xl font-bold text-white">{statValue('active')}</div>
+            <div className="text-2xl font-bold text-[var(--text-primary)]">{statValue('active')}</div>
           </div>
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
@@ -391,7 +391,7 @@ export default function SocialEngineering() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      <h4 className="text-sm font-semibold text-white">{f.title}</h4>
+                      <h4 className="text-sm font-semibold text-[var(--text-primary)]">{f.title}</h4>
                       {f.severity && (
                         <span className={`px-2 py-1 rounded text-xs font-medium ${getSeverityColor(f.severity)}`}>
                           {f.severity}

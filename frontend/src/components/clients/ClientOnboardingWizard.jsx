@@ -216,7 +216,7 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
             className={`px-3 py-1.5 rounded-lg text-[11px] font-mono border transition-colors ${
               i === step
                 ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-200'
-                : 'border-white/10 text-white/40 hover:text-white/70'
+                : 'border-white/10 text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
             }`}
           >
             {i + 1}. {stepLabel}
@@ -503,7 +503,7 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
           type="button"
           disabled={step === 0 || submitting}
           onClick={() => setStep((s) => Math.max(0, s - 1))}
-          className="px-4 py-2 flex items-center gap-1 border border-white/15 text-white/70 rounded-lg hover:bg-white/5 disabled:opacity-40"
+          className="px-4 py-2 flex items-center gap-1 border border-white/15 text-[var(--text-secondary)] rounded-lg hover:bg-white/5 disabled:opacity-40"
         >
           <ChevronLeft className="w-4 h-4" />
           {t('pages.clientOnboarding.back')}

@@ -656,7 +656,7 @@ export default function IncidentResponseCenter() {
                     </span>
                   )}
                 </div>
-                <h2 className="text-sm font-bold text-white mb-2">{selected.title}</h2>
+                <h2 className="text-sm font-bold text-[var(--text-primary)] mb-2">{selected.title}</h2>
                 <p className="text-xs text-[var(--text-tertiary)] leading-relaxed">{selected.description}</p>
               </div>
 

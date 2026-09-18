@@ -258,7 +258,7 @@ export default function MetricsDashboard() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold text-white">{t('pages.metricsDashboard.findings_by_severity')}</h3>
+                  <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('pages.metricsDashboard.findings_by_severity')}</h3>
                   <span className="text-xs text-[var(--text-tertiary)]">{t('pages.metricsDashboard.total_count', { count: totalFindings })}</span>
                 </div>
                 {totalFindings > 0 ? (
@@ -297,7 +297,7 @@ export default function MetricsDashboard() {
               </div>
 
               <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-6">
-                <h3 className="text-sm font-semibold text-white mb-4">{t('pages.metricsDashboard.severity_breakdown')}</h3>
+                <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-4">{t('pages.metricsDashboard.severity_breakdown')}</h3>
                 <div className="space-y-3">
                   {severityChartData.map(({ severity, count, label }) => (
                     <div key={severity} className="flex items-center gap-3">

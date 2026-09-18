@@ -922,7 +922,7 @@ function Num({ label, value, onChange, min, max, step, hint }) {
   return (
     <label className="block space-y-1">
       <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
-      <input type="number" min={min} max={max} step={step} value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-cyan-400/40" />
+      <input type="number" min={min} max={max} step={step} value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-[var(--text-primary)] font-mono focus:outline-none focus:border-cyan-400/40" />
       <Hint>{hint}</Hint>
     </label>
   )
@@ -942,7 +942,7 @@ function Txt({ label, value, onChange, placeholder, hint, type = 'text' }) {
   return (
     <label className="block space-y-1">
       <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white font-mono placeholder-white/20 focus:outline-none focus:border-cyan-400/40" />
+      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-[var(--text-primary)] font-mono placeholder-white/20 focus:outline-none focus:border-cyan-400/40" />
       <Hint>{hint}</Hint>
     </label>
   )

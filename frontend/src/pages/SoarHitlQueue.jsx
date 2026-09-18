@@ -83,7 +83,7 @@ function HitlItem({ item, onApprove, onDeny, loading }) {
               {item.action_kind}
             </span>
           </div>
-          <p className="text-sm font-medium text-white truncate max-w-lg">{item.target_id || '—'}</p>
+          <p className="text-sm font-medium text-[var(--text-primary)] truncate max-w-lg">{item.target_id || '—'}</p>
           <p className="text-[10px] font-mono text-[var(--text-disabled)]">
             {item.created_at ? new Date(item.created_at).toLocaleString() : ''}
             {item.client_id ? t('pages.soarHitlQueue.client_suffix', { id: item.client_id }) : ''}

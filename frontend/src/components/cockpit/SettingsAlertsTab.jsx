@@ -12,12 +12,12 @@ function SettingsAlertsTabCrashUI({ error, onRetry }) {
   return (
     <div className="p-6 text-white/90 max-w-xl mx-auto">
       <h2 className="text-lg font-semibold text-red-400 mb-2">{t(`${NS}.crashTitle`)}</h2>
-      <p className="text-sm text-white/60 mb-4">{t(`${NS}.crashBody`)}</p>
-      <p className="text-xs font-mono text-white/50 break-words mb-4">{msg}</p>
+      <p className="text-sm text-[var(--text-secondary)] mb-4">{t(`${NS}.crashBody`)}</p>
+      <p className="text-xs font-mono text-[var(--text-muted)] break-words mb-4">{msg}</p>
       <Button variant="unstyled"
         type="button"
         onClick={onRetry}
-        className="px-4 py-2 rounded-xl text-sm border border-white/20 text-white/80 hover:bg-white/10"
+        className="px-4 py-2 rounded-xl text-sm border border-white/20 text-[var(--text-primary)] hover:bg-white/10"
       >
         {t(`${NS}.tryAgain`)}
       </Button>
@@ -125,11 +125,11 @@ function SettingsAlertsTabInner() {
 
   return (
     <div className="p-6 text-white/90 max-w-xl mx-auto">
-      <h2 className="text-lg font-semibold mb-1 tracking-tight text-white">{t(`${NS}.title`)}</h2>
-      <p className="text-xs text-white/50 mb-6 uppercase tracking-widest">
+      <h2 className="text-lg font-semibold mb-1 tracking-tight text-[var(--text-primary)]">{t(`${NS}.title`)}</h2>
+      <p className="text-xs text-[var(--text-muted)] mb-6 uppercase tracking-widest">
         {t(`${NS}.subtitle`)}
       </p>
-      {loading && <p className="text-sm text-white/40">{t(`${NS}.loading`)}</p>}
+      {loading && <p className="text-sm text-[var(--text-muted)]">{t(`${NS}.loading`)}</p>}
       {!loading && settingsUnavailable && (
         <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400" role="alert" data-testid="settings-alerts-unavailable">
           {t(`${NS}.settings_unavailable`)}

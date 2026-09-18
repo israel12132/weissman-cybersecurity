@@ -370,7 +370,7 @@ export default function MemoryForensicsLab() {
             value={targetUrl}
             onChange={(e) => setTargetUrl(e.target.value)}
             placeholder={t(`${NS}.target_placeholder`)}
-            className="rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-white placeholder-[var(--text-muted)] w-80"
+            className="rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] w-80"
           />
           <Button variant="unstyled"
             onClick={runScan}
@@ -489,7 +489,7 @@ export default function MemoryForensicsLab() {
                     onClick={() => setSelected(f)}
                     className={`w-full text-left rounded-lg px-4 py-3 border transition-colors ${
                       selected?.id === f.id
-                        ? 'bg-violet-500/20 border-violet-500/50 text-white'
+                        ? 'bg-violet-500/20 border-violet-500/50 text-[var(--text-primary)]'
                         : 'bg-[var(--bg-3)]/60 border-[var(--border-strong)] hover:border-[var(--border-strong)] text-[var(--text-secondary)]'
                     }`}
                   >

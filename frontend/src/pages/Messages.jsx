@@ -111,7 +111,7 @@ export default function Messages() {
               id="messages-client"
               value={clientId || ''}
               onChange={(e) => setSelectedClientId(e.target.value ? Number(e.target.value) : null)}
-              className="px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-white text-sm focus:border-cyan-500/50 focus:outline-none"
+              className="px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-[var(--text-primary)] text-sm focus:border-cyan-500/50 focus:outline-none"
             >
               <option value="">{t('pages.messages.client_placeholder')}</option>
               {clients.map((c) => (
@@ -198,7 +198,7 @@ export default function Messages() {
               onKeyDown={onKeyDown}
               rows={2}
               placeholder={asHelp ? t('pages.messages.help_placeholder') : t('pages.messages.placeholder')}
-              className="w-full resize-none px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-white placeholder:text-[var(--text-muted)] focus:border-cyan-500/50 focus:outline-none text-sm"
+              className="w-full resize-none px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-cyan-500/50 focus:outline-none text-sm"
             />
             <div className="flex items-center justify-between gap-3">
               <label className="flex items-center gap-2 cursor-pointer select-none">

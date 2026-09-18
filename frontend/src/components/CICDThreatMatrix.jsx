@@ -118,7 +118,7 @@ export default function CICDThreatMatrix() {
             value={runRepoUrl}
             onChange={(e) => setRunRepoUrl(e.target.value)}
             placeholder={t(`${NS}.repo_placeholder`)}
-            className="rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-white placeholder-[var(--text-muted)] w-80"
+            className="rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] w-80"
           />
           <Button variant="unstyled"
             onClick={runScan}

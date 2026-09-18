@@ -43,7 +43,7 @@ export default function AIModelRiskTab() {
       columnHelper.accessor('endpoint_url', {
         header: t(`${NS}.colEndpoint`),
         cell: (info) => (
-          <span className="text-white/70 font-mono max-w-[200px] truncate block" title={info.getValue()}>
+          <span className="text-[var(--text-secondary)] font-mono max-w-[200px] truncate block" title={info.getValue()}>
             {info.getValue()}
           </span>
         ),

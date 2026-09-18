@@ -609,7 +609,7 @@ export default function KubernetesSecurityPanel({ clientId, target: defaultTarge
           <div className="flex items-center gap-3">
             <span className="text-3xl" style={{ color: ACCENT }}>⎈</span>
             <div>
-              <h2 className="text-lg font-bold text-white">{L.title}</h2>
+              <h2 className="text-lg font-bold text-[var(--text-primary)]">{L.title}</h2>
               <p className="text-sm text-[var(--text-tertiary)]">{L.subtitle}</p>
               <span className="text-[10px] font-mono text-[var(--text-disabled)] uppercase tracking-widest">k8s_container</span>
             </div>

@@ -197,7 +197,7 @@ export default function ContainmentRulesBuilder() {
               <span className="text-sm text-[var(--text-tertiary)]">{t('pages.containmentRulesBuilder.total_rules')}</span>
               <Shield className="w-4 h-4 text-cyan-400" />
             </div>
-            <div className="text-2xl font-bold text-white">{stats.total}</div>
+            <div className="text-2xl font-bold text-[var(--text-primary)]">{stats.total}</div>
           </div>
 
           <div className="bg-green-500/10 backdrop-blur-md border border-green-500/30 rounded-xl p-4">
@@ -453,7 +453,7 @@ function RuleModal({ rule, clientId, onClose, onSave }) {
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               placeholder={t('pages.containmentRulesBuilder.rule_name_placeholder')}
             />
           </div>
@@ -463,7 +463,7 @@ function RuleModal({ rule, clientId, onClose, onSave }) {
             <select
               value={formData.action}
               onChange={(e) => setFormData({ ...formData, action: e.target.value })}
-              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             >
               <option value="isolate">{t('pages.containmentRulesBuilder.action_isolate')}</option>
               <option value="quarantine">{t('pages.containmentRulesBuilder.action_quarantine')}</option>

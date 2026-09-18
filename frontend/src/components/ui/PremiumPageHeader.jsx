@@ -87,7 +87,7 @@ export default function PremiumPageHeader({
             <Button variant="unstyled"
               type="button"
               onClick={onExport}
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-mono border border-cyan-500/30 bg-cyan-500/10 text-cyan-200/90 hover:bg-cyan-500/18 hover:border-cyan-500/45 transition-all"
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-mono border border-cyan-500/30 bg-cyan-500/10 text-[var(--text-accent)] hover:bg-cyan-500/18 hover:border-cyan-500/45 transition-all"
             >
               <span aria-hidden="true">↓</span>
               {exportLabel || t('common.export')}

@@ -427,7 +427,7 @@ function SecretModal({ secret, onClose, onSave }) {
     >
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={secret ? t('pages.ceoVault.edit_secret') : t('pages.ceoVault.create_secret')} className="bg-[var(--bg-1)] border border-[var(--border-default)] rounded-xl max-w-lg w-full p-6">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-bold text-white">
+          <h3 className="text-lg font-bold text-[var(--text-primary)]">
             {secret ? t('pages.ceoVault.edit_secret') : t('pages.ceoVault.create_secret')}
           </h3>
           <Button variant="unstyled"

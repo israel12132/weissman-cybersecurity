@@ -204,10 +204,10 @@ export default function ComplianceDashboardTab() {
               key={f.framework}
               className="rounded-xl border border-white/10 bg-[var(--bg-0)]/80 p-4 flex flex-col gap-1"
             >
-              <span className="text-xs uppercase tracking-widest text-white/45">{labelForFramework(f.framework)}</span>
+              <span className="text-xs uppercase tracking-widest text-[var(--text-muted)]">{labelForFramework(f.framework)}</span>
               <span className="text-3xl font-bold text-[var(--text-primary)] tabular-nums">{f.compliance_percent}%</span>
-              <span className="text-[11px] text-white/40">{t(`${NS}.compliantMapped`)}</span>
-              <span className="text-[10px] text-white/30 mt-1">
+              <span className="text-[11px] text-[var(--text-muted)]">{t(`${NS}.compliantMapped`)}</span>
+              <span className="text-[10px] text-[var(--text-muted)] mt-1">
                 {t(`${NS}.controlsWithFindings`, {
                   violated: f.violated_controls,
                   total: f.total_mapped_controls,

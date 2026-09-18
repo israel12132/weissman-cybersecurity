@@ -424,7 +424,7 @@ export default function DarkWebMonitor() {
               onChange={(e) => setSearch(e.target.value)}
               aria-label={t('pages.darkWebMonitor.search_placeholder')}
               placeholder={t('pages.darkWebMonitor.search_placeholder')}
-              className="w-full pl-10 pr-4 py-2 rounded-xl bg-[var(--bg-2)] border border-[var(--border-default)] text-sm text-white placeholder-white/25 focus:outline-none focus:border-rose-500/40"
+              className="w-full pl-10 pr-4 py-2 rounded-xl bg-[var(--bg-2)] border border-[var(--border-default)] text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-rose-500/40"
             />
           </div>
           <div className="flex items-center gap-1 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg p-1 flex-wrap">
@@ -529,7 +529,7 @@ function KpiCard({ label, value, accent }) {
   return (
     <div className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-4">
       <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{label}</div>
-      <div className={`text-3xl font-bold mt-1 ${accent || 'text-white'}`}>{value}</div>
+      <div className={`text-3xl font-bold mt-1 ${accent || 'text-[var(--text-primary)]'}`}>{value}</div>
     </div>
   )
 }
