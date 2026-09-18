@@ -7162,7 +7162,15 @@
       "low": "נמוך",
       "info": "מידע",
       "velocity": "זמן סריקה ממוצע",
-      "queue": "תור פעיל"
+      "queue": "תור פעיל",
+      "posture": {
+        "unknown": "לא ידוע",
+        "robust": "חסין",
+        "guarded": "מוגן",
+        "elevated": "מוגבר",
+        "high": "סיכון גבוה",
+        "severe": "חמור"
+      }
     },
     "cockpitTabs": {
       "overview": {

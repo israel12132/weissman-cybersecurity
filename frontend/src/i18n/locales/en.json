@@ -7162,7 +7162,15 @@
       "low": "Low",
       "info": "Info",
       "velocity": "Avg scan",
-      "queue": "Live queue"
+      "queue": "Live queue",
+      "posture": {
+        "unknown": "Unknown",
+        "robust": "Robust",
+        "guarded": "Guarded",
+        "elevated": "Elevated",
+        "high": "High risk",
+        "severe": "Severe"
+      }
     },
     "cockpitTabs": {
       "overview": {

@@ -58,6 +58,15 @@ function scoreColor(score) {
   return '#ef4444'
 }
 
+function postureKey(score) {
+  if (score == null) return 'unknown'
+  if (score >= 80) return 'robust'
+  if (score >= 60) return 'guarded'
+  if (score >= 40) return 'elevated'
+  if (score >= 20) return 'high'
+  return 'severe'
+}
+
 function Delta({ value, invert = true }) {
   const { t } = useTranslation()
   if (value == null || value === 0) {
@@ -124,8 +133,14 @@ function ScoreGauge({ score, method }) {
           <span className="text-[10px] font-mono text-[var(--text-muted)] mt-1">/100</span>
         </div>
       </div>
-      <div className="mt-1.5 text-center">
-        <div className="text-[9px] font-mono uppercase tracking-[0.22em] text-[var(--text-tertiary)]">
+      <div className="mt-2 text-center flex flex-col items-center">
+        <span
+          className="px-2.5 py-0.5 rounded-full text-[9px] font-mono font-semibold uppercase tracking-[0.18em]"
+          style={{ color: col, background: `${col}18`, boxShadow: `inset 0 0 0 1px ${col}44` }}
+        >
+          {t(`${CH}.posture.${postureKey(score)}`)}
+        </span>
+        <div className="text-[8px] font-mono uppercase tracking-[0.22em] text-[var(--text-tertiary)] mt-1.5">
           {t(`${CH}.security_posture`)}
         </div>
         <div className="text-[9px] font-mono text-[var(--text-muted)] mt-0.5 max-w-[160px] truncate">
@@ -356,6 +371,15 @@ export default function CommandHero() {
       className="border-b border-[var(--border-subtle)] backdrop-blur-md"
       style={{ background: 'var(--kpi-strip-bg)' }}
     >
+      {/* Top accent — subtle brand gradient hairline */}
+      <div
+        className="h-px w-full"
+        aria-hidden
+        style={{
+          background:
+            'linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--brand-primary) 55%, transparent) 30%, color-mix(in srgb, var(--brand-secondary) 45%, transparent) 70%, transparent 100%)',
+        }}
+      />
       {/* Live status bar */}
       <div className="flex items-center justify-between gap-3 px-4 py-1.5 border-b border-[var(--border-subtle)] text-[9px] font-mono uppercase tracking-[0.18em]">
         <div className="flex items-center gap-2 text-[var(--text-tertiary)] min-w-0 overflow-hidden">
@@ -393,15 +417,15 @@ export default function CommandHero() {
 
       {/* Hero grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 p-3 sm:p-4">
-        <div className="lg:col-span-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-1)]/40 p-3 flex items-center justify-center">
+        <div className="lg:col-span-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-1)]/50 shadow-[0_8px_30px_-14px_rgba(0,0,0,0.45)] p-3 flex items-center justify-center">
           <Link to="/findings" className="focus:outline-none focus-visible:ring-1 focus-visible:ring-cyan-400/40 rounded-xl">
             <ScoreGauge score={score} method={kpis?.scoring?.method} />
           </Link>
         </div>
-        <div className="lg:col-span-5 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-1)]/40 p-3.5">
+        <div className="lg:col-span-5 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-1)]/50 shadow-[0_8px_30px_-14px_rgba(0,0,0,0.45)] p-3.5">
           <ThreatSpectrum sev={sev} delta={delta} />
         </div>
-        <div className="lg:col-span-4 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-1)]/40 p-3.5 flex flex-col justify-between min-w-0">
+        <div className="lg:col-span-4 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-1)]/50 shadow-[0_8px_30px_-14px_rgba(0,0,0,0.45)] p-3.5 flex flex-col justify-between min-w-0">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-mono uppercase tracking-[0.22em] text-[var(--text-tertiary)]">
               {t(`${CH}.discovery_trend`)}
