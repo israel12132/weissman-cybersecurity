@@ -7154,6 +7154,16 @@
         "proofOnly": "הוכחה בלבד"
       }
     },
+    "commandHero": {
+      "security_posture": "מצב אבטחה",
+      "threat_posture": "מפת איומים",
+      "discovery_trend": "מגמת גילויים · 24 שעות",
+      "medium": "בינוני",
+      "low": "נמוך",
+      "info": "מידע",
+      "velocity": "זמן סריקה ממוצע",
+      "queue": "תור פעיל"
+    },
     "cockpitTabs": {
       "overview": {
         "no_client": "לא נבחר לקוח",
