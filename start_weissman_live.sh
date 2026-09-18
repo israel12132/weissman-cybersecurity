@@ -60,6 +60,11 @@ ADMIN_EMAIL="${WEISSMAN_ADMIN_EMAIL:-admin@localhost}"
 # operator's `WEISSMAN_OAST_DOMAIN=... ./start_weissman_live.sh` with the template's blank
 # line, enabling the oast profile but starting the listener with an empty domain.
 OAST_DOMAIN_CLI="${WEISSMAN_OAST_DOMAIN:-}"
+# Same rationale as OAST_DOMAIN_CLI: capture a shell-provided gateway port (e.g.
+# `WEISSMAN_GATEWAY_PORT=8000 ./start_weissman_live.sh`, used to keep a cloudflared origin on
+# :8000) before `source .env` can clobber it, then persist it so compose binds there on every
+# run and the health/status probes target the right port instead of a hardcoded :80.
+GATEWAY_PORT_CLI="${WEISSMAN_GATEWAY_PORT:-}"
 WITH_MONITORING=1
 # OAST out-of-band listener: on automatically when WEISSMAN_OAST_DOMAIN is set (it needs a
 # DNS zone the operator delegates), off otherwise.
@@ -91,6 +96,21 @@ resolve_profiles() {
 # docker compose with the active profiles applied to every subcommand.
 dc() {
   "${COMPOSE[@]}" "${PROFILES[@]}" "$@"
+}
+
+# Host base URL for the gateway's loopback health/UI probes. The gateway publishes on
+# ${WEISSMAN_GATEWAY_PORT:-80} (compose: ${WEISSMAN_GATEWAY_BIND:-127.0.0.1}:${WEISSMAN_GATEWAY_PORT:-80}:8080),
+# so a probe hardcoded to :80 times out whenever the operator moves it — e.g.
+# `WEISSMAN_GATEWAY_PORT=8000 ./start_weissman_live.sh` to keep a cloudflared origin on :8000 —
+# and wait_healthy then burns the whole 45-min budget on a stack that is actually healthy.
+# Always curl loopback (works regardless of WEISSMAN_GATEWAY_BIND, incl. 0.0.0.0); only the port varies.
+gateway_local_base() {
+  local port="${WEISSMAN_GATEWAY_PORT:-80}"
+  if [[ "$port" == "80" ]]; then
+    printf 'http://127.0.0.1'
+  else
+    printf 'http://127.0.0.1:%s' "$port"
+  fi
 }
 
 gen_secret() {
@@ -489,6 +509,12 @@ ensure_env() {
     env_set WEISSMAN_OAST_DOMAIN "$OAST_DOMAIN_CLI"
   fi
 
+  # Persist a shell-provided gateway port so compose binds it on every run and the loopback
+  # health/status probes (gateway_local_base) target it instead of the hardcoded :80.
+  if [[ -n "$GATEWAY_PORT_CLI" ]]; then
+    env_set WEISSMAN_GATEWAY_PORT "$GATEWAY_PORT_CLI"
+  fi
+
   # shellcheck disable=SC1091
   set -a && source .env && set +a
 
@@ -647,10 +673,11 @@ wait_healthy() {
     done
 
     if [[ "$all_ok" -eq 1 ]]; then
-      if curl -sf "http://127.0.0.1/api/health" >/dev/null 2>&1; then
+      local health_base; health_base="$(gateway_local_base)"
+      if curl -sf "${health_base}/api/health" >/dev/null 2>&1; then
         return 0
       fi
-      stalled_svc="gateway"; stalled_reason="containers healthy but http://127.0.0.1/api/health is not answering"
+      stalled_svc="gateway"; stalled_reason="containers healthy but ${health_base}/api/health is not answering"
     fi
     sleep 5
   done
@@ -669,15 +696,16 @@ verify_live() {
   # It has NEVER had a "status" key, so the old `grep '"status"'` failed every healthy
   # deploy: wait_healthy passed, then verify_live died one line later and the operator
   # never saw the banner or the generated admin password.
-  local health
-  health="$(curl -sf "http://127.0.0.1/api/health")" || die "/api/health did not answer"
+  local health_base health
+  health_base="$(gateway_local_base)"
+  health="$(curl -sf "${health_base}/api/health")" || die "${health_base}/api/health did not answer"
   grep -q '"ok":true' <<<"$health" || die "/api/health returned an unexpected body: $health"
   # postgres_ok can momentarily read false on a cold pool (2s ping timeout right after
   # migrations); warn rather than abort so a slow first boot is not misread as failure.
   grep -q '"postgres_ok":true' <<<"$health" \
     || log "WARN: backend reports postgres_ok=false — check: ./start_weissman_live.sh logs postgres"
 
-  curl -sf "http://127.0.0.1/command-center/" >/dev/null || die "/command-center/ failed"
+  curl -sf "${health_base}/command-center/" >/dev/null || die "/command-center/ failed"
   # NOTE: do not probe /api/config/public here — despite the name it is behind auth_guard
   # (not in PUBLIC_ROUTES) and returns 401 unauthenticated, and its body leaks tenant_id.
   # The gateway->backend hop is already exercised by /api/health above.
@@ -707,14 +735,15 @@ print_banner() {
 
   local login_email="${WEISSMAN_ADMIN_EMAIL:-admin@localhost}"
   local base="${WEISSMAN_PUBLIC_BASE_URL%/}"
+  local local_base; local_base="$(gateway_local_base)"
   cat <<EOF
 
 ================================================================================
   WEISSMAN LIVE — production stack is running
 ================================================================================
   Command Center : ${base}/command-center/login   (the URL users log in at)
-  Local access   : http://127.0.0.1/command-center/  (this host only)
-  API health     : http://127.0.0.1/api/health
+  Local access   : ${local_base}/command-center/  (this host only)
+  API health     : ${local_base}/api/health
   Admin email    : ${login_email}
 EOF
   # Production forces Secure-only session cookies (WEISSMAN_COOKIE_SECURE=1). Browsers do
@@ -765,7 +794,7 @@ EOF
     cat <<EOF
   Grafana        : http://127.0.0.1:3000  (${login_email} / same as WEISSMAN_ADMIN_PASSWORD)
   Prometheus     : http://127.0.0.1:9090  (${login_email} / same password — health targets UI)
-  Status page    : http://127.0.0.1/command-center/status  (uses Command Center login)
+  Status page    : ${local_base}/command-center/status  (uses Command Center login)
 EOF
   fi
   cat <<EOF
@@ -871,10 +900,11 @@ cmd_status() {
   resolve_optional_stacks_from_env
   dc ps
   echo ""
-  if curl -sf "http://127.0.0.1/api/health" >/dev/null 2>&1; then
-    log "API: healthy"
+  local health_base; health_base="$(gateway_local_base)"
+  if curl -sf "${health_base}/api/health" >/dev/null 2>&1; then
+    log "API: healthy on ${health_base}"
   else
-    log "API: down"
+    log "API: down on ${health_base}"
   fi
 }
 
