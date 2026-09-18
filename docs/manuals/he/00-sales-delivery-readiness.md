@@ -10,7 +10,7 @@
 |------|--------|-------|
 | **חיווט מנועים** | ✅ מלא | `verify_engine_wiring.mjs` → 0 פערים; **595 מנועי production** |
 | **תקן UI** | ✅ מלא | `weissman-ui-audit.mjs` → **111/111 דפים**, **130 נתיבים** |
-| **UX למנועי Agent** | ✅ מלא | Empty state + gates; **45 מנועים** |
+| **UX למנועי Agent** | ✅ מלא | Empty state + gates; **59 מנועים** |
 | **Billing / quota** | ✅ מלא | כל נתיבי enqueue; strict ב-production |
 | **Guards אבטחה** | ✅ מלא | JWT **≥48 תווים**, סודות אחרים **≥32** |
 | **בדיקות וראיות (שלב 6)** | ✅ | Playwright live, 67+ קבצי test, evidence pack |

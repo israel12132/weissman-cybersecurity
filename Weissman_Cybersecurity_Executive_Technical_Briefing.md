@@ -361,7 +361,7 @@ Seven action types are implemented: `set_status`, `slack_notify`, `webhook`, `ht
 
 ## 15. Data Layer: PostgreSQL, Multi-Tenancy & Migrations
 
-- **PostgreSQL 16 + pgvector** (the vector extension powers the AI memory and pentest reinforcement). ~88 application tables across a tenant-scoped public schema, a global `intel` schema, and the EPSS/KEV mirrors; defined by **177 SQL migrations** (~5,100 lines).
+- **PostgreSQL 16 + pgvector** (the vector extension powers the AI memory and pentest reinforcement). ~88 application tables across a tenant-scoped public schema, a global `intel` schema, and the EPSS/KEV mirrors; defined by **178 SQL migrations** (~5,100 lines).
 - **Multi-tenant isolation via Row-Level Security.** Every tenant table has `ENABLE` + `FORCE ROW LEVEL SECURITY` policies keyed on a transaction-local `app.current_tenant_id` GUC. The application role is subject to RLS; a separate auth role with `BYPASSRLS` is narrowly scoped to login lookups and is itself audited (with auto-revocation on suspicious cross-tenant access).
 - **Three database roles:** `weissman_app` (RLS-enforced), `weissman_auth` (login only), and `weissman_ro` (the read-only role for the natural-language query interface, restricted to a tightly-scoped table whitelist with its own statement timeout and memory limits).
 - **A custom two-phase migration runner** (`no_tx_migrations.rs`) that detects a `-- weissman:no-transaction` header and runs `CREATE INDEX CONCURRENTLY`-style migrations **outside any transaction**, recording them in `_sqlx_migrations` with SQLx-compatible SHA-384 checksums so the standard runner safely skips them. Deferred dependencies are re-applied after their tables exist. (This is a genuinely hard problem solved cleanly.)
@@ -492,7 +492,7 @@ Because the platform performs *offensive* actions, safety is engineered as a fir
 | Rust route-handler includes (`.inc`) | **~22,576 lines** |
 | Rust modules in the core engine crate | **445 files** |
 | Frontend (React/JSX) | **~142,800 lines**, **137 pages** |
-| SQL migrations | **177 files**, ~5,097 lines, **107 `CREATE TABLE`s** |
+| SQL migrations | **178 files**, ~5,097 lines, **107 `CREATE TABLE`s** |
 | Legacy Python | **~17,000 lines** |
 | Workspace crates | **13** Rust crates |
 | Engine catalog | **595 engine IDs** → **329 real_probe** (321 distinct impls) + **204 alias** + **59 agent_required** + **3 advisory-only**, 0 no_path |

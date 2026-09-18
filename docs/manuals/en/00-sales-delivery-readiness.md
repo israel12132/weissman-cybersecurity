@@ -82,7 +82,7 @@
 - **595** production security engine IDs with live probes (329 real_probe + 3 advisory-only + 204 alias + 59 agent_required — no fake findings)
 - **112** Command Center routes with live API evidence banners
 - Multi-tenant RLS, JWT (≥48 char production) + MFA, RBAC, audit log
-- Endpoint agent with 45+ agent-required detection surfaces
+- Endpoint agent with 59 agent-required detection surfaces
 - SOAR playbooks, attack-path graph, KEV/EPSS enrichment
 - Paddle billing with monthly scan quotas
 - Docker, systemd, and Kubernetes deployment paths
