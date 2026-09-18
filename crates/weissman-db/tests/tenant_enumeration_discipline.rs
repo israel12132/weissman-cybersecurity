@@ -59,7 +59,15 @@ const ALLOWED: &[&str] = &[
     "fingerprint_engine/src/alert_evaluator_worker.rs",
     "fingerprint_engine/src/audit_log.rs",
     "fingerprint_engine/src/ceo/tenant_engines.rs",
+    // certstream / cnapp workers enumerate `tenants` on the auth_pool: spawn_certstream_watcher /
+    // spawn_cnapp_scheduler are handed (app_pool, auth_pool) in serve.rs and read on auth_pool.
+    "fingerprint_engine/src/certstream_watcher.rs",
+    "fingerprint_engine/src/cnapp_scheduler.rs",
     "fingerprint_engine/src/db_backup.rs",
+    // first-seen OSV/NVD worker enumerates `tenants` on auth_pool (spawn_first_seen_worker(app,
+    // auth)); honey routing resolves the default tenant (slug='default' LIMIT 1) on state.auth_pool.
+    "fingerprint_engine/src/first_seen_osv_nvd_engine.rs",
+    "fingerprint_engine/src/honey_routing_store.rs",
     "fingerprint_engine/src/http/serve.rs",
     "fingerprint_engine/src/intel_findings_backfill.rs",
     "fingerprint_engine/src/orchestrator/dispatch.rs",

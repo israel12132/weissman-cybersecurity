@@ -186,9 +186,25 @@ const RLS_FORCE_ALLOWLIST: &[&str] = &[
     "endpoint_agent_enroll_attempts",
     "ephemeral_payloads",
     "epss_intel",
+    // intel.discovery_knowledge — global recon dictionary (paths / subdomain prefixes), no
+    // tenant_id column; shared seed data, not per-tenant. The test extracts the bare schema
+    // identifier "intel" from `CREATE TABLE intel.discovery_knowledge`.
+    "intel",
+    // IOC feed platform (PR #375): the shared indicator store and its platform-level feed
+    // run-log / credentials tables have no tenant_id — the connectors authenticate with the
+    // PLATFORM's own feed accounts and populate a GLOBAL indicator store, so these are
+    // platform settings, not per-tenant data (see 20260913120000_ioc_feeds_ueba_expansion.sql
+    // and 20260917120000_ioc_feed_credentials.sql). The per-tenant IOC tables (ioc_sightings,
+    // ioc_watchlist) correctly FORCE RLS and are deliberately NOT here.
+    "ioc_feed_credentials",
+    "ioc_feed_runs",
+    "ioc_indicators",
     "kev_intel",
     "oast_interaction_hits",
     "pending_signups",
+    // public_contact_leads — public flagship-site contact-form submissions, captured before any
+    // tenant identity exists; no tenant_id column. Guarded by app-level admin access, not RLS.
+    "public_contact_leads",
     "stripe_webhook_events",
     "weissman_self_heal_gate",
     "ueba_sovereign_binary_allowlist",
@@ -272,6 +288,59 @@ fn every_new_table_forces_rls_unless_allowlisted() {
         missing.is_empty(),
         "these CREATE TABLE names have no FORCE ROW LEVEL SECURITY \
          (add FORCE RLS + tenant policy, or justify a catalog allowlist entry): {missing:?}"
+    );
+}
+
+/// The `RLS_FORCE_ALLOWLIST` entry `"intel"` is a *schema* token, not a table name:
+/// [`sql_idents_after`] collapses `CREATE TABLE intel.discovery_knowledge` to the bare leading
+/// token `"intel"` (it stops at the `.`). That one entry therefore exempts the ENTIRE `intel`
+/// schema from the FORCE-ROW-LEVEL-SECURITY contract above — which is only safe while that schema
+/// holds exactly the one global, tenant-less recon dictionary. Pin that invariant here so a new
+/// `intel.<table>` (especially a tenant-scoped one) can never ship unforced behind the schema-wide
+/// allowlist entry without tripping CI.
+#[test]
+fn intel_schema_holds_only_the_global_recon_table() {
+    use std::collections::BTreeSet;
+    let mut intel_tables: BTreeSet<String> = BTreeSet::new();
+    for dir in [
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations"),
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../crates/weissman-db/migrations"),
+    ] {
+        for entry in std::fs::read_dir(&dir).expect("migrations dir") {
+            let path = entry.expect("entry").path();
+            if path.extension().and_then(|e| e.to_str()) != Some("sql") {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).unwrap_or_default().to_ascii_lowercase();
+            let collapsed = text.split_whitespace().collect::<Vec<_>>().join(" ");
+            let needle = "create table ";
+            let mut from = 0;
+            while let Some(rel) = collapsed[from..].find(needle) {
+                let after = from + rel + needle.len();
+                from = after;
+                let mut rest = collapsed[after..].trim_start();
+                if let Some(stripped) = rest.strip_prefix("if not exists ") {
+                    rest = stripped.trim_start();
+                }
+                if let Some(tbl) = rest.strip_prefix("intel.") {
+                    let name: String = tbl
+                        .chars()
+                        .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                        .collect();
+                    if !name.is_empty() {
+                        intel_tables.insert(name);
+                    }
+                }
+            }
+        }
+    }
+    let expected: BTreeSet<String> = ["discovery_knowledge".to_string()].into_iter().collect();
+    assert_eq!(
+        intel_tables, expected,
+        "the `intel` schema now holds table(s) beyond the global recon dictionary: {intel_tables:?}. \
+         The RLS_FORCE_ALLOWLIST \"intel\" entry exempts the WHOLE schema from FORCE RLS, so a new \
+         tenant-scoped intel.* table would ship unforced. Give it FORCE RLS + a tenant policy, or \
+         narrow the allowlist to the specific global table."
     );
 }
 

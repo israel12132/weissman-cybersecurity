@@ -30,8 +30,8 @@ ALTER TABLE scan_finding_bridge ENABLE ROW LEVEL SECURITY;
 ALTER TABLE scan_finding_bridge FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS scan_finding_bridge_tenant ON scan_finding_bridge;
 CREATE POLICY scan_finding_bridge_tenant ON scan_finding_bridge FOR ALL
-    USING (tenant_id = current_setting('app.current_tenant_id', true)::bigint)
-    WITH CHECK (tenant_id = current_setting('app.current_tenant_id', true)::bigint);
+    USING (tenant_id = public.app_current_tenant_id())
+    WITH CHECK (tenant_id = public.app_current_tenant_id());
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON scan_finding_bridge TO weissman_app;
 
