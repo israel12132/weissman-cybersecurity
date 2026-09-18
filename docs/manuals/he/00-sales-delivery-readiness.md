@@ -8,9 +8,9 @@
 
 | תחום | סטטוס | הערות |
 |------|--------|-------|
-| **חיווט מנועים** | ✅ מלא | `verify_engine_wiring.mjs` → 0 פערים; **563 מנועי production** |
+| **חיווט מנועים** | ✅ מלא | `verify_engine_wiring.mjs` → 0 פערים; **595 מנועי production** |
 | **תקן UI** | ✅ מלא | `weissman-ui-audit.mjs` → **111/111 דפים**, **130 נתיבים** |
-| **UX למנועי Agent** | ✅ מלא | Empty state + gates; **45 מנועים** |
+| **UX למנועי Agent** | ✅ מלא | Empty state + gates; **59 מנועים** |
 | **Billing / quota** | ✅ מלא | כל נתיבי enqueue; strict ב-production |
 | **Guards אבטחה** | ✅ מלא | JWT **≥48 תווים**, סודות אחרים **≥32** |
 | **בדיקות וראיות (שלב 6)** | ✅ | Playwright live, 67+ קבצי test, evidence pack |
@@ -22,7 +22,7 @@
 | **ספר מוצר (מכירות)** | ✅ **681 עמודים** | `docs/sales/viewer/index.html` |
 | **MSA template** | ✅ outline | `docs/legal/MSA-ORDER-FORM-OUTLINE-he.md` |
 | **מוכנות חברה (קוד)** | ✅ 100% | `docs/sales/COMPANY-READINESS-he.md` |
-| **Pricing / marketing** | ✅ | 563 engine IDs, 130 routes, quotas aligned, no false SOC2 audit claim |
+| **Pricing / marketing** | ✅ | 595 engine IDs, 130 routes, quotas aligned, no false SOC2 audit claim |
 | **וידאו / LMS** | ⚠️ פער | אין קורס וידאו מצורף — אופציונלי |
 | **קטלוג Paddle חי** | ⚠️ per-deployment | חובה להגדיר `pri_*` |
 | **SMTP ל-signup** | ⚠️ אם self-serve | נדרש עם `WEISSMAN_SELF_SERVE_SIGNUP=1` |
@@ -84,7 +84,7 @@
 ## מה מותר / אסור לטעון במכירות
 
 **מותר:**
-- **563** מנועי production עם probes אמיתיים (303 real_probe + 212 alias + 48 agent_required — ללא findings מזויפים)
+- **595** מנועי production עם probes אמיתיים (329 real_probe + 3 advisory-only + 204 alias + 59 agent_required — ללא findings מזויפים)
 - RLS multi-tenant, JWT + MFA, RBAC, audit
 - Agent + 45+ משטחי detection
 - SOAR, attack-path, KEV/EPSS

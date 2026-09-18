@@ -37,7 +37,9 @@ export function AboutPage() {
           ))}
         </dl>
         <p className="mt-8 text-sm text-dim">
-          {t('aboutPage.registered', { location: t('brand.location'), id: company.companyIdIsrael })}
+          {company.companyIdIsrael.startsWith('[')
+            ? t('aboutPage.registeredPending', { location: t('brand.location') })
+            : t('aboutPage.registered', { location: t('brand.location'), id: company.companyIdIsrael })}
         </p>
       </Section>
     </Layout>

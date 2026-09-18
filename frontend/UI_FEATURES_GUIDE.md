@@ -219,7 +219,7 @@ const data = await api.get('/api/endpoint', { retries: 3 });
 
 ### Searchable Entities
 - 📊 Pages (Dashboard, Findings, Engines)
-- ⚡ Engines (482 attack engines)
+- ⚡ Engines (595 attack engines)
 - 🔍 Findings (Vulnerabilities)
 - 🏢 Clients
 - ⚙️ Commands
@@ -268,7 +268,7 @@ Text: #d4d4d8 (light gray)
 - `/operations` - Operations Cockpit
 - `/system-core` - System Core
 - `/findings` - Findings Command Center
-- `/engines` - Engine Matrix (482 engines)
+- `/engines` - Engine Matrix (595 engines)
 - `/engines/:engineId` - Engine Detail
 
 ### Intelligence & Monitoring
@@ -304,7 +304,7 @@ Text: #d4d4d8 (light gray)
 - `/network-protocols` ⭐ - Network Protocol Analysis
 - `/social-engineering` ⭐ - Phishing Simulator
 - `/remediation` ⭐ - Remediation Hub (SOAR)
-- `/engine-management` ⭐ - Engine Management Console (496 engines)
+- `/engine-management` ⭐ - Engine Management Console (595 engines)
 - `/system-config` ⭐ - System Configuration Dashboard
 - `/metrics` ⭐ - Real-time Metrics Dashboard (Prometheus)
 - `/ceo-vault` ⭐ - CEO Vault (Secrets Management)
