@@ -1,0 +1,43 @@
+# Code ownership — auto-requests review on the security- and correctness-critical
+# surfaces of the platform. Enforced when branch protection has
+# "Require review from Code Owners" enabled for the default branch.
+#
+# Rationale (roadmap step 11 / bus-factor): ~two thirds of commits are AI-authored
+# with a single human maintainer. These paths decide multi-tenant isolation, the
+# database schema, authentication, and what ships to production; every change to
+# them must be reviewed by a named human. Add a second qualified reviewer here as
+# soon as one exists — that is the actual exit criterion for the bus-factor risk,
+# not this file alone.
+
+# Default owner for everything not matched below.
+*                                       @israel12132
+
+# --- Multi-tenant isolation & database schema (crown jewels) ---
+/crates/weissman-db/                    @israel12132
+/crates/weissman-db/migrations/         @israel12132
+/fingerprint_engine/migrations/         @israel12132
+/fingerprint_engine/src/findings_gate.rs        @israel12132
+/fingerprint_engine/src/findings_persist.rs     @israel12132
+
+# --- Authentication, RBAC, secrets, production startup guards ---
+/fingerprint_engine/src/auth_jwt.rs     @israel12132
+/fingerprint_engine/src/auth_mfa.rs     @israel12132
+/fingerprint_engine/src/auth_refresh.rs @israel12132
+/fingerprint_engine/src/rbac.rs         @israel12132
+/fingerprint_engine/src/security_startup.rs     @israel12132
+/fingerprint_engine/src/saml_auth.rs    @israel12132
+/fingerprint_engine/src/oidc_auth.rs    @israel12132
+
+# --- Attack-engine implementations (offensive-security code) ---
+/fingerprint_engine/src/*_engine.rs     @israel12132
+/backend/weissman-core/src/models/engine.rs     @israel12132
+
+# --- CI/CD, deploy, and the guardrail scripts that gate everything above ---
+/.github/workflows/                     @israel12132
+/deploy/                                @israel12132
+/scripts/verify_*.mjs                   @israel12132
+/scripts/go_live_check.sh               @israel12132
+/docker-compose*.yml                    @israel12132
+
+# --- Architecture decision records ---
+/docs/adr/                              @israel12132

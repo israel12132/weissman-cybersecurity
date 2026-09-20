@@ -692,6 +692,16 @@ pub async fn execute_plan(
     let start = Instant::now();
     let compiled = compile_plan(&plan, tenant_id)?;
 
+    // Defense-in-depth: an independent, parser-based gate on the COMPILED SQL before it
+    // reaches the weissman_ro pool. `compile_plan` already assembles the statement from
+    // allow-listed identifiers + bound params, so this is a second line, not the first —
+    // but it fails closed on any future compile-path regression: it admits exactly one
+    // SELECT over allow-listed tables/columns, clamps LIMIT to 200, and rejects
+    // CTE/UNION/subquery/function/concatenation. Validate the INNER statement here; the
+    // `wrap_nl_sql` envelope below adds an outer `SELECT * FROM (…)` that the AST gate
+    // (correctly) treats as a nested query, so it must not see the wrapped form.
+    crate::cem_dago::sql_ast::validate_compiled_sql_ast(&compiled.sql)?;
+
     // Set the per-statement RLS GUC so policies see our tenant. set_config(..., true) is
     // transaction-local, so the SELECT MUST run inside the SAME transaction: on a bare pooled
     // connection every statement autocommits, which would discard the GUC before the query and
@@ -1028,47 +1038,63 @@ fn row_to_json(row: &sqlx::postgres::PgRow) -> Value {
 
 // ─── LLM call (OpenAI / vLLM / Ollama compatible) ────────────────────────────
 
-const PLANNER_PROMPT: &str = r#"You are the Weissman NL-to-Plan planner. Convert the user's question into a JSON QueryPlan.
+/// The NL→Plan planner system prompt, GENERATED from [`SCHEMA`] so the table/column
+/// list the LLM is told about can never drift from the tables `compile_plan` will
+/// actually accept (and that `weissman_ro` is granted). A hand-maintained copy had
+/// silently fallen 4 tables behind SCHEMA — the `ot_ics_*` tables were queryable but the
+/// planner was never told they existed, so Ask Weissman could not reach them. Sorted for
+/// a deterministic prompt. `planner_prompt_lists_every_schema_table` locks the parity.
+static PLANNER_PROMPT: LazyLock<String> = LazyLock::new(build_planner_prompt);
 
-You MUST output a single JSON object — nothing else (no ```json fences, no prose).
+fn build_planner_prompt() -> String {
+    let mut names: Vec<&'static str> = SCHEMA.keys().copied().collect();
+    names.sort_unstable();
 
-Schema:
-{
-  "table":     "<one of vulnerabilities|weissman_finding_clusters|clients|risk_graph_nodes|agent_anomalies|attack_path_snapshots|risk_graph_edges|client_financial_risk_snapshots|endpoint_agents|report_runs|epss_intel|kev_intel|audit_logs>",
-  "select":    ["col1","col2", ...]           // optional; default = all columns
-  "filters":   [
-     {"column":"severity","op":"in","value":["critical","high"]},
-     {"column":"kev_listed","op":"=","value":true},
-     {"column":"discovered_at","op":">","value":"2026-01-01"}
-  ],
-  "order_by":  "discovered_at",                // optional
-  "order_desc": true,                          // optional, default false
-  "limit":     50,                             // REQUIRED integer 1-200 (fail-closed)
-  "aggregate": "count",                        // optional: count|avg|sum|min|max
-  "aggregate_column": "id",                    // optional; omit for COUNT(*)
-  "group_by":  "severity"                      // optional allow-listed column
+    let mut p = String::new();
+    p.push_str("You are the Weissman NL-to-Plan planner. Convert the user's question into a JSON QueryPlan.\n\n");
+    p.push_str(
+        "You MUST output a single JSON object — nothing else (no ```json fences, no prose).\n\n",
+    );
+    p.push_str("Schema:\n{\n");
+    p.push_str("  \"table\":     \"<one of ");
+    p.push_str(&names.join("|"));
+    p.push_str(">\",\n");
+    p.push_str(
+        "  \"select\":    [\"col1\",\"col2\", ...]           // optional; default = all columns\n",
+    );
+    p.push_str("  \"filters\":   [\n");
+    p.push_str("     {\"column\":\"severity\",\"op\":\"in\",\"value\":[\"critical\",\"high\"]},\n");
+    p.push_str("     {\"column\":\"kev_listed\",\"op\":\"=\",\"value\":true},\n");
+    p.push_str("     {\"column\":\"discovered_at\",\"op\":\">\",\"value\":\"2026-01-01\"}\n");
+    p.push_str("  ],\n");
+    p.push_str("  \"order_by\":  \"discovered_at\",                // optional\n");
+    p.push_str("  \"order_desc\": true,                          // optional, default false\n");
+    p.push_str("  \"limit\":     50,                             // REQUIRED integer 1-200 (fail-closed)\n");
+    p.push_str(
+        "  \"aggregate\": \"count\",                        // optional: count|avg|sum|min|max\n",
+    );
+    p.push_str(
+        "  \"aggregate_column\": \"id\",                    // optional; omit for COUNT(*)\n",
+    );
+    p.push_str(
+        "  \"group_by\":  \"severity\"                      // optional allow-listed column\n",
+    );
+    p.push_str("}\n\n");
+    p.push_str("Operators allowed: =, !=, <, <=, >, >=, in, like, is_null, is_not_null.\n");
+    p.push_str("Tables and columns are case-sensitive. Use only the schema below.\n\n");
+    p.push_str("Schema:\n");
+    for t in &names {
+        let spec = &SCHEMA[*t];
+        p.push_str("- ");
+        p.push_str(spec.table);
+        p.push('(');
+        p.push_str(&spec.columns.join(", "));
+        p.push_str(")\n");
+    }
+    p.push('\n');
+    p.push_str("If you cannot map the question to a valid plan, output {\"table\":\"\",\"select\":[],\"filters\":[]}.\n");
+    p
 }
-
-Operators allowed: =, !=, <, <=, >, >=, in, like, is_null, is_not_null.
-Tables and columns are case-sensitive. Use only the schema below.
-
-Schema:
-- vulnerabilities(id, finding_id, title, severity, source, status, client_id, discovered_at, cluster_id, epss_score, epss_percentile, kev_listed, kev_known_ransomware, kev_due_date, seen_count, signature_hash)
-- weissman_finding_clusters(id, client_id, target, cwe, vuln_signature, title, member_count, max_severity, native_severity, watermark_severity, corroboration_boost, max_cvss, max_epss, kev_listed, status, first_seen_at, last_seen_at)
-- clients(id, name, default_asset_value_usd, risk_loss_discount)
-- risk_graph_nodes(id, client_id, node_type, label, graph_key, risk_score, is_choke_point, internet_exposed, crown_jewel, asset_value, business_value_usd)
-- agent_anomalies(id, agent_id, client_id, metric_name, observed, baseline_mean, baseline_stddev, z_score, severity, detail, detected_at)
-- attack_path_snapshots(id, client_id, computed_at, entry_count, jewel_count, path_count, max_risk)
-- risk_graph_edges(id, client_id, from_node_id, to_node_id, edge_type, created_at)
-- client_financial_risk_snapshots(id, client_id, computed_at, total_asset_value_usd, sle_worst_usd, ale_annualised_usd, crown_jewel_value_usd, currency_code)
-- endpoint_agents(id, client_id, hostname, device_name, os, arch, agent_version, status, enrolled_at, last_seen_at)
-- report_runs(id, region, created_at, summary)
-- epss_intel(cve, score, percentile, epss_date, refreshed_at)
-- kev_intel(cve, vendor_project, product, date_added, known_ransomware_use, due_date)
-- audit_logs(id, created_at, user_label, action_type, details, ip_address)
-
-If you cannot map the question to a valid plan, output {"table":"","select":[],"filters":[]}.
-"#;
 
 async fn llm_to_plan(question: &str, tenant_id: i64) -> Result<Value, String> {
     // Ask Weissman planner. Routes through the multi-provider failover chain
@@ -1093,7 +1119,7 @@ async fn llm_to_plan(question: &str, tenant_id: i64) -> Result<Value, String> {
         .map_err(|e| e.to_string())?;
     let text = weissman_engines::llm_router::routed_chat_completion_text_json_object(
         &client,
-        Some(PLANNER_PROMPT),
+        Some(PLANNER_PROMPT.as_str()),
         question,
         0.0,
         max_tokens,
@@ -1137,6 +1163,110 @@ mod tests {
         assert!(c.sql.contains("severity IN ($2, $3)"));
         assert!(c.sql.contains("ORDER BY discovered_at DESC"));
         assert!(c.sql.ends_with("LIMIT 50"));
+    }
+
+    #[test]
+    fn planner_prompt_lists_every_schema_table() {
+        // Parity lock: the LLM planner must be told about EXACTLY the tables compile_plan
+        // will accept (and weissman_ro is granted). A drift either offers the LLM tables
+        // that fail to compile, or hides queryable tables from Ask Weissman (the ot_ics_*
+        // regression this generator fixed). Since the prompt is now generated from SCHEMA,
+        // this asserts the generator actually emits every table's schema line + enum entry.
+        let p = build_planner_prompt();
+        for t in SCHEMA.keys() {
+            let spec = &SCHEMA[*t];
+            let line = format!("- {}({})", spec.table, spec.columns.join(", "));
+            assert!(
+                p.contains(&line),
+                "planner prompt missing schema line: {line}"
+            );
+        }
+        // The "<one of a|b|c>" enum lists exactly SCHEMA.len() pipe-separated tables.
+        let enum_seg = p
+            .split("<one of ")
+            .nth(1)
+            .and_then(|s| s.split('>').next())
+            .expect("planner prompt has a table enum");
+        assert_eq!(
+            enum_seg.split('|').count(),
+            SCHEMA.len(),
+            "planner enum table count must equal SCHEMA size"
+        );
+        for t in SCHEMA.keys() {
+            assert!(enum_seg.contains(*t), "planner enum missing table {t}");
+        }
+    }
+
+    #[test]
+    fn compiled_plan_passes_the_execute_plan_ast_gate() {
+        // Guards the defense-in-depth gate wired into execute_plan: a legitimate
+        // compiled plan must sail through validate_compiled_sql_ast (so the second
+        // line never rejects a query compile_plan already blessed), while an
+        // over-large LIMIT is clamped to 200 in the bounded rewrite.
+        let plan = QueryPlan {
+            table: "vulnerabilities".into(),
+            select: vec!["id".into(), "title".into(), "severity".into()],
+            filters: vec![Filter {
+                column: "severity".into(),
+                op: "in".into(),
+                value: json!(["critical", "high"]),
+            }],
+            order_by: Some("discovered_at".into()),
+            order_desc: true,
+            limit: Some(9999),
+            aggregate: None,
+            aggregate_column: None,
+            group_by: None,
+        };
+        let c = compile_plan(&plan, 1).unwrap();
+        crate::cem_dago::sql_ast::validate_compiled_sql_ast(&c.sql)
+            .expect("compiled plan must pass the AST gate");
+        let bounded = crate::cem_dago::sql_ast::validate_and_bound_sql(&c.sql).unwrap();
+        assert!(
+            bounded.contains("LIMIT 200"),
+            "AST gate must clamp LIMIT to 200: {bounded}"
+        );
+    }
+
+    #[test]
+    fn aggregate_and_group_by_plans_pass_the_execute_plan_ast_gate() {
+        // Regression: compile_plan emits COUNT(*)/COUNT(col)/AVG|SUM|MIN|MAX(col) and
+        // `GROUP BY <col>`; the AST gate MUST admit exactly those (an earlier version
+        // rejected every aggregate/GROUP BY as a non-identifier projection, silently
+        // breaking Ask Weissman's count/avg/sum/min/max feature at runtime).
+        let base = QueryPlan {
+            table: "vulnerabilities".into(),
+            select: vec![],
+            filters: vec![],
+            order_by: None,
+            order_desc: false,
+            limit: Some(50),
+            aggregate: None,
+            aggregate_column: None,
+            group_by: None,
+        };
+        // COUNT(*)
+        let mut p = base.clone();
+        p.aggregate = Some("count".into());
+        let c = compile_plan(&p, 1).unwrap();
+        assert!(c.sql.contains("COUNT(*)"), "sanity: {}", c.sql);
+        crate::cem_dago::sql_ast::validate_compiled_sql_ast(&c.sql)
+            .expect("COUNT(*) plan must pass the AST gate");
+        // AVG(epss_score)
+        let mut p = base.clone();
+        p.aggregate = Some("avg".into());
+        p.aggregate_column = Some("epss_score".into());
+        let c = compile_plan(&p, 1).unwrap();
+        crate::cem_dago::sql_ast::validate_compiled_sql_ast(&c.sql)
+            .expect("AVG(col) plan must pass the AST gate");
+        // GROUP BY severity, COUNT(*)
+        let mut p = base.clone();
+        p.aggregate = Some("count".into());
+        p.group_by = Some("severity".into());
+        let c = compile_plan(&p, 1).unwrap();
+        assert!(c.sql.contains("GROUP BY severity"), "sanity: {}", c.sql);
+        crate::cem_dago::sql_ast::validate_compiled_sql_ast(&c.sql)
+            .expect("GROUP BY aggregate plan must pass the AST gate");
     }
 
     #[test]

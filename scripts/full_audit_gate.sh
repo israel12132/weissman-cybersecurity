@@ -60,6 +60,8 @@ gate_g4_wiring() {
     && node scripts/live_only_audit.mjs >/dev/null \
     && node scripts/engine_quality_audit.mjs >/dev/null \
     && node scripts/elite_hardening_gate.mjs >/dev/null \
+    && node scripts/ci_supply_chain_gate.mjs --selftest >/dev/null \
+    && node scripts/ci_supply_chain_gate.mjs >/dev/null \
     || return 1
   local gaps
   gaps="$(node scripts/verify_engine_wiring.mjs | node -e "

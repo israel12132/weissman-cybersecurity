@@ -1525,6 +1525,13 @@ async fn api_ask(
                 .into_response();
         }
     }
+    // Per-user burst limit (10/min, Redis fail-closed in prod) + blind-oracle /
+    // enumeration detector (sequential "starts with A/B/C" walks, one-letter-flip
+    // membership probes). Runs before the daily quota so an abusive scan is rejected
+    // without consuming the tenant's 50/day allowance. Client-safe 429/503 responses.
+    if let Err(r) = crate::ask_oracle_guard::admit_ask(auth.user_id, &body.question).await {
+        return r;
+    }
     let quota = match crate::tenant_quota::enforce(
         state.app_pool.as_ref(),
         auth.tenant_id,

@@ -28,11 +28,12 @@ import json
 import socket
 import ssl
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
-from typing import Iterator
 
 import pytest
+
 
 def _gate_dir(pytestconfig) -> Path:
     """scripts/weissman_gate under pytest's rootdir (the checkout root holding pytest.ini).
@@ -621,7 +622,7 @@ def _post_detonate(detonate, payload):
 
 class TestDetonateHandler:
     def test_get_health(self, detonate):
-        status, headers, body = run_handler(detonate, "GET / HTTP/1.1", {"Host": "127.0.0.1"})
+        status, _headers, body = run_handler(detonate, "GET / HTTP/1.1", {"Host": "127.0.0.1"})
         assert status == 200
         assert json.loads(body) == {"ok": True, "component": "weissman-detonation"}
 

@@ -9,8 +9,8 @@
 
 use crate::nl_query::{is_allowlisted_column, is_allowlisted_table};
 use sqlparser::ast::{
-    BinaryOperator, Expr, Function, GroupByExpr, Query, Select, SelectItem, SetExpr, Statement,
-    TableFactor, TableWithJoins, Value,
+    BinaryOperator, Expr, Function, FunctionArg, FunctionArgExpr, FunctionArguments, GroupByExpr,
+    Query, Select, SelectItem, SetExpr, Statement, TableFactor, TableWithJoins, Value,
 };
 use sqlparser::dialect::PostgreSqlDialect;
 use sqlparser::parser::Parser;
@@ -159,7 +159,7 @@ fn validate_select(sel: &Select) -> Result<String, String> {
     for item in &sel.projection {
         match item {
             SelectItem::UnnamedExpr(e) | SelectItem::ExprWithAlias { expr: e, .. } => {
-                validate_ident_or_value(e, &table)?;
+                validate_projection_expr(e, &table)?;
             }
             _ => {
                 return Err("sql ast: wildcard / non-identifier projection is not permitted".into())
@@ -172,9 +172,21 @@ fn validate_select(sel: &Select) -> Result<String, String> {
     if sel.having.is_some() {
         return Err("sql ast: HAVING is not permitted".into());
     }
+    // GROUP BY is permitted ONLY over allow-listed column identifiers with no grouping-set
+    // modifiers (ROLLUP/CUBE/GROUPING SETS). compile_plan emits `GROUP BY <allow-listed col>`.
     match &sel.group_by {
-        GroupByExpr::Expressions(exprs, _) if exprs.is_empty() => {}
-        _ => return Err("sql ast: GROUP BY is not permitted".into()),
+        GroupByExpr::Expressions(exprs, modifiers) => {
+            if !modifiers.is_empty() {
+                return Err(
+                    "sql ast: GROUP BY modifiers (ROLLUP/CUBE/GROUPING SETS) are not permitted"
+                        .into(),
+                );
+            }
+            for g in exprs {
+                validate_ident_or_value(g, &table)?;
+            }
+        }
+        GroupByExpr::All(_) => return Err("sql ast: GROUP BY ALL is not permitted".into()),
     }
     Ok(table)
 }
@@ -246,6 +258,59 @@ fn object_name_unqualified(name: &sqlparser::ast::ObjectName) -> Result<String, 
 fn column_ok(table: &str, col: &str) -> bool {
     // compile_plan injects tenant_id on tenant-scoped tables; it is not an LLM identifier.
     col == "tenant_id" || is_allowlisted_column(table, col)
+}
+
+/// A projection item may be a bare allow-listed column OR a bounded aggregate:
+/// `COUNT(*)` / `COUNT(col)` / `AVG|SUM|MIN|MAX(col)` over an allow-listed column — exactly
+/// what `nl_query::compile_plan` emits for count/avg/sum/min/max and group_by plans. No window
+/// (OVER), FILTER, WITHIN GROUP, DISTINCT, ODBC, parameters, multi-arg, or non-aggregate
+/// function is admitted, so this stays a tight allow-list, not a general expression gate.
+fn validate_projection_expr(e: &Expr, table: &str) -> Result<(), String> {
+    if matches!(e, Expr::Identifier(_) | Expr::CompoundIdentifier(_)) {
+        return validate_ident_or_value(e, table);
+    }
+    let Expr::Function(f) = e else {
+        return Err("sql ast: projection must be an allow-listed column or aggregate".into());
+    };
+    if f.uses_odbc_syntax
+        || f.over.is_some()
+        || f.filter.is_some()
+        || !f.within_group.is_empty()
+        || f.null_treatment.is_some()
+        || !matches!(f.parameters, FunctionArguments::None)
+    {
+        return Err(
+            "sql ast: aggregate with OVER/FILTER/WITHIN GROUP/ODBC/parameters is not permitted"
+                .into(),
+        );
+    }
+    if f.name.0.len() != 1 {
+        return Err("sql ast: qualified function name is not permitted".into());
+    }
+    let fname = f.name.0[0].value.to_ascii_lowercase();
+    if !matches!(fname.as_str(), "count" | "avg" | "sum" | "min" | "max") {
+        return Err(format!(
+            "sql ast: function '{fname}' is not an allow-listed aggregate"
+        ));
+    }
+    let FunctionArguments::List(list) = &f.args else {
+        return Err("sql ast: aggregate must take a parenthesised argument".into());
+    };
+    if list.duplicate_treatment.is_some() || !list.clauses.is_empty() || list.args.len() != 1 {
+        return Err("sql ast: aggregate DISTINCT / ORDER BY / multi-arg is not permitted".into());
+    }
+    match &list.args[0] {
+        FunctionArg::Unnamed(FunctionArgExpr::Wildcard) => {
+            if fname != "count" {
+                return Err(format!(
+                    "sql ast: {fname}(*) is not permitted (only COUNT(*))"
+                ));
+            }
+            Ok(())
+        }
+        FunctionArg::Unnamed(FunctionArgExpr::Expr(inner)) => validate_ident_or_value(inner, table),
+        _ => Err("sql ast: aggregate argument must be * or an allow-listed column".into()),
+    }
 }
 
 fn validate_ident_or_value(e: &Expr, table: &str) -> Result<(), String> {

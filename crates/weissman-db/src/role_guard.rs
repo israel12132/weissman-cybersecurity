@@ -97,8 +97,79 @@ impl PoolKind {
     }
 }
 
+/// Pure policy for [`e2e_or_allow_superuser_dsn`], split out for exhaustive testing.
+///
+/// `WEISSMAN_E2E_STACK` is a local/CI single-node fixture switch and is honored in any
+/// environment. `WEISSMAN_ALLOW_SUPERUSER_DSN` is a break-glass that is honored ONLY
+/// outside production: in production it is inert, so a single env var cannot silently
+/// downgrade every role/RLS guard from a hard boot failure to a warning.
+fn superuser_dsn_override_active(
+    e2e_stack: bool,
+    allow_superuser: bool,
+    is_production: bool,
+) -> bool {
+    e2e_stack || (allow_superuser && !is_production)
+}
+
 fn e2e_or_allow_superuser_dsn() -> bool {
-    env_flag("WEISSMAN_E2E_STACK") || env_flag("WEISSMAN_ALLOW_SUPERUSER_DSN")
+    let e2e = env_flag("WEISSMAN_E2E_STACK");
+    let allow = env_flag("WEISSMAN_ALLOW_SUPERUSER_DSN");
+    let prod = is_production_env();
+    if allow && prod {
+        tracing::error!(
+            target: "weissman_db::role_guard",
+            "WEISSMAN_ALLOW_SUPERUSER_DSN is set in production and is being IGNORED — role/RLS \
+             guards remain strict. Remove it; owner/superuser DSNs belong only in \
+             WEISSMAN_MIGRATE_URL, and non-production fixtures should use WEISSMAN_E2E_STACK."
+        );
+    }
+    superuser_dsn_override_active(e2e, allow, prod)
+}
+
+/// Count DB-/role-level defaults for `app.current_tenant_id` visible from `pool`.
+///
+/// A non-zero count means an unscoped connection would silently read that tenant
+/// instead of NULL, so tenant tables fail OPEN into that bucket — the exact headline
+/// production RLS leak that migration `20260811000100_reset_role_tenant_guc_defaults`
+/// fixed. [`assert_pool_role`] hard-fails a production boot when this is non-zero.
+pub async fn tenant_guc_role_default_count(pool: &PgPool) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar(
+        r#"SELECT count(*)::bigint
+           FROM pg_db_role_setting s
+           LEFT JOIN pg_database d ON d.oid = s.setdatabase
+           WHERE (s.setdatabase = 0 OR d.datname = current_database())
+             AND EXISTS (
+                 SELECT 1 FROM unnest(s.setconfig) AS c
+                 WHERE c LIKE 'app.current_tenant_id=%'
+             )"#,
+    )
+    .fetch_one(pool)
+    .await
+}
+
+/// Tables in `public` that the CURRENT role (expected `weissman_ro`) can `SELECT`
+/// but that are **not** on [`RO_SELECT_TABLES`]. A non-empty result is grant drift:
+/// the read-only NL→SQL role can read a table the allow-list never sanctioned (a
+/// stray `GRANT SELECT … TO weissman_ro`, a `GRANT … TO PUBLIC`, or a role-membership
+/// change), so Ask Weissman could surface data the allow-list was meant to fence off.
+///
+/// Uses the two-argument `has_table_privilege(table, 'SELECT')`, which resolves the
+/// effective privilege of the connected role — direct grants, `PUBLIC`, and inherited
+/// role memberships alike — so it catches over-reach the migration text cannot.
+/// [`assert_pool_role`] hard-fails a production boot when this is non-empty.
+pub async fn ro_select_grant_overreach(pool: &PgPool) -> Result<Vec<String>, sqlx::Error> {
+    let allow: Vec<String> = RO_SELECT_TABLES.iter().map(|s| (*s).to_string()).collect();
+    sqlx::query_scalar(
+        r#"SELECT t.tablename::text
+           FROM pg_tables t
+           WHERE t.schemaname = 'public'
+             AND has_table_privilege(format('%I.%I', t.schemaname, t.tablename), 'SELECT')
+             AND t.tablename <> ALL($1::text[])
+           ORDER BY t.tablename"#,
+    )
+    .bind(&allow)
+    .fetch_all(pool)
+    .await
 }
 
 fn env_flag(name: &str) -> bool {
@@ -274,6 +345,38 @@ pub async fn assert_pool_role(pool: &PgPool, kind: PoolKind) -> Result<(), sqlx:
         tracing::warn!(target: "weissman_db::role_guard", "{msg}");
     }
 
+    // Fail-closed guard against reintroduction of a DB-/role-level default for
+    // app.current_tenant_id — the exact drift behind the historical production tenant
+    // leak (migration 20260811000100 reset it, and a CI test keeps it gone, but that
+    // test only runs against the CI database, never the live one at boot). Mirror the
+    // rolsuper / rolbypassrls checks above: hard-fail a production boot, warn otherwise.
+    match tenant_guc_role_default_count(pool).await {
+        Ok(0) => {}
+        Ok(n) => {
+            let msg = format!(
+                "a DB-/role-level default for app.current_tenant_id is set ({n} pg_db_role_setting \
+                 row(s)); an unscoped connection would read that tenant instead of NULL and tenant \
+                 tables would fail OPEN. Keep the RESET from migration \
+                 20260811000100_reset_role_tenant_guc_defaults"
+            );
+            if strict {
+                return Err(sqlx::Error::Configuration(msg.into()));
+            }
+            tracing::warn!(target: "weissman_db::role_guard", "{msg}");
+        }
+        Err(e) => {
+            // A catalog read failing at boot means the DB is unusable; fail closed in
+            // production rather than let an unverifiable drift state through.
+            if strict {
+                return Err(e);
+            }
+            tracing::warn!(
+                target: "weissman_db::role_guard",
+                "tenant GUC drift check skipped (catalog read failed): {e}"
+            );
+        }
+    }
+
     if matches!(kind, PoolKind::ReadOnly) {
         let timeout: String = sqlx::query_scalar("SHOW statement_timeout")
             .fetch_one(pool)
@@ -285,6 +388,37 @@ pub async fn assert_pool_role(pool: &PgPool, kind: PoolKind) -> Result<(), sqlx:
                 statement_timeout = %timeout,
                 "weissman_ro statement_timeout is not 15s (Ask Weissman budget)"
             );
+        }
+
+        // Fail-closed guard against SELECT-grant drift: the NL→SQL role must be able to
+        // read only the allow-listed tables. A stray grant (or a GRANT … TO PUBLIC) would
+        // widen what Ask Weissman can surface past RO_SELECT_TABLES, defeating the
+        // application-layer allow-list. Mirror the tenant-GUC drift check: hard-fail a
+        // production boot, warn otherwise.
+        match ro_select_grant_overreach(pool).await {
+            Ok(extra) if extra.is_empty() => {}
+            Ok(extra) => {
+                let msg = format!(
+                    "weissman_ro can SELECT {} table(s) not on RO_SELECT_TABLES: [{}]. \
+                     Ask Weissman would be able to read them past the allow-list. Revoke the \
+                     stray grant(s) or add the table to RO_SELECT_TABLES + the RO grant migration",
+                    extra.len(),
+                    extra.join(", ")
+                );
+                if strict {
+                    return Err(sqlx::Error::Configuration(msg.into()));
+                }
+                tracing::warn!(target: "weissman_db::role_guard", "{msg}");
+            }
+            Err(e) => {
+                if strict {
+                    return Err(e);
+                }
+                tracing::warn!(
+                    target: "weissman_db::role_guard",
+                    "weissman_ro grant-drift check skipped (catalog read failed): {e}"
+                );
+            }
         }
     }
 
@@ -312,6 +446,20 @@ pub fn warn_if_runtime_dsn_not_app_role(url: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn superuser_dsn_override_is_inert_in_production_except_e2e_stack() {
+        // WEISSMAN_E2E_STACK overrides in any environment (local/CI single-node fixtures).
+        assert!(superuser_dsn_override_active(true, false, false));
+        assert!(superuser_dsn_override_active(true, false, true));
+        // WEISSMAN_ALLOW_SUPERUSER_DSN is a non-production break-glass only …
+        assert!(superuser_dsn_override_active(false, true, false));
+        // … and is INERT in production (the whole point of step 3b).
+        assert!(!superuser_dsn_override_active(false, true, true));
+        // Neither flag → guards stay strict everywhere.
+        assert!(!superuser_dsn_override_active(false, false, false));
+        assert!(!superuser_dsn_override_active(false, false, true));
+    }
 
     #[test]
     fn ro_select_list_is_exactly_seventeen() {

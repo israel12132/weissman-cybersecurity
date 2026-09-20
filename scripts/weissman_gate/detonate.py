@@ -35,9 +35,9 @@ import os
 import shutil
 import socket
 import ssl
+from collections.abc import Callable
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Callable
 from urllib.parse import urljoin, urlsplit
 
 HOST = "127.0.0.1"
