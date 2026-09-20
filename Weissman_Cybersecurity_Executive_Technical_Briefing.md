@@ -46,7 +46,7 @@
 25. [Honest Status & Roadmap Notes](#25-honest-status--roadmap-notes)
 26. [Compliance, Standards & Regulatory Alignment](#26-compliance-standards--regulatory-alignment)
 27. [Assurance, Operational Resilience & Response](#27-assurance-operational-resilience--response)
-- [Appendix A — Complete Engine Catalog (303 canonical engines)](#appendix-a--complete-engine-catalog-303-canonical-engines)
+- [Appendix A — Complete Engine Catalog (391 canonical engines)](#appendix-a--complete-engine-catalog-391-canonical-engines)
 - [Appendix B — Complete Database Table Inventory (88 tables)](#appendix-b--complete-database-table-inventory-88-tables)
 - [Appendix C — Complete API Endpoint Inventory](#appendix-c--complete-api-endpoint-inventory)
 - [Appendix D — Complete Command Center Page Inventory](#appendix-d--complete-command-center-page-inventory)
@@ -61,7 +61,7 @@ Weissman Cybersecurity is a **closed-loop, autonomous security platform** that c
 
 It is **not** a vulnerability scanner with a dashboard. It is an integrated system that combines:
 
-- **A very large catalog of security engines** — 563 engine identifiers in the product catalog (303 real_probe / 295 distinct impls, 212 aliases, 48 agent-required), individually-implemented spanning web, API, cloud, network, OT/ICS/IoT, identity, supply chain, AI/LLM, cryptography, OSINT, and host-level detection. **Every engine is wired to a real network/host probe** (HTTP, TCP, UDP, DNS, TLS, or agent telemetry); the codebase explicitly forbids fabricated or randomized findings.
+- **A very large catalog of security engines** — 595 engine identifiers in the product catalog (329 real_probe / 321 distinct impls, 204 aliases, 59 agent-required, 3 advisory-only), individually-implemented spanning web, API, cloud, network, OT/ICS/IoT, identity, supply chain, AI/LLM, cryptography, OSINT, and host-level detection. **Every engine is wired to a real network/host probe** (HTTP, TCP, UDP, DNS, TLS, or agent telemetry); the codebase explicitly forbids fabricated or randomized findings.
 - **An autonomous AI "Supreme Council"** — a multi-model adversarial debate (offensive proposer, blind defensive critic, sovereign decision-maker) with a **vector-database memory of past successes**, human-in-the-loop approval gates, and a cryptographically-signed audit trail.
 - **A detection-integrity layer** — stable finding identity, deduplication, clustering, a false-positive feedback loop with Bayesian confidence weighting, and per-finding cryptographic attestation.
 - **Live threat intelligence** — local mirrors of CISA KEV and FIRST.org EPSS, enriching every CVE-bearing finding with exploit-probability and known-exploited status at the moment it is persisted.
@@ -114,12 +114,12 @@ flowchart TB
     end
 
     subgraph data["PostgreSQL 16 + pgvector"]
-      DB[("~88 tables · row-level security\n100 migrations · read-only NL role")]
+      DB[("~88 tables · row-level security\n177 migrations · read-only NL role")]
     end
 
     subgraph workers["Async execution"]
       WORKER["weissman-worker\nSKIP LOCKED queue · per-kind timeouts"]
-      ENGINES["563 engine IDs / 303 real_probe + 212 alias + 48 agent"]
+      ENGINES["595 engine IDs / 329 real_probe + 204 alias + 59 agent + 3 advisory"]
       OAST["weissman-oast-server\n(DNS+HTTP callback capture)"]
     end
 
@@ -169,7 +169,7 @@ Engines are registered in an authoritative list (`PRODUCTION_ENGINE_IDS`) in `ba
 
 ### 4.2 The catalog (by domain)
 
-The product catalog exposes **500+ engine identifiers** (the frontend registry lists 563, mirrored 1:1 to `PRODUCTION_ENGINE_IDS`). CI-verified classification (`scripts/engine_reality_audit.mjs`): **303 real_probe** (295 distinct implementations — 8 IDs are delegates sharing an impl), **212 aliases** that resolve to a real probe, and **48 agent-required** host-level techniques clearly labeled as such (`info`/advisory when no agent enrolled), 0 no_path. Major domains:
+The product catalog exposes **500+ engine identifiers** (the frontend registry lists 595, mirrored 1:1 to `PRODUCTION_ENGINE_IDS`). CI-verified classification (`scripts/engine_reality_audit.mjs`): **329 real_probe** (321 distinct implementations — 8 IDs are delegates sharing an impl), **204 aliases** that resolve to a real probe, **59 agent-required** host-level techniques clearly labeled as such (`info`/advisory when no agent enrolled), and **3 advisory-only**, 0 no_path. Major domains:
 
 | Domain | Representative engines | What they actually do (from code) |
 |---|---|---|
@@ -361,7 +361,7 @@ Seven action types are implemented: `set_status`, `slack_notify`, `webhook`, `ht
 
 ## 15. Data Layer: PostgreSQL, Multi-Tenancy & Migrations
 
-- **PostgreSQL 16 + pgvector** (the vector extension powers the AI memory and pentest reinforcement). ~88 application tables across a tenant-scoped public schema, a global `intel` schema, and the EPSS/KEV mirrors; defined by **100 SQL migrations** (~5,100 lines).
+- **PostgreSQL 16 + pgvector** (the vector extension powers the AI memory and pentest reinforcement). ~88 application tables across a tenant-scoped public schema, a global `intel` schema, and the EPSS/KEV mirrors; defined by **178 SQL migrations** (~5,100 lines).
 - **Multi-tenant isolation via Row-Level Security.** Every tenant table has `ENABLE` + `FORCE ROW LEVEL SECURITY` policies keyed on a transaction-local `app.current_tenant_id` GUC. The application role is subject to RLS; a separate auth role with `BYPASSRLS` is narrowly scoped to login lookups and is itself audited (with auto-revocation on suspicious cross-tenant access).
 - **Three database roles:** `weissman_app` (RLS-enforced), `weissman_auth` (login only), and `weissman_ro` (the read-only role for the natural-language query interface, restricted to a tightly-scoped table whitelist with its own statement timeout and memory limits).
 - **A custom two-phase migration runner** (`no_tx_migrations.rs`) that detects a `-- weissman:no-transaction` header and runs `CREATE INDEX CONCURRENTLY`-style migrations **outside any transaction**, recording them in `_sqlx_migrations` with SQLx-compatible SHA-384 checksums so the standard runner safely skips them. Deferred dependencies are re-applied after their tables exist. (This is a genuinely hard problem solved cleanly.)
@@ -492,10 +492,10 @@ Because the platform performs *offensive* actions, safety is engineered as a fir
 | Rust route-handler includes (`.inc`) | **~22,576 lines** |
 | Rust modules in the core engine crate | **445 files** |
 | Frontend (React/JSX) | **~142,800 lines**, **137 pages** |
-| SQL migrations | **100 files**, ~5,097 lines, **107 `CREATE TABLE`s** |
+| SQL migrations | **178 files**, ~5,097 lines, **107 `CREATE TABLE`s** |
 | Legacy Python | **~17,000 lines** |
 | Workspace crates | **13** Rust crates |
-| Engine catalog | **563 engine IDs** → **303 real_probe** (295 distinct impls) + **212 alias** + **48 agent_required**, 0 no_path |
+| Engine catalog | **595 engine IDs** → **329 real_probe** (321 distinct impls) + **204 alias** + **59 agent_required** + **3 advisory-only**, 0 no_path |
 | API surface | **~130 endpoints**, ~271 handlers, **6 WebSocket channels** |
 | Database | **~88 tables**, full row-level security, 3 scoped DB roles |
 | Async job kinds | **~27** |
@@ -510,7 +510,7 @@ Because the platform performs *offensive* actions, safety is engineered as a fir
 
 In the spirit of a precise, code-grounded briefing, the following nuances are stated plainly (and reflect well on the team's discipline):
 
-- **Engine count is presented honestly in the code itself.** The product surfaces 563 engine identifiers, and the codebase classifies them (CI-verified) as 303 real_probe implementations (295 distinct), 212 vertical/marketing aliases that resolve to a real probe, and 48 agent-required host techniques — an explicit accounting module plus a CI gate prevents any UI engine from lacking a real execution path. The platform deliberately avoids inflated "no-op" engines.
+- **Engine count is presented honestly in the code itself.** The product surfaces 595 engine identifiers, and the codebase classifies them (CI-verified) as 329 real_probe implementations (321 distinct), 204 vertical/marketing aliases that resolve to a real probe, 59 agent-required host techniques, and 3 advisory-only engines — an explicit accounting module plus a CI gate prevents any UI engine from lacking a real execution path. The platform deliberately avoids inflated "no-op" engines.
 - **Agent detections are pragmatic.** Of the ~20 advertised agent capabilities, several are aliases over shared host-inspection code, and UEBA's richest metrics are Linux-first (other OSes degrade gracefully). The timestomp detection is implemented and wired (mtime-vs-ctime backdating heuristics on high-value paths, MITRE T1070.006).
 - **Autonomy ships safe-by-default.** The most powerful "sovereign" features are disabled unless explicitly enabled, and the consequential cloud actions require dual acknowledgment. This is a deliberate safety choice, not a missing feature.
 - **The platform is a Rust rewrite of an earlier Python system.** A legacy Python layer remains in the repository for intel feeds and correlation tooling, but **all production execution — API, orchestration, engines, worker — is Rust.** The old Alembic schema is explicitly deprecated in favor of the SQLx migrations.
@@ -591,9 +591,9 @@ For each framework the engine computes three metrics — `total_mapped_controls`
 
 ---
 
-## Appendix A — Complete Engine Catalog (303 canonical engines)
+## Appendix A — Complete Engine Catalog (391 canonical engines)
 
-The complete, ordered registry of canonical engine implementations (`FULL_ENGINE_REGISTRY_ORDER` in `backend/weissman-core/src/models/engine.rs`), grouped by domain. These are in addition to 212 catalog/vertical aliases that resolve to these implementations, for the 563 identifiers shown in the product.
+The complete, ordered registry of canonical engine implementations (`FULL_ENGINE_REGISTRY_ORDER` in `backend/weissman-core/src/models/engine.rs`), grouped by domain. These are in addition to 204 catalog/vertical aliases that resolve to these implementations, for the 595 identifiers shown in the product.
 
 **Recon, OSINT & Attack-Surface Intelligence:** `osint`, `asm`, `leak_hunter`, `discovery_engine`, `recon`, `satellite_recon`, `darkweb_intel`, `financial_osint`, `blockchain_trace`, `metadata_harvest`, `patent_recon`, `telecom_osint`, `iot_shodan_scan`, `job_posting_osint`, `github_secret_scan`, `dark_web_monitor`, `passive_dns_forensics`, `threat_intel_fusion`, `attack_surface_quantify`, `adversarial_simulation`
 

@@ -73,8 +73,8 @@ describe('content integrity', () => {
   })
 
   it('keeps engine counts honest', () => {
-    expect(metrics.productionEngines.value).toBe(586)
-    expect(metrics.liveProbes.value).toBe(324)
+    expect(metrics.productionEngines.value).toBe(595)
+    expect(metrics.liveProbes.value).toBe(329)
     expect(metrics.slaUptime.value).toBe('99.95%')
   })
 

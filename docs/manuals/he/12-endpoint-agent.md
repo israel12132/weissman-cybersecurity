@@ -2,7 +2,7 @@
 
 ## מטרה
 
-פריסה, enrollment, ותפעול agent (`weissman-agent`) ל-detections על-host, UEBA, ו-~45 מנועי **agent_required**.
+פריסה, enrollment, ותפעול agent (`weissman-agent`) ל-detections על-host, UEBA, ו-59 מנועי **agent_required**.
 
 ---
 

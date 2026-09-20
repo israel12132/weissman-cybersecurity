@@ -54,7 +54,7 @@ Validates:
 - Every production engine has dispatch or alias runner path
 - No orphan frontend IDs
 
-Expected: **563 production engine IDs**, 0 wiring gaps.
+Expected: **595 production engine IDs**, 0 wiring gaps.
 
 ### 2. Engine reality audit
 
@@ -64,7 +64,7 @@ node scripts/engine_reality_audit.mjs
 
 **Pass criteria:** Zero `no_path` engines.
 
-Reports counts by kind: **300** `real_probe`, **213** `alias`, **45** `agent_required`, **0** `special`.
+Reports counts by kind: **329** `real_probe`, **204** `alias`, **59** `agent_required`, **3** `advisory_only`.
 
 ### 3. UI compliance audit
 
@@ -244,7 +244,7 @@ Engineered by: _______________
 
 Automated:
   [ ] full_audit_gate.sh — GLOBAL PASS
-  [ ] verify_engine_wiring.mjs — 563 engine IDs, 0 gaps
+  [ ] verify_engine_wiring.mjs — 595 engine IDs, 0 gaps
   [ ] engine_reality_audit.mjs — 0 no_path
   [ ] weissman-ui-audit.mjs — 111 pages, 130 routes
   [ ] generate_audit_evidence_pack.sh — JSON + PDF
