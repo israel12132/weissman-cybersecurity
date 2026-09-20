@@ -84,6 +84,22 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ### Fixed
 
+- **Ask Weissman planner prompt is generated from the query SCHEMA (no more drift).**
+  The NL→Plan LLM system prompt hand-listed the tables/columns it may target, and had
+  silently fallen **4 tables behind** the real `nl_query::SCHEMA` allow-list — the
+  `ot_ics_*` tables (OT/ICS fingerprints, safety events, protocol baselines, asset
+  ranges) were queryable by `compile_plan` and granted to `weissman_ro`, but the planner
+  was never told they existed, so an analyst could not reach them through Ask Weissman.
+  The prompt's table enum and per-table column schema are now generated from `SCHEMA`
+  itself (sorted, deterministic), so the LLM is always told about exactly the tables the
+  compiler will accept — no more, no less. A new unit test
+  (`planner_prompt_lists_every_schema_table`) locks the parity: every SCHEMA table must
+  appear as both a schema line and an enum entry, and the enum count must equal
+  `SCHEMA.len()`. _Deferred (needs CI-pipeline + live-stack validation not available
+  here):_ retiring the deprecated `legacy/` Python layer, porting
+  `tests/e2e/test_scan_pipeline_live.py` to Rust/Node, and removing the `python-audit`
+  gate + live pytest contract from `ci.yml` — that touches a required CI job and a live
+  E2E stack, so it belongs in its own reviewed change rather than a blind edit.
 - **Findings never show a fabricated CVSS; probe-sharing is disclosed at the source.**
   Two honesty gaps in how findings were scored and attributed:
   1. **CVSS display honesty.** Both the write path (`findings_persist.rs`) and the read
