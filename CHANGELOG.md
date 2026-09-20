@@ -222,6 +222,26 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ### Security
 
+- **CI supply-chain hardening is now self-enforcing locally, not just asserted on the runner.**
+  The real controls (gitleaks, Trivy fs/config/image, Semgrep `--error`, CodeQL, cosign
+  keyless signing + SLSA provenance + SBOM attestation, an anchored fail-closed
+  `cosign verify` before `kubectl apply`, 40-hex-SHA-pinned actions, least-privilege
+  `contents: read` token) live entirely in GitHub Actions YAML — so nothing local caught a
+  silent weakening (dropping the gitleaks step, flipping a Trivy/Semgrep gate to advisory,
+  unpinning an action back to a mutable tag, de-anchoring or removing the `cosign verify`).
+  `full_audit_gate.sh` (G1–G7) never inspected `.github/workflows/`. New dependency-free
+  `scripts/ci_supply_chain_gate.mjs` closes that hole: it (a) parses the workflow YAML and
+  **asserts every fail-closed invariant is present and blocking**, and (b) runs a built-in
+  secret scanner + k8s IaC linter over the deploy surface. A `--selftest` mode plants a
+  secret + a privileged/insecure manifest into a temp fixture and asserts the detectors
+  **fire** — proving the detection is real, not a stub — before any clean run is trusted.
+  Wired into `full_audit_gate.sh` G4 (`--selftest` then real run). It does not pretend to
+  run the CI-only scanners themselves; it guarantees their steps cannot be silently
+  removed or downgraded. Verified here: selftest green, real run green with 7 honest
+  non-blocking advisory notes (a few datastore/gateway manifests omit resource
+  limits/`runAsNonRoot`; the `:latest` template tags the deploy pipeline pins to a verified
+  digest). This is the self-enforcing half of Step 15; the live execution of gitleaks/
+  Trivy/Semgrep/CodeQL/ZAP + cosign signing remains CI-runner-only by nature.
 - **NL→SQL & IOC-credential defense-in-depth (Ask Weissman hardening).** Four layered
   gaps closed on the read-only NL→SQL and global IOC-credential paths — none was
   exploitable on its own (the app-layer allow-lists and RBAC held), but each removes a
