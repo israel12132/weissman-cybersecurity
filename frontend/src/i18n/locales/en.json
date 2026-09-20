@@ -2517,6 +2517,7 @@
       "help_badge": "Help",
       "loading": "Loading messages…",
       "empty": "No messages yet. Start the conversation.",
+      "search_placeholder": "Search messages or sender…",
       "unknown_sender": "Unknown",
       "placeholder": "Write a message… (Enter to send)",
       "help_placeholder": "Describe what you need help with…",

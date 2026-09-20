@@ -23,6 +23,7 @@ export default function Messages() {
   const [text, setText] = useState('')
   const [asHelp, setAsHelp] = useState(false)
   const [helpOnly, setHelpOnly] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const [sending, setSending] = useState(false)
   const listRef = useRef(null)
 
@@ -60,10 +61,16 @@ export default function Messages() {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight
   }, [messages])
 
-  const visibleMessages = useMemo(
-    () => (helpOnly ? messages.filter((m) => m.kind === 'help') : messages),
-    [messages, helpOnly],
-  )
+  const visibleMessages = useMemo(() => {
+    const base = helpOnly ? messages.filter((m) => m.kind === 'help') : messages
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return base
+    return base.filter(
+      (m) =>
+        (m.body || m.text || '').toLowerCase().includes(q) ||
+        (m.sender_email || '').toLowerCase().includes(q),
+    )
+  }, [messages, helpOnly, searchQuery])
 
   const send = async () => {
     const bodyText = text.trim()
@@ -140,6 +147,14 @@ export default function Messages() {
             <LifeBuoy className="inline w-3.5 h-3.5 mr-1" aria-hidden="true" />
             {t('pages.messages.tab_help')}
           </Button>
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={t('pages.messages.search_placeholder')}
+            aria-label={t('common.search')}
+            className="ms-auto w-full sm:w-64 px-3 py-1.5 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-cyan-500/50 focus:outline-none text-xs"
+          />
         </div>
 
         {error && (
