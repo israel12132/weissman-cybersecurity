@@ -116,7 +116,7 @@ html[dir=rtl] .details .lead dt{font-family:var(--font-he)}
 @media (max-width:400px){.footer .sep{display:none}.footer .city{display:block}}
 @media (max-width:360px){.details .lead dd{font-size:.92rem}.lang{padding:.3rem .55rem;font-size:.8rem}.wordmark{font-size:.74rem}.wordsub{font-size:.625rem}}
 @media (min-width:900px){.page{max-width:44rem}}
-@media print{body{background:#fff;color:#000}.card{box-shadow:none}}
+@media print{:root{--bg-deep:#fff;--bg-charcoal:#fff;--bg-elevated:#fff;--bg-glow:transparent;--text:#000;--text-muted:#333;--text-dim:#555;--accent:#0369a1;--accent-deep:#0369a1;--accent-dim:transparent;--line:rgba(0,0,0,.25);--line-strong:rgba(0,0,0,.4)}body{background:#fff;color:#000}.card{box-shadow:none}}
 </style>
 <script defer src="/maintenance/maintenance.js"></script>
 </head>
@@ -132,7 +132,7 @@ html[dir=rtl] .details .lead dt{font-family:var(--font-he)}
 </header>
 
 <main id="main">
-  <p class="eyebrow"><span class="dot" aria-hidden="true"></span><span class="eb-default">עדכון מערכת</span><span class="eb-planned">תחזוקה מתוכננת</span></p>
+  <p class="eyebrow"><span class="dot" aria-hidden="true"></span><span class="eb-default">עדכון מתוכנן</span><span class="eb-planned">תחזוקה מתוכננת</span></p>
   <h1 id="maint-headline">מתבצע עדכון מערכת.</h1>
   <p class="lede">הפלטפורמה עוברת עדכון מתוכנן. פעילות הניטור והסריקות נמשכת כסדרה לאורך כל העדכון, ואין צורך בפעולה מצדכם — השירות יחזור לפעול באופן אוטומטי עם השלמתו.</p>
 
@@ -151,15 +151,15 @@ html[dir=rtl] .details .lead dt{font-family:var(--font-he)}
     <div class="planned" id="maint-planned" hidden>
       <h3>חלון תחזוקה מתוכנן</h3>
       <dl>
-        <div id="maint-reason-row" hidden><dt>מה מתעדכן</dt><dd id="maint-reason"></dd></div>
-        <div id="maint-until-row" hidden><dt>צפי לחזרה עד</dt><dd><time id="maint-until"></time></dd></div>
+        <div id="maint-reason-row" hidden><dt>מה מתעדכן</dt><dd id="maint-reason" dir="auto"></dd></div>
+        <div id="maint-until-row" hidden><dt>חזרה צפויה עד</dt><dd><time id="maint-until"></time></dd></div>
       </dl>
     </div>
     <form class="actions" id="maint-retry-form" method="get" action="">
       <button class="btn" id="maint-retry" type="submit" aria-describedby="maint-retry-hint">בדקו שוב</button>
       <noscript><a class="btn" href="">בדקו שוב</a><style>#maint-retry{display:none}</style></noscript>
       <a class="btn btn-ghost" href="/status">עדכוני סטטוס<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-      <span class="hint" id="maint-retry-hint">בדיקת זמינות עכשיו.</span>
+      <span class="hint" id="maint-retry-hint">בודק זמינות מיד.</span>
     </form>
   </section>
 

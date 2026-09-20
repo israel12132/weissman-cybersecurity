@@ -189,7 +189,9 @@
     renderCountdown();
     // The countdown is text, not motion, but under reduced motion it steps
     // every 5 s so nothing on the page appears to animate.
-    tickTimer = setInterval(renderCountdown, reducedMotion ? 5000 : 1000);
+    // A 1 s tick regardless of prefers-reduced-motion: the countdown is a text update, not an
+    // animation, and a 5 s redraw showed a stale "in N s" four seconds out of five.
+    tickTimer = setInterval(renderCountdown, 1000);
   }
 
   function fetchWithTimeout(url) {

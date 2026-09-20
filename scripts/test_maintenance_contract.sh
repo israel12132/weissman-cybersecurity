@@ -54,7 +54,8 @@ for tool in nginx curl openssl; do
   command -v "$tool" >/dev/null 2>&1 || { echo "SKIP: $tool unavailable"; exit 0; }
 done
 
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/weissman-maint-XXXXXX")"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/weissman-maint-XXXXXX")" || { echo "FAIL: cannot create a work dir under ${TMPDIR:-/tmp}" >&2; exit 1; }
+[[ -n "$WORK" && -d "$WORK" ]] || { echo "FAIL: mktemp returned no directory" >&2; exit 1; }
 GWD="$WORK/gateway"; VD="$WORK/vps"; SD="$WORK/stub"; KD="$WORK/k8s"
 HDR_FILE="$WORK/hdr"; BODY_FILE="$WORK/body"
 DIST="$ROOT/deploy/maintenance/dist"

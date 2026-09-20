@@ -105,7 +105,7 @@ cmd_status() {
     else
       echo "maintenance flag: ON  (since $(head -n1 "$FLAG" 2>/dev/null || echo '?'))"
       echo "state dir:        $STATE_DIR"
-      [ -f "$STATUS" ] && { echo "status.json:"; sed 's/^/  /' "$STATUS"; }
+      [ -f "$STATUS" ] && { echo "status.json:"; sed 's/^/  /' "$STATUS"; } || true
     fi
   else
     if [ $json -eq 1 ]; then printf '{"mode":"off"}\n'; else

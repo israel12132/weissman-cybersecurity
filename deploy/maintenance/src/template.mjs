@@ -131,7 +131,7 @@ html[dir=rtl] .details .lead dt{font-family:var(--font-he)}
 @media (max-width:400px){.footer .sep{display:none}.footer .city{display:block}}
 @media (max-width:360px){.details .lead dd{font-size:.92rem}.lang{padding:.3rem .55rem;font-size:.8rem}.wordmark{font-size:.74rem}.wordsub{font-size:.625rem}}
 @media (min-width:900px){.page{max-width:44rem}}
-@media print{body{background:#fff;color:#000}.card{box-shadow:none}}
+@media print{:root{--bg-deep:#fff;--bg-charcoal:#fff;--bg-elevated:#fff;--bg-glow:transparent;--text:#000;--text-muted:#333;--text-dim:#555;--accent:#0369a1;--accent-deep:#0369a1;--accent-dim:transparent;--line:rgba(0,0,0,.25);--line-strong:rgba(0,0,0,.4)}body{background:#fff;color:#000}.card{box-shadow:none}}
 `.trim();
 
 export function page({ locale = 'en', variant = 'public', assetBase = '/maintenance/', fonts, mark }) {
@@ -165,7 +165,7 @@ ${css(fonts)}
 <header class="top">
   <a class="brand" href="${S.brandHref}" aria-label="${esc(S.brandLabel)}" dir="ltr">
     ${markSvg(mark, 30)}
-    <span class="brand-text" aria-hidden="true"><span class="wordmark">WEISSMAN</span><span class="wordsub">Cybersecurity</span></span>
+    <span class="brand-text" aria-hidden="true"><span class="wordmark">WEISSMAN</span><span class="wordsub">${esc(S.wordsub)}</span></span>
   </a>
 ${cc ? '' : langPill(S)}</header>
 
@@ -189,7 +189,7 @@ ${cc ? '' : langPill(S)}</header>
     <div class="planned" id="maint-planned" hidden>
       <h3>${esc(S.plannedTitle)}</h3>
       <dl>
-        <div id="maint-reason-row" hidden><dt>${esc(S.plannedReason)}</dt><dd id="maint-reason"></dd></div>
+        <div id="maint-reason-row" hidden><dt>${esc(S.plannedReason)}</dt><dd id="maint-reason" dir="auto"></dd></div>
         <div id="maint-until-row" hidden><dt>${esc(S.plannedUntil)}</dt><dd><time id="maint-until"></time></dd></div>
       </dl>
     </div>

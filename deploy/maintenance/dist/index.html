@@ -116,7 +116,7 @@ html[dir=rtl] .details .lead dt{font-family:var(--font-he)}
 @media (max-width:400px){.footer .sep{display:none}.footer .city{display:block}}
 @media (max-width:360px){.details .lead dd{font-size:.92rem}.lang{padding:.3rem .55rem;font-size:.8rem}.wordmark{font-size:.74rem}.wordsub{font-size:.625rem}}
 @media (min-width:900px){.page{max-width:44rem}}
-@media print{body{background:#fff;color:#000}.card{box-shadow:none}}
+@media print{:root{--bg-deep:#fff;--bg-charcoal:#fff;--bg-elevated:#fff;--bg-glow:transparent;--text:#000;--text-muted:#333;--text-dim:#555;--accent:#0369a1;--accent-deep:#0369a1;--accent-dim:transparent;--line:rgba(0,0,0,.25);--line-strong:rgba(0,0,0,.4)}body{background:#fff;color:#000}.card{box-shadow:none}}
 </style>
 <script defer src="/maintenance/maintenance.js"></script>
 </head>
@@ -151,7 +151,7 @@ html[dir=rtl] .details .lead dt{font-family:var(--font-he)}
     <div class="planned" id="maint-planned" hidden>
       <h3>Scheduled window</h3>
       <dl>
-        <div id="maint-reason-row" hidden><dt>What is being updated</dt><dd id="maint-reason"></dd></div>
+        <div id="maint-reason-row" hidden><dt>What is being updated</dt><dd id="maint-reason" dir="auto"></dd></div>
         <div id="maint-until-row" hidden><dt>Expected back by</dt><dd><time id="maint-until"></time></dd></div>
       </dl>
     </div>
