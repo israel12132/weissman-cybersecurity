@@ -264,7 +264,8 @@ async fn insert_contact_lead(
 }
 
 fn notify_sales(name: &str, email: &str, company: &str, message: &str) {
-    let to = std::env::var("WEISSMAN_SALES_EMAIL").unwrap_or_else(|_| "weissmancybersecurity@gmail.com".into());
+    let to = std::env::var("WEISSMAN_SALES_EMAIL")
+        .unwrap_or_else(|_| "weissmancybersecurity@gmail.com".into());
     let body = format!(
         "New Weissman demo request\n\nName: {name}\nEmail: {email}\nCompany: {company}\n\n{message}\n"
     );
