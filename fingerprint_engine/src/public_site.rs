@@ -221,7 +221,7 @@ pub async fn api_public_contact(
                 Json(json!({
                     "ok": false,
                     "code": "contact_unavailable",
-                    "detail": "Could not store the request. Email sales@weissman.io or try again."
+                    "detail": "Could not store the request. Email weissmancybersecurity@gmail.com or try again."
                 })),
             )
                 .into_response()
@@ -254,7 +254,7 @@ async fn insert_contact_lead(
 }
 
 fn notify_sales(name: &str, email: &str, company: &str, message: &str) {
-    let to = std::env::var("WEISSMAN_SALES_EMAIL").unwrap_or_else(|_| "sales@weissman.io".into());
+    let to = std::env::var("WEISSMAN_SALES_EMAIL").unwrap_or_else(|_| "weissmancybersecurity@gmail.com".into());
     let body = format!(
         "New Weissman demo request\n\nName: {name}\nEmail: {email}\nCompany: {company}\n\n{message}\n"
     );
