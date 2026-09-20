@@ -49,7 +49,7 @@ class Handler(BaseHTTPRequestHandler):
         url = UPSTREAM + self.path
         req = urllib.request.Request(url, method="GET")
         try:
-            with urllib.request.urlopen(req, timeout=8) as resp:  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected -- fixed operator-configured UPSTREAM base; the request controls only the path suffix, never the scheme or host
+            with urllib.request.urlopen(req, timeout=8) as resp:
                 data = resp.read()
                 self.send_response(resp.status)
                 self.send_header("Content-Type", resp.headers.get("Content-Type", "application/octet-stream"))
