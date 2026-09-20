@@ -81,6 +81,20 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ### Security
 
+- **Integrity lock: no randomness in the finding scoring/persist path.** New CI gate
+  `scripts/verify_no_rand_in_scoring.mjs` fails the build if `findings_persist.rs`,
+  `findings_gate.rs` or `intel_epss.rs` ever import or use a randomness source
+  (`rand`, `thread_rng`, `gen_range`, `StdRng`/`SmallRng`/`OsRng`, `fastrand`,
+  `getrandom`). These modules compute the severity / risk_score / EPSS / KEV / proof
+  that reach the `vulnerabilities` table, so this makes the headline "no fabricated or
+  randomised findings" claim a build-enforced property rather than a convention (a
+  reviewed non-scoring use may opt out with a `// no-rand-gate: allow` marker). The
+  `findings_gate.rs` module docs are corrected to state honestly what the gate does
+  (enforces non-empty proof + determinism) and does **not** (verify probe-provenance —
+  that is an engine-level convention). _Deferred to its own reviewed change:_ requiring
+  a structured, machine-checkable evidence object for actionable severities, because
+  rejecting a real engine's prose-only finding would silently lose a genuine
+  vulnerability and needs per-engine evidence-shape analysis + staging first.
 - **Fail-closed boot guards against role/RLS drift.** Two hardenings in
   `crates/weissman-db/src/role_guard.rs`:
   - `assert_pool_role` now also scans `pg_db_role_setting` for a DB-/role-level

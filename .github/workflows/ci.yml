@@ -599,6 +599,9 @@ jobs:
       - name: Doc metric references (fail on drift in README/AGENTS/runbooks)
         run: node scripts/verify_doc_metrics.mjs
 
+      - name: No randomness in the finding scoring/persist path (integrity lock)
+        run: node scripts/verify_no_rand_in_scoring.mjs
+
       - name: Frontend↔backend route contract
         run: node scripts/verify_frontend_route_contract.mjs
 
