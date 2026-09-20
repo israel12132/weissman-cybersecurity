@@ -104,7 +104,7 @@ function ProviderCard({ prov, onClick }) {
       <div className="flex items-center gap-3">
         <span className="text-2xl">{prov.logo}</span>
         <div>
-          <p className="font-semibold text-white text-sm">{t(`pages.ssoDashboard.providers.${prov.id}.label`)}</p>
+          <p className="font-semibold text-[var(--text-primary)] text-sm">{t(`pages.ssoDashboard.providers.${prov.id}.label`)}</p>
           <p className="text-[10px] font-mono text-[var(--text-disabled)] uppercase">{prov.protocol}</p>
         </div>
       </div>
@@ -231,7 +231,7 @@ function IdpRow({ idp, onEdit, onDelete, onToggle, onTest, testing }) {
       <div className="flex items-center gap-3 flex-1 min-w-0">
         <span className="text-xl shrink-0">{prov.logo}</span>
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-white truncate">{idp.name}</p>
+          <p className="text-sm font-semibold text-[var(--text-primary)] truncate">{idp.name}</p>
           <p className="text-[10px] font-mono text-[var(--text-disabled)] truncate">{idp.issuer_url || idp.saml_idp_sso_url || '—'}</p>
           {idp.last_test_at && (
             <p className="text-[10px] text-[var(--text-disabled)] mt-0.5">

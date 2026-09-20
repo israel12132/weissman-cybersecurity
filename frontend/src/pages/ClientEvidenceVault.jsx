@@ -386,7 +386,7 @@ export default function ClientEvidenceVault() {
               <label className="block text-xs text-[var(--text-tertiary)] mb-1">{t('pages.clientEvidenceVault.file')}</label>
               <input
                 type="file"
-                className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-white"
+                className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-[var(--text-primary)]"
                 onChange={(e) => setFile(e.target.files?.[0] || null)}
               />
               {file && (
@@ -399,7 +399,7 @@ export default function ClientEvidenceVault() {
             <div>
               <label className="block text-xs text-[var(--text-tertiary)] mb-1">{t('pages.clientEvidenceVault.label_optional')}</label>
               <input
-                className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-white"
+                className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-[var(--text-primary)]"
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
                 placeholder={t('pages.clientEvidenceVault.label_placeholder')}
@@ -409,7 +409,7 @@ export default function ClientEvidenceVault() {
             <div>
               <label className="block text-xs text-[var(--text-tertiary)] mb-1">{t('pages.clientEvidenceVault.engagement_id_optional')}</label>
               <input
-                className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-white font-mono"
+                className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] font-mono"
                 value={engagementId}
                 onChange={(e) => setEngagementId(e.target.value)}
                 placeholder="123"
@@ -419,7 +419,7 @@ export default function ClientEvidenceVault() {
             <div>
               <label className="block text-xs text-[var(--text-tertiary)] mb-1">{t('pages.clientEvidenceVault.vuln_id_optional')}</label>
               <input
-                className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-white font-mono"
+                className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] font-mono"
                 value={vulnerabilityId}
                 onChange={(e) => setVulnerabilityId(e.target.value)}
                 placeholder="456"
@@ -429,7 +429,7 @@ export default function ClientEvidenceVault() {
             <div className="md:col-span-2">
               <label className="block text-xs text-[var(--text-tertiary)] mb-1">{t('pages.clientEvidenceVault.notes_optional')}</label>
               <textarea
-                className="w-full min-h-24 px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-white"
+                className="w-full min-h-24 px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-[var(--text-primary)]"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder={t('pages.clientEvidenceVault.notes_placeholder')}

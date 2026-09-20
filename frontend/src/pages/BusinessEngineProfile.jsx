@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../utils/apiFetch'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import { strategicEnginesNeedingDedicatedPage } from '../lib/strategicEngineProgram'
-import { buildSimpleTextPdf, downloadBytes } from '../lib/pdfExport'
+import { renderTextPdf, downloadBytes } from '../lib/pdfExport'
 import AgentRequiredGate from '../components/engine/AgentRequiredGate'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
@@ -319,7 +319,7 @@ export default function BusinessEngineProfile() {
       lines.push(`${t('pages.businessEngineProfile.pdf_active_job')}: ${liveJob.id}`)
       lines.push(`${t('common.status')}: ${liveJob.status || '-'}`)
     }
-    const bytes = buildSimpleTextPdf(lines)
+    const bytes = renderTextPdf(lines)
     downloadBytes(bytes, `${engineId}-business-export.pdf`, 'application/pdf')
   }
 
@@ -377,7 +377,7 @@ export default function BusinessEngineProfile() {
             {reg?.mitre && <span className="px-2 py-0.5 rounded border border-cyan-500/30 text-[11px] font-mono text-cyan-300">MITRE {reg.mitre}</span>}
             <span className="px-2 py-0.5 rounded border border-emerald-500/30 text-[11px] font-mono text-emerald-300">{t('pages.businessEngineProfile.dedicated_badge')}</span>
           </div>
-          <p className="text-lg font-semibold text-white">{mission}</p>
+          <p className="text-lg font-semibold text-[var(--text-primary)]">{mission}</p>
           <p className="text-sm text-[var(--text-tertiary)]">{t('pages.businessEngineProfile.ops_desc')}</p>
         </section>
 
@@ -506,7 +506,7 @@ export default function BusinessEngineProfile() {
             <div className="space-y-2 max-h-[280px] overflow-auto pr-1">
               {!historyUnavailable && visibleFindings.map((f) => (
                 <div key={`${f.id}-${f.discovered_at}`} className="text-xs rounded border border-[var(--border-default)] bg-[var(--table-surface)] p-2 text-[var(--text-secondary)]">
-                  <div className="font-medium text-white">{f.title || t('pages.businessEngineProfile.finding_fallback')}</div>
+                  <div className="font-medium text-[var(--text-primary)]">{f.title || t('pages.businessEngineProfile.finding_fallback')}</div>
                   <div className="font-mono text-[var(--text-muted)]">{f.discovered_at || '-'} | {f.severity || '-'} | {f.source || '-'}</div>
                 </div>
               ))}

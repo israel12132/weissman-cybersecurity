@@ -19,6 +19,10 @@ pub mod roles {
     pub const OPERATOR: &str = "operator";
     pub const ADMIN: &str = "admin";
     pub const CEO: &str = "ceo";
+    /// Platform owner — the top human role, ranked above CEO. Feeds
+    /// `client_isolation::is_platform_owner`. Grantable only by an existing owner
+    /// (or superadmin) via `require_can_assign_owner`.
+    pub const OWNER: &str = "owner";
     /// Customer-portal identity. Isolated to `assigned_client_id`.
     pub const CLIENT: &str = "client";
 }
@@ -26,6 +30,7 @@ pub mod roles {
 #[must_use]
 pub fn role_rank(role: &str) -> u8 {
     match role.trim().to_ascii_lowercase().as_str() {
+        roles::OWNER => 6,
         roles::CEO => 5,
         roles::ADMIN => 4,
         // Portal users operate engines on their own customer (operator-equivalent
@@ -108,6 +113,26 @@ pub fn require_can_assign_ceo(auth: &AuthContext) -> Result<(), Response> {
     ))
 }
 
+/// Only an existing platform owner (or superadmin) may grant the `owner` role.
+/// This is what lets "the owner add another owner" without letting a CEO/admin
+/// mint one.
+#[inline]
+#[must_use]
+pub fn can_assign_owner_role(auth: &AuthContext) -> bool {
+    auth.is_superadmin || auth.role.eq_ignore_ascii_case(roles::OWNER)
+}
+
+/// HTTP gate for handlers that assign `role = owner`.
+pub fn require_can_assign_owner(auth: &AuthContext) -> Result<(), Response> {
+    if can_assign_owner_role(auth) {
+        return Ok(());
+    }
+    Err(forbidden(
+        auth,
+        "Only the platform owner or superadmin may assign the owner role",
+    ))
+}
+
 /// Endpoint-agent WebSocket / fleet APIs — only JWTs with `role=agent` (not human RBAC ranks).
 #[inline]
 pub fn require_agent(auth: &AuthContext) -> Result<(), Response> {
@@ -131,6 +156,9 @@ const SELF_SERVICE_PREFIXES: &[&str] = &[
     "/api/ask",
     "/api/telemetry",
     "/api/preferences",
+    // Per-client message board + help: every employee (incl. read-only viewers)
+    // may post. Client isolation is still enforced by the scope middleware + RLS.
+    "/api/messages",
 ];
 
 fn path_in(prefixes: &[&str], path: &str) -> bool {
@@ -218,7 +246,9 @@ pub async fn mutation_rbac_middleware(req: Request, next: Next) -> Response {
     // Owner plane is hidden, not forbidden: staff must not learn that
     // `/api/sovereign/operator/*` exists (404, same as the GET middleware).
     if path == "/api/sovereign/operator" || path.starts_with("/api/sovereign/operator/") {
-        let owner = auth.is_superadmin || auth.role.eq_ignore_ascii_case(roles::CEO);
+        let owner = auth.is_superadmin
+            || auth.role.eq_ignore_ascii_case(roles::CEO)
+            || auth.role.eq_ignore_ascii_case(roles::OWNER);
         if owner {
             return next.run(req).await;
         }
@@ -366,5 +396,30 @@ mod tests {
         assert!(!can_assign_ceo_role(&ctx("operator", false)));
         assert!(require_can_assign_ceo(&ctx("ceo", false)).is_ok());
         assert!(require_can_assign_ceo(&ctx("admin", false)).is_err());
+    }
+
+    #[test]
+    fn owner_outranks_ceo() {
+        assert_eq!(role_rank("owner"), 6);
+        assert!(role_rank("owner") > role_rank("ceo"));
+        // Owner passes every rank gate below it.
+        assert!(require_role(&ctx("owner", false), "ceo").is_ok());
+        assert!(require_role(&ctx("owner", false), "admin").is_ok());
+        // Nothing below owner passes an owner gate.
+        assert!(require_role(&ctx("ceo", false), "owner").is_err());
+        assert!(require_role(&ctx("admin", false), "owner").is_err());
+        assert!(require_role(&ctx("owner", false), "owner").is_ok());
+        assert!(require_role(&ctx("viewer", true), "owner").is_ok()); // superadmin bypass
+    }
+
+    #[test]
+    fn owner_assignment_gate() {
+        // Only an existing owner (or superadmin) may grant the owner role.
+        assert!(can_assign_owner_role(&ctx("owner", false)));
+        assert!(can_assign_owner_role(&ctx("viewer", true)));
+        assert!(!can_assign_owner_role(&ctx("ceo", false)));
+        assert!(!can_assign_owner_role(&ctx("admin", false)));
+        assert!(require_can_assign_owner(&ctx("owner", false)).is_ok());
+        assert!(require_can_assign_owner(&ctx("ceo", false)).is_err());
     }
 }

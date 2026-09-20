@@ -170,7 +170,7 @@ export default function NetworkProtocols() {
               <span className="text-sm text-[var(--text-tertiary)]">{t('pages.networkProtocols.protocols_scanned')}</span>
               <Network className="w-4 h-4 text-cyan-400" />
             </div>
-            <div className="text-2xl font-bold text-white">{stats.scanned}</div>
+            <div className="text-2xl font-bold text-[var(--text-primary)]">{stats.scanned}</div>
           </div>
 
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
@@ -200,7 +200,7 @@ export default function NetworkProtocols() {
 
         <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
           <div className="p-4 border-b border-[var(--border-default)]">
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
               <Globe className="w-4 h-4 text-cyan-400" />
               {t('pages.networkProtocols.heading')}
             </h3>
@@ -226,7 +226,7 @@ export default function NetworkProtocols() {
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
-                        <h4 className="text-sm font-semibold text-white">{protocol.name}</h4>
+                        <h4 className="text-sm font-semibold text-[var(--text-primary)]">{protocol.name}</h4>
                         <span className={`px-2 py-1 rounded text-xs font-medium border ${getStatusColor(protocol.status)}`}>
                           {statusLabel(protocol.status)}
                         </span>

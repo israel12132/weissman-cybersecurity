@@ -219,7 +219,7 @@ export default function OnboardingWizard({ open, onComplete }) {
                     placeholder={t('components.onboarding.client_placeholder')}
                     // eslint-disable-next-line jsx-a11y/no-autofocus -- intentional focus on first field of onboarding wizard
                     autoFocus
-                    className="w-full px-4 py-3 rounded-xl bg-[var(--bg-2)] border border-[var(--border-default)] text-white placeholder-white/25 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/40 transition-all"
+                    className="w-full px-4 py-3 rounded-xl bg-[var(--bg-2)] border border-[var(--border-default)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/40 transition-all"
                   />
                 </div>
                 <div>
@@ -234,7 +234,7 @@ export default function OnboardingWizard({ open, onComplete }) {
                       value={domain}
                       onChange={(e) => setDomain(e.target.value)}
                       placeholder={t('components.onboarding.domain_placeholder')}
-                      className="w-full pl-11 pr-4 py-3 rounded-xl bg-[var(--bg-2)] border border-[var(--border-default)] text-white placeholder-white/25 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/40 transition-all"
+                      className="w-full pl-11 pr-4 py-3 rounded-xl bg-[var(--bg-2)] border border-[var(--border-default)] text-[var(--text-primary)] placeholder-[var(--text-muted)] font-mono text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/40 transition-all"
                     />
                   </div>
                   <p className="mt-2 text-[11px] text-[var(--text-disabled)]">

@@ -10,7 +10,7 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
 import { apiFetch } from '../utils/apiFetch'
 import { openSseStream } from '../lib/sseStream'
-import { buildSimpleTextPdf, downloadBytes } from '../lib/pdfExport'
+import { renderTextPdf, downloadBytes } from '../lib/pdfExport'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import Button from '../components/ui/Button'
 
@@ -336,7 +336,7 @@ function Num({ label, value, onChange, min, max, step, hint }) {
         step={step}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-pink-400/40"
+        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-[var(--text-primary)] font-mono focus:outline-none focus:border-pink-400/40"
       />
       <Hint>{hint}</Hint>
     </label>
@@ -369,7 +369,7 @@ function Txt({ label, value, onChange, placeholder, hint }) {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white font-mono placeholder-white/20 focus:outline-none focus:border-pink-400/40"
+        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-[var(--text-primary)] font-mono placeholder-white/20 focus:outline-none focus:border-pink-400/40"
       />
       <Hint>{hint}</Hint>
     </label>
@@ -535,7 +535,7 @@ function MetricTile({ label, value, accent = '#f472b6' }) {
   return (
     <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] backdrop-blur-md p-4" style={{ boxShadow: `inset 0 1px 0 ${accent}20` }}>
       <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-1">{label}</p>
-      <p className="text-2xl font-bold text-white">{value ?? '—'}</p>
+      <p className="text-2xl font-bold text-[var(--text-primary)]">{value ?? '—'}</p>
     </div>
   )
 }
@@ -616,7 +616,7 @@ function SchemaTypeExplorer({ schemaGraph }) {
       {active && (
         <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-3)] p-3">
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-sm font-semibold text-white">{active.type}</span>
+            <span className="text-sm font-semibold text-[var(--text-primary)]">{active.type}</span>
             <span className="text-[9px] font-mono text-[var(--text-muted)]">{active.kind}</span>
             <span className="text-[9px] font-mono text-cyan-400/70">{active.field_count ?? (active.fields || []).length} fields</span>
           </div>
@@ -743,7 +743,7 @@ function RemediationPanel({ items }) {
             <span className={`text-[10px] font-mono shrink-0 ${sevColor(item.severity)}`}>
               [{item.severity || 'info'}]
             </span>
-            <span className="text-xs font-semibold text-white">{item.title}</span>
+            <span className="text-xs font-semibold text-[var(--text-primary)]">{item.title}</span>
           </div>
           {item.remediation && (
             <p className="text-[10px] text-cyan-200/70 leading-snug pl-1">{item.remediation}</p>
@@ -878,7 +878,7 @@ export default function GraphqlSecurityCommandCenter() {
     for (const c of card?.categories || []) {
       lines.push(`- ${c.category} ${c.grade} (${c.score}) — ${c.label}`)
     }
-    downloadBytes(buildSimpleTextPdf(lines), `graphql-executive-${Date.now()}.pdf`, 'application/pdf')
+    downloadBytes(renderTextPdf(lines), `graphql-executive-${Date.now()}.pdf`, 'application/pdf')
   }, [historyUnavailable, target, metrics])
 
 

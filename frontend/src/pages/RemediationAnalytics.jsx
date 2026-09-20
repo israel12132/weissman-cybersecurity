@@ -260,7 +260,7 @@ export default function RemediationAnalytics() {
         {!error && (
         <section className="space-y-2">
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
               <GitPullRequest className="w-4 h-4 text-cyan-400" />
               {t('pages.remediationAnalytics.recent_heals')}
             </h3>

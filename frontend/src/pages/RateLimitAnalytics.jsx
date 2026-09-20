@@ -220,7 +220,7 @@ export default function RateLimitAnalytics() {
         <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-6">
           <div className="flex items-center gap-2 mb-6">
             <TrendingUp className="w-4 h-4 text-cyan-400" />
-            <h3 className="text-sm font-semibold text-white">{t('pages.rateLimitAnalytics.usage_history')}</h3>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('pages.rateLimitAnalytics.usage_history')}</h3>
           </div>
           {!data ? (
             <SkeletonBar className="h-[300px] w-full" />
@@ -265,7 +265,7 @@ export default function RateLimitAnalytics() {
         <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-6">
           <div className="flex items-center gap-2 mb-4">
             <AlertTriangle className="w-4 h-4 text-rose-400" />
-            <h3 className="text-sm font-semibold text-white">{t('pages.rateLimitAnalytics.violations_heading')}</h3>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('pages.rateLimitAnalytics.violations_heading')}</h3>
           </div>
           {!data ? (
             <SkeletonBar className="h-24 w-full" />
@@ -298,7 +298,7 @@ export default function RateLimitAnalytics() {
         <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-6">
           <div className="flex items-center gap-2 mb-4">
             <BarChart3 className="w-4 h-4 text-cyan-400" />
-            <h3 className="text-sm font-semibold text-white">{t('pages.rateLimitAnalytics.endpoints_heading')}</h3>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('pages.rateLimitAnalytics.endpoints_heading')}</h3>
           </div>
           {!data ? (
             <SkeletonBar className="h-[250px] w-full" />

@@ -149,7 +149,7 @@ export default function CompetitiveWinRoom() {
             {t(`${NS}.not_ngfw`)}
           </div>
           <div>
-            <h2 className="text-sm font-semibold text-white mb-2">{t(`${NS}.gaps_heading`)}</h2>
+            <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-2">{t(`${NS}.gaps_heading`)}</h2>
             {!gaps.length ? (
               <EmptyState title={t(`${NS}.empty_gaps`)} body={t(`${NS}.empty_gaps_body`)} />
             ) : (
@@ -157,7 +157,7 @@ export default function CompetitiveWinRoom() {
                 {gaps.map((g) => (
                   <li key={g.id} className="rounded-lg border border-white/10 p-3" data-testid="win-room-gap">
                     <div className="text-[10px] font-mono uppercase text-amber-300">{g.id} · {g.severity}</div>
-                    <div className="text-sm text-white mt-1">{g.detail}</div>
+                    <div className="text-sm text-[var(--text-primary)] mt-1">{g.detail}</div>
                   </li>
                 ))}
               </ul>

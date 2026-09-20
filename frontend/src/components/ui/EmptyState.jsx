@@ -121,7 +121,7 @@ export default function EmptyState({
             (cta.to ? (
               <Link
                 to={cta.to}
-                className="px-4 py-2 rounded-lg text-sm font-mono border border-cyan-500/35 bg-cyan-500/10 text-cyan-200/90 hover:bg-cyan-500/20 transition-colors"
+                className="px-4 py-2 rounded-lg text-sm font-mono border border-cyan-500/35 bg-cyan-500/10 text-[var(--text-accent)] hover:bg-cyan-500/20 transition-colors"
               >
                 {cta.label}
               </Link>
@@ -129,7 +129,7 @@ export default function EmptyState({
               <Button variant="unstyled"
                 type="button"
                 onClick={cta.onClick}
-                className="px-4 py-2 rounded-lg text-sm font-mono border border-cyan-500/35 bg-cyan-500/10 text-cyan-200/90 hover:bg-cyan-500/20 transition-colors"
+                className="px-4 py-2 rounded-lg text-sm font-mono border border-cyan-500/35 bg-cyan-500/10 text-[var(--text-accent)] hover:bg-cyan-500/20 transition-colors"
               >
                 {cta.label}
               </Button>

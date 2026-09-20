@@ -297,7 +297,7 @@ export default function SystemConfiguration() {
                       {filteredFindings.map((item) => (
                         <div key={item.id} className="rounded-lg border border-[var(--border-default)] bg-[var(--row-hover-bg)] px-4 py-3">
                           <div className="text-[10px] font-mono uppercase text-cyan-400/70">{item.type}</div>
-                          <div className="text-sm font-medium text-white mt-1">{item.title}</div>
+                          <div className="text-sm font-medium text-[var(--text-primary)] mt-1">{item.title}</div>
                           <div className="text-xs text-[var(--text-tertiary)] font-mono mt-1 break-all">{item.description}</div>
                         </div>
                       ))}
@@ -357,7 +357,7 @@ function GeneralSettings({ config, onChange }) {
 
   return (
     <div className="space-y-6">
-      <h3 className="text-lg font-bold text-white mb-4">{t(`${NS}.sections.general.title`)}</h3>
+      <h3 className="text-lg font-bold text-[var(--text-primary)] mb-4">{t(`${NS}.sections.general.title`)}</h3>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <label htmlFor="cfg-general-org_name" className="block text-sm font-medium text-[var(--text-secondary)]">

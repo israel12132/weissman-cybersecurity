@@ -107,7 +107,7 @@ function HitlItem({ item, onApprove, onReject, loading }) {
               {severityLabel}
             </span>
           </div>
-          <p className="text-sm font-medium text-white truncate max-w-lg">{item.target_brief}</p>
+          <p className="text-sm font-medium text-[var(--text-primary)] truncate max-w-lg">{item.target_brief}</p>
           <p className="text-[10px] font-mono text-[var(--text-disabled)]">
             {item.proposed_at ? new Date(item.proposed_at).toLocaleString() : ''}
             {item.client_id ? t('pages.councilHitlQueue.client_suffix', { id: item.client_id }) : ''}

@@ -133,7 +133,7 @@ export default function CasbDlpCenter() {
                 return (
                   <li key={f.id || f.finding_id} className="rounded-lg border border-white/10 p-3">
                     <span className="text-[10px] font-mono uppercase" style={{ color: SEV_COLOR[s] || SEV_COLOR.info }}>{s}</span>
-                    <span className="ml-2 text-xs font-mono text-white/50">{f.source}</span>
+                    <span className="ml-2 text-xs font-mono text-[var(--text-muted)]">{f.source}</span>
                     <div className="text-sm mt-1">{f.title}</div>
                   </li>
                 )

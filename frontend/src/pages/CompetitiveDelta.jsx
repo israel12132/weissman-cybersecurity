@@ -115,7 +115,7 @@ export default function CompetitiveDelta() {
       }),
       columnHelper.accessor('title', {
         header: () => t(`${NS}.col_lane`),
-        cell: (ctx) => <span className="text-white">{ctx.getValue()}</span>,
+        cell: (ctx) => <span className="text-[var(--text-primary)]">{ctx.getValue()}</span>,
       }),
       columnHelper.accessor('live_engine_count', {
         header: () => t(`${NS}.col_engines`),

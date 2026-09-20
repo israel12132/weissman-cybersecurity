@@ -1,14 +1,17 @@
 /**
  * RBAC role ladder — single source of truth for the frontend.
  *
- * Mirrors the backend ladder `viewer → analyst → operator → admin → ceo`
+ * Mirrors the backend ladder `viewer → analyst → operator → admin → ceo → owner`
  * plus the `superadmin` override. This is defense-in-depth for the UI: the
  * backend still enforces every privileged call with a 403. Route guards and
  * nav gating both consume `roleRank`/`hasRole` so they can never drift apart.
+ *
+ * `owner` is the top human role (backend rank 6, above CEO); it may be granted
+ * only by an existing owner or a superadmin.
  */
 
 /** Ordered low→high. Index is intentionally not the rank — use ROLE_RANK. */
-export const ROLE_LADDER = ['viewer', 'analyst', 'operator', 'admin', 'ceo', 'superadmin']
+export const ROLE_LADDER = ['viewer', 'analyst', 'operator', 'admin', 'ceo', 'owner', 'superadmin']
 
 /** @type {Record<string, number>} role → numeric rank (higher = more privilege). */
 export const ROLE_RANK = ROLE_LADDER.reduce((acc, role, i) => {

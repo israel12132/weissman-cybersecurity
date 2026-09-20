@@ -183,7 +183,7 @@ function CampaignDetail({ campaign, t }) {
             {statusLabel}
           </span>
         </div>
-        <h3 className="text-sm font-bold text-white mb-2">{campaign.title}</h3>
+        <h3 className="text-sm font-bold text-[var(--text-primary)] mb-2">{campaign.title}</h3>
         <p className="text-xs text-[var(--text-tertiary)] leading-relaxed italic">&quot;{campaign.hypothesis}&quot;</p>
       </div>
       <div className="grid grid-cols-2 gap-3">

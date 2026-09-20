@@ -119,7 +119,7 @@ function DomainCard({ domain, selected, onSelect, onScanClick }) {
             onChange={() => onSelect(domain.domain)}
             className="w-4 h-4 rounded border-[var(--border-strong)] bg-[var(--bg-2)] text-cyan-500 focus:ring-cyan-500/40"
           />
-          <span className="text-sm font-semibold text-white truncate">{domain.domain}</span>
+          <span className="text-sm font-semibold text-[var(--text-primary)] truncate">{domain.domain}</span>
         </div>
         <LiveBadge live={domain.live} https={domain.https_available} />
       </div>
@@ -174,7 +174,7 @@ function StatsBar({ result, selectedCount }) {
   return (
     <div className="flex flex-wrap items-center gap-4 p-4 rounded-xl bg-[var(--bg-2)] border border-[var(--border-default)]">
       <div className="flex flex-col">
-        <span className="text-2xl font-bold text-white">{result.total_discovered}</span>
+        <span className="text-2xl font-bold text-[var(--text-primary)]">{result.total_discovered}</span>
         <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wider">{t('pages.domainDiscovery.total_discovered')}</span>
       </div>
       <div className="flex flex-col">
@@ -374,7 +374,7 @@ export default function DomainDiscovery() {
               {t('pages.domainDiscovery.dashboard')}
             </Link>
             <span className="text-[var(--text-disabled)] text-xs">|</span>
-            <h1 className="text-sm font-bold tracking-tight text-white">{t('pages.domainDiscovery.title')}</h1>
+            <h1 className="text-sm font-bold tracking-tight text-[var(--text-primary)]">{t('pages.domainDiscovery.title')}</h1>
             <span className="text-[10px] font-mono text-[var(--text-disabled)] uppercase tracking-widest">
               {t('pages.domainDiscovery.tagline')}
             </span>

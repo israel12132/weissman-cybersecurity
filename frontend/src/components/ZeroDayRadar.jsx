@@ -114,7 +114,7 @@ export default function ZeroDayRadar() {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
             <Link to="/" className="text-cyan-400 hover:text-cyan-300 text-sm font-medium">{t(`${NS}.back_war_room`)}</Link>
-            <h1 className="text-2xl font-bold text-white tracking-tight">{t(`${NS}.title`)}</h1>
+            <h1 className="text-2xl font-bold text-[var(--text-primary)] tracking-tight">{t(`${NS}.title`)}</h1>
           </div>
           <span className="text-[var(--text-muted)] text-sm">{t(`${NS}.subtitle`)}</span>
         </div>

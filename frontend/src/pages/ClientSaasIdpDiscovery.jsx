@@ -230,7 +230,7 @@ export default function ClientSaasIdpDiscovery() {
                     <div key={c.vendor} className="p-4 bg-[var(--bg-1)]/40 border border-[var(--border-default)] rounded-lg">
                       <div className="flex items-start justify-between gap-4">
                         <div>
-                          <div className="text-white font-semibold">{vendorLabel(c.vendor)}</div>
+                          <div className="text-[var(--text-primary)] font-semibold">{vendorLabel(c.vendor)}</div>
                           <div className="text-xs text-[var(--text-tertiary)] mt-1">
                             {t('pages.clientSaasIdpDiscovery.confidence', { pct: pct(c.confidence) })}
                           </div>
@@ -298,7 +298,7 @@ export default function ClientSaasIdpDiscovery() {
             <div className="mt-4 space-y-3">
               {visibleSaas.map((s) => (
                 <div key={s.name} className="p-4 bg-[var(--bg-1)]/40 border border-[var(--border-default)] rounded-lg">
-                  <div className="text-white font-semibold">{s.name}</div>
+                  <div className="text-[var(--text-primary)] font-semibold">{s.name}</div>
                   <div className="mt-2 text-xs text-[var(--text-secondary)] font-mono space-y-1">
                     {(Array.isArray(s.evidence) ? s.evidence : []).slice(0, 10).map((e) => (
                       <div key={e} className="break-all">{e}</div>

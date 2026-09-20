@@ -147,7 +147,7 @@ function Txt({ label, value, onChange, placeholder, hint }) {
     <label className="block space-y-1">
       <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
       <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white font-mono placeholder-white/20 focus:outline-none focus:border-pink-400/40" />
+        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-[var(--text-primary)] font-mono placeholder-white/20 focus:outline-none focus:border-pink-400/40" />
       {hint && <span className="text-[9px] font-mono text-[var(--text-disabled)]">{hint}</span>}
     </label>
   )
@@ -492,7 +492,7 @@ export default function ServerlessSecurityCommandCenter() {
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="rounded-2xl border border-pink-500/30 bg-[var(--bg-2)] p-4">
                 <h3 className="text-sm font-mono text-pink-300 uppercase tracking-widest mb-3">Posture Score</h3>
                 <div className="flex items-end gap-4">
-                  <span className="text-5xl font-bold text-white">{liveMetrics.score}<span className="text-2xl text-[var(--text-muted)]">/100</span></span>
+                  <span className="text-5xl font-bold text-[var(--text-primary)]">{liveMetrics.score}<span className="text-2xl text-[var(--text-muted)]">/100</span></span>
                   <span className="text-3xl font-mono text-pink-400 mb-1">Grade {liveMetrics.grade}</span>
                 </div>
                 <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] font-mono">

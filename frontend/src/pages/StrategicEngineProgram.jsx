@@ -181,7 +181,7 @@ export default function StrategicEngineProgram() {
         <section className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
             <div className="text-[11px] text-[var(--text-tertiary)]">{t('pages.strategicEngineProgram.prioritized_label')}</div>
-            <div className="text-2xl font-semibold text-white">{rows.length}</div>
+            <div className="text-2xl font-semibold text-[var(--text-primary)]">{rows.length}</div>
             <p className="text-xs text-[var(--text-tertiary)]">{t('pages.strategicEngineProgram.prioritized_count', { count: rows.length })}</p>
           </article>
           <article className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
@@ -242,7 +242,7 @@ export default function StrategicEngineProgram() {
         <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] p-5">
           <div className="flex items-center gap-2 mb-4">
             <Layers className="w-4 h-4 text-[var(--text-muted)]" />
-            <h2 className="text-sm font-semibold text-white">{t('pages.strategicEngineProgram.priority_matrix')}</h2>
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">{t('pages.strategicEngineProgram.priority_matrix')}</h2>
             <span className="text-[10px] font-mono text-[var(--text-muted)] ml-auto">
               {t('pages.strategicEngineProgram.showing_count', { count: filteredRows.length, total: rows.length })}
             </span>

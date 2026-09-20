@@ -289,7 +289,7 @@ export default function FeedbackLoopVerification() {
               <div className="grid grid-cols-3 gap-3">
                 <div className="rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-3 text-center">
                   <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t('pages.feedbackLoopVerification.steps_total')}</div>
-                  <div className="text-xl font-semibold text-white">{stepCount}</div>
+                  <div className="text-xl font-semibold text-[var(--text-primary)]">{stepCount}</div>
                 </div>
                 <div className="rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-3 text-center">
                   <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t('pages.feedbackLoopVerification.steps_passed')}</div>

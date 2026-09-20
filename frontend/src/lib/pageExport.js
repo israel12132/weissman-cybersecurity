@@ -8,7 +8,7 @@
  * defines its columns once and gets both formats.
  */
 import { downloadCsv } from './exportFindingsCsv'
-import { buildSimpleTextPdf, downloadBytes } from './pdfExport'
+import { renderTextPdf, downloadBytes } from './pdfExport'
 
 /** Formula-injection-safe CSV of `rows` (array of arrays) under `header` (array of strings). */
 export function exportRowsCsv(header, rows, filenamePrefix) {
@@ -16,9 +16,9 @@ export function exportRowsCsv(header, rows, filenamePrefix) {
 }
 
 /**
- * Self-contained text PDF of the same tabular data. `title` is the document heading.
- * buildSimpleTextPdf caps at 120 lines / 120 chars per line, which comfortably covers
- * the pre-aggregated panels this is used for; longer rows are truncated by that helper.
+ * Self-contained PDF of the same tabular data. `title` is the document heading.
+ * Latin content uses a compact text PDF; Hebrew/RTL content is rendered via the
+ * browser canvas and embedded as an image so it is legible (renderTextPdf).
  */
 export function exportRowsPdf(title, header, rows, filenamePrefix) {
   const safeHeader = Array.isArray(header) ? header : []
@@ -31,7 +31,7 @@ export function exportRowsPdf(title, header, rows, filenamePrefix) {
     ...safeRows.map((r) => (Array.isArray(r) ? r : []).map((c) => String(c ?? '')).join('  |  ')),
   ]
   downloadBytes(
-    buildSimpleTextPdf(lines),
+    renderTextPdf(lines),
     `${filenamePrefix}-${new Date().toISOString().slice(0, 10)}.pdf`,
     'application/pdf',
   )

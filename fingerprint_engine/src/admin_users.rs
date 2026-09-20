@@ -32,6 +32,34 @@ fn default_role() -> String {
     "viewer".to_string()
 }
 
+const ROLE_ERROR_DETAIL: &str = "role must be one of viewer|analyst|operator|admin|ceo|owner|client";
+
+/// The roles an admin API may assign. `owner` is here too but is additionally
+/// gated by `require_can_assign_owner`; `superadmin` is a flag, never a role.
+#[must_use]
+fn is_valid_role(role: &str) -> bool {
+    matches!(
+        role,
+        crate::rbac::roles::VIEWER
+            | crate::rbac::roles::ANALYST
+            | crate::rbac::roles::OPERATOR
+            | crate::rbac::roles::ADMIN
+            | crate::rbac::roles::CEO
+            | crate::rbac::roles::OWNER
+            | crate::client_isolation::CLIENT_ROLE
+    )
+}
+
+/// True when a user in this role may be confined to a single client via
+/// `assigned_client_id`: the portal `client` role, or any human role below
+/// admin (viewer / analyst / operator). Admin, CEO and owner always see every
+/// client, so a per-client assignment is rejected for them.
+#[must_use]
+fn role_may_be_client_scoped(role: &str) -> bool {
+    crate::client_isolation::is_client_role(role)
+        || crate::rbac::role_rank(role) < crate::rbac::role_rank(crate::rbac::roles::ADMIN)
+}
+
 #[derive(Deserialize)]
 pub struct UpdateUserBody {
     pub role: Option<String>,
@@ -64,6 +92,22 @@ async fn allow_ceo_role_assignment(
         })
 }
 
+/// Allow the DB `guard_users_owner_role` trigger for this transaction. Only the
+/// handler — after `require_can_assign_owner` has passed — sets this GUC, so the
+/// database is a second wall against minting an owner from an unprivileged path.
+async fn allow_owner_role_assignment(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+) -> Result<(), Response> {
+    sqlx::query("SET LOCAL app.owner_role_assignment = '1'")
+        .execute(&mut **tx)
+        .await
+        .map(|_| ())
+        .map_err(|e| {
+            tracing::error!(target: "admin", error = %e, "set owner_role_assignment guc failed");
+            admin_store_down()
+        })
+}
+
 /// Check if the caller is admin, CEO or superadmin (uses live DB role, not JWT alone).
 async fn require_admin_access(pool: &PgPool, auth: &AuthContext) -> Result<AuthContext, Response> {
     let auth = match crate::auth_refresh::revalidate_auth_context(pool, auth).await {
@@ -85,6 +129,7 @@ async fn require_admin_access(pool: &PgPool, auth: &AuthContext) -> Result<AuthC
         }
     };
     if auth.is_superadmin
+        || auth.role.to_lowercase() == "owner"
         || auth.role.to_lowercase() == "ceo"
         || auth.role.to_lowercase() == "admin"
     {
@@ -255,20 +300,10 @@ pub async fn api_admin_users_create(
     };
 
     let role = body.role.trim().to_lowercase();
-    let valid_roles = [
-        "viewer",
-        "analyst",
-        "operator",
-        "admin",
-        "ceo",
-        crate::client_isolation::CLIENT_ROLE,
-    ];
-    // Reject unknown roles instead of silently downgrading to "viewer": a botched or typo'd
-    // role otherwise creates a user the operator did not intend.
-    if !valid_roles.contains(&role.as_str()) {
+    if !is_valid_role(&role) {
         return (
             StatusCode::BAD_REQUEST,
-            Json(json!({"ok": false, "detail": "role must be one of viewer|analyst|operator|admin|ceo|client"})),
+            Json(json!({"ok": false, "detail": ROLE_ERROR_DETAIL})),
         )
             .into_response();
     }
@@ -293,20 +328,38 @@ pub async fn api_admin_users_create(
                 .into_response();
         }
     } else if assigned_client_id.is_some() {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(json!({
-                "ok": false,
-                "detail": "assigned_client_id is only valid for role=client"
-            })),
-        )
-            .into_response();
+        // A client may be assigned to any below-admin role (viewer / analyst /
+        // operator) so they are confined to that one customer. It is never valid
+        // for admin, CEO, owner or a superadmin — those see every client.
+        if !role_may_be_client_scoped(&role) {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({
+                    "ok": false,
+                    "detail": "assigned_client_id is only valid for a client or a below-admin (viewer/analyst/operator) user"
+                })),
+            )
+                .into_response();
+        }
+        if body.is_superadmin {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"ok": false, "detail": "A superadmin cannot be scoped to a single client"})),
+            )
+                .into_response();
+        }
     }
 
     // Rank guard on create (mirrors the update path and ensure_can_manage_target): a
     // non-superadmin may only create a user of strictly lower effective rank. Without this an
     // `admin` could mint a peer-`admin` sock-puppet and defeat the two-person ROE approval control.
+    // An owner may create a peer owner ("the owner can add another owner"), so the
+    // strict lower-rank rule is waived for that one case (still gated below by
+    // require_can_assign_owner). Every other equal-or-higher creation is blocked.
+    let owner_grant = role == crate::rbac::roles::OWNER
+        && crate::rbac::can_assign_owner_role(&auth);
     if !auth.is_superadmin
+        && !owner_grant
         && crate::rbac::role_rank(&role) >= effective_rank(&auth.role, auth.is_superadmin)
     {
         return (
@@ -320,6 +373,11 @@ pub async fn api_admin_users_create(
 
     if role == crate::rbac::roles::CEO {
         if let Err(r) = crate::rbac::require_can_assign_ceo(&auth) {
+            return r;
+        }
+    }
+    if role == crate::rbac::roles::OWNER {
+        if let Err(r) = crate::rbac::require_can_assign_owner(&auth) {
             return r;
         }
     }
@@ -339,8 +397,7 @@ pub async fn api_admin_users_create(
         }
     };
 
-    if crate::client_isolation::is_client_role(&role) {
-        let cid = assigned_client_id.unwrap();
+    if let Some(cid) = assigned_client_id {
         let exists_client: Option<i64> = match sqlx::query_scalar(
             "SELECT id FROM clients WHERE id = $1 AND tenant_id = $2 LIMIT 1",
         )
@@ -391,6 +448,11 @@ pub async fn api_admin_users_create(
 
     if role == crate::rbac::roles::CEO {
         if let Err(r) = allow_ceo_role_assignment(&mut tx).await {
+            return r;
+        }
+    }
+    if role == crate::rbac::roles::OWNER {
+        if let Err(r) = allow_owner_role_assignment(&mut tx).await {
             return r;
         }
     }
@@ -514,21 +576,13 @@ pub async fn api_admin_users_update(
     let valid_role: Option<String> = match body.role.as_ref() {
         Some(r) => {
             let role = r.trim().to_lowercase();
-            let valid_roles = [
-                "viewer",
-                "analyst",
-                "operator",
-                "admin",
-                "ceo",
-                crate::client_isolation::CLIENT_ROLE,
-            ];
-            if valid_roles.contains(&role.as_str()) {
+            if is_valid_role(&role) {
                 Some(role)
             } else {
                 let _ = tx.rollback().await;
                 return (
                     StatusCode::BAD_REQUEST,
-                    Json(json!({"ok": false, "detail": "role must be one of viewer|analyst|operator|admin|ceo|client"})),
+                    Json(json!({"ok": false, "detail": ROLE_ERROR_DETAIL})),
                 )
                     .into_response();
             }
@@ -542,8 +596,14 @@ pub async fn api_admin_users_update(
                 return r;
             }
         }
+        if role == crate::rbac::roles::OWNER {
+            if let Err(r) = crate::rbac::require_can_assign_owner(&auth) {
+                return r;
+            }
+        }
         // Prevent privilege escalation: a non-superadmin cannot grant a role above
-        // their own privilege level.
+        // their own privilege level. An owner may grant owner (equal), which the
+        // strict `>` already permits, backed by require_can_assign_owner above.
         if !auth.is_superadmin
             && crate::rbac::role_rank(role) > effective_rank(&auth.role, auth.is_superadmin)
         {
@@ -580,6 +640,11 @@ pub async fn api_admin_users_update(
                 return r;
             }
         }
+        if role == crate::rbac::roles::OWNER {
+            if let Err(r) = allow_owner_role_assignment(&mut tx).await {
+                return r;
+            }
+        }
     }
 
     let new_role = valid_role
@@ -591,12 +656,16 @@ pub async fn api_admin_users_update(
     } else {
         body.is_superadmin.unwrap_or(target_is_superadmin)
     };
-    let new_cid: Option<i64> = if crate::client_isolation::is_client_role(&new_role) {
+    // A superadmin (or admin/CEO/owner) is never scoped; only a below-admin role
+    // or the portal `client` role may carry an assigned client.
+    let new_cid: Option<i64> = if new_sa || !role_may_be_client_scoped(&new_role) {
+        None
+    } else {
         let cid = body
             .assigned_client_id
             .filter(|id| *id > 0)
             .or(target_assigned_client.filter(|id| *id > 0));
-        let Some(cid) = cid else {
+        if crate::client_isolation::is_client_role(&new_role) && cid.is_none() {
             let _ = tx.rollback().await;
             return (
                 StatusCode::BAD_REQUEST,
@@ -606,32 +675,34 @@ pub async fn api_admin_users_update(
                 })),
             )
                 .into_response();
-        };
-        let exists_client: Option<i64> = match sqlx::query_scalar(
-            "SELECT id FROM clients WHERE id = $1 AND tenant_id = $2 LIMIT 1",
-        )
-        .bind(cid)
-        .bind(auth.tenant_id)
-        .fetch_optional(&mut *tx)
-        .await
-        {
-            Ok(v) => v,
-            Err(e) => {
-                tracing::error!(target: "admin", error = %e, "client existence lookup failed");
-                return admin_store_down();
-            }
-        };
-        if exists_client.is_none() {
-            let _ = tx.rollback().await;
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(json!({"ok": false, "detail": "assigned_client_id does not exist in this workspace"})),
-            )
-                .into_response();
         }
-        Some(cid)
-    } else {
-        None
+        if let Some(cid) = cid {
+            let exists_client: Option<i64> = match sqlx::query_scalar(
+                "SELECT id FROM clients WHERE id = $1 AND tenant_id = $2 LIMIT 1",
+            )
+            .bind(cid)
+            .bind(auth.tenant_id)
+            .fetch_optional(&mut *tx)
+            .await
+            {
+                Ok(v) => v,
+                Err(e) => {
+                    tracing::error!(target: "admin", error = %e, "client existence lookup failed");
+                    return admin_store_down();
+                }
+            };
+            if exists_client.is_none() {
+                let _ = tx.rollback().await;
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({"ok": false, "detail": "assigned_client_id does not exist in this workspace"})),
+                )
+                    .into_response();
+            }
+            Some(cid)
+        } else {
+            None
+        }
     };
 
     match sqlx::query(

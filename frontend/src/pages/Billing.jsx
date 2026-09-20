@@ -264,7 +264,7 @@ export default function Billing() {
                     {t('pages.billing.current_plan')}
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-3">
-                    <h2 className="text-2xl font-bold text-white tracking-tight">
+                    <h2 className="text-2xl font-bold text-[var(--text-primary)] tracking-tight">
                       {subscription.plan_name || subscription.plan_slug || '—'}
                     </h2>
                     <span

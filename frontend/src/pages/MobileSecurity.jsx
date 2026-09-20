@@ -307,7 +307,7 @@ export default function MobileSecurity() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder={t('pages.mobileSecurity.search_placeholder')}
-              className="w-full pl-10 pr-4 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-sm text-white placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
+              className="w-full pl-10 pr-4 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-sm text-[var(--text-primary)] placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
             />
           </div>
           <div className="flex items-center gap-1 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg p-1">
@@ -331,7 +331,7 @@ export default function MobileSecurity() {
         {/* Apps list */}
         <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
           <div className="p-4 border-b border-[var(--border-default)]">
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
               <Smartphone className="w-4 h-4 text-cyan-400" />
               {t('pages.mobileSecurity.apps_heading')}
             </h3>
@@ -376,7 +376,7 @@ export default function MobileSecurity() {
                           <Smartphone className="w-3 h-3" />
                           {t(`pages.mobileSecurity.platform_${app.platform || 'unknown'}`, { defaultValue: app.platform })}
                         </span>
-                        <h4 className="text-sm font-semibold text-white truncate">
+                        <h4 className="text-sm font-semibold text-[var(--text-primary)] truncate">
                           {app.name || app.package_id || '—'}
                         </h4>
                         {!historyUnavailable && app.max_severity && <SeverityBadge severity={app.max_severity} t={t} />}

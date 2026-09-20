@@ -253,7 +253,7 @@ export default function ThreatAnalysisCenter() {
             {/* Attack chain */}
             {chain?.reached_goal && Array.isArray(chain.steps) && chain.steps.length > 0 && (
               <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-5">
-                <h3 className="text-sm font-semibold text-white flex items-center gap-2 mb-3">
+                <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-3">
                   <GitBranch className="w-4 h-4 text-red-400" />
                   {t('pages.threatAnalysis.attack_chain')}
                   <span className="text-[11px] text-[var(--text-muted)] font-normal">

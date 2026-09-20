@@ -137,7 +137,7 @@ export default function TargetIntelligence() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 text-text-secondary">
       <header className="mb-5">
-        <h1 className="text-2xl font-semibold tracking-tight text-white flex items-center gap-2">
+        <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)] flex items-center gap-2">
           <span aria-hidden>🎯</span> {t('targetIntel.title')}
         </h1>
         <p className="text-sm text-text-tertiary mt-1">{t('targetIntel.subtitle')}</p>
@@ -201,7 +201,7 @@ export default function TargetIntelligence() {
             </div>
 
             <div className="mb-3">
-              <div className="text-lg font-semibold text-white">{p.asset_class}</div>
+              <div className="text-lg font-semibold text-[var(--text-primary)]">{p.asset_class}</div>
               <div className="text-xs text-text-tertiary font-mono break-all">{p.host}</div>
               {data.resolved ? (
                 <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-mono text-emerald-400">

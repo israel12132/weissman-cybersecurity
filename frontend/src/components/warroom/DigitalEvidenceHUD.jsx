@@ -215,7 +215,7 @@ export default function DigitalEvidenceHUD({ clientId, finding, onClose, onVerif
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
               >
-                <span className="text-white/50">{t(`${NS}.decrypting`)} </span>
+                <span className="text-[var(--text-muted)]">{t(`${NS}.decrypting`)} </span>
                 <span>{title.slice(0, revealIndex)}</span>
                 <motion.span animate={{ opacity: [1, 0] }} transition={{ repeat: Infinity, duration: 0.5 }}>
                   _
@@ -234,7 +234,7 @@ export default function DigitalEvidenceHUD({ clientId, finding, onClose, onVerif
                 </p>
                 {finding.poc_commitment_sha256 ? (
                   <div>
-                    <h3 className="text-[10px] font-mono text-white/50 uppercase tracking-wider mb-1">
+                    <h3 className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wider mb-1">
                       {t(`${NS}.commitmentTitle`)}
                     </h3>
                     <pre className="text-[10px] font-mono text-emerald-400/80 break-all bg-black/50 p-2 rounded border border-white/10 m-0">
@@ -279,11 +279,11 @@ export default function DigitalEvidenceHUD({ clientId, finding, onClose, onVerif
                   >
                     {finding.severity || '—'}
                   </span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-mono text-white/60 bg-white/10">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono text-[var(--text-muted)] bg-white/10">
                     {finding.source || '—'}
                   </span>
                 </div>
-                <h2 className="text-base font-semibold text-white">{finding.title || '—'}</h2>
+                <h2 className="text-base font-semibold text-[var(--text-primary)]">{finding.title || '—'}</h2>
 
                 <div>
                   <h3 className="text-[10px] font-mono text-[#22d3ee] uppercase tracking-wider mb-1">
@@ -299,7 +299,7 @@ export default function DigitalEvidenceHUD({ clientId, finding, onClose, onVerif
                     {t(`${NS}.proofTitle`)}
                   </h3>
                   {isSealed && !decryptedCurl ? (
-                    <p className="text-xs text-white/50">{t(`${NS}.sealedHint`)}</p>
+                    <p className="text-xs text-[var(--text-muted)]">{t(`${NS}.sealedHint`)}</p>
                   ) : (
                     <CopyableBlock
                       value={proofText}

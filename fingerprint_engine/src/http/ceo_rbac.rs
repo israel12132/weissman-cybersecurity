@@ -10,7 +10,10 @@ use crate::auth_jwt::AuthContext;
 
 #[must_use]
 pub fn auth_is_ceo(ctx: &AuthContext) -> bool {
-    ctx.is_superadmin || ctx.role.eq_ignore_ascii_case("ceo")
+    // The platform owner ranks above CEO, so it reaches the CEO plane too.
+    ctx.is_superadmin
+        || ctx.role.eq_ignore_ascii_case("ceo")
+        || ctx.role.eq_ignore_ascii_case(crate::rbac::roles::OWNER)
 }
 
 pub async fn ceo_rbac_middleware(request: Request<Body>, next: Next) -> Response {

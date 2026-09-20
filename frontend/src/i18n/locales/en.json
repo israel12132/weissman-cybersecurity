@@ -69,6 +69,7 @@
     "export_pdf": "Export PDF",
     "reset": "Reset",
     "running": "Running…",
+    "run": "Run",
     "export_xlsx": "Export Excel"
   },
   "a11y": {
@@ -112,7 +113,10 @@
     "client_portal": "Customer portal",
     "signed_in": "Signed in",
     "bound_workspace": "bound workspace",
-    "tenant": "workspace"
+    "tenant": "workspace",
+    "change_photo": "Change photo",
+    "uploading": "Uploading…",
+    "avatar_failed": "Photo upload failed"
   },
   "battlespace": {
     "title": "Hyper-Dimensional Cognitive Battlespace",
@@ -150,6 +154,7 @@
     "dashboard": "Dashboard",
     "engines": "Engines",
     "clients": "Clients",
+    "messages": "Messages",
     "findings": "Findings",
     "finding_clusters": "Finding Clusters",
     "scan_finding_spine": "Scan-Finding Spine",
@@ -998,7 +1003,9 @@
     "attack_surface": "Attack Surface",
     "attack_surface_desc": "View ASM graph",
     "integrations": "Integrations",
-    "sector": "Sector"
+    "sector": "Sector",
+    "change_logo": "Change logo",
+    "logo_failed": "Logo upload failed"
   },
   "clients": {
     "title": "Clients",
@@ -2499,6 +2506,27 @@
       "unavailable_title": "Alert rules unavailable",
       "unavailable_body": "GET /api/alerts/rules could not be confirmed. Zero rules is not an idle detector."
     },
+    "messages": {
+      "title": "Messages & Help",
+      "subtitle": "Internal message board per client — stays within that client only",
+      "client": "Client",
+      "client_placeholder": "Select a client…",
+      "pick_client": "Pick a client to open its message board.",
+      "tab_all": "All",
+      "tab_help": "Help requests",
+      "help_badge": "Help",
+      "loading": "Loading messages…",
+      "empty": "No messages yet. Start the conversation.",
+      "search_placeholder": "Search messages or sender…",
+      "unknown_sender": "Unknown",
+      "placeholder": "Write a message… (Enter to send)",
+      "help_placeholder": "Describe what you need help with…",
+      "send_as_help": "Send as a help request",
+      "send": "Send",
+      "sending": "Sending…",
+      "load_failed": "Failed to load messages",
+      "send_failed": "Failed to send message"
+    },
     "adminManagement": {
       "search_users": "Search users…",
       "title": "Admin Management",
@@ -2528,7 +2556,9 @@
       "deactivate_confirm": "Deactivate user {{email}}? They will lose access immediately.",
       "deactivate_action": "Deactivate",
       "role_client": "Customer portal",
+      "role_owner": "Owner",
       "assigned_client": "Bound customer",
+      "assigned_client_optional": "optional — with none assigned the user sees nothing",
       "assigned_client_placeholder": "Select the customer this login belongs to",
       "assigned_client_required": "Customer-portal users must be bound to a client",
       "users_unavailable": "User directory unavailable — store could not be confirmed."
@@ -4390,6 +4420,9 @@
       "emergency_title": "Emergency Network Isolation",
       "emergency_body": "Immediately isolate all compromised assets from the network",
       "kill_switch": "Activate Kill Switch",
+      "kill_switch_confirm": "Activate emergency containment? This creates an active isolation rule that immediately isolates suspicious hosts. You can turn it off from the rules list.",
+      "kill_switch_rule_name": "Emergency isolation (Kill Switch)",
+      "kill_switch_created": "Emergency isolation rule activated",
       "edit_rule": "Edit Rule",
       "create_containment_rule": "Create Containment Rule",
       "rule_name": "Rule Name",
@@ -7120,6 +7153,24 @@
         "enableRedTeam": "Enable Red Team",
         "redTeamOn": "Red Team ON",
         "proofOnly": "Proof only"
+      }
+    },
+    "commandHero": {
+      "security_posture": "Security posture",
+      "threat_posture": "Threat posture",
+      "discovery_trend": "Discovery trend · 24h",
+      "medium": "Medium",
+      "low": "Low",
+      "info": "Info",
+      "velocity": "Avg scan",
+      "queue": "Live queue",
+      "posture": {
+        "unknown": "Unknown",
+        "robust": "Robust",
+        "guarded": "Guarded",
+        "elevated": "Elevated",
+        "high": "High risk",
+        "severe": "Severe"
       }
     },
     "cockpitTabs": {

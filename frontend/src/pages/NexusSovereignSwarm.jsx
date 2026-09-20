@@ -738,7 +738,7 @@ function ConfigSchemaPanel({ schema, onClose }) {
       {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- click only stops propagation so inner content does not close the modal */}
       <div className="max-w-2xl w-full max-h-[80vh] overflow-auto rounded-2xl border border-violet-500/30 bg-[var(--bg-0)] p-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-3">
-          <p className="text-sm font-bold text-white">NSSI Config Schema v{schema.version} · {schema.parameter_count} params</p>
+          <p className="text-sm font-bold text-[var(--text-primary)]">NSSI Config Schema v{schema.version} · {schema.parameter_count} params</p>
           <Button variant="unstyled" type="button" aria-label="Close" onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">✕</Button>
         </div>
         {schema.completeness && (

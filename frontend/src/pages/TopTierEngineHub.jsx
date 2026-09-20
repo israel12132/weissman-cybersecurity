@@ -208,7 +208,7 @@ export default function TopTierEngineHub() {
           <div className="flex items-center gap-3">
             <Link to="/engines" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-xs font-mono transition-colors">{t('pages.topTierEngineHub.back_matrix')}</Link>
             <span className="text-[var(--text-disabled)] text-xs">|</span>
-            <h1 className="text-sm font-bold tracking-tight text-white">{t('pages.topTierEngineHub.title')}</h1>
+            <h1 className="text-sm font-bold tracking-tight text-[var(--text-primary)]">{t('pages.topTierEngineHub.title')}</h1>
           </div>
           <div className="flex items-center gap-3">
             <ShellScanActions
@@ -235,7 +235,7 @@ export default function TopTierEngineHub() {
         <EngineHubForensicHeader evidence={t('pages.topTierEngineHub.evidence_notice')} />
 
         <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] p-5">
-          <h2 className="text-sm font-semibold text-white mb-2">{t('pages.topTierEngineHub.reality_heading')}</h2>
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-2">{t('pages.topTierEngineHub.reality_heading')}</h2>
           <p className="text-sm text-[var(--text-tertiary)] leading-relaxed">
             {t('pages.topTierEngineHub.reality_body')}
           </p>
@@ -313,7 +313,7 @@ export default function TopTierEngineHub() {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <div className="text-[11px] font-mono text-[var(--text-muted)]">{t('pages.topTierEngineHub.top_tier_num', { num: idx + 1 })}</div>
-                    <h3 className="text-base font-semibold text-white">{engine?.label || id}</h3>
+                    <h3 className="text-base font-semibold text-[var(--text-primary)]">{engine?.label || id}</h3>
                     <div className="text-[11px] font-mono text-[var(--text-muted)]">{id}</div>
                   </div>
                   <span className={`px-2 py-1 rounded border text-[10px] font-mono uppercase tracking-wider ${auditUnavailable ? 'text-[var(--text-muted)] border-[var(--border-default)]' : badgeClass(path)}`}>

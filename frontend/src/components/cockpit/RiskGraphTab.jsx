@@ -156,7 +156,7 @@ export default function RiskGraphTab() {
       <div className="flex items-center justify-between gap-4 mb-4">
         <div className="flex items-center gap-2">
           <Network className="w-5 h-5 text-[#22d3ee]" />
-          <h2 className="text-lg font-semibold text-white tracking-wide">
+          <h2 className="text-lg font-semibold text-[var(--text-primary)] tracking-wide">
             {t('components.cockpitTabs.riskGraph.title')}
           </h2>
         </div>
