@@ -491,7 +491,14 @@ class TestOpenPinnedConnection:
         assert context.wrapped[0].inner is sockets.sockets[0]
         assert context.wrapped[0].server_hostname == "sample.example"
         assert sockets.sockets[0].peer == (PUBLIC_V4, 443)
+        assert context.minimum_version == ssl.TLSVersion.TLSv1_2
         conn.close()
+
+    def test_tls_context_pins_tls12_floor_on_the_real_default_context(self, detonate):
+        ctx = detonate.tls_context()
+        assert isinstance(ctx, ssl.SSLContext)
+        assert ctx.minimum_version == ssl.TLSVersion.TLSv1_2
+        assert ctx.verify_mode == ssl.CERT_REQUIRED and ctx.check_hostname is True
 
     def test_tls_failure_closes_the_socket_and_is_a_fetch_error(self, detonate, resolver, monkeypatch):
         sockets = FakeSocketFactory()
@@ -855,15 +862,47 @@ class TestZtnaHandler:
         assert status == 414
         assert json.loads(body) == {"ok": False, "detail": "request target exceeds 8192 bytes"}
 
-    def test_relays_redirects_without_following(self, ztna, monkeypatch):
+    def test_relays_redirect_status_without_following_or_re_pointing(self, ztna, monkeypatch):
         connector = ScriptedConnector(
             FakeResponse(302, body=b"", headers={"Location": "https://elsewhere.example/login", "Content-Type": "text/html"}),
             FakeResponse(200, body=b"never"),
         )
         monkeypatch.setattr(ztna, "open_upstream_connection", connector)
         status, headers, body = _get(ztna, "/api/login", authorization=GOOD_AUTH)
-        assert (status, headers["location"], headers["content-type"], body) == (302, "https://elsewhere.example/login", "text/html", b"")
+        assert (status, headers["content-type"], body) == (302, "text/html", b"")
+        # The upstream never gets to write a response header: Location is withheld.
+        assert "location" not in headers
         assert len(connector.connections) == 1
+
+    @pytest.mark.parametrize(
+        ("upstream_value", "relayed"),
+        [
+            ("application/json", "application/json"),
+            ("Application/JSON; charset=UTF-8", "application/json; charset=utf-8"),
+            ('text/html; charset="iso-8859-1"', "text/html; charset=iso-8859-1"),
+            ("text/plain; charset=utf-7", "text/plain"),
+            ("text/plain; boundary=x", "text/plain"),
+            ("application/x-custom", "application/octet-stream"),
+            ("text/html\r\nX-Injected: 1", "application/octet-stream"),
+            ("", "application/octet-stream"),
+            (None, "application/octet-stream"),
+        ],
+    )
+    def test_content_type_is_re_emitted_from_the_fixed_table(self, ztna, upstream_value, relayed):
+        out = ztna.relayed_content_type(upstream_value)
+        assert out == relayed
+        # Whatever is emitted is one of the table's media types (plus a charset from the
+        # fixed charset set) — never the upstream's own string.
+        media, _, charset = out.partition("; charset=")
+        assert media in ztna.RELAYED_MEDIA_TYPES
+        assert not charset or charset in ztna.RELAYED_CHARSETS
+
+    def test_unlisted_content_type_never_reaches_the_client_header(self, ztna, monkeypatch):
+        connector = ScriptedConnector(FakeResponse(200, body=b"x", headers={"Content-Type": "text/html\r\nSet-Cookie: a=b"}))
+        monkeypatch.setattr(ztna, "open_upstream_connection", connector)
+        status, headers, body = _get(ztna, "/api/x", authorization=GOOD_AUTH)
+        assert (status, headers["content-type"], body) == (200, "application/octet-stream", b"x")
+        assert "set-cookie" not in headers
 
     def test_relays_upstream_error_status_and_body(self, ztna, monkeypatch):
         connector = ScriptedConnector(FakeResponse(404, body=b'{"error":"nope"}', headers={"Content-Type": "application/json"}, reason="Not Found"))
@@ -938,7 +977,14 @@ class TestOpenUpstreamConnection:
         assert context.wrapped[0].inner is created[0]
         assert context.wrapped[0].server_hostname == "api.example"
         assert created[0].peer == ("api.example", 443)
+        assert context.minimum_version == ssl.TLSVersion.TLSv1_2
         conn.close()
+
+    def test_tls_context_pins_tls12_floor_on_the_real_default_context(self, ztna):
+        ctx = ztna.tls_context()
+        assert isinstance(ctx, ssl.SSLContext)
+        assert ctx.minimum_version == ssl.TLSVersion.TLSv1_2
+        assert ctx.verify_mode == ssl.CERT_REQUIRED and ctx.check_hostname is True
 
     def test_tls_failure_closes_the_socket(self, ztna, monkeypatch):
         created = []

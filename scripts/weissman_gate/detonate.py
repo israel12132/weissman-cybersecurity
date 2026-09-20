@@ -19,7 +19,7 @@ answers point the request at loopback or the cloud metadata service):
 * the TCP socket is opened on the exact address that passed the guard and only
   then handed to http.client, so a DNS rebind between validation and connect
   cannot swap the target; TLS is negotiated explicitly with the default
-  verifying context and SNI for the URL's hostname;
+  verifying context, TLS 1.2 as the floor and SNI for the URL's hostname;
 * redirects are never auto-followed: at most MAX_REDIRECTS hops, each
   Location re-validated with the same rules;
 * at most MAX_SAMPLE_BYTES are read (longer bodies are truncated, as before),
@@ -200,6 +200,18 @@ def validate_sample_url(url: str, *, allow_private: bool | None = None) -> Valid
     )
 
 
+def tls_context() -> ssl.SSLContext:
+    """The default verifying context with TLS 1.2 as an explicit floor.
+
+    create_default_context() verifies certificates and hostnames but leaves the protocol
+    floor to the OpenSSL build, which may still admit TLS 1.0/1.1; pin it so a downgrade
+    to a legacy protocol is refused regardless of the platform's OpenSSL configuration.
+    """
+    ctx = ssl.create_default_context()
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+    return ctx
+
+
 def open_pinned_connection(target: ValidatedTarget, timeout: float = SAMPLE_TIMEOUT_S) -> http.client.HTTPConnection:
     """Open an HTTP(S) connection to one of ``target``'s vetted addresses.
 
@@ -216,7 +228,7 @@ def open_pinned_connection(target: ValidatedTarget, timeout: float = SAMPLE_TIME
             sock.settimeout(timeout)
             sock.connect(sockaddr)
             if target.scheme == "https":
-                sock = ssl.create_default_context().wrap_socket(sock, server_hostname=target.host)
+                sock = tls_context().wrap_socket(sock, server_hostname=target.host)
         except ssl.SSLError as exc:
             sock.close()
             raise SampleFetchError(f"tls handshake with {target.host} failed: {exc}") from exc

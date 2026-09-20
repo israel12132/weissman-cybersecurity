@@ -14,9 +14,13 @@ Forwarding is one explicit ``http.client`` exchange rather than ``urllib.request
   the upstream), printable ASCII, at most MAX_TARGET_BYTES;
 * the Host header sent upstream is always the configured upstream, and only the
   client's Accept header is relayed;
-* redirects from the upstream are relayed (status, Content-Type, Location) but
-  never followed, so the upstream cannot steer the proxy elsewhere;
-* the bearer token is compared with hmac.compare_digest.
+* no upstream-controlled bytes are ever written into a response header: the
+  Content-Type is re-emitted from a fixed table of media types (anything else
+  degrades to application/octet-stream) and Location is withheld, so a redirect
+  from the upstream is relayed as its status and body but never followed and
+  never re-pointed by the proxy;
+* TLS to an https upstream uses the default verifying context with TLS 1.2 as
+  the floor; the bearer token is compared with hmac.compare_digest.
 """
 from __future__ import annotations
 
@@ -45,9 +49,38 @@ _PRINTABLE_NO_SPACE = re.compile(r"[\x21-\x7e]*")
 # Origin-form request target: exactly one leading "/" — "//host" would be read as a
 # scheme-relative URL by the upstream — followed by printable ASCII only.
 _ORIGIN_FORM = re.compile(r"/(?!/)[\x21-\x7e]*")
-# Header values we relay in either direction: visible ASCII plus space, so no CR/LF
-# and no obs-fold can be smuggled through the proxy.
+# Header values we relay upstream: visible ASCII plus space, so no CR/LF and no
+# obs-fold can be smuggled through the proxy.
 _HEADER_VALUE = re.compile(r"[\x20-\x7e]+")
+# Media types the proxy re-emits to the client. The response header is built from the
+# constant in this table, never from the upstream's bytes; anything not listed is served
+# as application/octet-stream. A charset parameter is likewise re-emitted only from a
+# fixed set.
+DEFAULT_CONTENT_TYPE = "application/octet-stream"
+RELAYED_MEDIA_TYPES = {
+    name: name
+    for name in (
+        "application/json",
+        "application/problem+json",
+        "application/javascript",
+        "application/xml",
+        "application/pdf",
+        "application/zip",
+        "application/octet-stream",
+        "text/plain",
+        "text/html",
+        "text/css",
+        "text/csv",
+        "text/xml",
+        "text/event-stream",
+        "image/png",
+        "image/jpeg",
+        "image/gif",
+        "image/svg+xml",
+        "image/webp",
+    )
+}
+RELAYED_CHARSETS = {name: name for name in ("utf-8", "us-ascii", "iso-8859-1")}
 
 
 class UpstreamConfigError(ValueError):
@@ -135,11 +168,11 @@ def bearer_token_matches(authorization: str, expected: str) -> bool:
 
 
 def open_upstream_connection(upstream: Upstream, timeout: float = UPSTREAM_TIMEOUT_S) -> http.client.HTTPConnection:
-    """Connect to the configured upstream; https is negotiated with the default verifying context."""
+    """Connect to the configured upstream; https is negotiated with the verifying context (TLS >= 1.2)."""
     sock = socket.create_connection((upstream.host, upstream.port), timeout=timeout)
     try:
         if upstream.scheme == "https":
-            sock = ssl.create_default_context().wrap_socket(sock, server_hostname=upstream.host)
+            sock = tls_context().wrap_socket(sock, server_hostname=upstream.host)
     except OSError:
         sock.close()
         raise
@@ -153,6 +186,35 @@ def relayable_header(value: str | None) -> str | None:
     if value is None or not _HEADER_VALUE.fullmatch(value):
         return None
     return value
+
+
+def relayed_content_type(value: str | None) -> str:
+    """Map the upstream Content-Type onto a constant from RELAYED_MEDIA_TYPES.
+
+    Only the table's own strings are ever returned, so the client-facing header carries
+    no upstream-controlled bytes (a response-splitting or MIME-confusion vector otherwise).
+    """
+    if not value:
+        return DEFAULT_CONTENT_TYPE
+    media, _, params = value.partition(";")
+    canonical = RELAYED_MEDIA_TYPES.get(media.strip().lower())
+    if canonical is None:
+        return DEFAULT_CONTENT_TYPE
+    for param in params.split(";"):
+        key, _, raw = param.partition("=")
+        if key.strip().lower() == "charset":
+            charset = RELAYED_CHARSETS.get(raw.strip().strip('"').lower())
+            if charset is not None:
+                return f"{canonical}; charset={charset}"
+            break
+    return canonical
+
+
+def tls_context() -> ssl.SSLContext:
+    """The default verifying context with TLS 1.2 as an explicit floor."""
+    ctx = ssl.create_default_context()
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+    return ctx
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -199,17 +261,17 @@ class Handler(BaseHTTPRequestHandler):
             conn.request("GET", UPSTREAM_TARGET.path_prefix + path, headers=headers)
             resp = conn.getresponse()
             status = resp.status
-            content_type = relayable_header(resp.getheader("Content-Type")) or "application/octet-stream"
-            location = relayable_header(resp.getheader("Location"))
+            content_type = relayed_content_type(resp.getheader("Content-Type"))
             data = resp.read()
         except (OSError, http.client.HTTPException) as exc:
             return self._deny(502, str(exc))
         finally:
             conn.close()
+        # Status and body are relayed as-is; headers are not. Location in particular is
+        # withheld: a 3xx reaches the client as its status and body, and the proxy neither
+        # follows the redirect nor re-points the client at an upstream-chosen URL.
         self.send_response(status)
         self.send_header("Content-Type", content_type)
-        if location is not None:
-            self.send_header("Location", location)
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
