@@ -1,7 +1,11 @@
 //! Advanced AI/LLM engines — real, OWASP-LLM-Top-10-aligned probes against live AI endpoints.
 //!
-//! Every engine below performs a **distinct** live probe (no two share one behaviour) and emits
-//! findings only on observed behaviour:
+//! Every engine below performs a real, OWASP-LLM-aligned live probe and emits findings only on
+//! observed behaviour. Note: several catalog IDs deliberately share one underlying probe grouped
+//! by OWASP-LLM category (e.g. the feedback/fine-tune poisoning IDs call one
+//! `probe_training_feedback`; the multimodal/watermark IDs call one `probe_multimodal`), so the
+//! number of catalog IDs is larger than the number of distinct probe behaviours — the honest
+//! distinct-probe count is what `scripts/engine_reality_audit.mjs` reports, not the ID count:
 //!   • LLM01 prompt injection / jailbreak — benign instruction-override canary, detect compliance.
 //!   • LLM06 system-prompt / sensitive-info disclosure — verbatim-instruction leak canary.
 //!   • LLM07 insecure plugin/tool design — `/.well-known/ai-plugin.json` + tool/OpenAPI schema exposure.

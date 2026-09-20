@@ -1341,10 +1341,15 @@ async fn api_findings(
         let raw_id = r.try_get::<i64, _>("id").unwrap_or(0);
         let poc_sealed = r.try_get::<bool, _>("poc_sealed").unwrap_or(false);
         let raw_data = r.try_get::<Value, _>("raw_data").unwrap_or(Value::Null);
-        let cvss = raw_data
+        // Display honesty: a persisted cvss_score of null/absent (or a sentinel 0.0
+        // from older rows) means "no CVSS was published for this finding" — it must
+        // render as "—", never as a fabricated 0.0 that reads like a real score of
+        // "no severity". Keep it as an Option for the emitted payload; the internal
+        // risk fallback below derives its own numeric value separately.
+        let cvss_display: Option<f64> = raw_data
             .get("cvss_score")
             .and_then(Value::as_f64)
-            .unwrap_or(0.0);
+            .filter(|c| *c > 0.0);
         let mitre = raw_data
             .get("mitre_attack")
             .and_then(Value::as_str)
@@ -1380,7 +1385,8 @@ async fn api_findings(
         // Apply the FP/TP confidence multiplier to risk_score so a chronically-FP
         // engine gets pushed down in the prioritised list, while a high-EPSS or KEV
         // finding gets boosted. This makes the inbox automatically self-tuning.
-        let base_risk = if cvss > 0.0 { cvss } else { severity_to_score(&r.try_get::<String, _>("severity").unwrap_or_default()) };
+        let base_risk = cvss_display
+            .unwrap_or_else(|| severity_to_score(&r.try_get::<String, _>("severity").unwrap_or_default()));
         let mut risk = base_risk;
         if let Some(s) = epss_score {
             risk *= 1.0 + (s as f64) * 0.5; // up to +50% for max EPSS
@@ -1445,7 +1451,7 @@ async fn api_findings(
             "poc_sealed": poc_sealed,
             "verified": poc_sealed,
             "poc_commitment_sha256": r.try_get::<String, _>("poc_commitment_sha256").unwrap_or_default(),
-            "cvss_score": cvss,
+            "cvss_score": cvss_display,
             "risk_score": risk,
             "effective_risk": risk,
             "priority_score": risk,

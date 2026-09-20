@@ -66,6 +66,33 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ### Fixed
 
+- **Findings never show a fabricated CVSS; probe-sharing is disclosed at the source.**
+  Two honesty gaps in how findings were scored and attributed:
+  1. **CVSS display honesty.** Both the write path (`findings_persist.rs`) and the read
+     path (`server_handlers_sqlx.inc`) derived the *displayed* `cvss_score` from severity
+     when the engine published none (`severity_to_score`, so a `critical` with no measured
+     CVSS rendered as a hard "9.5", and a null score rendered as "0"). To an auditor a
+     fabricated number reads as a standards-based score the engine never measured, and it
+     skews triage. The emitted `cvss_score` is now `null` (UI "—") whenever no real CVSS
+     was published, mirroring the existing EPSS behaviour, via a single tested
+     `cvss_for_display()` helper; severity still drives the internal risk ranking
+     (`base_risk`/`effective_risk`) exactly as before — only the *displayed* value changed.
+     New unit tests assert absent/zero CVSS serialises to JSON `null`, never `0.0`, and that
+     a real published score is preserved and clamped.
+  2. **Shared-probe disclosure.** The per-actor APT engines (`apt28_techniques`, …, 21 IDs)
+     are one `actor_exposure_scan` probe parameterized by an `ActorProfile` (the edge
+     products each actor is publicly documented by CISA/Mandiant to exploit, its IOCs, and
+     the attributed actor name); the AI/LLM catalog IDs likewise group onto a handful of
+     OWASP-LLM probes. Both module headers now state this plainly and point to
+     `scripts/engine_reality_audit.mjs` as the authoritative count of distinct probe
+     *behaviours* (329 real live probes), so the 595 catalog-ID figure is never read as 595
+     distinct techniques. The contradicted `advanced_ai_engines.rs` comment ("no two share
+     one behaviour") was corrected. **Attribution verified end-to-end:** findings persist
+     with `source` = the *requested* engine ID (the one the operator launched), not the
+     shared probe's internal name, and alias engines additionally stamp
+     `alias_engine_id`/`canonical_engine_id`/`probe_fidelity` into `raw_data` — so a user
+     always sees the engine they ran. No behavioural or count change was needed here; the
+     gap was disclosure, now closed.
 - **Scan-quota enforcement is now atomic (no TOCTOU revenue leak) + handler-honesty
   ratchet re-armed.** `gate_scan_enqueue_n` (billing) was a check-then-increment race:
   `enforce_scan_quota` read `scans_started`, then `record_scans_started` incremented it
