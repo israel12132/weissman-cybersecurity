@@ -65,6 +65,21 @@ export const INTEL_MAP_QUICKNAV = [
 /** @type {NavGroup[]} */
 export const NAV_GROUPS = [
   {
+    id: 'modules',
+    labelKey: 'nav.groups.modules',
+    items: [
+      { to: '/engine-room', labelKey: 'nav.engine_room', icon: '⬡' },
+      { to: '/auto-heal', labelKey: 'nav.auto_heal', icon: '🩺' },
+      { to: '/deception', labelKey: 'nav.deception', icon: '🕸' },
+      { to: '/swarm-mind', labelKey: 'nav.swarm_mind', icon: '🧠' },
+      { to: '/ai-model-risk', labelKey: 'nav.ai_model_risk', icon: '⚠' },
+      { to: '/edge-swarm', labelKey: 'nav.edge_swarm', icon: '🌐' },
+      { to: '/neural-web', labelKey: 'nav.neural_web', icon: '◈' },
+      { to: '/identity-matrix', labelKey: 'nav.identity_matrix', icon: '🔑' },
+      { to: '/pulse', labelKey: 'nav.pulse', icon: '📈' },
+    ],
+  },
+  {
     id: 'command',
     labelKey: 'nav.groups.command',
     items: [

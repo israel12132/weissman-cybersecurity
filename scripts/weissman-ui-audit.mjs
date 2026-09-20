@@ -42,6 +42,15 @@ const EVIDENCE_ONLY_ROUTE_PREFIXES = [
   'operations',
   'war-room',
   'cockpit-legacy',
+  'engine-room',
+  'auto-heal',
+  'deception',
+  'swarm-mind',
+  'ai-model-risk',
+  'edge-swarm',
+  'neural-web',
+  'identity-matrix',
+  'pulse',
 ]
 
 const EMBEDDED_PANELS = new Set(['KubernetesSecurityPanel.jsx'])
