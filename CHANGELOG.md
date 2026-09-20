@@ -66,6 +66,18 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ### Fixed
 
+- **Automated backups on the recommended docker-compose path + honest HA scoping.**
+  The recommended compose stack ran ONE Postgres with no automated backups — a disk
+  failure or a bad boot-time auto-migration was unrecoverable, while marketing a
+  99.95% SLA. New `db-backup` service (`deploy/db-backup.sh`, wired into
+  `docker-compose.prod.yml`) takes a nightly `pg_dump` (custom format) into the
+  `weissman_db_backups` volume, verifies each archive is readable, and prunes to
+  `WEISSMAN_BACKUP_RETENTION`. `deploy/PRODUCTION.txt` now states plainly that the
+  compose path is single-node / non-HA and NOT for the SLA (pointing SLA-bound
+  customers at the k8s/CNPG PITR stack), and its recommended command is aligned with
+  the launcher and README to include `-f docker-compose.prod.yml` (so the hardening
+  and the backup service actually apply). Backup script validated end-to-end
+  (dump → archive-integrity check → retention) against a live Postgres 16 + pgvector.
 - **Repaired the RED engine-count / metric source-of-truth gate and reconciled every
   headline number.** `node scripts/sync_doc_metrics.mjs --check` was failing on the
   committed tree (stale `docs/METRICS.md`) and the engine count was stated three

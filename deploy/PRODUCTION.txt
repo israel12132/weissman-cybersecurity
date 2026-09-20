@@ -9,9 +9,30 @@ From repository root:
   # Edit .env: POSTGRES_*, DB_APP_*, DB_AUTH_*, WEISSMAN_JWT_SECRET,
   # WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET (required for destructive actions in prod)
 
-  docker compose up -d --build
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 
-Services: postgres (pgvector), redis, backend (weissman-server), worker (weissman-worker), gateway (nginx SPA).
+  # NOTE: the production override (docker-compose.prod.yml) is what applies the log
+  # caps, container hardening, and the db-backup service below. `docker compose up`
+  # WITHOUT `-f docker-compose.prod.yml` brings up an UNHARDENED, backup-less stack.
+
+Services: postgres (pgvector), redis, backend (weissman-server), worker (weissman-worker),
+gateway (nginx SPA), db-backup (scheduled pg_dump).
+
+Durability & availability (read before selling an SLA)
+------------------------------------------------------
+This docker-compose path is SINGLE-NODE and NOT highly available: one Postgres,
+one redis, one backend, one worker, one gateway — a container crash or host reboot
+is downtime. It is NOT the deployment for a 99.95% / 99.9% SLA.
+
+- Backups: the `db-backup` service (deploy/db-backup.sh) takes a nightly logical
+  `pg_dump` into the `weissman_db_backups` volume, verifies each archive, and keeps
+  WEISSMAN_BACKUP_RETENTION (default 14). Tune WEISSMAN_BACKUP_INTERVAL_SECONDS /
+  WEISSMAN_BACKUP_RETENTION in .env, and copy the volume off-host for real durability.
+  Restore:  docker compose cp db-backup:/backups ./restore   # then pg_restore a .dump
+- For HA (replicated Postgres + redis, autoscaling, PDBs), continuous PITR/WAL
+  archiving, cross-region DR and an SLA, deploy the Kubernetes / CNPG stack
+  (deploy/k8s/*, deploy/k8s/backup-cronjob.yaml, scripts/dr_orchestrator.sh) — not
+  this compose path.
 
 - Migrations run once at backend boot when WEISSMAN_MIGRATE_URL is set.
 - REDIS_URL is set automatically in compose for distributed rate limits.
