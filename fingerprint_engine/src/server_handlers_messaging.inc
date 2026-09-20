@@ -293,16 +293,19 @@ async fn api_messages_create(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return msg_unavailable();
     };
-    let sender_email: String = sqlx::query_scalar::<_, String>(
+    // Store-down honesty: a failed lookup must surface as 503, never be swallowed
+    // into an empty sender_email that then persists a fabricated-blank message.
+    let sender_email: String = match sqlx::query_scalar::<_, String>(
         "SELECT email FROM users WHERE id = $1 AND tenant_id = $2",
     )
     .bind(auth.user_id)
     .bind(auth.tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten()
-    .unwrap_or_default();
+    {
+        Ok(row) => row.unwrap_or_default(),
+        Err(_) => return msg_unavailable(),
+    };
     let inserted = sqlx::query(
         r#"INSERT INTO client_messages (tenant_id, client_id, sender_user_id, sender_email, kind, body)
            VALUES ($1, $2, $3, $4, $5, $6)
