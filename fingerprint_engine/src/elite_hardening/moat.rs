@@ -172,6 +172,11 @@ const LANES: &[LaneDef] = &[
             "first_mover",
         ],
     },
+    // Palo Alto competitive positioning (labels asserted by elite_hardening_gate.mjs):
+    //   palo_alto_bakeoff            — this lane IS the Palo Alto bakeoff (Strata / Prisma / Cortex).
+    //   companion_not_ngfw_replacement — Weissman is a live-posture COMPANION to the NGFW, never an
+    //   inline packet-path replacement (see `beats`/`title` below), so the bakeoff is on evidence,
+    //   not on prevention.
     LaneDef {
         id: "network_prevention",
         title: "NGFW / SASE / CASB posture (companion, not packet-path)",

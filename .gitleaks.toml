@@ -42,6 +42,11 @@ paths = [
     # Playwright saved login state — JWTs signed with the CI-only test secret,
     # scoped to a test tenant; worthless outside CI.
     '''frontend/tests-e2e/\.auth/''',
+    # The CI supply-chain gate is itself a secret/IaC scanner: its detector regexes
+    # (AKIA…, -----BEGIN…PRIVATE KEY-----) and its --selftest planted fixtures are
+    # non-real placeholders by design. Narrow single-file entry; gitleaks stays
+    # active on the rest of scripts/.
+    '''scripts/ci_supply_chain_gate\.mjs$''',
     # Nightly-e2e + CI smoke workflows boot an ephemeral throwaway stack; every
     # hardcoded value here is a CI-only fixture (JWT/orchestrator/metrics/vault
     # placeholders like the repeating-hex WEISSMAN_VAULT_KEY). Real secrets in
