@@ -223,6 +223,94 @@ struct Params<'a> {
     raw: &'a Value,
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Wall-clock budget
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// A full EASM pass has no natural end: Certificate Transparency can return thousands of names
+// and every discovered host then gets a sequential HTTP + TLS + sensitive-path pass. Nothing
+// bounded the whole run, so a busy estate ran until the worker's 15-minute `command_center_engine`
+// ceiling killed the job and discarded everything it had found. The engine now carries its own
+// deadline: an explicit `wall_clock_budget_secs`, else the Command Center scan contract's
+// `timeout` (seconds), else a default that sits well inside the worker ceiling. When the budget
+// runs out mid-phase the remaining discovery phases are skipped and the surface gathered so far
+// is scored, reported and persisted as an explicitly partial result.
+
+/// Default whole-run budget: inside the worker's 15-minute job ceiling with room to persist.
+const DEFAULT_WALL_CLOCK_BUDGET_SECS: u64 = 600;
+const MIN_WALL_CLOCK_BUDGET_SECS: u64 = 10;
+/// Below the 900s `command_center_engine` ceiling so the engine, not the worker, ends the run.
+const MAX_WALL_CLOCK_BUDGET_SECS: u64 = 840;
+/// Hosts (apex + subdomains) that get the per-host HTTP/TLS/sensitive-path posture pass.
+const DEFAULT_MAX_POSTURE_HOSTS: usize = 40;
+
+/// Resolve the run's wall-clock budget from job params (see the module note above).
+fn wall_clock_budget_secs(p: &Params<'_>) -> u64 {
+    let explicit = p.u64_or("wall_clock_budget_secs", 0);
+    let requested = if explicit > 0 {
+        explicit
+    } else {
+        p.u64_or("timeout", 0)
+    };
+    let secs = if requested > 0 {
+        requested
+    } else {
+        DEFAULT_WALL_CLOCK_BUDGET_SECS
+    };
+    secs.clamp(MIN_WALL_CLOCK_BUDGET_SECS, MAX_WALL_CLOCK_BUDGET_SECS)
+}
+
+/// Deadline for one EASM run. `check` gates a phase; `bounded` caps one long await at the
+/// remaining budget. The first phase that exhausts the budget is remembered for the report.
+struct WallClock {
+    deadline: tokio::time::Instant,
+    exhausted_in: Option<&'static str>,
+}
+
+impl WallClock {
+    fn new(budget_secs: u64) -> Self {
+        Self {
+            deadline: tokio::time::Instant::now() + Duration::from_secs(budget_secs),
+            exhausted_in: None,
+        }
+    }
+
+    fn remaining(&self) -> Duration {
+        self.deadline
+            .saturating_duration_since(tokio::time::Instant::now())
+    }
+
+    /// True while budget remains; otherwise records `phase` (first hit only) and returns false.
+    fn check(&mut self, phase: &'static str) -> bool {
+        if self.exhausted_in.is_some() {
+            return false;
+        }
+        if self.remaining().is_zero() {
+            self.exhausted_in = Some(phase);
+            return false;
+        }
+        true
+    }
+
+    /// Run `fut` with the remaining budget as its timeout; `None` once the budget is gone.
+    async fn bounded<F: std::future::Future>(
+        &mut self,
+        phase: &'static str,
+        fut: F,
+    ) -> Option<F::Output> {
+        if !self.check(phase) {
+            return None;
+        }
+        match tokio::time::timeout(self.remaining(), fut).await {
+            Ok(v) => Some(v),
+            Err(_) => {
+                self.exhausted_in = Some(phase);
+                None
+            }
+        }
+    }
+}
+
 impl Params<'_> {
     fn lookup(&self, key: &str) -> Option<&Value> {
         if let Some(v) = self.raw.get(key) {
@@ -1899,6 +1987,11 @@ pub async fn run_asm_result_ctx(
     let http_timeout = p.u64_or("http_timeout_ms", 6000).clamp(1000, 30000);
     let threshold = p.str_or("severity_threshold", "info").to_ascii_lowercase();
     let max_findings = p.usize_or("max_findings", 800).clamp(1, 5000);
+    let budget_secs = wall_clock_budget_secs(&p);
+    let mut clock = WallClock::new(budget_secs);
+    let max_posture_hosts = p
+        .usize_or("max_posture_hosts", DEFAULT_MAX_POSTURE_HOSTS)
+        .max(1);
 
     // Ports: explicit param > ctx.asm_ports > TOP_PORTS
     let ports: Vec<u16> = match p.str("ports") {
@@ -1956,7 +2049,13 @@ pub async fn run_asm_result_ctx(
             } else {
                 max_subdomains.max(1).saturating_mul(2)
             };
-            let ct = crtsh_subdomains(&client, &host, ct_cap).await;
+            let ct = clock
+                .bounded(
+                    "certificate_transparency",
+                    crtsh_subdomains(&client, &host, ct_cap),
+                )
+                .await
+                .unwrap_or_default();
             if !ct.is_empty() {
                 notes.push(format!(
                     "Certificate Transparency surfaced {} name(s).",
@@ -2028,7 +2127,13 @@ pub async fn run_asm_result_ctx(
                 wordlist
             };
             let dns_conc = pace.concurrency().max(8).min(200);
-            let brute = enum_subdomains(&host, &wordlist, dns_conc).await;
+            let brute = clock
+                .bounded(
+                    "subdomain_bruteforce",
+                    enum_subdomains(&host, &wordlist, dns_conc),
+                )
+                .await
+                .unwrap_or_default();
             if let Some(pool) = ctx.discovery_knowledge_pool() {
                 let confirmed: Vec<String> = brute
                     .iter()
@@ -2068,7 +2173,7 @@ pub async fn run_asm_result_ctx(
     }
 
     // ── 2. DNS intelligence + email posture (apex) ────────────────────────────
-    if do_dns {
+    if do_dns && clock.check("dns_intelligence") {
         if let Some(r) = resolver.as_ref() {
             let prof = dns_profile(r, &host).await;
             findings.push(asm_finding(
@@ -2123,7 +2228,7 @@ pub async fn run_asm_result_ctx(
         }
     }
 
-    if do_rdap && is_domain {
+    if do_rdap && is_domain && clock.check("rdap_intel") {
         findings.extend(rdap_domain_intel(&client, &host).await);
     }
 
@@ -2131,13 +2236,13 @@ pub async fn run_asm_result_ctx(
         findings.extend(scan_shadow_it(&subdomains, &host));
     }
 
-    if do_cleartext {
+    if do_cleartext && clock.check("cleartext_http_probe") {
         if let Some(f) = probe_cleartext_http(&client, &host).await {
             findings.push(f);
         }
     }
 
-    if do_wellknown {
+    if do_wellknown && clock.check("wellknown_probe") {
         findings.extend(probe_wellknown(&client, &host).await);
         for sub in subdomains.iter().take(3) {
             findings.extend(probe_wellknown(&client, sub).await);
@@ -2149,6 +2254,9 @@ pub async fn run_asm_result_ctx(
         let mut scan_hosts: Vec<String> = vec![host.clone()];
         scan_hosts.extend(subdomains.iter().take(8).cloned());
         for sh in scan_hosts {
+            if !clock.check("service_exposure") {
+                break;
+            }
             for (port, svc, open) in scan_ports(&sh, &ports, port_timeout).await {
                 if !open {
                     continue;
@@ -2226,8 +2334,22 @@ pub async fn run_asm_result_ctx(
         Vec::new()
     };
     let mut posture_hosts: Vec<String> = vec![host.clone()];
-    posture_hosts.extend(subdomains.iter().cloned());
+    posture_hosts.extend(
+        subdomains
+            .iter()
+            .take(max_posture_hosts.saturating_sub(1))
+            .cloned(),
+    );
+    if subdomains.len() + 1 > max_posture_hosts {
+        notes.push(format!(
+            "HTTP/TLS posture pass limited to {max_posture_hosts} host(s) of {} discovered (max_posture_hosts).",
+            subdomains.len() + 1
+        ));
+    }
     for ph in &posture_hosts {
+        if !clock.check("http_tls_posture") {
+            break;
+        }
         if do_http {
             let url = format!("https://{ph}");
             if let Some(hp) = http_posture(&client, &url).await {
@@ -2316,18 +2438,23 @@ pub async fn run_asm_result_ctx(
                 }
             }
             if do_sensitive {
-                findings.extend(
-                    probe_sensitive_paths(
-                        &mut client,
-                        ph,
-                        discovery_pool,
-                        &extra_sensitive,
-                        pace.as_ref(),
-                        &mut stealth_owned,
-                        http_timeout,
+                if let Some(leaks) = clock
+                    .bounded(
+                        "sensitive_path_probe",
+                        probe_sensitive_paths(
+                            &mut client,
+                            ph,
+                            discovery_pool,
+                            &extra_sensitive,
+                            pace.as_ref(),
+                            &mut stealth_owned,
+                            http_timeout,
+                        ),
                     )
-                    .await,
-                );
+                    .await
+                {
+                    findings.extend(leaks);
+                }
             }
             if do_robots {
                 findings.extend(harvest_robots_txt(&client, ph, discovery_pool).await);
@@ -2432,7 +2559,13 @@ pub async fn run_asm_result_ctx(
         for s in subdomains.iter() {
             urls.push(format!("https://{}", s));
         }
-        let fp = scan_targets_concurrent_with_stealth(&urls, stealth_owned.as_ref()).await;
+        let fp = clock
+            .bounded(
+                "tech_fingerprint",
+                scan_targets_concurrent_with_stealth(&urls, stealth_owned.as_ref()),
+            )
+            .await
+            .unwrap_or_default();
         for (url, techs) in fp {
             if !techs.is_empty() {
                 findings.push(asm_finding(
@@ -2455,9 +2588,17 @@ pub async fn run_asm_result_ctx(
     // ── 7. Subdomain takeover + exposed storage (graph) ──────────────────────
     let mut graph_nodes: Option<Vec<cloud_hunter::GraphNode>> = None;
     let mut graph_edges: Option<Vec<cloud_hunter::GraphEdge>> = None;
-    if do_cloud {
-        let (mut nodes, mut edges, cloud_findings) =
-            cloud_hunter::run_cloud_hunter(&host, &subdomains, stealth_owned.as_ref()).await;
+    let cloud_run = if do_cloud {
+        clock
+            .bounded(
+                "cloud_hunter",
+                cloud_hunter::run_cloud_hunter(&host, &subdomains, stealth_owned.as_ref()),
+            )
+            .await
+    } else {
+        None
+    };
+    if let Some((mut nodes, mut edges, cloud_findings)) = cloud_run {
         findings.extend(cloud_findings);
         let shadow_set: BTreeSet<String> = findings
             .iter()
@@ -2487,6 +2628,22 @@ pub async fn run_asm_result_ctx(
     }
 
     // ── 8. Threshold filter, scoring, report ─────────────────────────────────
+    if let Some(phase) = clock.exhausted_in {
+        notes.push(format!(
+            "Wall-clock budget of {budget_secs}s reached during {phase}; later discovery phases were skipped, so this surface is partial. Raise wall_clock_budget_secs (or timeout) for a deeper pass."
+        ));
+        findings.push(asm_finding(
+            "budget",
+            "info",
+            &host,
+            format!("Partial surface — {budget_secs}s budget reached during {phase}"),
+            "T1590",
+            format!(
+                "The EASM run for {host} hit its wall-clock budget ({budget_secs}s) in the {phase} phase and returned what it had gathered. The findings are real but not exhaustive."
+            ),
+            "Re-run with a larger wall_clock_budget_secs, or narrow subdomain_sources / max_subdomains / max_posture_hosts so a complete pass fits the budget.",
+        ));
+    }
     let min_rank = sev_rank(&threshold);
     findings.retain(|f| {
         let s = f.get("severity").and_then(Value::as_str).unwrap_or("info");
@@ -2650,6 +2807,72 @@ fn build_surface_report(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn budget_for(raw: Value) -> u64 {
+        wall_clock_budget_secs(&Params { raw: &raw })
+    }
+
+    #[test]
+    fn wall_clock_budget_prefers_explicit_then_timeout_then_default_and_clamps() {
+        assert_eq!(budget_for(json!({})), DEFAULT_WALL_CLOCK_BUDGET_SECS);
+        assert_eq!(budget_for(json!({"timeout": 45})), 45);
+        assert_eq!(budget_for(json!({"timeout": "45"})), 45);
+        assert_eq!(
+            budget_for(json!({"timeout": 45, "wall_clock_budget_secs": 300})),
+            300
+        );
+        assert_eq!(
+            budget_for(json!({"options": {"wall_clock_budget_secs": 120}})),
+            120
+        );
+        assert_eq!(
+            budget_for(json!({"timeout": 1})),
+            MIN_WALL_CLOCK_BUDGET_SECS
+        );
+        assert_eq!(
+            budget_for(json!({"wall_clock_budget_secs": 99_999})),
+            MAX_WALL_CLOCK_BUDGET_SECS
+        );
+        assert!(
+            MAX_WALL_CLOCK_BUDGET_SECS < 15 * 60,
+            "must end before the worker ceiling"
+        );
+    }
+
+    #[tokio::test]
+    async fn wall_clock_bounded_returns_the_value_while_budget_remains() {
+        let mut clock = WallClock::new(30);
+        assert!(clock.check("phase_a"));
+        assert_eq!(clock.bounded("phase_b", async { 7 }).await, Some(7));
+        assert_eq!(clock.exhausted_in, None);
+    }
+
+    #[tokio::test]
+    async fn wall_clock_records_the_first_exhausted_phase_and_stays_exhausted() {
+        let mut clock = WallClock::new(30);
+        clock.deadline = tokio::time::Instant::now();
+        assert!(clock
+            .bounded("subdomain_bruteforce", async { 1 })
+            .await
+            .is_none());
+        assert_eq!(clock.exhausted_in, Some("subdomain_bruteforce"));
+        // Later phases are gated off and the first phase stays on record.
+        assert!(!clock.check("http_tls_posture"));
+        assert!(clock.bounded("cloud_hunter", async { 2 }).await.is_none());
+        assert_eq!(clock.exhausted_in, Some("subdomain_bruteforce"));
+    }
+
+    #[tokio::test]
+    async fn wall_clock_bounded_times_out_a_slow_phase_at_the_deadline() {
+        let mut clock = WallClock::new(MIN_WALL_CLOCK_BUDGET_SECS);
+        clock.deadline = tokio::time::Instant::now() + Duration::from_millis(20);
+        let slow = tokio::time::sleep(Duration::from_secs(5));
+        assert!(clock
+            .bounded("certificate_transparency", slow)
+            .await
+            .is_none());
+        assert_eq!(clock.exhausted_in, Some("certificate_transparency"));
+    }
 
     #[test]
     fn parse_ports_variants() {
