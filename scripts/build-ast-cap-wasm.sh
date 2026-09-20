@@ -19,10 +19,14 @@ fi
 
 mkdir -p "$OUT_DIR"
 
-BINDGEN="$(command -v wasm-bindgen || true)"
-if [[ -z "${BINDGEN}" ]]; then
-  cargo install wasm-bindgen-cli --locked 2>/dev/null || true
+# Pin wasm-bindgen-cli to the Cargo.lock crate version (0.2.122); a mismatched CLI
+# breaks the build with a bindgen schema-version error. See build-ui-provenance-wasm.sh.
+WB_VER="0.2.122"
+if command -v wasm-bindgen >/dev/null 2>&1 && wasm-bindgen --version 2>/dev/null | grep -qF "${WB_VER}"; then
   BINDGEN="$(command -v wasm-bindgen)"
+else
+  cargo install wasm-bindgen-cli --locked --version "${WB_VER}" --force
+  BINDGEN="$(command -v wasm-bindgen || true)"
 fi
 
 "$BINDGEN" "$WASM_PATH" \

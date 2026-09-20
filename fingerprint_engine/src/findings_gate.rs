@@ -9,6 +9,27 @@
 //! They **must** call [`gate_finding`] / [`gate_findings`] before any persistence
 //! path accepts them. The DB writer trait [`VulnerabilitiesWriter`] accepts
 //! **only** [`PersistableFinding`], never raw JSON.
+//!
+//! ## What this gate does and does NOT guarantee (read before quoting it)
+//!
+//! What it enforces, in code: a persistable finding carries a NON-EMPTY proof string
+//! for actionable severities (critical/high/medium), and the scoring/enrichment path is
+//! deterministic and randomness-free (locked by `scripts/verify_no_rand_in_scoring.mjs`).
+//! So no fabricated/randomised SCORE reaches `vulnerabilities`.
+//!
+//! What it does NOT verify: that the proof string was actually produced by a live
+//! network/host probe. Probe-provenance is an ENGINE-LEVEL convention (each engine only
+//! emits findings from real I/O), not something this gate checks — today it accepts any
+//! non-empty prose as "proof". Tightening it to require a structured, machine-checkable
+//! evidence object (request/response markers, status code) for actionable severities is
+//! tracked as roadmap step 4's remaining work; it is deferred because dropping a real
+//! engine's prose-only finding would silently lose a genuine vulnerability, so it needs
+//! per-engine evidence-shape analysis + staging validation first.
+//!
+//! Likewise, "only [`findings_persist`] may write" is enforced by this module's private
+//! capability token at the Rust level, but the `weissman_app` DB role still holds direct
+//! INSERT on `vulnerabilities` (a DB-level writer-role boundary is the deferred half of
+//! roadmap step 2). Do not cite this gate as a database-level provenance guarantee.
 
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};

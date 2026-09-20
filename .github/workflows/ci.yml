@@ -665,6 +665,16 @@ jobs:
       - name: Generate engine catalog snapshot
         run: node scripts/generate_engine_catalog_snapshot.mjs
 
+      - name: Engine catalog snapshot is committed & in sync with source
+        # The step above regenerates shared/engine_catalog.snapshot.json from source but
+        # never asserted the committed copy matched — so a stale snapshot (and the engine
+        # counts derived from it) could ship green. Fail on any CONTENT drift. The only
+        # non-deterministic field is the `generated_at` timestamp, so ignore lines
+        # matching it (`-I`) — a real change to counts/ids is a separate hunk and still fails.
+        run: |
+          git diff --exit-code -I'"generated_at"' shared/engine_catalog.snapshot.json \
+            || { echo "::error::shared/engine_catalog.snapshot.json content is stale — run: node scripts/generate_engine_catalog_snapshot.mjs && commit it"; exit 1; }
+
       - name: Verify engine scan wiring
         run: node scripts/verify_engine_scan_wiring.mjs
 
@@ -682,6 +692,9 @@ jobs:
 
       - name: Doc metric references (fail on drift in README/AGENTS/runbooks)
         run: node scripts/verify_doc_metrics.mjs
+
+      - name: No randomness in the finding scoring/persist path (integrity lock)
+        run: node scripts/verify_no_rand_in_scoring.mjs
 
       - name: Frontend↔backend route contract
         run: node scripts/verify_frontend_route_contract.mjs
@@ -1321,6 +1334,14 @@ jobs:
         #   nginx possible-h2c-smuggling       — TLS-terminated edge; the websocket map
         #     (nginx-snippet-websocket-map.conf) now forwards an upgrade only for a real
         #     `Upgrade: websocket`, so H2C cannot be smuggled to the backend.
+        #   python dynamic-urllib              — two dev-only gate helpers
+        #     (scripts/weissman_gate/detonate.py, ztna_proxy.py) fetch a URL with urllib:
+        #     detonate.py is a local detonation sandbox gated to http(s) schemes;
+        #     ztna_proxy.py forwards only the request path to a fixed operator UPSTREAM.
+        #     Both are pre-existing and accepted in CodeQL's baseline; CodeQL's py/SSRF
+        #     query stays ACTIVE on them as the backstop. Excluded at the rule level (not
+        #     inline) so we don't edit those long-standing lines and mark them as
+        #     PR-introduced in CodeQL's diff.
         # Secret-detection rules stay ACTIVE everywhere; the engines' own test-fixture
         # tokens are suppressed inline (`// nosemgrep`) on their exact lines.
         run: |
@@ -1332,7 +1353,8 @@ jobs:
             --error \
             --exclude-rule generic.nginx.security.request-host-used.request-host-used \
             --exclude-rule generic.nginx.security.header-redefinition.header-redefinition \
-            --exclude-rule generic.nginx.security.possible-h2c-smuggling.possible-nginx-h2c-smuggling
+            --exclude-rule generic.nginx.security.possible-h2c-smuggling.possible-nginx-h2c-smuggling \
+            --exclude-rule python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
 
       # Project-specific rules (.semgrep/weissman-rules.yml) run SEPARATELY and NON-blocking
       # first, so we can judge signal-to-noise on the real tree before promoting any into the

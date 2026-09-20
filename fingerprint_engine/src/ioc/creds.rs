@@ -151,20 +151,18 @@ pub async fn set(
     } else {
         crate::soar::integrations_vault::encrypt_secret(trimmed)
     };
-    sqlx::query(
-        r#"INSERT INTO ioc_feed_credentials (key, value_enc, updated_by, updated_at)
-           VALUES ($1, $2, $3, now())
-           ON CONFLICT (key) DO UPDATE SET
-               value_enc = EXCLUDED.value_enc,
-               updated_by = EXCLUDED.updated_by,
-               updated_at = now()"#,
-    )
-    .bind(key)
-    .bind(&value_enc)
-    .bind(updated_by)
-    .execute(pool)
-    .await
-    .map_err(|e| e.to_string())?;
+    // Route the write through the SECURITY DEFINER function (migration
+    // 20260920140000): weissman_app no longer holds direct INSERT/UPDATE/DELETE on the
+    // secrets table, so this constrained upsert is the only DB write path. The Rust
+    // is_allowed() gate above still fences the key set; the function enforces the safe
+    // upsert shape (server-derived updated_at, no DELETE) at the DB layer.
+    sqlx::query("SELECT public.set_ioc_feed_credential($1, $2, $3)")
+        .bind(key)
+        .bind(&value_enc)
+        .bind(updated_by)
+        .execute(pool)
+        .await
+        .map_err(|e| e.to_string())?;
     refresh_from_db(pool).await;
     Ok(())
 }

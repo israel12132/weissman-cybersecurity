@@ -11,6 +11,7 @@ pub mod auth_access;
 pub mod auth_rotation;
 pub mod bulk_copy;
 pub mod env_bootstrap;
+pub mod isolation_attestation;
 pub mod job_queue;
 pub mod llm_usage;
 pub mod no_tx_migrations;

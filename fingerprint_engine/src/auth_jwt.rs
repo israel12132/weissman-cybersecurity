@@ -692,4 +692,85 @@ mod agent_token_tests {
         .expect("mint");
         assert!(verify_access_token(&token).is_none());
     }
+
+    // ── SSE zero-trust stream-context binding (Step 9) ───────────────────────────────
+    // verify_stream_context decides whether a hijacked/replayed SSE stream is terminated
+    // (sse_context.rs drops the connection with 403 on false). It is a pure comparison over
+    // AuthContext, so no DB/Redis/JWT_SECRET is needed — construct the context directly.
+    // Before these tests only the trivial `is_sse_stream_path` string match was covered; the
+    // security decision beside it had ZERO coverage, so a refactor that treated "no evidence
+    // supplied" as "skip the check" would have silently turned stream binding into a no-op
+    // and still passed CI. These pin the three invariants that must never regress.
+    fn sctx_auth(bind_ip: Option<&str>, bind_tls_fp: Option<&str>) -> AuthContext {
+        AuthContext {
+            user_id: 1,
+            tenant_id: 1,
+            role: "analyst".to_string(),
+            is_superadmin: false,
+            agent_id: None,
+            jti: Some("j".to_string()),
+            bind_ip: bind_ip.map(String::from),
+            bind_tls_fp: bind_tls_fp.map(String::from),
+            assigned_client_id: None,
+        }
+    }
+
+    #[test]
+    fn stream_context_ip_binding_enforced() {
+        let a = sctx_auth(Some("203.0.113.7"), None);
+        assert!(
+            verify_stream_context(&a, "203.0.113.7", None),
+            "matching IP must pass"
+        );
+        assert!(
+            !verify_stream_context(&a, "203.0.113.8", None),
+            "different client IP must be rejected"
+        );
+        // A supplied TLS fp is irrelevant when no fp was bound at mint.
+        assert!(verify_stream_context(&a, "203.0.113.7", Some("whatever")));
+    }
+
+    #[test]
+    fn stream_context_tls_fp_absence_does_not_bypass_binding() {
+        let a = sctx_auth(None, Some("ja3-abc"));
+        // THE fail-closed invariant: token bound to a fingerprint but the connection presents
+        // NONE => reject. Treating "no fp supplied" as "skip the check" would break this.
+        assert!(
+            !verify_stream_context(&a, "10.0.0.1", None),
+            "missing TLS fp must NOT bypass a bound fingerprint"
+        );
+        assert!(
+            !verify_stream_context(&a, "10.0.0.1", Some("ja3-wrong")),
+            "wrong TLS fp must be rejected"
+        );
+        assert!(
+            verify_stream_context(&a, "10.0.0.1", Some("ja3-abc")),
+            "matching fp must pass"
+        );
+    }
+
+    #[test]
+    fn stream_context_legacy_unbound_token_passes() {
+        // Both bindings absent (legacy/unbound access token) => allow, whatever the context.
+        let a = sctx_auth(None, None);
+        assert!(verify_stream_context(&a, "10.0.0.1", None));
+        assert!(verify_stream_context(&a, "anything", Some("any-fp")));
+    }
+
+    #[test]
+    fn stream_context_both_bindings_must_all_match() {
+        let a = sctx_auth(Some("198.51.100.5"), Some("ja3-xyz"));
+        assert!(
+            verify_stream_context(&a, "198.51.100.5", Some("ja3-xyz")),
+            "both bindings match => pass"
+        );
+        assert!(
+            !verify_stream_context(&a, "198.51.100.5", None),
+            "fp missing => reject even when IP matches"
+        );
+        assert!(
+            !verify_stream_context(&a, "198.51.100.9", Some("ja3-xyz")),
+            "IP mismatch => reject even when fp matches"
+        );
+    }
 }

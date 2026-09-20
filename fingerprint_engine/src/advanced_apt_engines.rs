@@ -10,6 +10,15 @@
 //! internet-facing Citrix/Fortinet/Ivanti gateway, an open RDP/SMB port, a confirmed
 //! product fingerprint, weak email-auth on a live MX domain, or a TLS hygiene gap.
 //! No simulated findings; no payloads are delivered to the target.
+//!
+//! Structural honesty: the per-actor engines below (`apt28_techniques`, `apt29_techniques`,
+//! …) are **one** `actor_exposure_scan` probe parameterized by an `ActorProfile` — the
+//! curated set of edge products that actor is publicly documented (CISA/Mandiant) to
+//! exploit for initial access, plus its IOCs and attributed actor name. Two actors that
+//! target the same product therefore run the same underlying check against it; what
+//! differs per engine is the surface set, the IOC list, and the actor attribution — not a
+//! separate detection technique. The honest count of distinct *probe behaviours* is what
+//! `scripts/engine_reality_audit.mjs` reports, not the number of actor IDs.
 
 use crate::engine_probes::{
     dns_mx, dns_txt, empty_ok, extract_host, finding_with_probe_depth, fingerprint_stack,
