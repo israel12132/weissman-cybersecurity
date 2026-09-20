@@ -376,7 +376,10 @@ services:
       # operators to restart the one container that is keeping the site presentable. Healthy
       # therefore means: nginx answered the proxied path with the backend's 200 or with its own
       # branded 503; anything else (000, 502 from a broken map, 404) is a gateway problem.
-      test: ["CMD-SHELL", "code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/health); [ \"$code\" = 200 ] || [ \"$code\" = 503 ]"]
+      # `$$` — Compose interpolates `$var` inside this string at `docker compose config` time,
+      # so an unescaped `$code` became an empty string and the check compared "" to 200/503:
+      # the gateway could never report healthy. `$$` is the Compose escape for a literal `$`.
+      test: ["CMD-SHELL", "code=$$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/health); [ \"$$code\" = 200 ] || [ \"$$code\" = 503 ]"]
       interval: 10s
       timeout: 5s
       retries: 3
