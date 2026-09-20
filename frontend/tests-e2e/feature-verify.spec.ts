@@ -136,12 +136,14 @@ test.describe('Command palette (⌘K)', () => {
     // Idle state shows quick-nav options.
     await expect(dialog.getByRole('option').first()).toBeVisible()
 
-    // Type to filter to a route, then Enter navigates.
+    // Type to filter to a single route the mock (analyst) session can reach,
+    // then Enter navigates there. ("playbooks" uniquely matches /playbooks;
+    // /audit-log is portal-blocked for the analyst role, so it never appears.)
     const input = dialog.getByRole('combobox')
-    await input.fill('audit')
+    await input.fill('playbooks')
     await expect(dialog.getByRole('option')).toHaveCount(1)
     await page.keyboard.press('Enter')
-    await expect(page).toHaveURL(/\/audit/, { timeout: 15_000 })
+    await expect(page).toHaveURL(/\/playbooks/, { timeout: 15_000 })
 
     await assertNoCrash(page)
     expect(errors).toEqual([])
