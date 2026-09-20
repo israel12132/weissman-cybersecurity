@@ -20,6 +20,8 @@ import RouteLoader from './components/ui/RouteLoader'
 import { predictChainFromRoute } from './boot/intentPrefetch'
 import {
   Cockpit,
+  CommandCenter,
+  WarRoom,
   Login,
   App,
   SystemCore,
@@ -222,8 +224,10 @@ export default function TacticalApp() {
           }
         />
         <Route path="/" element={<ProtectedRoute><ProtectedOutlet /></ProtectedRoute>}>
-          <Route index element={<CeoProtectedRoute><Cockpit ceoIntegrated /></CeoProtectedRoute>} />
+          <Route index element={<CeoProtectedRoute><CommandCenter /></CeoProtectedRoute>} />
+          <Route path="war-room" element={<CeoProtectedRoute><WarRoom /></CeoProtectedRoute>} />
           <Route path="operations" element={<Cockpit />} />
+          <Route path="cockpit-legacy" element={<CeoProtectedRoute><Cockpit ceoIntegrated /></CeoProtectedRoute>} />
           <Route path="system-core" element={<SystemCore />} />
           <Route path="design-system" element={<DesignSystemGallery />} />
           <Route path="design-system/advanced" element={<RequireRole min="admin"><AdvancedShowcase /></RequireRole>} />

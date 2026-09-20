@@ -40,6 +40,8 @@ const EVIDENCE_ONLY_ROUTE_PREFIXES = [
   'intel-map',
   'system-core',
   'operations',
+  'war-room',
+  'cockpit-legacy',
 ]
 
 const EMBEDDED_PANELS = new Set(['KubernetesSecurityPanel.jsx'])

@@ -69,6 +69,7 @@ export const NAV_GROUPS = [
     labelKey: 'nav.groups.command',
     items: [
       { to: '/', labelKey: 'nav.cockpit', icon: '◈', exact: true },
+      { to: '/war-room', labelKey: 'nav.war_room', icon: '⚔', minRole: 'ceo' },
       { to: '/overview', labelKey: 'nav.overview', icon: '▤' },
       { to: '/live-feed', labelKey: 'nav.live_feed', icon: '📡' },
       { to: '/findings', labelKey: 'nav.findings', icon: '◉' },
@@ -338,6 +339,7 @@ function dedupeCrumbs(crumbs) {
  * @type {Record<string, string>}
  */
 export const NAV_MIN_ROLE = {
+  '/war-room': 'ceo',
   '/admin': 'ceo',
   '/ceo-vault': 'ceo',
   '/ceo': 'ceo',

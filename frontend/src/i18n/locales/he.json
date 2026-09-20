@@ -135,6 +135,7 @@
   },
   "nav": {
     "cockpit": "תא הפיקוד",
+    "war_room": "חדר מלחמה",
     "overview": "סקירת מנהלים",
     "live_feed": "הזנה חיה",
     "dashboard": "לוח בקרה",

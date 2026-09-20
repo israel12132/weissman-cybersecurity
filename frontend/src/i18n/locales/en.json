@@ -145,6 +145,7 @@
   },
   "nav": {
     "cockpit": "Cockpit",
+    "war_room": "War Room",
     "overview": "Executive Overview",
     "live_feed": "Live Feed",
     "dashboard": "Dashboard",

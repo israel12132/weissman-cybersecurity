@@ -46,7 +46,8 @@ const EXACT = {
   '/feedback-loop': () => import(/* webpackChunkName: "page-feedback-loop" */ '../pages/FeedbackLoopVerification'),
   '/roe-approvals': () => import(/* webpackChunkName: "page-roe" */ '../pages/RoeApprovals'),
   '/operations': () => import(/* webpackChunkName: "cockpit-shell" */ '../Cockpit'),
-  '/': () => import(/* webpackChunkName: "cockpit-shell" */ '../Cockpit'),
+  '/': () => import(/* webpackChunkName: "command-center" */ '../CommandCenter'),
+  '/war-room': () => import(/* webpackChunkName: "war-room" */ '../WarRoom'),
 }
 
 const PREFIX = [

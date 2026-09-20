@@ -14,6 +14,8 @@ export { normalizeRoutePath, matchRouteChunk } from './routePrefetchMap'
 // dynamic-import (chunk 404 after a redeploy) with backoff before surfacing the error
 // boundary, instead of hard-failing the route. See ./lazyWithRetry.js.
 export const Cockpit = React$lazy(() => import(/* webpackChunkName: "cockpit-shell" */ '../Cockpit'))
+export const CommandCenter = React$lazy(() => import(/* webpackChunkName: "command-center" */ '../CommandCenter'))
+export const WarRoom = React$lazy(() => import(/* webpackChunkName: "war-room" */ '../WarRoom'))
 export const Login = React$lazy(() => import(/* webpackChunkName: "page-login" */ '../components/cockpit/Login'))
 export const App = React$lazy(() => import(/* webpackChunkName: "page-intel-map" */ '../App'))
 export const SystemCore = React$lazy(() => import('../components/SystemCore'))
