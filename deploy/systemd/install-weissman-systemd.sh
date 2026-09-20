@@ -52,6 +52,23 @@ fi
 
 chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_ROOT"
 
+# Continuity ("maintenance") page for the host gateway. deploy/nginx-weissman.conf and
+# deploy/Caddyfile serve it from /opt/weissman/maintenance (a sibling of $INSTALL_ROOT) whenever
+# the origin cannot answer, and read the optional announced-window flag from its state/ dir.
+# The page is automatic, so a problem here must not block the units: it only means the branded
+# page is not in place yet. --no-build verifies the committed dist instead of regenerating
+# files inside the operator's checkout as root. WEISSMAN_MAINTENANCE_ROOT/_STATE_DIR/_OWNER
+# pass through to install.sh.
+MAINT_INSTALL="$REPO_ROOT/deploy/maintenance/install.sh"
+if [[ -f "$MAINT_INSTALL" ]]; then
+  echo "[*] Installing the continuity page → ${WEISSMAN_MAINTENANCE_ROOT:-/opt/weissman/maintenance}"
+  if ! bash "$MAINT_INSTALL" --no-build; then
+    echo "[!] continuity page not installed (non-fatal) — run: node deploy/maintenance/build.mjs && sudo deploy/maintenance/install.sh"
+  fi
+else
+  echo "[!] deploy/maintenance/install.sh not found — continuity page not installed (the units do not need it)"
+fi
+
 UNIT_SRC="$REPO_ROOT/deploy/systemd"
 for u in weissman-server.service weissman-worker.service weissman.target; do
   [[ -f "$UNIT_SRC/$u" ]] || die "missing $UNIT_SRC/$u"
