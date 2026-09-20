@@ -1,0 +1,8 @@
+{
+  "status": "maintenance",
+  "code": 503,
+  "message": "Scheduled platform update in progress; service resumes automatically.",
+  "retry_after_seconds": 30,
+  "contact": "weissmancybersecurity@gmail.com",
+  "status_page": "/status"
+}
