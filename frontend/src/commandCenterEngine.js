@@ -361,6 +361,28 @@ export const CC_CSS = `
     font-family:var(--font-mono);font-size:10px;color:var(--muted);letter-spacing:.03em;}
   .sla-foot b{font-family:var(--font-mono);font-size:17px;color:var(--ok);font-variant-numeric:tabular-nums;}
 
+  /* ══ Crown Path — attack-path graph + choke-point analysis ══ */
+  .crownpath{display:flex;flex-direction:column;gap:11px;}
+  .cp-graph{width:100%;border-radius:14px;overflow:hidden;background:linear-gradient(160deg,color-mix(in srgb,var(--a2) 7%,transparent),transparent);}
+  .cp-graph svg{width:100%;height:auto;display:block;}
+  .cp-edge{fill:none;stroke:var(--hairline);stroke-width:1.4;opacity:.5;}
+  .cp-edge.hot{stroke-width:2.6;opacity:1;stroke-dasharray:7 6;animation:cpFlow 1s linear infinite;}
+  @keyframes cpFlow{to{stroke-dashoffset:-26;}}
+  .cp-nrect{stroke-width:1.5;}
+  .cp-nlabel{font-family:var(--font-mono);font-size:9px;fill:var(--text);}
+  .cp-nkind{font-family:var(--font-mono);font-size:7px;letter-spacing:.12em;text-transform:uppercase;}
+  .cp-tierlab{font-family:var(--font-mono);font-size:8px;letter-spacing:.16em;text-transform:uppercase;fill:var(--muted);}
+  .cp-choke-ring{fill:none;stroke:var(--warn);stroke-width:2;opacity:.7;animation:cpPulse 1.7s ease-in-out infinite;}
+  @keyframes cpPulse{0%,100%{opacity:.28;} 50%{opacity:.95;}}
+  .cp-choke-tag{font-family:var(--font-mono);font-size:7.5px;font-weight:700;letter-spacing:.1em;fill:var(--warn);}
+  .cp-crown-glow{filter:drop-shadow(0 0 7px color-mix(in srgb,var(--a1) 70%,transparent));}
+  .cp-insight{display:flex;align-items:center;gap:11px;background:var(--track);border:1px solid var(--edge2);border-inline-start:3px solid var(--warn);border-radius:12px;padding:11px 14px;font-family:var(--font-mono);font-size:11px;line-height:1.45;color:var(--muted);}
+  .cp-insight .cp-ic{font-size:17px;flex:0 0 auto;}
+  .cp-insight b{color:var(--text);} .cp-insight .hi{color:var(--warn);} .cp-insight .cy{color:var(--a1);}
+  .cp-legend{display:flex;gap:15px;flex-wrap:wrap;font-family:var(--font-mono);font-size:8.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);}
+  .cp-legend span{display:inline-flex;align-items:center;gap:5px;}
+  .cp-legend i{width:9px;height:9px;border-radius:3px;flex:0 0 auto;}
+
   /* ══ Cockpit customization ══ */
   .cc-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:2px 0 12px;}
   .cc-profile{display:flex;align-items:center;gap:9px;}
@@ -660,6 +682,7 @@ export function mountCommandCenter(root, THREE, opts) {
     buildMenuNav();
     if(typeof paqPaint==='function')paqPaint();
     if(typeof slaPaint==='function')slaPaint();
+    if(typeof cpRender==='function')cpRender();
   }
 
   /* ─── domain vocab ─── */
@@ -1031,6 +1054,96 @@ export function mountCommandCenter(root, THREE, opts) {
 
   paqPaint();slaPaint();
 
+  /* ══ Crown Path — attack-path graph + choke-point analysis ══
+     A real directed graph from internet exposure → foothold → identity →
+     lateral movement → crown-jewel assets. Every source→crown path is
+     enumerated; likelihood is the product of its edge probabilities; the
+     "choke point" is the node crossed by the most paths — remediate it and
+     you sever the most routes to the crown jewels at once. This is the
+     highest-value insight in exposure management, computed live. */
+  var CP_TIERS=[
+    {lab:{en:'Exposure',he:'חשיפה'},col:'var(--crit)'},
+    {lab:{en:'Foothold',he:'דריסת רגל'},col:'var(--warn)'},
+    {lab:{en:'Identity',he:'זהות'},col:'var(--a3)'},
+    {lab:{en:'Lateral',he:'תנועה רוחבית'},col:'var(--a2)'},
+    {lab:{en:'Crown Jewel',he:'נכס-על'},col:'var(--a1)'}];
+  var CP_NODES=[
+    {id:'e1',tier:0,lab:{en:'Internet-facing VPN',he:'VPN חשוף'}},
+    {id:'e2',tier:0,lab:{en:'Public API gateway',he:'שער API ציבורי'}},
+    {id:'e3',tier:0,lab:{en:'Exposed RDP',he:'RDP חשוף'}},
+    {id:'f1',tier:1,lab:{en:'CVE-2024-3400 RCE',he:'CVE-2024-3400 RCE'}},
+    {id:'f2',tier:1,lab:{en:'IMDSv1 SSRF',he:'IMDSv1 SSRF'}},
+    {id:'f3',tier:1,lab:{en:'Unauth GraphQL',he:'GraphQL ללא אימות'}},
+    {id:'i1',tier:2,lab:{en:'Over-priv IAM role',he:'תפקיד יתר-הרשאות'}},
+    {id:'i2',tier:2,lab:{en:'Kerberoastable SPN',he:'SPN פגיע'}},
+    {id:'i3',tier:2,lab:{en:'Leaked CI/CD token',he:'טוקן CI/CD דלוף'}},
+    {id:'l1',tier:3,lab:{en:'Cloud role assumption',he:'נטילת תפקיד ענן'}},
+    {id:'l2',tier:3,lab:{en:'SMB lateral move',he:'תנועת SMB'}},
+    {id:'c1',tier:4,lab:{en:'Customer PII store',he:'מאגר PII לקוחות'}},
+    {id:'c2',tier:4,lab:{en:'Payments core',he:'ליבת תשלומים'}},
+    {id:'c3',tier:4,lab:{en:'Domain Controller',he:'בקר דומיין'}}];
+  var CP_EDGES=[['e1','f1','T1190'],['e2','f2','T1190'],['e2','f3','T1190'],['e3','f1','T1133'],
+    ['f1','i1','T1068'],['f2','i1','T1552'],['f2','i2','T1558'],['f3','i3','T1552'],
+    ['i1','l1','T1078'],['i2','l1','T1550'],['i3','l1','T1078'],['i2','l2','T1021'],
+    ['l1','c1','T1213'],['l1','c2','T1213'],['l2','c3','T1021']];
+  var cpNodeById={};CP_NODES.forEach(function(n){cpNodeById[n.id]=n;});
+  CP_EDGES.forEach(function(e){e[3]=0.5+Math.random()*0.45;}); // e[3] = likelihood
+  function cpEdgeP(a,b){for(var i=0;i<CP_EDGES.length;i++)if(CP_EDGES[i][0]===a&&CP_EDGES[i][1]===b)return CP_EDGES[i][3];return 0;}
+  function cpAdj(id){var o=[];CP_EDGES.forEach(function(e){if(e[0]===id)o.push(e[1]);});return o;}
+  function cpEnumPaths(){var paths=[];
+    CP_NODES.forEach(function(s){if(s.tier!==0)return;
+      (function dfs(id,seq,p){var nx=cpAdj(id);
+        if(cpNodeById[id].tier===4){paths.push({seq:seq.slice(),p:p});return;}
+        nx.forEach(function(t){dfs(t,seq.concat(t),p*cpEdgeP(id,t));});})(s.id,[s.id],1);});
+    return paths;}
+  function cpAnalyze(){var paths=cpEnumPaths();
+    var cross={};paths.forEach(function(pt){pt.seq.forEach(function(id,i){if(i>0&&i<pt.seq.length-1)cross[id]=(cross[id]||0)+1;});});
+    var choke=null,cmax=-1;for(var k in cross){if(cross[k]>cmax){cmax=cross[k];choke=k;}}
+    paths.sort(function(a,b){return b.p-a.p;});
+    var top=paths[0]||{seq:[],p:0};
+    var chokePaths=paths.filter(function(pt){return pt.seq.indexOf(choke)>=0;}).length;
+    return {paths:paths,top:top,choke:choke,chokePaths:chokePaths,total:paths.length};}
+  var cpHot={};
+  function cpGeom(){var W=760,H=344,pad=30,cols=5,byTier=[[],[],[],[],[]];
+    CP_NODES.forEach(function(n){byTier[n.tier].push(n);});
+    var pos={};for(var t=0;t<cols;t++){var cx=pad+40+t*((W-2*pad-80)/(cols-1)),arr=byTier[t],n=arr.length;
+      arr.forEach(function(nd,i){var cy=44+(i+0.5)*((H-70)/n);pos[nd.id]={x:cx,y:cy};});}
+    return {W:W,H:H,pos:pos};}
+  function cpRender(){var host=document.getElementById('crownPath');if(!host)return;
+    var g=cpGeom(),a=cpAnalyze(),NW=120,NH=30;cpHot={};
+    for(var i=0;i<a.top.seq.length-1;i++)cpHot[a.top.seq[i]+'>'+a.top.seq[i+1]]=1;
+    var svg='<svg viewBox="0 0 '+g.W+' '+g.H+'" preserveAspectRatio="xMidYMid meet">';
+    // tier labels
+    CP_TIERS.forEach(function(tr,t){var any=CP_NODES.filter(function(n){return n.tier===t;})[0];if(!any)return;
+      svg+='<text class="cp-tierlab" x="'+g.pos[any.id].x+'" y="20" text-anchor="middle">'+(LANG==='he'?tr.lab.he:tr.lab.en)+'</text>';});
+    // edges (curved)
+    CP_EDGES.forEach(function(e){var s=g.pos[e[0]],d=g.pos[e[1]];if(!s||!d)return;
+      var x1=s.x+NW/2,y1=s.y,x2=d.x-NW/2,y2=d.y,mx=(x1+x2)/2,hot=cpHot[e[0]+'>'+e[1]];
+      svg+='<path class="cp-edge'+(hot?' hot':'')+'" '+(hot?'stroke="var(--crit)" ':'')+'d="M'+x1+','+y1+' C'+mx+','+y1+' '+mx+','+y2+' '+x2+','+y2+'"/>';});
+    // nodes
+    CP_NODES.forEach(function(n){var p=g.pos[n.id],col=CP_TIERS[n.tier].col,crown=n.tier===4,choke=n.id===a.choke,onHot=a.top.seq.indexOf(n.id)>=0;
+      var x=p.x-NW/2,y=p.y-NH/2;
+      if(choke)svg+='<rect class="cp-choke-ring" x="'+(x-5)+'" y="'+(y-5)+'" width="'+(NW+10)+'" height="'+(NH+10)+'" rx="12"/>';
+      svg+='<g'+(crown?' class="cp-crown-glow"':'')+'>';
+      svg+='<rect class="cp-nrect" x="'+x+'" y="'+y+'" width="'+NW+'" height="'+NH+'" rx="9" fill="color-mix(in srgb,'+col+' '+(onHot?'26':'15')+'%,var(--track))" stroke="'+col+'" '+(onHot?'stroke-width="2.2"':'')+'/>';
+      var rtl=LANG==='he',dotX=rtl?(x+NW-11):(x+11);
+      svg+='<circle cx="'+dotX+'" cy="'+p.y+'" r="3.4" fill="'+col+'"/>';
+      var lab=rtl?n.lab.he:n.lab.en;if(lab.length>16)lab=lab.slice(0,15)+'…';lab=(crown?'♛ ':'')+lab;
+      svg+='<text class="cp-nlabel" x="'+(rtl?(x+NW-20):(x+20))+'" y="'+(p.y+3.2)+'" text-anchor="'+(rtl?'end':'start')+'"'+(rtl?' direction="rtl"':'')+'>'+lab+'</text>';
+      svg+='</g>';
+      if(choke)svg+='<text class="cp-choke-tag" x="'+p.x+'" y="'+(y-9)+'" text-anchor="middle">◆ '+(LANG==='he'?'צוואר בקבוק':'CHOKE POINT')+'</text>';});
+    svg+='</svg>';
+    var chokeNode=cpNodeById[a.choke],cut=Math.round(a.chokePaths/a.total*100);
+    var ins=LANG==='he'
+      ? '<span class="cp-ic">◈</span><div>תקן את צוואר-הבקבוק <b class="hi">'+(chokeNode?chokeNode.lab.he:'')+'</b> ← ינתק <b class="hi">'+a.chokePaths+'</b> מתוך <b>'+a.total+'</b> נתיבי-תקיפה אל נכסי-העל · חיתוך <b class="cy">'+cut+'%</b> מהחשיפה. סבירות הנתיב החם <b class="cy">'+Math.round(a.top.p*100)+'%</b>.</div>'
+      : '<span class="cp-ic">◈</span><div>Remediate the choke point <b class="hi">'+(chokeNode?chokeNode.lab.en:'')+'</b> → severs <b class="hi">'+a.chokePaths+'</b> of <b>'+a.total+'</b> attack paths to crown jewels · cuts <b class="cy">'+cut+'%</b> of exposure. Hottest path likelihood <b class="cy">'+Math.round(a.top.p*100)+'%</b>.</div>';
+    host.innerHTML='<div class="cp-graph">'+svg+'</div><div class="cp-insight">'+ins+'</div>'+
+      '<div class="cp-legend">'+CP_TIERS.map(function(tr){return '<span><i style="background:'+tr.col+'"></i>'+(LANG==='he'?tr.lab.he:tr.lab.en)+'</span>';}).join('')+'</div>';
+    var nEl=document.getElementById('cpN');if(nEl)nEl.textContent=a.total+' '+(LANG==='he'?'נתיבים · חם ':'paths · top ')+Math.round(a.top.p*100)+'%';}
+  function initCrownPath(){cpRender();}
+  IV(function(){if(!document.getElementById('crownPath'))return;
+    CP_EDGES.forEach(function(e){if(Math.random()<.4)e[3]=Math.max(.35,Math.min(.97,e[3]+(Math.random()-.5)*0.12));});cpRender();},3000);
+
   /* ══════════ Cockpit widget catalog + customization ══════════ */
   var MODULES=[
     {id:'ekg',t:'System-Pulse EKG',sub:'/pulse · platform health',size:'s12',cbody:'vizbox',cbodyStyle:'min-height:96px;height:96px;',bh:'<canvas id="ekgCanvas" class="viz"></canvas>',hr:'<span class="live-n" id="bpm">72 bpm</span>',draw:function(){drawEkgOn(document.getElementById('ekgCanvas'),true);},ic:'📈'},
@@ -1038,6 +1151,7 @@ export function mountCommandCenter(root, THREE, opts) {
     {id:'auto-heal',t:'Auto-Heal',sub:'/auto-heal · remediation',size:'s4',bh:'<div class="timeline" id="heal"></div>',hr:'<span class="live-n" id="mttr">MTTR 4.2m</span>',init:initHeal,ic:'🩺'},
     {id:'priority-queue',t:'Priority Action Queue',sub:'/response · impact-ranked',size:'s6',bh:'<div class="paq" id="ckPaq" style="max-height:236px"></div>',hr:'<span class="live-n" id="ckPaqN">—</span>',init:initCkPaq,ic:'⚡'},
     {id:'response-sla',t:'Response SLA · MTTR',sub:'/sla · detect · respond · contain',size:'s3',bh:'<div class="slap" id="ckSla"></div>',hr:'<span class="live-n" id="ckSlaN">—</span>',init:initCkSla,ic:'⏱'},
+    {id:'crown-path',t:'Crown Path',sub:'/crown-path · attack-path + choke-point',size:'s8',bh:'<div class="crownpath" id="crownPath"></div>',hr:'<span class="live-n" id="cpN">—</span>',init:initCrownPath,ic:'♛'},
     {id:'neural-web',t:'Neural Engine Web',sub:'/neural-web · Cortex graph',size:'s4',cbody:'vizbox',bh:'<canvas id="neuralCanvas" class="viz"></canvas>',hr:'<span class="live-n">42 nodes</span>',draw:drawNeural,init:function(){if(neuNodes)neuNodes._w=-1;},ic:'◈'},
     {id:'deception',t:'Deception Grid',sub:'/deception · live decoys',size:'s4',bh:'<div class="heatgrid" id="deception" style="grid-template-columns:repeat(12,1fr)"></div>',hr:'<span class="live-n" id="decoyN">—</span>',init:initDeception,ic:'🕸'},
     {id:'swarm-mind',t:'Swarm-Mind',sub:'/swarm-mind · consensus',size:'s4',cbody:'vizbox',bh:'<canvas id="swarmCanvas" class="viz"></canvas>',hr:'<span class="live-n" id="swarmN">consensus 0.0</span>',draw:drawSwarm,init:function(){if(swP)swP._w=-1;},ic:'🧠'},
@@ -1071,7 +1185,7 @@ export function mountCommandCenter(root, THREE, opts) {
   }
 
   var CLIENTS=[{id:'default',name:'Default · all companies'},{id:'acme',name:'Acme Corp'},{id:'globex',name:'Globex Financial'},{id:'umbrella',name:'Umbrella Med'}];
-  var DEFAULT_LAYOUT=['m:risk_score','m:crit_findings','m:mttc','m:mitre_cov','m:assets','m:contained','mod:priority-queue','mod:response-sla','mod:mission-control','mod:ekg','mod:engine-room','mod:auto-heal','mod:neural-web','mod:deception','mod:swarm-mind','mod:identity-matrix','mod:ai-model-risk','mod:edge-swarm','mod:mitre','mod:findings'];
+  var DEFAULT_LAYOUT=['m:risk_score','m:crit_findings','m:mttc','m:mitre_cov','m:assets','m:contained','mod:priority-queue','mod:response-sla','mod:crown-path','mod:mission-control','mod:ekg','mod:engine-room','mod:auto-heal','mod:neural-web','mod:deception','mod:swarm-mind','mod:identity-matrix','mod:ai-model-risk','mod:edge-swarm','mod:mitre','mod:findings'];
   var curClient='default',layout=DEFAULT_LAYOUT.slice();
   function lkey(c){return 'wm_cc_layout_'+c;}
   function loadLayout(c){try{var s2=localStorage.getItem(lkey(c));if(s2){var a=JSON.parse(s2);if(Array.isArray(a)&&a.length)return a.filter(function(id){return catById[id];});}}catch(e){}return DEFAULT_LAYOUT.slice();}
