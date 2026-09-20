@@ -3,14 +3,21 @@
  *  - Hashed build assets (js/css/wasm): cache-first + stale-while-revalidate.
  *  - Navigations: network-first with an offline app-shell fallback, so the
  *    Command Center still boots (from cache) when the network is unavailable.
+ *    When no shell is cached, the branded continuity page (offline.html, generated
+ *    by deploy/maintenance/build.mjs) is served instead of a browser error.
  *  - PREFETCH_CHUNKS message: warm the cache with predicted route chunks.
  */
-const CACHE = 'weissman-tactical-v3'
+const CACHE = 'weissman-tactical-v4'
 const ASSET_RE = /\/command-center\/assets\/[a-zA-Z0-9_.-]+\.(js|css|wasm)$/
 
 // The app shell is stored under this stable key and served for any navigation
 // when offline. Resolved against the registration scope (e.g. /command-center/).
 const shellKey = () => `${self.registration.scope}index.html`
+
+// The branded continuity page (Command Center variant of the maintenance page).
+// Served as the navigation fallback when the shell is not cached, so a visitor
+// never sees a browser "can't connect" page while the origin is being updated.
+const offlineKey = () => `${self.registration.scope}offline.html`
 
 self.addEventListener('install', (event) => {
   self.skipWaiting()
@@ -20,7 +27,7 @@ self.addEventListener('install', (event) => {
       // Precache the shell so a first-load-then-offline visit still boots.
       // allSettled: never fail the install if one path 404s in a given deploy.
       await Promise.allSettled(
-        [self.registration.scope, shellKey()].map((url) =>
+        [self.registration.scope, shellKey(), offlineKey()].map((url) =>
           cache.add(new Request(url, { credentials: 'same-origin' })),
         ),
       )
@@ -64,7 +71,18 @@ const OFFLINE_HTML =
   '<p style="color:#94a3b8;line-height:1.6;margin:0">The Command Center cannot reach the network. ' +
   'Cached views may still be available — reconnect to resume live operations.</p></div></body></html>'
 
-// Network-first for navigations: fresh HTML when online, cached shell when not.
+// The continuity page is served with the same machine-readable semantics as the
+// gateway's own maintenance response (503 + Retry-After), so nothing upstream —
+// crawlers, the page's own /api/health poll, monitoring — mistakes it for content.
+const MAINTENANCE_HEADERS = {
+  'Content-Type': 'text/html; charset=utf-8',
+  'Retry-After': '30',
+  'Cache-Control': 'no-store',
+  'X-Weissman-Maintenance': '1',
+}
+
+// Network-first for navigations: fresh HTML when online, cached shell when not,
+// then the cached continuity page, then a minimal inline page as the last resort.
 async function navigationHandler(request) {
   const cache = await caches.open(CACHE)
   try {
@@ -74,6 +92,11 @@ async function navigationHandler(request) {
   } catch {
     const shell = (await cache.match(shellKey())) || (await cache.match(self.registration.scope))
     if (shell) return shell
+    const offline = await cache.match(offlineKey())
+    if (offline) {
+      // Re-wrap so the cached 200 becomes a 503 with the maintenance headers.
+      return new Response(offline.body, { status: 503, headers: MAINTENANCE_HEADERS })
+    }
     return new Response(OFFLINE_HTML, {
       status: 503,
       headers: { 'Content-Type': 'text/html; charset=utf-8' },

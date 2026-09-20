@@ -12,6 +12,7 @@ import RequireRole, { RequireStaff } from './components/auth/RequireRole'
 import RouteErrorBoundary from './components/RouteErrorBoundary'
 import { ToastProvider } from './components/ui/Toaster'
 import RateLimitProvider from './components/RateLimitProvider'
+import MaintenanceProvider from './components/MaintenanceProvider'
 import KeyboardShortcuts from './components/ui/KeyboardShortcuts'
 import GlobalSearch from './components/GlobalSearch'
 import SkipToContent from './components/ui/SkipToContent'
@@ -393,7 +394,11 @@ export function TacticalProviders({ children }) {
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
             <ToastProvider>
-              <RateLimitProvider>{children}</RateLimitProvider>
+              <RateLimitProvider>
+                {/* Full-screen "Command Center is being updated" overlay while the
+                    gateway answers with the branded maintenance page. */}
+                <MaintenanceProvider>{children}</MaintenanceProvider>
+              </RateLimitProvider>
             </ToastProvider>
           </AuthProvider>
         </QueryClientProvider>
