@@ -319,6 +319,48 @@ export const CC_CSS = `
   .comms{font-family:var(--font-mono);font-size:11px;display:flex;flex-direction:column;gap:6px;overflow-y:auto;max-height:120px;}
   .comms .cm{color:var(--muted);} .comms .cm b{color:var(--a1);}
 
+  /* ══ Priority Action Queue — impact-ranked "what to do now" ══ */
+  .paq{display:flex;flex-direction:column;gap:9px;max-height:292px;overflow-y:auto;}
+  .paqit{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:13px;position:relative;overflow:hidden;
+    background:var(--track);border:1px solid var(--edge2);border-radius:13px;padding:11px 14px 11px 16px;transition:.16s;}
+  .paqit::before{content:"";position:absolute;top:0;bottom:0;inset-inline-start:0;width:3px;background:var(--crit);}
+  .paqit.p-h::before{background:var(--warn);} .paqit.p-m::before{background:var(--a1);}
+  .paqit:hover{border-color:var(--a1);transform:translateX(2px);}
+  #deck[dir="rtl"] .paqit:hover{transform:translateX(-2px);}
+  .paq-rank{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:34px;}
+  .paq-sc{font-family:var(--font-mono);font-weight:700;font-size:20px;line-height:1;color:var(--crit);font-variant-numeric:tabular-nums;text-shadow:0 0 14px color-mix(in srgb,var(--crit) 55%,transparent);}
+  .paqit.p-h .paq-sc{color:var(--warn);text-shadow:0 0 14px color-mix(in srgb,var(--warn) 55%,transparent);}
+  .paqit.p-m .paq-sc{color:var(--a1);text-shadow:0 0 14px color-mix(in srgb,var(--a1) 55%,transparent);}
+  .paq-scl{font-family:var(--font-mono);font-size:7px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);}
+  .paq-mid{min-width:0;}
+  .paq-act{font-family:var(--font-display);font-weight:600;font-size:12.5px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .paq-act .tg{color:var(--a2);}
+  .paq-why{font-family:var(--font-mono);font-size:9.5px;color:var(--muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .paq-why b{color:var(--text);}
+  .paq-sla{display:inline-flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:9px;margin-top:5px;color:var(--warn);letter-spacing:.04em;}
+  .paq-sla i{width:6px;height:6px;border-radius:50%;background:var(--warn);box-shadow:0 0 7px var(--warn);}
+  .paqit.breach{border-color:var(--crit);background:color-mix(in srgb,var(--crit) 9%,var(--track));}
+  .paqit.breach .paq-sla{color:var(--crit);font-weight:600;} .paqit.breach .paq-sla i{background:var(--crit);box-shadow:0 0 9px var(--crit);}
+  .paq-go{font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.03em;color:#0a1733;
+    background:linear-gradient(120deg,var(--a1),var(--a2));border:none;border-radius:9px;padding:9px 14px;cursor:pointer;white-space:nowrap;transition:.15s;}
+  .paq-go:hover{transform:translateY(-1px);box-shadow:0 5px 15px -5px var(--a2);}
+  @keyframes paqDone{to{opacity:0;transform:translateX(18px) scale(.98);}}
+  .paqit.done{animation:paqDone .38s forwards;pointer-events:none;}
+
+  /* ══ Response SLA / MTTR ══ */
+  .slap{display:flex;flex-direction:column;gap:14px;}
+  .sla-row .sla-h{display:flex;justify-content:space-between;align-items:baseline;font-family:var(--font-mono);font-size:10px;margin-bottom:6px;}
+  .sla-row .sla-k{color:var(--text);letter-spacing:.05em;font-weight:600;} .sla-row .sla-k small{color:var(--muted);margin-inline-start:6px;font-weight:400;text-transform:uppercase;letter-spacing:.1em;font-size:8px;}
+  .sla-row .sla-v{color:var(--ok);font-variant-numeric:tabular-nums;font-weight:600;}
+  .sla-row.warn .sla-v{color:var(--warn);} .sla-row.bad .sla-v{color:var(--crit);}
+  .sla-bar{height:8px;border-radius:5px;background:var(--track);border:1px solid var(--edge2);overflow:hidden;}
+  .sla-bar i{display:block;height:100%;border-radius:5px;background:linear-gradient(90deg,var(--ok),var(--a1));transition:width .55s ease;}
+  .sla-row.warn .sla-bar i{background:linear-gradient(90deg,var(--warn),#fb923c);}
+  .sla-row.bad .sla-bar i{background:linear-gradient(90deg,var(--crit),#b5179e);}
+  .sla-foot{display:flex;justify-content:space-between;align-items:center;margin-top:2px;padding-top:12px;border-top:1px solid var(--edge2);
+    font-family:var(--font-mono);font-size:10px;color:var(--muted);letter-spacing:.03em;}
+  .sla-foot b{font-family:var(--font-mono);font-size:17px;color:var(--ok);font-variant-numeric:tabular-nums;}
+
   /* ══ Cockpit customization ══ */
   .cc-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:2px 0 12px;}
   .cc-profile{display:flex;align-items:center;gap:9px;}
@@ -515,6 +557,14 @@ export const CC_HTML = `<div id="deck" data-dir="nebula" dir="ltr">
           </div>
         </div>
         <div class="card s8">
+          <div class="ch"><div class="ht"><b data-t="wrPaq">Priority Action Queue</b><span class="rt" data-t="wrPaqSub">what to do now · impact-ranked</span></div><span class="live-n" id="paqN">—</span></div>
+          <div class="cbody"><div class="paq" id="wrPaq"></div></div>
+        </div>
+        <div class="card s4">
+          <div class="ch"><div class="ht"><b data-t="wrSla">Response SLA · MTTR</b><span class="rt" data-t="wrSlaSub">detect · respond · contain</span></div><span class="live-n" id="slaN">—</span></div>
+          <div class="cbody"><div class="slap" id="wrSla"></div></div>
+        </div>
+        <div class="card s8">
           <div class="ch"><div class="ht"><b data-t="wrPulse">Battle Pulse</b><span class="rt">/pulse · operational tempo</span></div><span class="live-n" id="wrBpm">88 bpm</span></div>
           <div class="cbody vizbox" style="min-height:90px;height:90px;"><canvas id="wrEkg" class="viz"></canvas></div>
         </div>
@@ -591,6 +641,8 @@ export function mountCommandCenter(root, THREE, opts) {
     wrPulse:['Battle Pulse','דופק קרב'], wrComms:['Command Stream','זרם פיקוד'],
     wrRed:['Red team','צוות אדום'], wrBlue:['Blue containment','בלימה כחולה'],
     wrMitre:['MITRE ATT&CK Coverage','כיסוי MITRE ATT&CK'], wrIntel:['Threat Intel','מודיעין איומים'],
+    wrPaq:['Priority Action Queue','תור פעולות עדיפות'], wrPaqSub:['what to do now · impact-ranked','מה לעשות עכשיו · דירוג לפי השפעה'],
+    wrSla:['Response SLA · MTTR','SLA תגובה · MTTR'], wrSlaSub:['detect · respond · contain','זיהוי · תגובה · הכלה'],
     ccClient:['Client layout','תצוגת לקוח'], ccAdd:['Add widget','הוסף ווידג׳ט'], ccEdit:['Edit layout','עריכת פריסה'], ccReset:['Reset','איפוס'],
     ccAddTitle:['Add to cockpit','הוספה לקוקפיט'], ccSearch:['Search metrics, modules, engines…','חיפוש מדדים, מודולים, מנועים…'],
     rIsolate:['Isolate host','בודד מארח'], rRevoke:['Revoke sessions','בטל הרשאות'], rBlock:['Block egress','חסום יציאה'], rDeploy:['Deploy decoy','פרוס פיתיון'],
@@ -606,6 +658,8 @@ export function mountCommandCenter(root, THREE, opts) {
     if(document.getElementById('warpBtn')) document.getElementById('warpBtn').firstChild.nodeValue='⚡ ';
     document.getElementById('warpBtn').lastChild.nodeValue=t('warp');
     buildMenuNav();
+    if(typeof paqPaint==='function')paqPaint();
+    if(typeof slaPaint==='function')slaPaint();
   }
 
   /* ─── domain vocab ─── */
@@ -911,11 +965,79 @@ export function mountCommandCenter(root, THREE, opts) {
 
   wrBuild();wrBuildMitre();
 
+  /* ══ Priority Action Queue — impact-ranked "what to do now" ══
+     Inspired by the guided-response surfaces of the world's leading platforms
+     (attack-path / toxic-combination prioritization, incident workbenches):
+     each item is scored by exploitability × business impact × blast radius,
+     carries a live SLA countdown, and drives a one-click response. */
+  var PAQ_ACTS=[{en:'Isolate host',he:'בודד מארח'},{en:'Revoke sessions',he:'בטל הפעלות'},{en:'Block egress',he:'חסום יציאה'},
+    {en:'Rotate credentials',he:'סובב אישורים'},{en:'Quarantine asset',he:'הסגר נכס'},{en:'Patch & redeploy',he:'עדכן ופרוס'},{en:'Deploy decoy',he:'פרוס פיתיון'}];
+  var PAQ_ASSETS=[{en:'crown-jewel DB',he:'נכס-על · DB'},{en:'domain controller',he:'בקר דומיין'},{en:'payment gateway',he:'שער תשלומים'},
+    {en:'prod K8s cluster',he:'אשכול K8s ייצור'},{en:'CEO mailbox',he:'תיבת מנכ״ל'},{en:'CI/CD pipeline',he:'צינור CI/CD'},{en:'customer PII store',he:'מאגר PII לקוחות'}];
+  function L(o){return LANG==='he'?o.he:o.en;}
+  function fmtClock(s){s=Math.max(0,s|0);var m=(s/60)|0,ss=s%60;return m+':'+(ss<10?'0':'')+ss;}
+  var paqSeq=1;
+  function paqMake(){var b=pick(breaches),blast=2+rnd(28),exploit=55+rnd(44),biz=60+rnd(39);
+    var score=Math.max(35,Math.min(99,Math.round(exploit*0.4+biz*0.35+Math.min(100,blast*3.4)*0.25)));
+    var sla=90+rnd(560);return {id:paqSeq++,actIdx:rnd(PAQ_ACTS.length),asIdx:rnd(PAQ_ASSETS.length),domain:b.domain,blast:blast,exploit:exploit,biz:biz,score:score,sla:sla};}
+  var paqItems=[];for(var pq=0;pq<5;pq++)paqItems.push(paqMake());
+  function paqById(id){for(var i=0;i<paqItems.length;i++)if(paqItems[i].id===id)return paqItems[i];return null;}
+  function paqCls(s){return s>=80?'p-c':s>=62?'p-h':'p-m';}
+  function paqRowsHTML(){paqItems.sort(function(a,b){return b.score-a.score;});
+    var wBlast=LANG==='he'?'רדיוס':'blast',wExp=LANG==='he'?'ניצול':'exploit',wAssets=LANG==='he'?'נכסים':'assets',wPr=LANG==='he'?'עדיפות':'priority',wGo=LANG==='he'?'בצע':'Execute',wBr=LANG==='he'?'חריגת SLA':'SLA BREACH';
+    return paqItems.map(function(it){var act=PAQ_ACTS[it.actIdx],asset=PAQ_ASSETS[it.asIdx],breach=it.sla<=0;
+      return '<div class="paqit '+paqCls(it.score)+(breach?' breach':'')+'" data-paq="'+it.id+'">'+
+        '<div class="paq-rank"><span class="paq-sc">'+it.score+'</span><span class="paq-scl">'+wPr+'</span></div>'+
+        '<div class="paq-mid">'+
+          '<div class="paq-act">'+L(act)+' <span class="tg">→ '+it.domain+'</span></div>'+
+          '<div class="paq-why"><b>'+L(asset)+'</b> · '+wBlast+' <b>'+it.blast+'</b> '+wAssets+' · '+wExp+' <b>'+it.exploit+'%</b></div>'+
+          '<div class="paq-sla"><i></i>'+(breach?wBr:'SLA '+fmtClock(it.sla))+'</div>'+
+        '</div>'+
+        '<button class="paq-go" data-go="'+it.id+'">'+wGo+'</button>'+
+      '</div>';}).join('');}
+  function paqPaint(){var painted=false;['wrPaq','ckPaq'].forEach(function(id){var el=document.getElementById(id);if(el){el.innerHTML=paqRowsHTML();painted=true;}});
+    var lbl=paqItems.length+' '+(LANG==='he'?'בתור':'queued');['paqN','ckPaqN'].forEach(function(id){var e=document.getElementById(id);if(e)e.textContent=lbl;});return painted;}
+  function paqTickSla(){document.querySelectorAll('#deck .paqit').forEach(function(row){var it=paqById(+row.getAttribute('data-paq'));if(!it)return;
+    var breach=it.sla<=0;row.classList.toggle('breach',breach);var sl=row.querySelector('.paq-sla');
+    if(sl)sl.innerHTML='<i></i>'+(breach?(LANG==='he'?'חריגת SLA':'SLA BREACH'):'SLA '+fmtClock(it.sla));});}
+  function paqExecute(id){var it=paqById(id);if(!it)return;var act=PAQ_ACTS[it.actIdx];
+    wrPushComms((LANG==='he'?'בוצע':'EXECUTED')+' · '+L(act).toUpperCase()+' → '+it.domain);
+    if(typeof spikeEkg==='function')spikeEkg();slaResolve();
+    var row=document.querySelector('#deck .paqit[data-paq="'+id+'"]');if(row)row.classList.add('done');
+    setTimeout(function(){var i=paqItems.indexOf(it);if(i>=0)paqItems.splice(i,1);while(paqItems.length<5)paqItems.push(paqMake());paqPaint();},380);}
+  deck.addEventListener('click',function(e){var b=e.target.closest('.paq-go');if(!b)return;paqExecute(+b.getAttribute('data-go'));});
+  IV(paqTickSla,1000);
+  IV(function(){if(!document.getElementById('wrPaq')&&!document.getElementById('ckPaq'))return;
+    // fresh intel re-ranks the queue; occasionally a hotter item preempts the coldest
+    paqItems.forEach(function(it){if(Math.random()<.35)it.score=Math.max(35,Math.min(99,it.score+(rnd(5)-2)));});
+    if(Math.random()<.25){paqItems.sort(function(a,b){return a.score-b.score;});paqItems[0]=paqMake();}
+    paqPaint();},3200);
+  function initCkPaq(){paqPaint();}
+
+  /* ══ Response SLA / MTTR — live SOC responsiveness vs targets ══ */
+  var SLA=[{k:'MTTD',v:38,tgt:60,he:'זיהוי',en:'detect',floor:12},{k:'MTTR',v:144,tgt:300,he:'תגובה',en:'respond',floor:55},{k:'MTTC',v:486,tgt:900,he:'הכלה',en:'contain',floor:150}];
+  var slaAdherence=99.2;
+  function slaRowsHTML(){return SLA.map(function(s){var pct=Math.round(s.v/s.tgt*100),cls=s.v>s.tgt?'bad':(s.v>s.tgt*0.8?'warn':'');
+      return '<div class="sla-row '+cls+'"><div class="sla-h"><span class="sla-k">'+s.k+' <small>'+(LANG==='he'?s.he:s.en)+'</small></span>'+
+        '<span class="sla-v">'+fmtClock(s.v)+' <small style="color:var(--muted);font-weight:400">/ '+fmtClock(s.tgt)+'</small></span></div>'+
+        '<div class="sla-bar"><i style="width:'+Math.min(100,pct)+'%"></i></div></div>';}).join('')+
+      '<div class="sla-foot"><span>'+(LANG==='he'?'עמידה ב-SLA · משמרת':'SLA adherence · shift')+'</span><b>'+slaAdherence.toFixed(1)+'%</b></div>';}
+  function slaPaint(){['wrSla','ckSla'].forEach(function(id){var el=document.getElementById(id);if(el)el.innerHTML=slaRowsHTML();});
+    var st=slaAdherence>=99?(LANG==='he'?'במסלול':'on track'):(LANG==='he'?'בסיכון':'at risk');['slaN','ckSlaN'].forEach(function(id){var e=document.getElementById(id);if(e)e.textContent=st;});}
+  function slaResolve(){SLA[1].v=Math.max(SLA[1].floor,SLA[1].v-4-rnd(8));SLA[2].v=Math.max(SLA[2].floor,SLA[2].v-6-rnd(12));slaAdherence=Math.min(99.9,slaAdherence+0.05);slaPaint();}
+  IV(function(){if(!document.getElementById('wrSla')&&!document.getElementById('ckSla'))return;
+    SLA.forEach(function(s){s.v=Math.max(s.floor,s.v+(rnd(7)-3));});slaAdherence=Math.max(97,Math.min(99.9,slaAdherence+(Math.random()-.5)*0.1));slaPaint();},2600);
+  function initCkSla(){slaPaint();}
+
+  paqPaint();slaPaint();
+
   /* ══════════ Cockpit widget catalog + customization ══════════ */
   var MODULES=[
     {id:'ekg',t:'System-Pulse EKG',sub:'/pulse · platform health',size:'s12',cbody:'vizbox',cbodyStyle:'min-height:96px;height:96px;',bh:'<canvas id="ekgCanvas" class="viz"></canvas>',hr:'<span class="live-n" id="bpm">72 bpm</span>',draw:function(){drawEkgOn(document.getElementById('ekgCanvas'),true);},ic:'📈'},
     {id:'engine-room',t:'Engine Room',sub:'/engines · 147 mesh',size:'s4',cbody:'vizbox',bh:'<canvas id="engineCanvas" class="viz"></canvas>',hr:'<span class="live-n" id="engN">—</span>',draw:drawEngine,ic:'⬡'},
     {id:'auto-heal',t:'Auto-Heal',sub:'/auto-heal · remediation',size:'s4',bh:'<div class="timeline" id="heal"></div>',hr:'<span class="live-n" id="mttr">MTTR 4.2m</span>',init:initHeal,ic:'🩺'},
+    {id:'priority-queue',t:'Priority Action Queue',sub:'/response · impact-ranked',size:'s6',bh:'<div class="paq" id="ckPaq" style="max-height:236px"></div>',hr:'<span class="live-n" id="ckPaqN">—</span>',init:initCkPaq,ic:'⚡'},
+    {id:'response-sla',t:'Response SLA · MTTR',sub:'/sla · detect · respond · contain',size:'s3',bh:'<div class="slap" id="ckSla"></div>',hr:'<span class="live-n" id="ckSlaN">—</span>',init:initCkSla,ic:'⏱'},
     {id:'neural-web',t:'Neural Engine Web',sub:'/neural-web · Cortex graph',size:'s4',cbody:'vizbox',bh:'<canvas id="neuralCanvas" class="viz"></canvas>',hr:'<span class="live-n">42 nodes</span>',draw:drawNeural,init:function(){if(neuNodes)neuNodes._w=-1;},ic:'◈'},
     {id:'deception',t:'Deception Grid',sub:'/deception · live decoys',size:'s4',bh:'<div class="heatgrid" id="deception" style="grid-template-columns:repeat(12,1fr)"></div>',hr:'<span class="live-n" id="decoyN">—</span>',init:initDeception,ic:'🕸'},
     {id:'swarm-mind',t:'Swarm-Mind',sub:'/swarm-mind · consensus',size:'s4',cbody:'vizbox',bh:'<canvas id="swarmCanvas" class="viz"></canvas>',hr:'<span class="live-n" id="swarmN">consensus 0.0</span>',draw:drawSwarm,init:function(){if(swP)swP._w=-1;},ic:'🧠'},
@@ -949,7 +1071,7 @@ export function mountCommandCenter(root, THREE, opts) {
   }
 
   var CLIENTS=[{id:'default',name:'Default · all companies'},{id:'acme',name:'Acme Corp'},{id:'globex',name:'Globex Financial'},{id:'umbrella',name:'Umbrella Med'}];
-  var DEFAULT_LAYOUT=['m:risk_score','m:crit_findings','m:mttc','m:mitre_cov','m:assets','m:contained','mod:ekg','mod:engine-room','mod:auto-heal','mod:neural-web','mod:deception','mod:swarm-mind','mod:identity-matrix','mod:ai-model-risk','mod:edge-swarm','mod:mission-control','mod:mitre','mod:findings'];
+  var DEFAULT_LAYOUT=['m:risk_score','m:crit_findings','m:mttc','m:mitre_cov','m:assets','m:contained','mod:priority-queue','mod:response-sla','mod:mission-control','mod:ekg','mod:engine-room','mod:auto-heal','mod:neural-web','mod:deception','mod:swarm-mind','mod:identity-matrix','mod:ai-model-risk','mod:edge-swarm','mod:mitre','mod:findings'];
   var curClient='default',layout=DEFAULT_LAYOUT.slice();
   function lkey(c){return 'wm_cc_layout_'+c;}
   function loadLayout(c){try{var s2=localStorage.getItem(lkey(c));if(s2){var a=JSON.parse(s2);if(Array.isArray(a)&&a.length)return a.filter(function(id){return catById[id];});}}catch(e){}return DEFAULT_LAYOUT.slice();}
