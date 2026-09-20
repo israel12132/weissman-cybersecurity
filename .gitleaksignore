@@ -1,0 +1,8 @@
+# gitleaks fingerprints reviewed and accepted as NOT secrets. Format: <commit>:<path>:<rule>:<line>
+# Each entry is scoped to one historical line, so the same string anywhere else still fails the gate.
+#
+# Mocked SCIM token prefix in a vitest fixture (ScimProvisioning.test.jsx, commit 3856c1e). It was
+# never a credential — the page only renders the prefix. The working tree now uses a low-entropy
+# placeholder; this entry covers the original line that remains in git history (the CI
+# security-scan job also runs `gitleaks detect --log-opts=HEAD`, which walks every commit).
+3856c1ea327e3881b280b54e6a63dc24b20e5df5:frontend/src/pages/ScimProvisioning.test.jsx:generic-api-key:69
