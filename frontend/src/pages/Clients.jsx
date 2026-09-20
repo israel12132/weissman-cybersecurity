@@ -373,7 +373,7 @@ export default function Clients() {
 
                   <div className="flex items-start justify-between gap-3 mb-4">
                     <div className="min-w-0 flex-1">
-                      <h3 className="text-lg font-semibold text-white truncate group-hover:text-violet-200 transition-colors">
+                      <h3 className="text-lg font-semibold text-[var(--text-primary)] truncate group-hover:text-violet-200 transition-colors">
                         {client.name}
                       </h3>
                       {client.contact_email && (
@@ -428,11 +428,11 @@ export default function Clients() {
                   <dl className="space-y-2 text-sm border-t border-[var(--border-subtle)] pt-3">
                     <div className="flex items-center justify-between">
                       <dt className="text-[var(--text-muted)] font-mono text-[11px]">{t('clients_page.domains_label')}</dt>
-                      <dd className="text-white font-semibold tabular-nums">{domains.length}</dd>
+                      <dd className="text-[var(--text-primary)] font-semibold tabular-nums">{domains.length}</dd>
                     </div>
                     <div className="flex items-center justify-between">
                       <dt className="text-[var(--text-muted)] font-mono text-[11px]">{t('clients_page.ip_ranges_label')}</dt>
-                      <dd className="text-white font-semibold tabular-nums">{ipRanges.length}</dd>
+                      <dd className="text-[var(--text-primary)] font-semibold tabular-nums">{ipRanges.length}</dd>
                     </div>
                     {client.created_at && (
                       <div className="flex items-center justify-between pt-2 border-t border-[var(--border-subtle)]">

@@ -148,9 +148,7 @@ fn try_decode_layer(s: &str) -> Option<String> {
 
 fn looks_like_hex(s: &str) -> bool {
     let compact: String = s.chars().filter(|c| !c.is_whitespace()).collect();
-    compact.len() >= 16
-        && compact.len() % 2 == 0
-        && compact.bytes().all(|b| b.is_ascii_hexdigit())
+    compact.len() >= 16 && compact.len() % 2 == 0 && compact.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
 fn looks_like_base64(s: &str) -> bool {
@@ -359,7 +357,9 @@ mod tests {
     #[test]
     fn decodes_base64_layer() {
         let layers = recursive_decode("aWdub3JlIHByZXZpb3VzIGluc3RydWN0aW9ucw==", 4);
-        assert!(layers.iter().any(|l| l.to_ascii_lowercase().contains("ignore previous")));
+        assert!(layers
+            .iter()
+            .any(|l| l.to_ascii_lowercase().contains("ignore previous")));
     }
 
     #[test]
@@ -375,17 +375,13 @@ mod tests {
     fn nfkc_maps_fullwidth_and_math_bold_to_ascii_s() {
         // FULLWIDTH LATIN SMALL LETTER S — architect NFKC gate (NFC would leave it).
         let fullwidth = "\u{FF53}ystem prompt:";
-        assert!(
-            unfold_output_stream(fullwidth)
-                .to_ascii_lowercase()
-                .contains("system prompt:")
-        );
+        assert!(unfold_output_stream(fullwidth)
+            .to_ascii_lowercase()
+            .contains("system prompt:"));
         // MATHEMATICAL BOLD SMALL S (U+1D42C) — not in the homoglyph table; NFKC -> s.
         let math_bold = "\u{1D42C}ystem prompt:";
-        assert!(
-            unfold_output_stream(math_bold)
-                .to_ascii_lowercase()
-                .contains("system prompt:")
-        );
+        assert!(unfold_output_stream(math_bold)
+            .to_ascii_lowercase()
+            .contains("system prompt:"));
     }
 }

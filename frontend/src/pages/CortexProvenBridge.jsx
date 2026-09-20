@@ -290,7 +290,7 @@ export default function CortexProvenBridge() {
                         <span className="text-[10px] font-mono uppercase text-emerald-300">{t(`${NS}.xdr_had`)}</span>
                       )}
                     </div>
-                    <div className="text-sm text-white mt-1">{f.title}</div>
+                    <div className="text-sm text-[var(--text-primary)] mt-1">{f.title}</div>
                     <div className="text-[10px] font-mono text-white/40 mt-1">
                       {f.target || '—'} · run {f.report_run_id ?? '—'} · {f.cortex_status}
                       {' · '}

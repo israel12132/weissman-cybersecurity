@@ -14,7 +14,6 @@ const NS = 'components.cockpitTabs.autoHeal'
 function terminalStep(s) {
   if (s === 'verified') return 'ok'
   if (s === 'failed') return 'fail'
-  if (s?.includes('exploit')) return 'exploit'
   return 'run'
 }
 

@@ -40,7 +40,11 @@ pub async fn run_sandbox_evasion(engine: &str) -> anyhow::Result<Vec<Value>> {
     }
 }
 
-pub async fn run_memory_technique(engine: &str, mitre: &str, title: &str) -> anyhow::Result<Vec<Value>> {
+pub async fn run_memory_technique(
+    engine: &str,
+    mitre: &str,
+    title: &str,
+) -> anyhow::Result<Vec<Value>> {
     let mut sys = System::new();
     sys.refresh_processes_specifics(
         ProcessRefreshKind::new()
@@ -114,7 +118,9 @@ pub async fn run_ppid_spoof(engine: &str) -> anyhow::Result<Vec<Value>> {
     for p in sys.processes().values() {
         let name = p.name().to_ascii_lowercase();
         let parent = p.parent().and_then(|pid| sys.process(pid));
-        let pname = parent.map(|x| x.name().to_ascii_lowercase()).unwrap_or_default();
+        let pname = parent
+            .map(|x| x.name().to_ascii_lowercase())
+            .unwrap_or_default();
         if (name == "cmd" || name == "cmd.exe" || name == "powershell" || name == "pwsh")
             && (pname.contains("winword") || pname.contains("outlook") || pname.contains("excel"))
         {
@@ -201,7 +207,10 @@ pub async fn run_privesc(engine: &str) -> anyhow::Result<Vec<Value>> {
                     "high",
                     "T1548.001",
                     &unusual.join(" "),
-                    json!({ "suid": unusual }).as_object().cloned().unwrap_or_default(),
+                    json!({ "suid": unusual })
+                        .as_object()
+                        .cloned()
+                        .unwrap_or_default(),
                 ));
             }
         }

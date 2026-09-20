@@ -48,18 +48,32 @@ docker run -d --name "$UPSTREAM" --network "$NET" --network-alias backend \
   -v "$WORK/upstream.conf:/etc/nginx/conf.d/default.conf:ro" \
   nginxinc/nginx-unprivileged:1.29-alpine >/dev/null 2>&1
 
-# Serve the real gateway config with a minimal document root.
-mkdir -p "$WORK/conf" "$WORK/html/command-center" "$WORK/html/public/.well-known"
+# Serve the real gateway config with a minimal document root. Copy EVERY include the config
+# references, exactly as deploy/frontend.Dockerfile does: for a while only security-headers.inc
+# was copied while the config also included strip-internal-headers.inc, so nginx refused the
+# config at startup and the whole suite failed before its first assertion — an infrastructure
+# failure that looked like a contract failure. The maintenance page directory and the (host)
+# state directory the config now references are created too, empty: the config must load and
+# behave with nothing in them (no flag, no status.json, page on 502/504 only), which is the
+# automatic default in production. scripts/test_maintenance_contract.sh covers the page itself.
+mkdir -p "$WORK/conf" "$WORK/html/command-center" "$WORK/html/public/.well-known" \
+         "$WORK/html/maintenance" "$WORK/state"
 cp "$ROOT/deploy/nginx-gateway.conf" "$WORK/conf/default.conf"
 cp "$ROOT/deploy/nginx-security-headers.inc" "$WORK/conf/security-headers.inc"
+cp "$ROOT/deploy/nginx-strip-internal-headers.inc" "$WORK/conf/strip-internal-headers.inc"
 printf 'SPA-SHELL\n'  > "$WORK/html/command-center/index.html"
 printf 'MARKETING\n'  > "$WORK/html/index.html"
+# The Hebrew site is a directory: /he without its slash exercises nginx's automatic directory
+# redirect, the one redirect this config does not write out by hand.
+mkdir -p "$WORK/html/public/he"
+printf 'MARKETING-HE\n' > "$WORK/html/public/he/index.html"
 mkdir -p "$WORK/html/command-center/assets"
 printf 'console.log(1)\n' > "$WORK/html/command-center/assets/ok-test.js"
 
 docker run -d --name "$GATEWAY" --network "$NET" -p 127.0.0.1:58089:8080 \
   -v "$WORK/conf:/etc/nginx/conf.d:ro" \
   -v "$WORK/html:/usr/share/nginx/html:ro" \
+  -v "$WORK/state:/var/lib/weissman/maintenance:ro" \
   nginxinc/nginx-unprivileged:1.29-alpine >/dev/null 2>&1
 
 for _ in $(seq 1 40); do
@@ -98,6 +112,19 @@ else
 fi
 body="$(curl -sL -m 5 "$B/command-center" | head -1)"
 [[ "$body" == "SPA-SHELL" ]] && ok "following the redirect reaches the SPA" || bad "redirect landed on '$body'"
+
+# ── Automatic directory redirect ────────────────────────────────────────────────
+# /he is not a `return`, it is nginx's own directory redirect — the one the location-level
+# `absolute_redirect off` never covered. It emitted `Location: http://host:8080/he/` and the
+# browser followed it into "can't connect". The server-level directive must keep it relative.
+code="$(curl -s -o /dev/null -m 5 -w '%{http_code}' "$B/he")"
+loc="$(curl -s -o /dev/null -m 5 -D- "$B/he" | awk 'tolower($1)=="location:"{print $2}' | tr -d '\r')"
+[[ "$code" == "301" ]] && ok "/he redirects (301)" || bad "/he returned $code, not 301"
+if [[ "$loc" == "/he/" ]]; then
+  ok "/he redirect Location is relative (/he/)"
+else
+  bad "/he redirect Location is '$loc' — nginx's directory redirect leaked the internal listen port"
+fi
 
 # ── Unknown paths must 404, not serve the homepage with 200 ─────────────────────
 code="$(curl -s -o /dev/null -m 5 -w '%{http_code}' "$B/definitely-not-a-real-path-9f3a")"

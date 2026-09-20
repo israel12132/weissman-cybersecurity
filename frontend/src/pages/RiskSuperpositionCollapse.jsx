@@ -501,7 +501,7 @@ export default function RiskSuperpositionCollapse() {
               <select
                 value={clientId}
                 onChange={(e) => setClientId(e.target.value)}
-                className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-white"
+                className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-[var(--text-primary)]"
               >
                 <option value="">{t('pages.superpositionCollapse.select_client')}</option>
                 {clients.map((c) => (
@@ -519,7 +519,7 @@ export default function RiskSuperpositionCollapse() {
                 type="url"
                 value={target}
                 onChange={(e) => setTarget(e.target.value)}
-                className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-white font-mono"
+                className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-[var(--text-primary)] font-mono"
                 placeholder="https://"
               />
             </Field>

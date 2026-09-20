@@ -280,10 +280,10 @@ export default function OverviewTab() {
       {/* Section header */}
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
-          <h2 className="text-xs font-semibold text-white/60 uppercase tracking-[0.2em] mb-1">
+          <h2 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-[0.2em] mb-1">
             {t('components.cockpitTabs.overview.title')}
           </h2>
-          <p className="text-white/40 text-sm">
+          <p className="text-[var(--text-muted)] text-sm">
             {t('components.cockpitTabs.overview.subtitle', { client: clientLabel })}
           </p>
         </div>

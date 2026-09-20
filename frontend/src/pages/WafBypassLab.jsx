@@ -208,7 +208,7 @@ export default function WafBypassLab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId, target, params])
 
-  const jobStatus = uiJobStatus(pendingJobId, scanning)
+  const jobStatus = uiJobStatus(scanning ? 'running' : pendingJobId ? 'queued' : 'idle')
 
   return (
     <PageShell

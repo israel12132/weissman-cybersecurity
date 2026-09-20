@@ -373,13 +373,15 @@ pub async fn status_for_async(tenant_id: i64, client_ip: &str) -> Result<Value, 
         super::rate_limit_redis::current_api_ip(client_ip),
     );
     match (scan, login, api) {
-        (Some((scan_cur, scan_reset)), Some((login_cur, login_reset)), Some((api_cur, api_reset))) => {
-            Ok(json!({
-                "scans": limit_block(scan_cur as usize, scan_max, scan_reset),
-                "logins": limit_block(login_cur as usize, login_max, login_reset),
-                "api": limit_block(api_cur as usize, api_max, api_reset),
-            }))
-        }
+        (
+            Some((scan_cur, scan_reset)),
+            Some((login_cur, login_reset)),
+            Some((api_cur, api_reset)),
+        ) => Ok(json!({
+            "scans": limit_block(scan_cur as usize, scan_max, scan_reset),
+            "logins": limit_block(login_cur as usize, login_max, login_reset),
+            "api": limit_block(api_cur as usize, api_max, api_reset),
+        })),
         _ => Err(()),
     }
 }
@@ -564,9 +566,11 @@ pub async fn api_rate_limits_analytics(
         Ok(body) => (StatusCode::OK, Json(body)).into_response(),
         Err(()) => (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(crate::http_unavailable::rate_limits_analytics_unavailable_json(
-                "redis unavailable",
-            )),
+            Json(
+                crate::http_unavailable::rate_limits_analytics_unavailable_json(
+                    "redis unavailable",
+                ),
+            ),
         )
             .into_response(),
     }

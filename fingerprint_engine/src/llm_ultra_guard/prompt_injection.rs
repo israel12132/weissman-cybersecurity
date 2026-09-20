@@ -38,7 +38,11 @@ pub struct InjectionScore {
 /// Public helper used by unit tests and the Ask Weissman gate.
 #[must_use]
 pub fn score_prompt_injection(text: &str) -> InjectionScore {
-    score_layers(&[text.to_string()], crate::llm_ultra_guard::codec::shannon_entropy(text.as_bytes()), text.chars().count() < SANITIZATION.fast_path_chars)
+    score_layers(
+        &[text.to_string()],
+        crate::llm_ultra_guard::codec::shannon_entropy(text.as_bytes()),
+        text.chars().count() < SANITIZATION.fast_path_chars,
+    )
 }
 
 #[must_use]
@@ -47,21 +51,22 @@ pub fn score_layers(layers: &[String], entropy: f32, fast_path: bool) -> Injecti
         return InjectionScore::default();
     }
 
-    let per_layer: Vec<(u8, Vec<GuardHit>)> = if layers.len() > 1 && layers.iter().map(|l| l.len()).sum::<usize>() > 256 {
-        GUARD_RAYON.install(|| {
+    let per_layer: Vec<(u8, Vec<GuardHit>)> =
+        if layers.len() > 1 && layers.iter().map(|l| l.len()).sum::<usize>() > 256 {
+            GUARD_RAYON.install(|| {
+                layers
+                    .par_iter()
+                    .enumerate()
+                    .map(|(i, layer)| (i as u8, scan_layer(i as u8, layer)))
+                    .collect()
+            })
+        } else {
             layers
-                .par_iter()
+                .iter()
                 .enumerate()
                 .map(|(i, layer)| (i as u8, scan_layer(i as u8, layer)))
                 .collect()
-        })
-    } else {
-        layers
-            .iter()
-            .enumerate()
-            .map(|(i, layer)| (i as u8, scan_layer(i as u8, layer)))
-            .collect()
-    };
+        };
 
     let mut hits = Vec::new();
     for (_, h) in per_layer {

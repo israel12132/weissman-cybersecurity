@@ -155,6 +155,24 @@ cd frontend && npm ci && npm run build && cd ..
 sudo systemctl restart weissman-server weissman-worker
 ```
 
+### שדרוג ללא downtime ודף ההמשכיות
+
+ה-restart שלמעלה הוא הרגע היחיד שמבקרים עלולים להרגיש, והוא מכוסה **אוטומטית**: ה-reverse proxy
+(`deploy/nginx-weissman.conf` או `deploy/Caddyfile`) מגיש את דף Weissman הממותג כ-HTTP 503 +
+`Retry-After: 30` בכל פעם ש-`weissman-server` לא עונה, והדף מחזיר כל מבקר ל-URL המקורי שלו
+ב-200 הראשון מ-`/api/health`. אין מה להדליק — הדף רק צריך להיות על הדיסק
+(`sudo bash deploy/maintenance/install.sh` → `/opt/weissman/maintenance`; המתקין בשלב 3 עושה זאת גם כן).
+
+ל-rollout שגרתי עדיף הגרסה של פקודה אחת: build קודם, restart ל-units, המתנה ל-200 אמיתי והדפסה
+של כמה זמן ה-origin לא היה זמין:
+
+```bash
+deploy/rebuild.sh --mode systemd        # --dry-run מדפיס את התוכנית
+```
+
+Runbook (מה המבקרים רואים, חלונות מוכרזים, בדיקות curl, פתרון תקלות):
+[`docs/operations/MAINTENANCE-PAGE-AND-ZERO-DOWNTIME-REBUILD-he.md`](../../operations/MAINTENANCE-PAGE-AND-ZERO-DOWNTIME-REBUILD-he.md).
+
 ---
 
 ## פתרון תקלות

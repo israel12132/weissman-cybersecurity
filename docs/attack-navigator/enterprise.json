@@ -280,8 +280,8 @@
     },
     {
       "techniqueID": "T1078",
-      "score": 18,
-      "comment": "casb_saas_posture, continuous_auth_evasion, external_exposure_supreme, identity_attack_chain, idor_advanced, itdr, ldap_injection, ldap_injection_engine, mainframe_zos_attack, microsegmentation_bypass, midnight_blizzard_ttps, ntlm_relay, risk_superposition_collapse, smb_netbios, smb_relay, threat_hunting_apt, volt_typhoon_ttps, zero_trust_bypass",
+      "score": 19,
+      "comment": "casb_saas_posture, continuous_auth_evasion, credential_ransomware_fusion, external_exposure_supreme, identity_attack_chain, idor_advanced, itdr, ldap_injection, ldap_injection_engine, mainframe_zos_attack, microsegmentation_bypass, midnight_blizzard_ttps, ntlm_relay, risk_superposition_collapse, smb_netbios, smb_relay, threat_hunting_apt, volt_typhoon_ttps, zero_trust_bypass",
       "enabled": true
     },
     {
@@ -346,8 +346,8 @@
     },
     {
       "techniqueID": "T1071",
-      "score": 9,
-      "comment": "advanced_c2_covert_exfil, apt_c2_infra, botnet_c2_engine, c2_emulation, c2_rotation_engine, icmp_covert_channel, network_covert_channel, oast_oob, obfuscated_c2",
+      "score": 10,
+      "comment": "advanced_c2_covert_exfil, apt_c2_infra, botnet_c2_engine, c2_emulation, c2_rotation_engine, icmp_covert_channel, ioc_endpoint_match, network_covert_channel, oast_oob, obfuscated_c2",
       "enabled": true
     },
     {
@@ -492,6 +492,12 @@
       "techniqueID": "T1110.004",
       "score": 1,
       "comment": "credential_stuffing",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1597",
+      "score": 5,
+      "comment": "credential_ransomware_fusion, dark_web_monitor, darkweb_intel, deepweb_intel, threat_intel_fusion",
       "enabled": true
     },
     {
@@ -660,12 +666,6 @@
       "techniqueID": "T1565.001",
       "score": 3,
       "comment": "data_pipeline_attack, data_poisoning_engine, federated_learning_attack",
-      "enabled": true
-    },
-    {
-      "techniqueID": "T1597",
-      "score": 4,
-      "comment": "dark_web_monitor, darkweb_intel, deepweb_intel, threat_intel_fusion",
       "enabled": true
     },
     {

@@ -132,8 +132,8 @@ via WSS+JWT, and on every dispatch ships:
 | [`SIG_CAIQ_PREP_QA.md`](SIG_CAIQ_PREP_QA.md) | Pre-filled SIG / CAIQ vendor security questionnaire |
 | [`CHANGELOG.md`](CHANGELOG.md) | Per-release changes (phase 1–3 of the autonomous-defence rollout) |
 | [`docs/SOC_ENGINES_ARCHITECTURE.md`](docs/SOC_ENGINES_ARCHITECTURE.md) | Engine wiring + dispatch path |
-| [`docs/ENGINE_COVERAGE_AND_ACCURACY.md`](docs/ENGINE_COVERAGE_AND_ACCURACY.md) | **Source-derived, CI-gated proof** — live-probe breadth across all 15 attack domains + 192 MITRE techniques, and the FP/TP accuracy mechanism (`scripts/engine_coverage_accuracy_report.mjs`) |
-| [`docs/MITRE_ATTACK_COVERAGE.md`](docs/MITRE_ATTACK_COVERAGE.md) | **ATT&CK coverage matrix** — 226 techniques (192 primary + 34 code-grounded secondary extracted from the engines' own finding tags), per tactic/domain against the current release (v19.1), CI **currency gate** (no stale/revoked IDs); ships ATT&CK Navigator layers per domain (`scripts/mitre_attack_coverage.mjs`) |
+| [`docs/ENGINE_COVERAGE_AND_ACCURACY.md`](docs/ENGINE_COVERAGE_AND_ACCURACY.md) | **Source-derived, CI-gated proof** — live-probe breadth across all 15 attack domains + 200 MITRE techniques, and the FP/TP accuracy mechanism (`scripts/engine_coverage_accuracy_report.mjs`) |
+| [`docs/MITRE_ATTACK_COVERAGE.md`](docs/MITRE_ATTACK_COVERAGE.md) | **ATT&CK coverage matrix** — 239 techniques (200 primary + 39 code-grounded secondary extracted from the engines' own finding tags), per tactic/domain against the current release (v19.1), CI **currency gate** (no stale/revoked IDs); ships ATT&CK Navigator layers per domain (`scripts/mitre_attack_coverage.mjs`) |
 
 The interactive **OpenAPI spec** lives at <code>/api/docs/</code> (Swagger UI)
 with the raw 3.1 JSON at <code>/api/openapi.json</code>.
@@ -154,7 +154,7 @@ with the raw 3.1 JSON at <code>/api/openapi.json</code>.
                                            ▼
                                   ┌────────────────────────────────┐
                                   │ PostgreSQL 16 + pgvector       │
-                                  │  • 180 migrations              │
+                                  │  • 183 migrations              │
                                   │  • RLS per-tenant on every     │
                                   │    multi-tenant table          │
                                   │  • _sqlx_migrations w/ no-tx   │

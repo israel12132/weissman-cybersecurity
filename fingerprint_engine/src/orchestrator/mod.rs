@@ -1908,7 +1908,11 @@ async fn run_cycle_for_tenant_inner(
                         &sem.state_nodes,
                         &sem.state_edges,
                     );
-                    let log = if encoded.is_empty() { None } else { Some(encoded) };
+                    let log = if encoded.is_empty() {
+                        None
+                    } else {
+                        Some(encoded)
+                    };
                     (sem.result, log)
                 }
                 "microsecond_timing" => {

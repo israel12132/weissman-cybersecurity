@@ -209,6 +209,9 @@ mod tests {
     fn resolve_prefers_configured_over_env_default() {
         assert_eq!(resolve_daily_token_budget(Some(500)), 500);
         // Configured 0 falls through to the env default (0 unless overridden).
-        assert_eq!(resolve_daily_token_budget(Some(0)), daily_token_budget_env_default());
+        assert_eq!(
+            resolve_daily_token_budget(Some(0)),
+            daily_token_budget_env_default()
+        );
     }
 }

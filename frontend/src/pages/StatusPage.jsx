@@ -465,7 +465,7 @@ export default function StatusPage() {
               </div>
               <div>
                 <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-cyan-400/70">Weissman</p>
-                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">{t('status.title')}</h1>
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--text-primary)]">{t('status.title')}</h1>
               </div>
             </div>
             <LanguageSwitcher />
@@ -481,7 +481,7 @@ export default function StatusPage() {
                 <OverallIcon className={`h-6 w-6 ${overallMeta.iconClass}`} />
               </div>
               <div>
-                <h2 className="text-lg sm:text-xl font-semibold text-white">
+                <h2 className="text-lg sm:text-xl font-semibold text-[var(--text-primary)]">
                   {state.loading
                     ? t('status.checking')
                     : overall === 'operational'

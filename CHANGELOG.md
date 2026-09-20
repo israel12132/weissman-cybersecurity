@@ -9,6 +9,20 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ### Added
 
+- **Branded continuity page at every layer, zero-downtime rebuild.** Whenever the origin
+  cannot answer (restart, rebuild, migration, host off) the nginx gateway, VPS nginx/Caddy,
+  the Kubernetes ingress default backend, a Cloudflare edge Worker and the Command Center
+  itself serve a branded Weissman page as HTTP 503 + `Retry-After: 30` (EN/HE, `api.json`
+  for API clients) instead of a browser, nginx or Cloudflare error, and drop it on the first
+  genuine 200 from `/api/health` — automatic, nothing to switch on. One generator
+  (`node deploy/maintenance/build.mjs`, `--check` as the drift gate) emits every layer's
+  assets; `deploy/rebuild.sh` rolls out new code (Compose or systemd) while the page covers
+  the origin and reports how long it was unreachable; the announced-window flag
+  (`deploy/maintenance/maintenance-mode.sh on|off`) is optional and off by default.
+  Contract suite `scripts/test_maintenance_contract.sh` (docker-free, 311 checks) and
+  Worker tests (`node --test deploy/cloudflare/maintenance-worker/worker.test.mjs`).
+  Runbook: `docs/operations/MAINTENANCE-PAGE-AND-ZERO-DOWNTIME-REBUILD.md` (+ Hebrew).
+
 - **Identity surface delta, dual-stack Host+SNI skip, ransomware preposition.**
   New live engines `identity_surface_delta` (OIDC/SAML on first-mover IdP hosts),
   `dualstack_edge_skip_fusion` (A vs AAAA with Host+SNI; finding only on status/WAF/body skip),

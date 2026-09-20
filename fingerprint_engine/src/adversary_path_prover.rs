@@ -12,12 +12,12 @@
 use crate::attack_chain_planner;
 use crate::engine_dispatch::EngineRunContext;
 use crate::engine_probes::{
-    DEFAULT_PROBE_CONCURRENCY, empty_ok, extract_host, finding_with_probe_depth, fingerprint_stack,
-    http_client, http_get, http_get_with_headers, join_url, normalize_url, probe_paths_concurrent,
-    status_indicates_presence, tcp_scan,
+    empty_ok, extract_host, finding_with_probe_depth, fingerprint_stack, http_client, http_get,
+    http_get_with_headers, join_url, normalize_url, probe_paths_concurrent,
+    status_indicates_presence, tcp_scan, DEFAULT_PROBE_CONCURRENCY,
 };
-use crate::engine_result::{EngineResult, print_result};
-use serde_json::{Value, json};
+use crate::engine_result::{print_result, EngineResult};
+use serde_json::{json, Value};
 
 pub const ENGINE_ID: &str = "adversary_path_prover";
 const DEPTH: &str = "adversary_path_prover_live";

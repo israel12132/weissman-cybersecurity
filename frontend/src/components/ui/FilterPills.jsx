@@ -25,7 +25,7 @@ export default function FilterPills({ pills = [], className = '', label }) {
               style={{
                 borderColor: active ? `${color}70` : 'rgba(255,255,255,0.1)',
                 backgroundColor: active ? `${color}18` : 'rgba(255,255,255,0.02)',
-                color: active ? color : 'rgba(255,255,255,0.55)',
+                color: active ? color : 'var(--text-muted)',
                 boxShadow: active ? `0 0 20px ${color}15` : 'none',
               }}
             >
@@ -45,7 +45,7 @@ export default function FilterPills({ pills = [], className = '', label }) {
                   className="tabular-nums text-[10px] px-1.5 py-0.5 rounded-full"
                   style={{
                     backgroundColor: active ? `${color}25` : 'rgba(255,255,255,0.06)',
-                    color: active ? color : 'rgba(255,255,255,0.35)',
+                    color: active ? color : 'var(--text-muted)',
                   }}
                 >
                   {pill.count}

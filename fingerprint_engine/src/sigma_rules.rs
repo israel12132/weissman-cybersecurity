@@ -325,7 +325,12 @@ pub fn event_from_agent_finding(engine: &str, finding: &serde_json::Value) -> se
     }
     if let Some(v) = first_str(
         finding,
-        &["parent_image", "parent_exe", "parent_process", "parent_name"],
+        &[
+            "parent_image",
+            "parent_exe",
+            "parent_process",
+            "parent_name",
+        ],
     ) {
         ev.insert("parent_image".into(), serde_json::json!(v));
     }

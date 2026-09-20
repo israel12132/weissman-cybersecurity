@@ -4,7 +4,7 @@ import GlobalNexus from './components/cockpit/GlobalNexus'
 import ClientCockpit from './components/cockpit/ClientCockpit'
 import TargetScopePanel from './components/cockpit/TargetScopePanel'
 import ToastContainer from './components/cockpit/Toast'
-import ExecKpiStrip from './components/cockpit/ExecKpiStrip'
+import CommandHero from './components/cockpit/CommandHero'
 import OnboardingWizard from './components/onboarding/OnboardingWizard'
 import EvidenceNotice from './components/ui/EvidenceNotice'
 
@@ -30,9 +30,8 @@ function CockpitLayout({ ceoIntegrated }) {
 
   return (
     <>
-          {/* Top-level layout: KPI strip is a sticky hero band over the original
-              3-column cockpit. Strip uses real-time aggregated data and is visible
-              regardless of which tab the user picks below.  */}
+          {/* Command center: a premium hero command deck (real-time aggregate
+              posture) crowns the 3-column operational cockpit below it. */}
           <div className="relative flex flex-col h-[100dvh] max-h-[100dvh] w-full max-w-[100vw] min-h-0 overflow-hidden bg-[var(--bg-0)]">
             {/* Multi-layer depth background — theme-aware via --cockpit-bg. */}
             <div
@@ -40,15 +39,18 @@ function CockpitLayout({ ceoIntegrated }) {
               aria-hidden
               style={{ background: 'var(--cockpit-bg)' }}
             />
+            {/* Soft brand aurora — replaces the old harsh scanline for a cleaner,
+                more premium depth. */}
             <div
-              className="pointer-events-none absolute inset-0 opacity-[0.015]"
+              className="pointer-events-none absolute inset-x-0 top-0 h-[42vh]"
               aria-hidden
               style={{
-                backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 1px, rgba(255,255,255,0.4) 1px, rgba(255,255,255,0.4) 2px)',
+                background:
+                  'radial-gradient(120% 80% at 22% 0%, color-mix(in srgb, var(--brand-primary) 12%, transparent) 0%, transparent 60%), radial-gradient(120% 80% at 85% 0%, color-mix(in srgb, var(--brand-secondary) 10%, transparent) 0%, transparent 55%)',
               }}
             />
             <div className="relative z-[1] flex flex-col h-full min-h-0">
-            <ExecKpiStrip />
+            <CommandHero />
             <CockpitEvidenceStrip />
             <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-hidden">
               <GlobalNexus ceoIntegrated={ceoIntegrated} />

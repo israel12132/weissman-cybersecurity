@@ -558,20 +558,23 @@ async fn dashboard_page(State(state): State<Arc<AppState>>) -> Response {
         Err(_) => return dashboard_store_down_html(),
         Ok(Some(tid)) => match db::begin_tenant_tx(state.read_pool(), tid).await {
             Ok(mut tx) => {
-                let v: i64 = match sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM vulnerabilities")
-                    .fetch_one(&mut *tx)
-                    .await
+                let v: i64 = match sqlx::query_scalar::<_, i64>(
+                    "SELECT COUNT(*)::bigint FROM vulnerabilities",
+                )
+                .fetch_one(&mut *tx)
+                .await
                 {
                     Ok(n) => n,
                     Err(_) => return dashboard_store_down_html(),
                 };
-                let c: i64 = match sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM clients")
-                    .fetch_one(&mut *tx)
-                    .await
-                {
-                    Ok(n) => n,
-                    Err(_) => return dashboard_store_down_html(),
-                };
+                let c: i64 =
+                    match sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM clients")
+                        .fetch_one(&mut *tx)
+                        .await
+                    {
+                        Ok(n) => n,
+                        Err(_) => return dashboard_store_down_html(),
+                    };
                 let summary: Option<String> = match sqlx::query_scalar::<_, String>(
                     "SELECT summary FROM report_runs ORDER BY created_at DESC LIMIT 1",
                 )
@@ -1065,16 +1068,17 @@ async fn handle_ws_command_center(
                 return;
             }
         };
-    let client_count: i64 = match sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM clients")
-        .fetch_one(&mut *tx)
-        .await
-    {
-        Ok(n) => n,
-        Err(_) => {
-            ws_command_center_store_down(&mut socket).await;
-            return;
-        }
-    };
+    let client_count: i64 =
+        match sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM clients")
+            .fetch_one(&mut *tx)
+            .await
+        {
+            Ok(n) => n,
+            Err(_) => {
+                ws_command_center_store_down(&mut socket).await;
+                return;
+            }
+        };
     let score: i64 = if assigned_client_id.is_some() {
         match live_security_score_from_vulns(&mut tx).await {
             Ok(s) => s,
@@ -1300,9 +1304,11 @@ async fn api_command_center_ticker(
     let Ok(mut tx) = db::begin_tenant_tx(state.read_pool(), auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(crate::http_unavailable::command_center_ticker_unavailable_json(
-                "database unavailable",
-            )),
+            Json(
+                crate::http_unavailable::command_center_ticker_unavailable_json(
+                    "database unavailable",
+                ),
+            ),
         )
             .into_response();
     };
@@ -1326,9 +1332,11 @@ async fn api_command_center_ticker(
     if tx.commit().await.is_err() {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(crate::http_unavailable::command_center_ticker_unavailable_json(
-                "database unavailable",
-            )),
+            Json(
+                crate::http_unavailable::command_center_ticker_unavailable_json(
+                    "database unavailable",
+                ),
+            ),
         )
             .into_response();
     }
@@ -2213,7 +2221,10 @@ mod poe_job_honesty_tests {
 
     #[test]
     fn empty_array_is_confirmed_zero() {
-        assert_eq!(parse_poe_findings_count("completed", Some("[]")), Ok(Some(0)));
+        assert_eq!(
+            parse_poe_findings_count("completed", Some("[]")),
+            Ok(Some(0))
+        );
         assert_eq!(parse_poe_findings_count("failed", Some("[]")), Ok(Some(0)));
     }
 
@@ -2239,7 +2250,10 @@ mod poe_job_honesty_tests {
 
     #[test]
     fn garbage_json_is_corrupt_not_zero() {
-        assert_eq!(parse_poe_findings_count("completed", Some("not-json")), Err(()));
+        assert_eq!(
+            parse_poe_findings_count("completed", Some("not-json")),
+            Err(())
+        );
     }
 }
 

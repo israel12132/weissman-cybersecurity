@@ -601,7 +601,7 @@ export default function KillChainOrchestrator() {
                     }`}
                   >
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-semibold text-white truncate pr-2">{chain.name}</span>
+                      <span className="text-sm font-semibold text-[var(--text-primary)] truncate pr-2">{chain.name}</span>
                       <span
                         className="text-[10px] font-mono px-2 py-0.5 rounded border flex-shrink-0"
                         style={{ color: sm.color, borderColor: `${sm.color}40`, backgroundColor: `${sm.color}10` }}
@@ -632,7 +632,7 @@ export default function KillChainOrchestrator() {
                 <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-5 mb-2">
                   <div className="flex items-start justify-between gap-4 mb-3">
                     <div>
-                      <h2 className="text-base font-bold text-white">{activeChain.name}</h2>
+                      <h2 className="text-base font-bold text-[var(--text-primary)]">{activeChain.name}</h2>
                       <div className="text-[11px] text-[var(--text-muted)] mt-1">
                         {t('pages.killChainOrchestrator.target_label')}: <span className="text-[#22d3ee]/80">{activeChain.target}</span>
                         {activeChain.discoveredAt && (

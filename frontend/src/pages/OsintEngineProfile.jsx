@@ -408,7 +408,7 @@ export default function OsintEngineProfile() {
         <div className="space-y-6">
           <div className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-6 space-y-3">
             <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-2xl font-bold text-white">OSINT</h2>
+              <h2 className="text-2xl font-bold text-[var(--text-primary)]">OSINT</h2>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-cyan-500/40 bg-cyan-500/10 text-cyan-300">{ENGINE_ID}</span>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-[var(--border-strong)] text-[var(--text-tertiary)]">MITRE T1589</span>
             </div>

@@ -291,9 +291,11 @@ pub async fn run_prototype_pollution_result_ctx(
     // No replayed prior-winner re-confirmed this run: record the miss (mirrors the hit
     // attribution — first loaded id) so future prioritization can explore vs. exploit.
     if !replayed_win {
-        if let (Some(pool), Some(tid), Some(&id)) =
-            (ctx.app_pool.as_ref(), ctx.tenant_id, ctx.memory_path_ids.first())
-        {
+        if let (Some(pool), Some(tid), Some(&id)) = (
+            ctx.app_pool.as_ref(),
+            ctx.tenant_id,
+            ctx.memory_path_ids.first(),
+        ) {
             crate::pentest_memory::record_loss(pool.as_ref(), tid, id).await;
         }
     }

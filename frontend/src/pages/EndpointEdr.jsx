@@ -132,7 +132,7 @@ export default function EndpointEdr() {
               {filtered.map((r) => (
                 <li key={`${r.kind}-${r.id}`} className="border border-white/10 rounded px-3 py-2 flex justify-between">
                   <span>{r.title}</span>
-                  <span className="text-xs font-mono text-white/40">{r.kind}</span>
+                  <span className="text-xs font-mono text-[var(--text-muted)]">{r.kind}</span>
                 </li>
               ))}
             </ul>

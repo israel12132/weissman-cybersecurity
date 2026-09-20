@@ -64,7 +64,9 @@ pub fn parse_semantic_fuzz_log(log_text: &str) -> ParsedSemanticLog {
             ..ParsedSemanticLog::default()
         };
     };
-    let graph = obj.get("weissman_semantic_graph").and_then(Value::as_object);
+    let graph = obj
+        .get("weissman_semantic_graph")
+        .and_then(Value::as_object);
     let nodes = graph
         .and_then(|g| g.get("state_nodes"))
         .or_else(|| obj.get("state_nodes"))
@@ -99,10 +101,7 @@ pub fn graph_from_logs(logs: &[Value]) -> (Vec<Value>, Vec<Value>) {
     let Some(latest) = logs.first() else {
         return (Vec::new(), Vec::new());
     };
-    let text = latest
-        .get("log_text")
-        .and_then(Value::as_str)
-        .unwrap_or("");
+    let text = latest.get("log_text").and_then(Value::as_str).unwrap_or("");
     let parsed = parse_semantic_fuzz_log(text);
     (parsed.state_nodes, parsed.state_edges)
 }

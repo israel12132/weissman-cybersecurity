@@ -27,7 +27,7 @@
 2. **Operations Cockpit** - `/operations` - תא הפעלה
 3. **System Core** - `/system-core` - ליבת המערכת
 4. **Findings Command Center** - `/findings` - מרכז ממצאים
-5. **Engine Matrix** - `/engines` - 482 מנועי תקיפה
+5. **Engine Matrix** - `/engines` - 595 מנועי תקיפה
 6. **Engine Detail** - `/engines/:engineId` - פרטי מנוע ספציפי
 
 #### 🔍 מודיעין ומוניטורינג (Intelligence & Monitoring)
@@ -65,7 +65,7 @@
 32. **Network Protocol Analysis** - `/network-protocols` - ניתוח פרוטוקולי רשת
 33. **Social Engineering Simulator** - `/social-engineering` - סימולטור הנדסה חברתית
 34. **Remediation Hub (SOAR)** - `/remediation` - מרכז תיקון אוטומטי
-35. **Engine Management Console** - `/engine-management` - קונסולת ניהול מנועים (496 מנועים!)
+35. **Engine Management Console** - `/engine-management` - קונסולת ניהול מנועים (595 מנועים!)
 36. **System Configuration** - `/system-config` - תצורת מערכת
 37. **Real-time Metrics** - `/metrics` - מדדים בזמן אמת (Prometheus)
 38. **CEO Vault** - `/ceo-vault` - כספת מנכ"ל (ניהול סודות)
@@ -176,7 +176,7 @@
 
 ## 📊 מנועי התקיפה
 
-### סה"כ מנועים: **496+** (עדכון אחרון)
+### סה"כ מנועים: **595+** (עדכון אחרון)
 
 #### קבוצות מנועים:
 1. **Stealth & Evasion** - התחמקות וסתר
@@ -272,7 +272,7 @@ Text:       #d4d4d8 (light gray)
 - [ ] ייצוא ממצאים
 
 ### 5. בדיקות מנועי תקיפה (Engines)
-- [ ] הצגת Engine Matrix (`/engines`) - 482 מנועים
+- [ ] הצגת Engine Matrix (`/engines`) - 595 מנועים
 - [ ] סינון מנועים לפי קטגוריה
 - [ ] חיפוש מנוע ספציפי
 - [ ] צפייה בפרטי מנוע (`/engines/:engineId`)
@@ -407,7 +407,7 @@ Text:       #d4d4d8 (light gray)
 ### 22. בדיקות חיפוש גלובלי (Global Search)
 - [ ] פתיחת חיפוש (Ctrl+K / Cmd+K)
 - [ ] חיפוש עמודים
-- [ ] חיפוש מנועים (482 engines)
+- [ ] חיפוש מנועים (595 engines)
 - [ ] חיפוש ממצאים
 - [ ] חיפוש לקוחות
 - [ ] ניווט מהיר
@@ -442,7 +442,7 @@ Text:       #d4d4d8 (light gray)
 ### 1. זמני טעינה
 - [ ] טעינה ראשונית של העמוד (< 3 שניות)
 - [ ] טעינת עמוד עם 500+ ממצאים (< 5 שניות)
-- [ ] טעינת Engine Matrix עם 482 מנועים (< 3 שניות)
+- [ ] טעינת Engine Matrix עם 595 מנועים (< 3 שניות)
 
 ### 2. זיכרון
 - [ ] שימוש בזיכרון סביר (< 500MB per container)
@@ -494,7 +494,7 @@ Text:       #d4d4d8 (light gray)
 ### ✅ מה עובד מעולה:
 1. **ארכיטקטורה מודרנית**: Rust backend + React frontend
 2. **50+ עמודים פעילים**: כיסוי מקיף של כל תחומי האבטחה
-3. **496 מנועי תקיפה**: הכיסוי הרחב ביותר בשוק
+3. **595 מנועי תקיפה**: הכיסוי הרחב ביותר בשוק
 4. **Multi-tenancy**: בידוד טנאנטים עם RLS
 5. **Real-time updates**: WebSocket לעדכונים חיים
 6. **Rate limiting**: מערכת מתוחכמת להגבלת קצב
@@ -578,7 +578,7 @@ curl -H "Authorization: Bearer YOUR_JWT" http://localhost/api/rate-limits/status
 
 - **עמודי UI**: 50+
 - **רכיבי React**: 70
-- **מנועי תקיפה**: 496
+- **מנועי תקיפה**: 595
 - **מסגרות תאימות**: 8
 - **אינטגרציות**: 12+
 - **שורות קוד Frontend**: ~15,000+
@@ -593,7 +593,7 @@ curl -H "Authorization: Bearer YOUR_JWT" http://localhost/api/rate-limits/status
 
 ### הישגים:
 - ✅ **50+ עמודי UI** מלאים ופונקציונליים
-- ✅ **496 מנועי תקיפה** - הכיסוי הרחב ביותר בשוק
+- ✅ **595 מנועי תקיפה** - הכיסוי הרחב ביותר בשוק
 - ✅ **ארכיטקטורה מודרנית** - Rust + React + PostgreSQL
 - ✅ **Multi-tenancy** מובנה עם RLS
 - ✅ **Real-time updates** דרך WebSocket

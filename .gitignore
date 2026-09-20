@@ -97,3 +97,7 @@ monitoring/alertmanager-web.generated.yml
 
 # WWW marketing site Vite build output
 frontend/dist-www/
+
+# Maintenance flag / status.json written by deploy/maintenance/maintenance-mode.sh (runtime state)
+deploy/maintenance/state/*
+!deploy/maintenance/state/.gitkeep

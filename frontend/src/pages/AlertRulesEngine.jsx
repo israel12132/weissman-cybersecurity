@@ -424,7 +424,7 @@ export default function AlertRulesEngine() {
               }
               className="p-3 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left"
             >
-              <div className="text-sm font-medium text-white mb-1">Critical Findings</div>
+              <div className="text-sm font-medium text-[var(--text-primary)] mb-1">Critical Findings</div>
               <div className="text-xs text-[var(--text-tertiary)]">Alert on all critical severity findings</div>
             </Button>
             <Button variant="unstyled"
@@ -437,7 +437,7 @@ export default function AlertRulesEngine() {
               }
               className="p-3 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left"
             >
-              <div className="text-sm font-medium text-white mb-1">New CVE Detection</div>
+              <div className="text-sm font-medium text-[var(--text-primary)] mb-1">New CVE Detection</div>
               <div className="text-xs text-[var(--text-tertiary)]">Alert on newly published CVEs</div>
             </Button>
             <Button variant="unstyled"
@@ -450,7 +450,7 @@ export default function AlertRulesEngine() {
               }
               className="p-3 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left"
             >
-              <div className="text-sm font-medium text-white mb-1">{t('pages.alertRulesEngine.template_kev')}</div>
+              <div className="text-sm font-medium text-[var(--text-primary)] mb-1">{t('pages.alertRulesEngine.template_kev')}</div>
               <div className="text-xs text-[var(--text-tertiary)]">{t('pages.alertRulesEngine.template_kev_body')}</div>
             </Button>
             <Button variant="unstyled"
@@ -573,7 +573,7 @@ function RuleModal({ rule, template, onClose, onSave }) {
     >
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={rule ? 'Edit alert rule' : 'Create alert rule'} className="bg-[var(--bg-1)] border border-[var(--border-default)] rounded-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-bold text-white">
+          <h3 className="text-lg font-bold text-[var(--text-primary)]">
             {rule ? 'Edit Rule' : 'Create Alert Rule'}
           </h3>
           <Button variant="unstyled"

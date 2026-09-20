@@ -286,8 +286,7 @@ pub fn is_masked_placeholder(s: &str) -> bool {
     if t.is_empty() {
         return false;
     }
-    t == "••••••••"
-        || (t.chars().all(|c| c == '•' || c == '*') && t.chars().count() >= 4)
+    t == "••••••••" || (t.chars().all(|c| c == '•' || c == '*') && t.chars().count() >= 4)
 }
 
 /// Merge an operator update onto the stored (possibly encrypted) config.

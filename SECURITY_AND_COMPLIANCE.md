@@ -63,7 +63,7 @@ Inspection-day script: **`docs/operations/INSPECTION-DAY-RUNBOOK.md`**.
 Full control mapping: [`docs/compliance/BANK-OF-ISRAEL-DIRECTIVE-361.md`](docs/compliance/BANK-OF-ISRAEL-DIRECTIVE-361.md).
 
 Summary of key controls:
-- **Cyber risk management:** 580 production engines mapped to MITRE ATT&CK (14/14 tactics)
+- **Cyber risk management:** 595 production engines mapped to MITRE ATT&CK (14/14 tactics)
 - **Tenant isolation:** PostgreSQL RLS on 80+ tables, enforced at DB level
 - **Incident response:** SEV-1 ≤ 15 minutes, 24/7 on-call (see `SLA_AND_STATUS.md`)
 - **DR / BCP:** RTO ≤ 4h, RPO ≤ 1h, **age-encrypted** PITR backups (asymmetric — host cannot decrypt its own backups), off-site replication, decrypt-restore drill every 48h. See [ENCRYPTED-DR-PITR.md](docs/operations/ENCRYPTED-DR-PITR.md).

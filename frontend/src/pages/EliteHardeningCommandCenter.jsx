@@ -111,7 +111,7 @@ export default function EliteHardeningCommandCenter() {
       }),
       columnHelper.accessor('title', {
         header: () => t(`${NS}.col_control`),
-        cell: (ctx) => <span className="text-white">{ctx.getValue()}</span>,
+        cell: (ctx) => <span className="text-[var(--text-primary)]">{ctx.getValue()}</span>,
       }),
       columnHelper.accessor('enforced', {
         header: () => t(`${NS}.col_status`),

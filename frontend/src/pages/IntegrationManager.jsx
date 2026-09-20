@@ -228,7 +228,7 @@ export default function IntegrationManager() {
               <span className="text-sm text-[var(--text-tertiary)]">Total Integrations</span>
               <Plug className="w-4 h-4 text-cyan-400" />
             </div>
-            <div className="text-2xl font-bold text-white">{stats.total}</div>
+            <div className="text-2xl font-bold text-[var(--text-primary)]">{stats.total}</div>
           </div>
 
           <div className="bg-green-500/10 backdrop-blur-md border border-green-500/30 rounded-xl p-4">
@@ -305,7 +305,7 @@ export default function IntegrationManager() {
                     <div className="text-3xl shrink-0">{integration.icon || '🔌'}</div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 mb-2 flex-wrap">
-                        <h4 className="text-sm font-semibold text-white">{integration.name}</h4>
+                        <h4 className="text-sm font-semibold text-[var(--text-primary)]">{integration.name}</h4>
                         <span className="px-2 py-1 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded text-xs font-medium">
                           {integration.category}
                         </span>
@@ -387,7 +387,7 @@ export default function IntegrationManager() {
 
         {/* Available Integrations */}
         <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-6">
-          <h3 className="text-sm font-semibold text-white mb-4">Available Integrations</h3>
+          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-4">Available Integrations</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {availableIntegrations
               .filter((ai) => !integrations.find((i) => i.id === ai.id || i.type === ai.id))
@@ -516,7 +516,7 @@ function AddIntegrationModal({ integration, existing = null, onClose, onSave }) 
     >
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={isEdit ? 'Configure integration' : 'Add integration'} className="bg-[var(--bg-1)] border border-[var(--border-default)] rounded-xl max-w-lg w-full p-6">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-bold text-white">
+          <h3 className="text-lg font-bold text-[var(--text-primary)]">
             {isEdit
               ? t('pages.integrationManager.configure_modal_title', { name: formData.name || formData.type })
               : t('pages.integrationManager.add_integration_modal')}

@@ -2,7 +2,7 @@
 
 ## מטרה
 
-תפעול **563 מנועי production**, תור jobs, hubs ב-Command Center, gates של agent-required, ותזמון — למפעילי SOC.
+תפעול **595 מנועי production**, תור jobs, hubs ב-Command Center, gates של agent-required, ותזמון — למפעילי SOC.
 
 ---
 
@@ -17,7 +17,7 @@
 
 ## קטלוג מנועים
 
-**563 מנועים** ב-`PRODUCTION_ENGINE_IDS` (`backend/weissman-core/src/models/engine.rs`).
+**595 מנועים** ב-`PRODUCTION_ENGINE_IDS` (`backend/weissman-core/src/models/engine.rs`).
 
 CI: `scripts/verify_engine_wiring.mjs` — build נכשל על פערים.
 
@@ -32,7 +32,7 @@ CI: `scripts/verify_engine_wiring.mjs` — build נכשל על פערים.
 
 API: `GET /api/engines/capabilities`
 
-~45 מנועים דורשים agent. **אין findings מזויפים.**
+59 מנועים דורשים agent. **אין findings מזויפים.**
 
 ---
 

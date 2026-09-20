@@ -311,7 +311,9 @@ fn intel_schema_holds_only_the_global_recon_table() {
             if path.extension().and_then(|e| e.to_str()) != Some("sql") {
                 continue;
             }
-            let text = std::fs::read_to_string(&path).unwrap_or_default().to_ascii_lowercase();
+            let text = std::fs::read_to_string(&path)
+                .unwrap_or_default()
+                .to_ascii_lowercase();
             let collapsed = text.split_whitespace().collect::<Vec<_>>().join(" ");
             let needle = "create table ";
             let mut from = 0;

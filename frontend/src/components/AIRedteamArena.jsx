@@ -131,7 +131,7 @@ export default function AIRedteamArena() {
               value={target}
               onChange={(e) => setTarget(e.target.value)}
               placeholder={t(`${NS}.target_placeholder`)}
-              className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-white placeholder-[var(--text-muted)]"
+              className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)]"
               disabled={running}
             />
           </div>
@@ -142,7 +142,7 @@ export default function AIRedteamArena() {
               value={aiEndpoint}
               onChange={(e) => setAiEndpoint(e.target.value)}
               placeholder={t(`${NS}.ai_endpoint_placeholder`)}
-              className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-white placeholder-[var(--text-muted)]"
+              className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)]"
               disabled={running}
             />
           </div>

@@ -81,7 +81,7 @@ function StatCard({ icon, label, value, hint }) {
         {icon}
         {label}
       </div>
-      <div className="mt-1 text-2xl font-semibold text-white">{value}</div>
+      <div className="mt-1 text-2xl font-semibold text-[var(--text-primary)]">{value}</div>
       {hint && <div className="text-[11px] text-white/40 mt-0.5">{hint}</div>}
     </div>
   )

@@ -43,7 +43,7 @@ describe('GraphqlSecurityCommandCenter live-only truth', () => {
     expect(src).toMatch(/const exportPostureJson = useCallback\(\(\) => \{\n {4}if \(historyUnavailable\) return/)
     expect(src).toMatch(/const exportExecutivePdf = useCallback\(\(\) => \{\n {4}if \(historyUnavailable\) return/)
     expect(src).toMatch(/downloadBytes\(\n {6}new TextEncoder\(\)\.encode\(JSON\.stringify\(payload, null, 2\)\),/)
-    expect(src).toMatch(/downloadBytes\(buildSimpleTextPdf\(lines\), `graphql-executive-\$\{Date\.now\(\)\}\.pdf`, 'application\/pdf'\)/)
+    expect(src).toMatch(/downloadBytes\(renderTextPdf\(lines\), `graphql-executive-\$\{Date\.now\(\)\}\.pdf`, 'application\/pdf'\)/)
   })
 
   it('mutes leftover leftover-GET Export CSV after a failed history GET', () => {

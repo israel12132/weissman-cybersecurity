@@ -7,7 +7,7 @@ export const he = {
     home: {
       title: 'Weissman Cybersecurity — ראיות חיות. תגובה חדה יותר.',
       description:
-        'Weissman בודק ברציפות משטחי תקיפה מאושרים עם 586 מנועי ייצור, מאמת ממצאים בראיות חיות, ומסייע לצוותי SOC לתעדף ולהגיב.',
+        'Weissman בודק ברציפות משטחי תקיפה מאושרים עם 595 מנועי ייצור, מאמת ממצאים בראיות חיות, ומסייע לצוותי SOC לתעדף ולהגיב.',
     },
     platform: {
       title: 'הפלטפורמה — Weissman Cybersecurity',
@@ -22,7 +22,7 @@ export const he = {
     'vulnerability-research': {
       title: 'מחקר חולשות אבטחה — Weissman Cybersecurity',
       description:
-        '324 בדיקות חיות ב-web, ענן, OT, זהות ושרשרת אספקה — כל ממצא מגיע מבדיקת רשת או מארח אמיתית.',
+        '329 בדיקות חיות ב-web, ענן, OT, זהות ושרשרת אספקה — כל ממצא מגיע מבדיקת רשת או מארח אמיתית.',
     },
     'detection-response': {
       title: 'זיהוי ותגובה — Weissman Cybersecurity',
@@ -42,7 +42,7 @@ export const he = {
     'security-operations': {
       title: 'תפעול אבטחה — Weissman Cybersecurity',
       description:
-        'Command Center לאירועים חיים, ממצאים, פלייבוקים, סוכנים ו-Ask Weissman — 145 מסלולים תפעוליים לצוותי SOC.',
+        'Command Center לאירועים חיים, ממצאים, פלייבוקים, סוכנים ו-Ask Weissman — 158 מסלולים תפעוליים לצוותי SOC.',
     },
     'oast-validation': {
       title: 'אימות OAST — Weissman Cybersecurity',
@@ -544,11 +544,11 @@ export const he = {
       eyebrow: 'מחקר',
       title: 'מחקר חולשות אבטחה עם רף של בדיקה חיה',
       summary:
-        '324 בדיקות חיות — web, API, ענן, OT/ICS, זהות, שרשרת אספקה, AI/LLM ועוד. כינויים מגיעים למימוש אמיתי. CI נכשל אם לא.',
+        '329 בדיקות חיות — web, API, ענן, OT/ICS, זהות, שרשרת אספקה, AI/LLM ועוד. כינויים מגיעים למימוש אמיתי. CI נכשל אם לא.',
       ctaLabel: 'למנועי המחקר',
       outcomes: [
-        '586 מזהי ייצור, כל אחד מחובר לראנר',
-        '226 טכניקות MITRE ATT&CK מול סט Enterprise, Mobile ו-ICS של v19.1',
+        '595 מזהי ייצור, כל אחד מחובר לראנר',
+        '239 טכניקות MITRE ATT&CK מול סט Enterprise, Mobile ו-ICS של v19.1',
         'אין ממצאים מומצאים או אקראיים בנתיב השמירה',
       ],
       capabilities: [
@@ -644,7 +644,7 @@ export const he = {
       eyebrow: 'תפעול',
       title: 'Command Center שנבנה למי שבמשמרת',
       summary:
-        '145 מסלולים, פסי KPI חיים, מגירות ממצאים, בונה פלייבוקים, צי סוכנים ו-Ask Weissman — אנגלית ועברית, כולל RTL.',
+        '158 מסלולים, פסי KPI חיים, מגירות ממצאים, בונה פלייבוקים, צי סוכנים ו-Ask Weissman — אנגלית ועברית, כולל RTL.',
       ctaLabel: 'לתפעול אבטחה',
       outcomes: [
         'קונסול אחד לסריקות, ראיות ותגובה',
@@ -721,11 +721,11 @@ export const he = {
       },
       'mitre-coverage': {
         title: 'כיסוי ATT&CK מול v19.1',
-        summary: '226 טכניקות: 192 מיפויים ראשוניים ועוד 34 תגיות משניות מעוגנות בקוד.',
+        summary: '239 טכניקות: 200 מיפויים ראשוניים ועוד 39 תגיות משניות מעוגנות בקוד.',
       },
       'engine-integrity': {
         title: 'חשבונאות שלמות מנועים',
-        summary: '586 מזהים מסווגים כבדיקה חיה, כינוי או דורש-סוכן — תחת שערי CI, בלי רשומות קטלוג שקטות.',
+        summary: '595 מזהים מסווגים כבדיקה חיה, כינוי או דורש-סוכן — תחת שערי CI, בלי רשומות קטלוג שקטות.',
       },
       'platform-overview': {
         title: 'סקירה טכנית של הפלטפורמה',
@@ -775,7 +775,8 @@ export const he = {
       'Command Center ב-React למפעילים; האתר הציבורי והמוצר לא חולקים אנליטיקה של צד שלישי.',
       'Cloud SaaS או התקנה עצמית — אותו מוצר, מקום אחר לנתונים.',
     ],
-    registered: 'כתובת רשומה: {location}. מספר חברה: {id} — ימולא אחרי ההתאגדות; לא מומצא כאן.',
+    registered: 'כתובת רשומה: {location}. מספר רישום חברה: {id}.',
+    registeredPending: 'כתובת רשומה: {location}. מספר רישום החברה יימסר לפי בקשה.',
     roles: {
       sales: 'מכירות',
       security: 'אבטחה',
@@ -881,7 +882,7 @@ export const he = {
     privacy: 'מדיניות הפרטיות',
     creating: 'יוצרים…',
     submit: 'יצירת סביבת עבודה',
-    verify: 'קישור אימות לפיתוח',
+    verify: 'אישור סביבת העבודה →',
     errWorkspace: 'שם סביבת העבודה חייב להיות 2–80 תווים.',
     errEmail: 'הזינו דוא״ל עבודה תקין.',
     errPasswordLen: 'השתמשו בלפחות 12 תווים עם אותיות וספרות או סימנים.',

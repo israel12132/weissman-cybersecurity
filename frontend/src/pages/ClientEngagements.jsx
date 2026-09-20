@@ -251,7 +251,7 @@ export default function ClientEngagements() {
             <div>
               <label className="block text-xs text-[var(--text-tertiary)] mb-1">{t('pages.clientEngagements.name')}</label>
               <input
-                className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-white"
+                className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-[var(--text-primary)]"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder={t('pages.clientEngagements.name_placeholder')}
@@ -274,7 +274,7 @@ export default function ClientEngagements() {
               <label className="block text-xs text-[var(--text-tertiary)] mb-1">{t('pages.clientEngagements.start')}</label>
               <input
                 type="datetime-local"
-                className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-white"
+                className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-[var(--text-primary)]"
                 value={startAt}
                 onChange={(e) => setStartAt(e.target.value)}
               />
@@ -284,7 +284,7 @@ export default function ClientEngagements() {
               <label className="block text-xs text-[var(--text-tertiary)] mb-1">{t('pages.clientEngagements.end_optional')}</label>
               <input
                 type="datetime-local"
-                className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-white"
+                className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-[var(--text-primary)]"
                 value={endAt}
                 onChange={(e) => setEndAt(e.target.value)}
               />
@@ -293,7 +293,7 @@ export default function ClientEngagements() {
             <div className="md:col-span-2">
               <label className="block text-xs text-[var(--text-tertiary)] mb-1">{t('pages.clientEngagements.notes_optional')}</label>
               <textarea
-                className="w-full min-h-24 px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-white"
+                className="w-full min-h-24 px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-[var(--text-primary)]"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder={t('pages.clientEngagements.notes_placeholder')}
@@ -304,7 +304,7 @@ export default function ClientEngagements() {
 
         <div className="p-6 bg-[var(--bg-1)]/30 border border-[var(--border-default)] rounded-xl">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white">{t('pages.clientEngagements.history_heading')}</h2>
+            <h2 className="text-lg font-semibold text-[var(--text-primary)]">{t('pages.clientEngagements.history_heading')}</h2>
             {!error && (
               <span className="text-xs text-[var(--text-muted)]">{t('pages.clientEngagements.total', { count: engagements.length })}</span>
             )}
@@ -340,7 +340,7 @@ export default function ClientEngagements() {
                 <div key={e.id} className="p-4 border border-[var(--border-default)] rounded-lg bg-[var(--bg-1)]">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
-                      <div className="text-white font-medium truncate">{e.name}</div>
+                      <div className="text-[var(--text-primary)] font-medium truncate">{e.name}</div>
                       <div className="mt-1 text-xs text-[var(--text-tertiary)] font-mono">
                         {e.status} · {e.roe_mode} · {e.start_at?.slice(0, 19).replace('T', ' ')}
                         {e.end_at ? ` → ${String(e.end_at).slice(0, 19).replace('T', ' ')}` : ''}

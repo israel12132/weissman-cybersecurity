@@ -369,7 +369,10 @@ fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
 }
 
-async fn ingest(ctx: &AdapterContext<'_>, as_incident: bool) -> Result<AdapterOutcome, AdapterError> {
+async fn ingest(
+    ctx: &AdapterContext<'_>,
+    as_incident: bool,
+) -> Result<AdapterOutcome, AdapterError> {
     let mode = CortexMode::from_config_and_provider(
         &ctx.integration.config,
         &ctx.integration.provider_type,
@@ -494,17 +497,12 @@ impl CreateIncidentAdapter for CortexXsiamAdapter {
             .and_then(Value::as_str)
             .unwrap_or("")
             .trim();
-        let key = payload
-            .get("api_key")
-            .and_then(Value::as_str)
-            .unwrap_or("");
+        let key = payload.get("api_key").and_then(Value::as_str).unwrap_or("");
         if base.is_empty() || key.is_empty() {
             return Ok(false);
         }
         if base.starts_with("http://") {
-            return Err(AdapterError::Config(
-                "cortex api_url must use https".into(),
-            ));
+            return Err(AdapterError::Config("cortex api_url must use https".into()));
         }
         let auth_id = payload
             .get("api_key_id")
@@ -596,11 +594,7 @@ mod tests {
             "unrelated long title here",
             Some("CVE-2024-12345")
         ));
-        assert!(alert_matches_finding(
-            &alert,
-            "CVE-2024-12345 apache",
-            None
-        ));
+        assert!(alert_matches_finding(&alert, "CVE-2024-12345 apache", None));
         assert!(!alert_matches_finding(&alert, "short", None));
     }
 

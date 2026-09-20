@@ -344,6 +344,13 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/audit-logs", get(api_audit_logs))
         .route("/api/audit/export", get(api_audit_export))
         .route("/api/auth/me", get(api_auth_me))
+        // ── Self-service profile + per-client messaging/help board ────────────
+        .route("/api/account/profile", get(api_account_profile))
+        .route("/api/account/avatar", post(api_account_avatar_set))
+        .route(
+            "/api/messages",
+            get(api_messages_list).post(api_messages_create),
+        )
         // ── Admin user management (CEO/Superadmin only) ───────────────────────
         .route(
             "/api/admin/users",
@@ -382,6 +389,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             get(api_client_config_get).patch(api_client_config_patch),
         )
         .route("/api/clients/:id/readiness", get(api_clients_readiness))
+        .route("/api/clients/:id/logo", post(api_client_logo_set))
         .route(
             "/api/clients/:id/engagements",
             get(api_client_engagements_list).post(api_client_engagements_create),
@@ -1059,7 +1067,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/cem-dago/waves", get(api_cem_dago_waves))
         .route("/api/cem-dago/blackboard", get(api_cem_dago_blackboard))
         // ── Elite hardening + market readiness (server_handlers_elite_hardening.inc) ──
-        .route("/api/elite-hardening/status", get(api_elite_hardening_status))
+        .route(
+            "/api/elite-hardening/status",
+            get(api_elite_hardening_status),
+        )
         .route("/api/market-readiness", get(api_market_readiness))
         // ── Previously-orphaned routes for already-compiled handlers ──
         .route(
@@ -1106,7 +1117,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/competitive-delta",
             get(crate::competitive_delta::api_competitive_delta),
         )
-        .route("/api/competitive/panw-displacement", get(api_panw_displacement))
+        .route(
+            "/api/competitive/panw-displacement",
+            get(api_panw_displacement),
+        )
         // ── Board evidence pack (board_pack module) ──
         .route("/api/board-pack", get(api_board_pack))
 }

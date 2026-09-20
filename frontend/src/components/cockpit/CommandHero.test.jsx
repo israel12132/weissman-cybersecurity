@@ -26,15 +26,28 @@ vi.mock('react-router', () => ({
   Link: ({ children, to }) => <a href={to}>{children}</a>,
 }))
 
-import ExecKpiStrip from './ExecKpiStrip.jsx'
+vi.mock('framer-motion', () => ({
+  motion: new Proxy(
+    {},
+    {
+      get: (_t, tag) => (props) => {
+        const Tag = String(tag)
+        const { initial, animate, transition, whileHover, whileTap, ...rest } = props
+        return <Tag {...rest} />
+      },
+    },
+  ),
+}))
 
-describe('ExecKpiStrip honesty', () => {
+import CommandHero from './CommandHero.jsx'
+
+describe('CommandHero honesty', () => {
   beforeEach(() => {
     apiFetch.mockReset()
   })
   afterEach(cleanup)
 
-  it('does not paint a perfect score when exec-kpis is store-down', async () => {
+  it('does not paint a score when exec-kpis is store-down', async () => {
     apiFetch.mockResolvedValue({
       ok: false,
       unavailable: true,
@@ -42,14 +55,14 @@ describe('ExecKpiStrip honesty', () => {
       trend: null,
       detail: 'store down',
     })
-    render(<ExecKpiStrip />)
+    render(<CommandHero />)
     expect(await screen.findByTestId('exec-kpi-unavailable')).toBeTruthy()
     expect(screen.queryByText(/\/100/)).toBeNull()
     expect(screen.queryByText('components.cockpitTabs.execKpiStrip.live')).toBeNull()
   })
 
   it('coalesces silent polls instead of abort-restarting every 15s', () => {
-    const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'ExecKpiStrip.jsx'), 'utf8')
+    const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'CommandHero.jsx'), 'utf8')
     expect(src).toMatch(/useVisiblePolling/)
     expect(src).toMatch(/silent && inflightRef/)
     expect(src).not.toMatch(/setInterval\(refresh/)

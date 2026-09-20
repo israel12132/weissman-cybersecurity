@@ -127,7 +127,7 @@ export default function ControlPlaneOfControls() {
                       <span className="text-[10px] font-mono uppercase" style={{ color: c }}>{s}</span>
                       <span className="text-xs text-white/50 font-mono">{f.source || f.type}</span>
                     </div>
-                    <div className="text-sm text-white mt-1">{f.title}</div>
+                    <div className="text-sm text-[var(--text-primary)] mt-1">{f.title}</div>
                   </li>
                 )
               })}

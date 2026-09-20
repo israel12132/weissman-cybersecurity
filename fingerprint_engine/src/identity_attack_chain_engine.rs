@@ -73,10 +73,7 @@ fn ingest_source(
     true
 }
 
-async fn itdr_findings_from_db(
-    ctx: &EngineRunContext,
-    host: &str,
-) -> Result<Vec<Value>, String> {
+async fn itdr_findings_from_db(ctx: &EngineRunContext, host: &str) -> Result<Vec<Value>, String> {
     let (pool, tenant_id, client_id) = match (ctx.app_pool.as_ref(), ctx.tenant_id, ctx.client_id) {
         (Some(p), Some(t), Some(c)) => (p.as_ref(), t, c),
         _ => return Ok(Vec::new()),

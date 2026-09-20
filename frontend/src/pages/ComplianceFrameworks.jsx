@@ -714,7 +714,7 @@ export default function ComplianceFrameworks() {
                       <span className="text-sm text-[var(--text-tertiary)]">{t('pages.complianceFrameworks.total_controls')}</span>
                       <FileText className="w-4 h-4 text-cyan-400" />
                     </div>
-                    <div className="text-2xl font-bold text-white">{stats.total}</div>
+                    <div className="text-2xl font-bold text-[var(--text-primary)]">{stats.total}</div>
                   </div>
                   <div className="bg-green-500/10 backdrop-blur-md border border-green-500/30 rounded-xl p-4">
                     <div className="flex items-center justify-between mb-2">
@@ -772,7 +772,7 @@ export default function ComplianceFrameworks() {
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder={t('pages.complianceFrameworks.search_placeholder')}
-                    className="pl-10 pr-4 py-2 rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] text-sm text-white placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
+                    className="pl-10 pr-4 py-2 rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
                   />
                 </div>
                 <div className="flex items-center gap-2 bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-lg p-1">

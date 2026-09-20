@@ -475,8 +475,7 @@ pub async fn run_first_seen_osv_nvd_result(target: &str, ctx: &EngineRunContext)
             }
         };
         for hit in hits {
-            match already_recorded(pool.as_ref(), tid, cid, &hit.id, &pkg.package_name, ver).await
-            {
+            match already_recorded(pool.as_ref(), tid, cid, &hit.id, &pkg.package_name, ver).await {
                 Ok(true) => continue,
                 Ok(false) => {}
                 Err(e) => {

@@ -716,7 +716,7 @@ textarea:focus-visible {
   }
 }
 
-/* ─── Custom scrollbar (used by ExecKpiStrip / LiveActivityFeed / MITRE matrix /
+/* ─── Custom scrollbar (used by CommandHero / LiveActivityFeed / MITRE matrix /
    TopMoversPanel). Keeps panels feeling like a SOC tool, not a default browser. */
 .custom-scroll::-webkit-scrollbar {
   width: 6px;

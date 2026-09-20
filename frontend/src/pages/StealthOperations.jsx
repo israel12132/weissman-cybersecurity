@@ -31,7 +31,7 @@ function Stat({ label, value, sub }) {
   return (
     <div className="rounded-lg border border-white/10 bg-bg-2 px-3 py-2.5">
       <div className="text-[10px] uppercase tracking-wider text-text-muted">{label}</div>
-      <div className="text-xl font-semibold text-white tabular-nums font-mono">{value}</div>
+      <div className="text-xl font-semibold text-[var(--text-primary)] tabular-nums font-mono">{value}</div>
       {sub && <div className="text-[10px] text-text-muted mt-0.5">{sub}</div>}
     </div>
   )
@@ -164,7 +164,7 @@ export default function StealthOperations() {
     <div className="mx-auto max-w-6xl px-4 py-6 text-text-secondary">
       <header className="mb-5 flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-white flex items-center gap-2">
+          <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)] flex items-center gap-2">
             <span aria-hidden>🛡️</span> {t('stealthOps.title')}
           </h1>
           <p className="text-sm text-text-tertiary mt-1 max-w-2xl">{t('stealthOps.subtitle')}</p>

@@ -152,7 +152,7 @@ function AptCard({ group, result, t }) {
               className="w-2 h-2 rounded-full shrink-0"
               style={{ backgroundColor: group.color, boxShadow: `0 0 5px ${group.color}80` }}
             />
-            <h3 className="text-sm font-bold text-white">{name}</h3>
+            <h3 className="text-sm font-bold text-[var(--text-primary)]">{name}</h3>
             {!result?.has_data && (
               <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-[var(--border-default)] text-[var(--text-muted)]">
                 {t('pages.threatEmulation.no_surface')}
@@ -483,7 +483,7 @@ export default function ThreatEmulation() {
                 <Shield className="w-3.5 h-3.5 text-cyan-400" />
                 {t('pages.threatEmulation.kpi_scenarios')}
               </div>
-              <div className="text-2xl font-bold text-white">{aggregate.totalTested}</div>
+              <div className="text-2xl font-bold text-[var(--text-primary)]">{aggregate.totalTested}</div>
             </div>
             <div className="rounded-xl border border-green-500/20 bg-green-950/20 p-4">
               <div className="flex items-center gap-2 text-[11px] text-green-300/70 mb-1">

@@ -273,7 +273,11 @@ pub async fn hydrate_paths(
         Some(3),
     )
     .await;
-    Ok(crate::discovery_knowledge::merge_unique(&[&stored_learned, extra, &ai]))
+    Ok(crate::discovery_knowledge::merge_unique(&[
+        &stored_learned,
+        extra,
+        &ai,
+    ]))
 }
 
 /// Seed ∪ DB ∪ extra ∪ live LLM subdomain prefixes.

@@ -115,7 +115,7 @@ Triage by severity. Verify findings map to authorized assets only. False positiv
 
 ### 7. Deploy endpoint agent (if in scope)
 
-If contract includes endpoint detection engines (~45 `agent_required` engines):
+If contract includes endpoint detection engines (59 `agent_required` engines):
 
 1. Generate enrollment token in **Agent Management**
 2. Install via `GET /install/agent.sh` or `GET /install/agent.ps1`

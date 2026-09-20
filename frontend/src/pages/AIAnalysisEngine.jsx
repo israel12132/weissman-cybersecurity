@@ -518,7 +518,7 @@ export default function AIAnalysisEngine() {
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2 min-w-0">
                           <span>{cm.icon}</span>
-                          <span className="text-sm font-semibold text-white truncate">{pattern.name}</span>
+                          <span className="text-sm font-semibold text-[var(--text-primary)] truncate">{pattern.name}</span>
                         </div>
                         <span
                           className="text-[10px] font-mono px-2 py-0.5 rounded border flex-shrink-0 ml-2"
@@ -560,7 +560,7 @@ export default function AIAnalysisEngine() {
                               <div>
                                 <div className="flex items-center gap-2 mb-1">
                                   <span className="text-xl">{cm.icon}</span>
-                                  <h2 className="text-lg font-bold text-white">{selectedPattern.name}</h2>
+                                  <h2 className="text-lg font-bold text-[var(--text-primary)]">{selectedPattern.name}</h2>
                                 </div>
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span className="text-[10px] font-mono px-2 py-0.5 rounded border"
@@ -700,7 +700,7 @@ export default function AIAnalysisEngine() {
                 >
                   <div className="flex items-start justify-between gap-4 mb-3">
                     <div>
-                      <h3 className="text-sm font-bold text-white mb-1">{corrTitle(corr)}</h3>
+                      <h3 className="text-sm font-bold text-[var(--text-primary)] mb-1">{corrTitle(corr)}</h3>
                       <div className="flex flex-wrap gap-2">
                         {corr.patternIds.map((pid) => {
                           const p = patterns.find((x) => x.id === pid)

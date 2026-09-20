@@ -12,7 +12,7 @@ import AssetHexGrid from './components/AssetHexGrid'
 import CyberRadar from './components/CyberRadar'
 import GlobalThreatTicker from './components/GlobalThreatTicker'
 import CommandBar from './components/CommandBar'
-import { apiUrl } from './lib/apiBase'
+import { downloadApiFile } from './lib/downloadApiFile'
 import { useWeissmanSocket } from './hooks/useWeissmanSocket'
 import { useAuth } from './context/AuthContext'
 import LabForensicEvidence from './components/ui/LabForensicEvidence'
@@ -33,7 +33,21 @@ export default function App() {
 
   const [highlightedEventId, setHighlightedEventId] = useState(null)
   const [commandBarError, setCommandBarError] = useState('')
+  const [exporting, setExporting] = useState(false)
   const [now, setNow] = useState(() => new Date())
+
+  const handleExportFindings = async () => {
+    if (exporting) return
+    setExporting(true)
+    setCommandBarError('')
+    try {
+      await downloadApiFile('/api/export/findings', 'findings.csv')
+    } catch (err) {
+      setCommandBarError(`${t('components.intelMap.export_csv')} — ${String(err?.message || err)}`)
+    } finally {
+      setExporting(false)
+    }
+  }
 
   useEffect(() => {
     if (tickerEvents.length === 0) return
@@ -74,7 +88,15 @@ export default function App() {
             </Fragment>
           ))}
           <span className="text-white/10" aria-hidden="true">|</span>
-          <a href={apiUrl('/api/export/findings')} className="nav-link" download>{t('components.intelMap.export_csv')}</a>
+          <Button
+            variant="unstyled"
+            type="button"
+            onClick={handleExportFindings}
+            disabled={exporting}
+            className="nav-link disabled:opacity-50"
+          >
+            {t('components.intelMap.export_csv')}
+          </Button>
           <Button variant="unstyled" type="button" id="intel-map-logout-btn" onClick={() => logout()} className="nav-link nav-link-danger">{t('components.intelMap.logout')}</Button>
         </nav>
       </header>

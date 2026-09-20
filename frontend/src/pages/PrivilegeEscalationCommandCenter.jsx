@@ -320,7 +320,7 @@ export default function PrivilegeEscalationCommandCenter() {
           <div className="flex items-center gap-3">
             <span className="text-3xl">⛨</span>
             <div>
-              <h2 className="text-lg font-bold text-white">{ENGINE_ID}</h2>
+              <h2 className="text-lg font-bold text-[var(--text-primary)]">{ENGINE_ID}</h2>
               <span className="text-[10px] font-mono text-[var(--text-disabled)] uppercase tracking-widest">MITRE T1068 · T1003 · T1134 · T1548.002</span>
             </div>
           </div>

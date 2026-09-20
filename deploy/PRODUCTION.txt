@@ -40,6 +40,12 @@ is downtime. It is NOT the deployment for a 99.95% / 99.9% SLA.
 
 Verify: curl -sf http://localhost/api/health
 
+Continuity page (automatic, nothing to switch on): while the backend restarts, migrates or is
+rebuilt, the gateway serves the branded Weissman page as HTTP 503 + Retry-After and drops it
+on the first 200 from /api/health. Roll out new code with deploy/rebuild.sh (build → recreate
+backend/worker with --no-deps → wait for 200 → how long the origin was unreachable).
+Runbook: docs/operations/MAINTENANCE-PAGE-AND-ZERO-DOWNTIME-REBUILD.md
+
 Sync migrations locally before deploy:
 
   bash scripts/check-migration-sync.sh
@@ -58,6 +64,10 @@ systemd / VPS (bare metal)
    - WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET
 5. Enable: sudo systemctl enable --now weissman-server weissman-worker weissman.target
 6. Reverse proxy: deploy/Caddyfile or deploy/nginx-weissman.conf
+7. Continuity page for the proxy (automatic once installed): sudo bash deploy/maintenance/install.sh
+   → /opt/weissman/maintenance (install-weissman-systemd.sh does this too). nginx/Caddy then serve
+   the branded 503 page whenever the units cannot answer. Later rollouts: deploy/rebuild.sh.
+   Runbook: docs/operations/MAINTENANCE-PAGE-AND-ZERO-DOWNTIME-REBUILD.md
 
 ---
 
@@ -68,9 +78,16 @@ Manifests in deploy/k8s/:
 - worker-deployment.yaml — weissman-worker (same image, no migrations)
 - redis-deployment.yaml — Redis for rate limits
 - gateway-deployment.yaml, ingress.yaml
+- maintenance-page-configmap.yaml (generated), maintenance-deployment.yaml — ingress-nginx default
+  backend that serves the branded 503 page whenever the gateway has no ready endpoints or answers
+  502/503/504 (apply ConfigMap → Deployment → wait for rollout → ingress.yaml).
+  Runbook §5: docs/operations/MAINTENANCE-PAGE-AND-ZERO-DOWNTIME-REBUILD.md
 
 Secrets (weissman-secrets): database_url, auth_database_url, migrate_url, jwt_secret,
 redis_url, destructive_confirm_secret.
+
+Cloudflare in front (any topology): deploy/cloudflare/maintenance-worker/ serves the same page
+from the edge when the whole machine is off (DNS proxied, `npx wrangler deploy`; see its README).
 
 ---
 

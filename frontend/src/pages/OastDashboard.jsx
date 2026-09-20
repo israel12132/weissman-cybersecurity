@@ -33,7 +33,7 @@ function ProbeCard({ probeId, active, onRun, disabled }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <h3 className="text-sm font-semibold text-white">{t(`pages.oastDashboard.probes.${probeId}.label`)}</h3>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t(`pages.oastDashboard.probes.${probeId}.label`)}</h3>
             {active && (
               <span className="relative flex w-2 h-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
