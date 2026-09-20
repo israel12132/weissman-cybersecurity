@@ -81,6 +81,23 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ### Security
 
+- **Fail-closed boot guards against role/RLS drift.** Two hardenings in
+  `crates/weissman-db/src/role_guard.rs`:
+  - `assert_pool_role` now also scans `pg_db_role_setting` for a DB-/role-level
+    default of `app.current_tenant_id` and, in production, **hard-fails the boot** if
+    one exists (mirroring the existing superuser/BYPASSRLS refusals). That lingering
+    role default was the exact cause of the historical production tenant leak;
+    migration `20260811000100` reset it and a CI test keeps it gone, but that test
+    only runs against the CI database — this closes the live-boot gap. New
+    `role_guard_guc_drift` live test proves the detector reads 0 on a migrated DB and
+    fires on an injected default.
+  - `WEISSMAN_ALLOW_SUPERUSER_DSN` is now **inert in production** — a single env var
+    can no longer silently downgrade every role/RLS guard from a hard boot failure to
+    a warning. The non-production single-node fixture switch `WEISSMAN_E2E_STACK`
+    still works in any environment; setting `WEISSMAN_ALLOW_SUPERUSER_DSN` in
+    production now logs an error and is ignored. `nightly-e2e.yml` (which runs the
+    stack as the postgres superuser under `WEISSMAN_ENV=production`) is switched to
+    `WEISSMAN_E2E_STACK` accordingly.
 - **Least-privilege: revoked the unused BYPASSRLS write surface + dropped a dead
   finding-write path.** `weissman_worker` is BYPASSRLS (it must claim the job bus
   across tenants) yet had been granted full CRUD on seven tenant-scoped (FORCE RLS)

@@ -116,6 +116,12 @@ async fn every_tenant_id_table_enables_forces_rls_and_scopes_by_tenant_guc() {
             FROM pg_class c
             JOIN pg_namespace n ON n.oid = c.relnamespace
             WHERE c.relkind = 'r'
+              -- Ignore transient unlogged *_probe fixtures that sibling live tests
+              -- (rls_tenant_guc_regression, this file's behavioural test) create and
+              -- drop concurrently on the same database — mid-build they would look like
+              -- a policy-less offender. Real app tables are permanent; the one unlogged
+              -- real table, fuzz_candidate_staging, ends in _staging and stays covered.
+              AND NOT (c.relpersistence = 'u' AND right(c.relname, 6) = '_probe')
               AND n.nspname NOT IN ('pg_catalog', 'information_schema')
               AND EXISTS (
                   SELECT 1 FROM information_schema.columns col
@@ -193,6 +199,9 @@ async fn every_client_id_table_scopes_by_client_visibility() {
             FROM pg_class c
             JOIN pg_namespace n ON n.oid = c.relnamespace
             WHERE c.relkind = 'r'
+              -- Ignore transient unlogged *_probe fixtures created concurrently by
+              -- sibling live tests (see the tenant query above for the rationale).
+              AND NOT (c.relpersistence = 'u' AND right(c.relname, 6) = '_probe')
               AND n.nspname = 'public'
               AND c.relname <> 'tenant_idps'   -- client_id here is an OAuth client id, not a customer
               AND EXISTS (
@@ -268,6 +277,15 @@ async fn portal_client_scope_isolates_customers_behaviorally() {
         .execute(&mut *conn)
         .await
         .expect("drop stale probe table");
+    // Build the probe atomically. The two introspection tests in this binary run
+    // concurrently against the same database; without a transaction they could observe
+    // the probe mid-build (table present, policy not yet created) and false-flag it. Once
+    // committed the probe is fully tenant+client compliant, so a concurrent introspection
+    // sees either nothing or a compliant table — never an offender.
+    sqlx::query("BEGIN")
+        .execute(&mut *conn)
+        .await
+        .expect("begin probe DDL");
     sqlx::query(&format!(
         "CREATE UNLOGGED TABLE {PROBE_TABLE} \
          (tenant_id bigint NOT NULL, client_id bigint NOT NULL, marker text NOT NULL)"
@@ -303,6 +321,10 @@ async fn portal_client_scope_isolates_customers_behaviorally() {
     .execute(&mut *conn)
     .await
     .expect("grant to weissman_app");
+    sqlx::query("COMMIT")
+        .execute(&mut *conn)
+        .await
+        .expect("commit probe DDL");
 
     // Seed one row per customer as the (superuser) connecting role — RLS bypassed,
     // so both rows definitely exist regardless of any GUC.
