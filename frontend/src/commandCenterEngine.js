@@ -277,8 +277,16 @@ export const CC_CSS = `
   .wr-strike{font-family:var(--font-display);font-weight:600;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#fff;
     background:linear-gradient(120deg,var(--crit),#b5179e);border:none;padding:11px 18px;border-radius:11px;cursor:pointer;box-shadow:0 6px 22px -6px var(--crit);}
   .wr-strike:hover{transform:translateY(-1px);}
-  #wrTheater{position:relative;padding:0;overflow:hidden;min-height:460px;}
-  #wrCanvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:crosshair;}
+  #wrTheater{position:relative;padding:0;overflow:hidden;min-height:540px;}
+  #wrTheater::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:2;
+    background:radial-gradient(ellipse 62% 58% at 50% 50%,transparent 52%,rgba(20,10,52,.42) 100%);}
+  #wrCanvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:crosshair;pointer-events:none;z-index:1;}
+  /* smooth view transitions */
+  .view.on{animation:viewfade .4s cubic-bezier(.2,.8,.2,1) both;}
+  @keyframes viewfade{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
+  /* cockpit hero cards: subtle top accent for hierarchy */
+  .hero-row .card::before{content:'';position:absolute;left:0;right:0;top:0;height:2px;z-index:3;
+    background:linear-gradient(90deg,transparent,var(--a1),var(--a3),transparent);opacity:.55;}
   .list{display:flex;flex-direction:column;gap:9px;overflow-y:auto;}
   .camp{background:var(--track);border:1px solid var(--edge2);border-radius:11px;padding:10px 11px;}
   .camp .cn{display:flex;justify-content:space-between;font-family:var(--font-display);font-weight:600;font-size:12px;color:var(--text);}
@@ -326,7 +334,7 @@ export const CC_CSS = `
     .kpi .k-val{font-size:22px;}
     .launch{grid-template-columns:1fr;}
   }
-  @media (prefers-reduced-motion:reduce){.pill i,#aurora::after{animation:none;}}
+  @media (prefers-reduced-motion:reduce){.pill i,#aurora::after,.view.on{animation:none;}}
 `;
 
 export const CC_HTML = `<div id="deck" data-dir="nebula" dir="ltr">
@@ -489,6 +497,14 @@ export const CC_HTML = `<div id="deck" data-dir="nebula" dir="ltr">
           <div class="ch"><div class="ht"><b data-t="wrComms">Command Stream</b><span class="rt">decisions · comms</span></div></div>
           <div class="cbody"><div class="comms" id="wrComms"></div></div>
         </div>
+        <div class="card s8">
+          <div class="ch"><div class="ht"><b data-t="wrMitre">MITRE ATT&amp;CK Coverage</b><span class="rt">14 tactics · live detections</span></div><span class="live-n" id="wrMitreN">—</span></div>
+          <div class="cbody"><div class="mitre" id="wrMitre"></div></div>
+        </div>
+        <div class="card s4">
+          <div class="ch"><div class="ht"><b data-t="wrIntel">Threat Intel</b><span class="rt">/threat-intel · IOC + TTP</span></div><span class="live-n" id="wrIntelN">live</span></div>
+          <div class="cbody"><div class="comms" id="wrIntel"></div></div>
+        </div>
       </div>
       <div class="footnote"><b data-t="wrFoot">World-class war room</b> <span data-t="wrFoot2">· cinematic, actionable, never-black — draft for your direction</span></div>
     </section>
@@ -538,6 +554,7 @@ export function mountCommandCenter(root, THREE, opts) {
     wrTheaterT:['Battle Theater','זירת קרב'], incoming:['incoming vectors','וקטורים נכנסים'],
     wrPulse:['Battle Pulse','דופק קרב'], wrComms:['Command Stream','זרם פיקוד'],
     wrRed:['Red team','צוות אדום'], wrBlue:['Blue containment','בלימה כחולה'],
+    wrMitre:['MITRE ATT&CK Coverage','כיסוי MITRE ATT&CK'], wrIntel:['Threat Intel','מודיעין איומים'],
     rIsolate:['Isolate host','בודד מארח'], rRevoke:['Revoke sessions','בטל הרשאות'], rBlock:['Block egress','חסום יציאה'], rDeploy:['Deploy decoy','פרוס פיתיון'],
     wrFoot:['World-class war room','חדר מלחמה עולמי'], wrFoot2:['· cinematic, actionable, never-black — draft for your direction','· קולנועי, אקטיבי, ללא שחור — טיוטה לכיוונך'],
     navGroups:['Navigate','ניווט']
@@ -746,7 +763,7 @@ export function mountCommandCenter(root, THREE, opts) {
     addWin('pointermove',function(e){if(!dg||gWarp)return;gGlobe.rotation.y+=(e.clientX-lx)*.005;gGlobe.rotation.x+=(e.clientY-ly)*.005;gGlobe.rotation.x=Math.max(-1.1,Math.min(1.1,gGlobe.rotation.x));lx=e.clientX;ly=e.clientY;});
   }catch(err){console.warn(err);}}
   function resizeGlobe(){if(!globeReady)return;var r=gCanvas.getBoundingClientRect();if(!r.width||!r.height)return;gRend.setPixelRatio(Math.min(2,window.devicePixelRatio||1));gRend.setSize(r.width,r.height,false);gCam.aspect=r.width/r.height;gCam.updateProjectionMatrix();}
-  function drawGlobe(){if(!globeReady||dir!=='nebula')return;if(gAuto&&!gWarp&&!R)gGlobe.rotation.y+=.0016;gArcs.forEach(function(a){if(!R){a.t+=a.spd;if(a.t>1)a.t=0;}a.sp.position.copy(a.cv.getPoint(a.t));});if(gQuatT)gGlobe.quaternion.slerp(gQuatT,.07);if(gWarp)stepGWarp(performance.now());gRend.render(gScene,gCam);}
+  function drawGlobe(){if(!globeReady)return;if(state.view!=='warroom'&&dir!=='nebula')return;if(gAuto&&!gWarp&&!R)gGlobe.rotation.y+=.0016;gArcs.forEach(function(a){if(!R){a.t+=a.spd;if(a.t>1)a.t=0;}a.sp.position.copy(a.cv.getPoint(a.t));});if(gQuatT)gGlobe.quaternion.slerp(gQuatT,.07);if(gWarp)stepGWarp(performance.now());gRend.render(gScene,gCam);}
   function beginGWarp(b){if(gWarp)return;gAuto=false;gQuatT=new THREE.Quaternion().setFromUnitVectors(b._gv.clone(),new THREE.Vector3(0,0,1));gWarp={b:b,ph:'in',t0:performance.now(),from:gCam.position.z};document.getElementById('warpBtn').disabled=true;fireLockCard(b);spikeEkg();pushCortex(true);}
   function stepGWarp(now){var wS=gWarp,el=now-wS.t0;if(wS.ph==='in'){var p=Math.min(1,el/1200);gCam.position.z=wS.from+(1.45-wS.from)*(1-Math.pow(1-p,3));if(p>=1){wS.ph='hold';wS.t0=now;}}else if(wS.ph==='hold'){if(now-wS.t0>2400){wS.ph='out';wS.t0=now;wS.from=gCam.position.z;hideLockCard();}}else{var p2=Math.min(1,(now-wS.t0)/1000);gCam.position.z=wS.from+(3.1-wS.from)*(1-Math.pow(1-p2,3));if(p2>=1){gWarp=null;gQuatT=null;gAuto=true;document.getElementById('warpBtn').disabled=false;}}}
 
@@ -795,28 +812,46 @@ export function mountCommandCenter(root, THREE, opts) {
   IV(function(){killStage=(killStage+1)%7;if(Math.random()<.5)campaigns.forEach(function(c){c.stage=Math.min(6,c.stage+(Math.random()<.4?1:0));});defconLevel=2+rnd(3);
     var rb=30+rnd(40);document.getElementById('rbRed').style.width=rb+'%';document.getElementById('rbBlue').style.width=(100-rb)+'%';wrBuild();},2600);
 
-  function drawWar(){var g=fit(wrCanvas),w=g.w,h=g.h,x=g.x;x.clearRect(0,0,w,h);var now=performance.now(),cx=w/2,cy=h*.52;
-    if(!wrDots||wrDots._w!==w){wrDots=[];for(var i=0;i<1200;i++){var lat=90-Math.acos(2*Math.random()-1)*180/Math.PI,lon=Math.random()*360-180;if(isLand(lat,lon))wrDots.push(mapProj(lat,lon,w,h));}wrDots._w=w;}
-    x.fillStyle='rgba(62,233,255,0.22)';for(var i=0;i<wrDots.length;i++)x.fillRect(wrDots[i][0],wrDots[i][1],1.2,1.2);
-    // range rings
-    for(var rr=1;rr<=3;rr++){x.strokeStyle='rgba(165,180,252,'+(.16-rr*.03)+')';x.lineWidth=1;x.beginPath();x.arc(cx,cy,Math.min(w,h)*.16*rr,0,7);x.stroke();}
-    // radar sweep
-    if(!R){var sweep=now*.0009%(Math.PI*2);var grad=x.createRadialGradient(cx,cy,0,cx,cy,Math.min(w,h)*.5);grad.addColorStop(0,'rgba(62,233,255,0.18)');grad.addColorStop(1,'rgba(62,233,255,0)');x.save();x.beginPath();x.moveTo(cx,cy);x.arc(cx,cy,Math.min(w,h)*.5,sweep-.4,sweep);x.closePath();x.fillStyle=grad;x.fill();x.restore();}
-    // converging attack arcs
-    breaches.forEach(function(b){var p=mapProj(b.lat,b.lon,w,h);var col=b.sev==='c'?'255,107,129':b.sev==='h'?'252,211,77':'62,233,255';
-      var mx=(p[0]+cx)/2,my=(p[1]+cy)/2-80;x.strokeStyle='rgba('+col+',0.4)';x.lineWidth=1.3;x.beginPath();x.moveTo(p[0],p[1]);x.quadraticCurveTo(mx,my,cx,cy);x.stroke();
-      var tt=(now*.0004+b.id*.13)%1,ix=(1-tt)*(1-tt)*p[0]+2*(1-tt)*tt*mx+tt*tt*cx,iy=(1-tt)*(1-tt)*p[1]+2*(1-tt)*tt*my+tt*tt*cy;
-      x.fillStyle='rgb('+col+')';x.shadowColor='rgb('+col+')';x.shadowBlur=8;x.beginPath();x.arc(ix,iy,2.2,0,7);x.fill();x.shadowBlur=0;
-      var pr=2.4+Math.sin(now*.004+b.id)*1;x.fillStyle='rgb('+col+')';x.beginPath();x.arc(p[0],p[1],pr,0,7);x.fill();});
-    // HQ core
-    var pulse=1+Math.sin(now*.005)*.3;x.fillStyle='#a5b4fc';x.shadowColor='#a5b4fc';x.shadowBlur=24*pulse;x.beginPath();x.arc(cx,cy,8,0,7);x.fill();x.shadowBlur=0;
-    x.strokeStyle='rgba(224,179,255,0.7)';x.lineWidth=1.5;x.beginPath();x.arc(cx,cy,14*pulse,0,7);x.stroke();
+  // Tactical radar HUD overlaid on the 3D globe (transparent — globe shows through).
+  function drawWar(){var g=fit(wrCanvas),w=g.w,h=g.h,x=g.x;x.clearRect(0,0,w,h);var now=performance.now(),cx=w/2,cy=h/2,R0=Math.min(w,h)*.46;
+    for(var rr=1;rr<=4;rr++){x.strokeStyle='rgba(165,180,252,'+(.14-rr*.024)+')';x.lineWidth=1;x.beginPath();x.arc(cx,cy,R0*rr/4,0,7);x.stroke();}
+    // cardinal ticks
+    x.strokeStyle='rgba(165,180,252,.12)';x.lineWidth=1;for(var k=0;k<12;k++){var a2=k/12*Math.PI*2;x.beginPath();x.moveTo(cx+Math.cos(a2)*(R0-8),cy+Math.sin(a2)*(R0-8));x.lineTo(cx+Math.cos(a2)*R0,cy+Math.sin(a2)*R0);x.stroke();}
+    // sweep
+    if(!R){var sweep=now*.0011%(Math.PI*2);var grad=x.createRadialGradient(cx,cy,0,cx,cy,R0);grad.addColorStop(0,'rgba(62,233,255,0.16)');grad.addColorStop(1,'rgba(62,233,255,0)');x.save();x.beginPath();x.moveTo(cx,cy);x.arc(cx,cy,R0,sweep-.45,sweep);x.closePath();x.fillStyle=grad;x.fill();x.restore();
+      x.strokeStyle='rgba(103,232,249,.5)';x.lineWidth=1.2;x.beginPath();x.moveTo(cx,cy);x.lineTo(cx+Math.cos(sweep)*R0,cy+Math.sin(sweep)*R0);x.stroke();}
+    // corner brackets
+    var b0=R0*1.02;x.strokeStyle='rgba(103,232,249,.35)';x.lineWidth=1.4;
+    [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(function(s){var bx=cx+s[0]*b0,by=cy+s[1]*b0;x.beginPath();x.moveTo(bx-s[0]*16,by);x.lineTo(bx,by);x.lineTo(bx,by-s[1]*16);x.stroke();});
     document.getElementById('wrCount').textContent=breaches.length;}
 
   var wrEkg=document.getElementById('wrEkg');
-  document.getElementById('wrStrikeBtn').addEventListener('click',function(){var b=pick(breaches);wrPushComms('COUNTER-STRIKE → '+b.domain);spikeEkg();defconLevel=Math.max(1,defconLevel-1);wrBuild();});
+  document.getElementById('wrStrikeBtn').addEventListener('click',function(){var b=pick(breaches.filter(function(x){return x.sev==='c';}))||pick(breaches);wrPushComms('COUNTER-STRIKE → '+b.domain);spikeEkg();defconLevel=Math.max(1,defconLevel-1);wrBuild();if(globeReady)beginGWarp(b);});
   document.querySelectorAll('#view-warroom .respbtns button').forEach(function(bn){bn.addEventListener('click',function(){wrPushComms(bn.textContent.toUpperCase());});});
-  wrBuild();
+
+  /* MITRE ATT&CK coverage (14 tactics) */
+  var TACTICS=['Reconnaissance','Resource Dev','Initial Access','Execution','Persistence','Priv. Escalation','Defense Evasion','Credential Access','Discovery','Lateral Movement','Collection','Command & Control','Exfiltration','Impact'];
+  var tacticCov=TACTICS.map(function(){return 82+rnd(17);});
+  function wrBuildMitre(){var el=document.getElementById('wrMitre');if(!el)return;
+    el.innerHTML=TACTICS.map(function(name,i){return '<div class="mrow"><span class="ml">'+name+'</span><span class="bar"><i style="width:'+tacticCov[i]+'%"></i></span><span class="mv">'+tacticCov[i]+'%</span></div>';}).join('');
+    var avg=Math.round(tacticCov.reduce(function(a,b){return a+b;},0)/TACTICS.length);
+    document.getElementById('wrMitreN').textContent=avg+'% avg';}
+  IV(function(){if(state.view!=="warroom")return;var i=rnd(TACTICS.length);tacticCov[i]=Math.max(70,Math.min(100,tacticCov[i]+(rnd(5)-2)));wrBuildMitre();},2400);
+
+  /* Threat-Intel feed (IOC + TTP) */
+  var IOC_KINDS=['IOC','TTP','C2','DOMAIN','HASH'];
+  function wrPushIntel(){var el=document.getElementById('wrIntel');if(!el)return;var kind=pick(IOC_KINDS),a=pick(ACTORS)[0];
+    var line;
+    if(kind==='IOC'||kind==='C2')line=kind+' '+(185+rnd(70))+'.'+rnd(255)+'.'+rnd(255)+'.'+rnd(255)+' → <b>'+a+'</b>';
+    else if(kind==='TTP')line='TTP '+pick(MITRE)+' '+pick(['process injection','token theft','LOLBIN','DLL sideload'])+' · <b>'+a+'</b>';
+    else if(kind==='DOMAIN')line='DOMAIN '+pick(COMPANIES)+' · newly-registered · <b>'+a+'</b>';
+    else line='HASH '+Math.random().toString(16).slice(2,12)+'… flagged · <b>'+a+'</b>';
+    var d=document.createElement('div');d.className='cm';d.innerHTML='<b>['+new Date().toISOString().slice(11,19)+']</b> '+line;
+    el.insertBefore(d,el.firstChild);while(el.children.length>16)el.removeChild(el.lastChild);}
+  for(var wi=0;wi<6;wi++)wrPushIntel();
+  IV(function(){if(state.view==='warroom')wrPushIntel();},1800);
+
+  wrBuild();wrBuildMitre();
 
   /* ══ menu / nav / views ══ */
   var NAVGROUPS=[
@@ -843,7 +878,11 @@ export function mountCommandCenter(root, THREE, opts) {
   var state={view:'cockpit',hist:[]};
   function showView(v){state.view=v;document.getElementById('view-cockpit').classList.toggle('on',v==='cockpit');document.getElementById('view-warroom').classList.toggle('on',v==='warroom');
     document.querySelectorAll('.launch button').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-go')===v);});
-    document.getElementById('content').scrollTop=0;setTimeout(resizeAll,30);updateBack();}
+    // Move the single 3D globe canvas into whichever theater is on screen (one WebGL context, no duplication).
+    var gc=document.getElementById('globeCanvas');
+    if(gc){ if(v==='warroom'){ var wt=document.getElementById('wrTheater'); if(wt&&gc.parentNode!==wt) wt.insertBefore(gc,wt.firstChild); gc.style.display='block'; }
+      else { var th=document.getElementById('theater'); if(th&&gc.parentNode!==th) th.insertBefore(gc,th.querySelector('.theater-hud')); gc.style.display=(dir==='nebula')?'block':'none'; } }
+    document.getElementById('content').scrollTop=0;setTimeout(resizeAll,40);updateBack();}
   function goView(v){if(v===state.view){closeMenu();return;}state.hist.push(state.view);showView(v);closeMenu();}
   function goBack(){if(menuOpen){closeMenu();return;}if(state.hist.length){showView(state.hist.pop());}}
   function updateBack(){document.getElementById('backBtn').disabled=(state.hist.length===0);}
@@ -864,7 +903,7 @@ export function mountCommandCenter(root, THREE, opts) {
   }
   requestAnimationFrame(loop);
 
-  function resizeAll(){cssCache={};cssDir='';if(dir==='nebula')resizeGlobe();mapDots=null;wrDots=null;if(neuNodes)neuNodes._w=-1;if(swP)swP._w=-1;}
+  function resizeAll(){cssCache={};cssDir='';if(globeReady)resizeGlobe();mapDots=null;wrDots=null;if(neuNodes)neuNodes._w=-1;if(swP)swP._w=-1;}
   addWin('resize',function(){clearTimeout(window._rz);window._rz=setTimeout(resizeAll,120);});
 
   /* boot */
