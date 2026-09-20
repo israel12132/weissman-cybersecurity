@@ -16,6 +16,31 @@ members = [
     "crates/weissman-ast-cap",
 ]
 
+# Fast iterative dev/CI builds. Fat-LTO + single codegen-unit is RELEASE-ONLY (below);
+# dev/test must never inherit it or every incremental build pays the whole-program
+# optimize cost. `debug = "line-tables-only"` keeps panic/backtrace file:line resolution
+# for first-party code while cutting the debug-info bloat that made a single
+# fingerprint_engine test binary ~2.7 GB (and filled the build disk); third-party deps
+# drop debug info entirely (the aws_sdk_* rlibs alone were multiple GB). No runtime
+# behaviour changes — only the size/speed of unoptimized artifacts.
+[profile.dev]
+codegen-units = 256
+lto = false
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
+# `cargo test` uses the `test` profile; pin the same fast, small settings (it inherits
+# `dev` but we make the intent explicit and cover the dependency debug-info override).
+[profile.test]
+codegen-units = 256
+lto = false
+debug = "line-tables-only"
+
+[profile.test.package."*"]
+debug = false
+
 # Tuned release for all `cargo build --release` (unwind kept so panic_shield::catch_unwind works).
 [profile.release]
 lto = "fat"

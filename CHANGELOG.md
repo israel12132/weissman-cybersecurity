@@ -43,6 +43,24 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ### Changed
 
+- **Dev/CI build profile: fast, small, unoptimized — fat-LTO stays release-only.** The
+  workspace had no `[profile.dev]`/`[profile.test]`, so unoptimized builds carried full
+  `debug = 2` info and every integration-test binary statically linked the 385K-LOC
+  `fingerprint_engine` with all of it — one such binary was ~2.7 GB, `target/debug/deps`
+  reached ~19 GB, and CI/build disks filled. New explicit dev/test profiles set
+  `codegen-units = 256` + `lto = false` (so an accidental inherit of the release fat-LTO
+  can't creep into iterative builds), `debug = "line-tables-only"` for first-party code
+  (panic/backtrace file:line still resolve), and `debug = false` for all third-party deps
+  (`[profile.*.package."*"]`). Release keeps `lto = "fat"` / `codegen-units = 1` unchanged.
+  Measured on a clean rebuild, no behaviour change, all unit tests green: the
+  fingerprint_engine test binary dropped **2.7 GB → 325 MB**, `libaws_sdk_ec2.rlib`
+  **1.2 GB → 553 MB**, and `target/debug/deps` **19 GB → 5.5 GB**. _Remaining Step 8
+  work (own reviewed changes — larger blast radius, deployment-packaging paths this
+  environment can't fully validate):_ splitting `fingerprint_engine` into domain
+  sub-crates, converting the 46 `include!()` `.inc` fragments to real `mod` files,
+  breaking the >4K-line god-files, and collapsing the byte-identical migration-tree
+  duplication to a symlink/build-copy (the `check-migration-sync.sh` guard stays either
+  way; trees currently verified in sync at 181 files).
 - **One compliance integrity gate, not two.** The parallel mapping-integrity work is
   unified into the single `report_gate` + diagonal `Tm` watermark pipeline.
   `compliance_framework_orphans` folds three signals for every official artifact
