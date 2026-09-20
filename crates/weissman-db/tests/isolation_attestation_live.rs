@@ -25,7 +25,9 @@ fn test_database_url() -> String {
                 !require_db_tests(),
                 "isolation_attestation_live requires TEST_DATABASE_URL, but WEISSMAN_REQUIRE_DB_TESTS is set"
             );
-            eprintln!("SKIP isolation_attestation_live: TEST_DATABASE_URL not set (no test Postgres)");
+            eprintln!(
+                "SKIP isolation_attestation_live: TEST_DATABASE_URL not set (no test Postgres)"
+            );
             String::new()
         }
     }
@@ -97,7 +99,10 @@ async fn isolation_attestation_reflects_live_db_enforced_posture() {
     );
 
     // The single verdict must agree with the parts.
-    assert!(att.compliant, "attestation.compliant must be true when every part is compliant");
+    assert!(
+        att.compliant,
+        "attestation.compliant must be true when every part is compliant"
+    );
 
     // active_tenant_ids() must be callable (SECURITY DEFINER); ids are non-negative.
     for id in &att.active_tenant_ids {

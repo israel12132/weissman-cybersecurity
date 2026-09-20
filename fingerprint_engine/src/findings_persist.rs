@@ -1040,7 +1040,10 @@ mod tests {
         let payload = json!({ "cvss_score": cvss_for_display(&json!({"severity": "high"})) });
         assert!(payload.get("cvss_score").unwrap().is_null());
         let measured = json!({ "cvss_score": cvss_for_display(&json!({"cvss_score": 8.1})) });
-        assert_eq!(measured.get("cvss_score").and_then(Value::as_f64), Some(8.1));
+        assert_eq!(
+            measured.get("cvss_score").and_then(Value::as_f64),
+            Some(8.1)
+        );
     }
 
     #[test]

@@ -177,7 +177,10 @@ fn validate_select(sel: &Select) -> Result<String, String> {
     match &sel.group_by {
         GroupByExpr::Expressions(exprs, modifiers) => {
             if !modifiers.is_empty() {
-                return Err("sql ast: GROUP BY modifiers (ROLLUP/CUBE/GROUPING SETS) are not permitted".into());
+                return Err(
+                    "sql ast: GROUP BY modifiers (ROLLUP/CUBE/GROUPING SETS) are not permitted"
+                        .into(),
+                );
             }
             for g in exprs {
                 validate_ident_or_value(g, &table)?;
@@ -277,7 +280,8 @@ fn validate_projection_expr(e: &Expr, table: &str) -> Result<(), String> {
         || !matches!(f.parameters, FunctionArguments::None)
     {
         return Err(
-            "sql ast: aggregate with OVER/FILTER/WITHIN GROUP/ODBC/parameters is not permitted".into(),
+            "sql ast: aggregate with OVER/FILTER/WITHIN GROUP/ODBC/parameters is not permitted"
+                .into(),
         );
     }
     if f.name.0.len() != 1 {
@@ -285,7 +289,9 @@ fn validate_projection_expr(e: &Expr, table: &str) -> Result<(), String> {
     }
     let fname = f.name.0[0].value.to_ascii_lowercase();
     if !matches!(fname.as_str(), "count" | "avg" | "sum" | "min" | "max") {
-        return Err(format!("sql ast: function '{fname}' is not an allow-listed aggregate"));
+        return Err(format!(
+            "sql ast: function '{fname}' is not an allow-listed aggregate"
+        ));
     }
     let FunctionArguments::List(list) = &f.args else {
         return Err("sql ast: aggregate must take a parenthesised argument".into());
@@ -296,7 +302,9 @@ fn validate_projection_expr(e: &Expr, table: &str) -> Result<(), String> {
     match &list.args[0] {
         FunctionArg::Unnamed(FunctionArgExpr::Wildcard) => {
             if fname != "count" {
-                return Err(format!("sql ast: {fname}(*) is not permitted (only COUNT(*))"));
+                return Err(format!(
+                    "sql ast: {fname}(*) is not permitted (only COUNT(*))"
+                ));
             }
             Ok(())
         }

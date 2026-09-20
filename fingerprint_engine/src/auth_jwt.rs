@@ -718,7 +718,10 @@ mod agent_token_tests {
     #[test]
     fn stream_context_ip_binding_enforced() {
         let a = sctx_auth(Some("203.0.113.7"), None);
-        assert!(verify_stream_context(&a, "203.0.113.7", None), "matching IP must pass");
+        assert!(
+            verify_stream_context(&a, "203.0.113.7", None),
+            "matching IP must pass"
+        );
         assert!(
             !verify_stream_context(&a, "203.0.113.8", None),
             "different client IP must be rejected"
@@ -740,7 +743,10 @@ mod agent_token_tests {
             !verify_stream_context(&a, "10.0.0.1", Some("ja3-wrong")),
             "wrong TLS fp must be rejected"
         );
-        assert!(verify_stream_context(&a, "10.0.0.1", Some("ja3-abc")), "matching fp must pass");
+        assert!(
+            verify_stream_context(&a, "10.0.0.1", Some("ja3-abc")),
+            "matching fp must pass"
+        );
     }
 
     #[test]

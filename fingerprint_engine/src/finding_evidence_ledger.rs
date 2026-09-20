@@ -93,7 +93,10 @@ impl EvidenceRequest {
     /// the body hash+len — never the request header values or raw body.
     #[must_use]
     pub fn capture(method: &str, url: &str, header_names: &[String], body: &[u8]) -> Self {
-        let mut names: Vec<String> = header_names.iter().map(|n| n.trim().to_ascii_lowercase()).collect();
+        let mut names: Vec<String> = header_names
+            .iter()
+            .map(|n| n.trim().to_ascii_lowercase())
+            .collect();
         names.sort();
         names.dedup();
         Self {
@@ -211,7 +214,11 @@ pub fn sign(transcript: &EvidenceTranscript, prev_hash: &str, finding_id: &str) 
 /// `entry_hash` recomputes; and, when a receipt is present, it constant-time-verifies. A
 /// missing receipt still validates the (unforgeable-without-collision) hash chain.
 #[must_use]
-pub fn verify_entry(entry: &LedgerEntry, transcript: &EvidenceTranscript, expected_prev: &str) -> bool {
+pub fn verify_entry(
+    entry: &LedgerEntry,
+    transcript: &EvidenceTranscript,
+    expected_prev: &str,
+) -> bool {
     if entry.prev_hash != expected_prev {
         return false;
     }
@@ -251,7 +258,10 @@ mod tests {
             ),
             response: EvidenceResponse::capture(
                 200,
-                &[("Server".into(), "nginx".into()), ("Content-Type".into(), "text/html".into())],
+                &[
+                    ("Server".into(), "nginx".into()),
+                    ("Content-Type".into(), "text/html".into()),
+                ],
                 b"<html>evidence body</html>",
             ),
         }
@@ -259,9 +269,13 @@ mod tests {
 
     #[test]
     fn request_capture_keeps_names_only_sorted_and_never_values() {
-        let r = EvidenceRequest::capture("get", "u", &["Host".into(), "authorization".into()], b"x");
+        let r =
+            EvidenceRequest::capture("get", "u", &["Host".into(), "authorization".into()], b"x");
         assert_eq!(r.method, "GET");
-        assert_eq!(r.header_names, vec!["authorization".to_string(), "host".to_string()]);
+        assert_eq!(
+            r.header_names,
+            vec!["authorization".to_string(), "host".to_string()]
+        );
         // body is hashed, not stored
         assert_eq!(r.body_sha256, sha256_hex(b"x"));
         assert_eq!(r.body_len, 1);
@@ -274,15 +288,25 @@ mod tests {
         let mut b = sample();
         a.response = EvidenceResponse::capture(
             200,
-            &[("Server".into(), "nginx".into()), ("Content-Type".into(), "text/html".into())],
+            &[
+                ("Server".into(), "nginx".into()),
+                ("Content-Type".into(), "text/html".into()),
+            ],
             b"<html>evidence body</html>",
         );
         b.response = EvidenceResponse::capture(
             200,
-            &[("Content-Type".into(), "text/html".into()), ("Server".into(), "nginx".into())],
+            &[
+                ("Content-Type".into(), "text/html".into()),
+                ("Server".into(), "nginx".into()),
+            ],
             b"<html>evidence body</html>",
         );
-        assert_eq!(a.commitment(), b.commitment(), "header order must not change the commitment");
+        assert_eq!(
+            a.commitment(),
+            b.commitment(),
+            "header order must not change the commitment"
+        );
     }
 
     #[test]
@@ -293,10 +317,23 @@ mod tests {
         assert_ne!(base, t.commitment(), "status change must change commitment");
         let mut t2 = sample();
         t2.elapsed_ms = 999;
-        assert_ne!(base, t2.commitment(), "timing change must change commitment");
+        assert_ne!(
+            base,
+            t2.commitment(),
+            "timing change must change commitment"
+        );
         let mut t3 = sample();
-        t3.request = EvidenceRequest::capture("get", "https://t.example/login", &["Host".into()], b"different");
-        assert_ne!(base, t3.commitment(), "request body-hash change must change commitment");
+        t3.request = EvidenceRequest::capture(
+            "get",
+            "https://t.example/login",
+            &["Host".into()],
+            b"different",
+        );
+        assert_ne!(
+            base,
+            t3.commitment(),
+            "request body-hash change must change commitment"
+        );
     }
 
     #[test]
@@ -307,9 +344,15 @@ mod tests {
 
         let t2 = sample();
         let e2 = sign(&t2, &e1.entry_hash, "VLN-2");
-        assert!(verify_entry(&e2, &t2, &e1.entry_hash), "second entry links to first");
+        assert!(
+            verify_entry(&e2, &t2, &e1.entry_hash),
+            "second entry links to first"
+        );
         // Wrong expected-prev breaks the link.
-        assert!(!verify_entry(&e2, &t2, GENESIS_PREV), "broken chain link must fail");
+        assert!(
+            !verify_entry(&e2, &t2, GENESIS_PREV),
+            "broken chain link must fail"
+        );
     }
 
     #[test]
@@ -341,7 +384,8 @@ mod tests {
         // collide with a structurally different one (one header with an embedded separator vs.
         // two separate headers). A naive separator-join canonicalization would collide here.
         let mut a = sample();
-        a.response = EvidenceResponse::capture(200, &[("x".into(), "1\u{1e}y\u{1e}2".into())], b"body");
+        a.response =
+            EvidenceResponse::capture(200, &[("x".into(), "1\u{1e}y\u{1e}2".into())], b"body");
         let mut b = sample();
         b.response = EvidenceResponse::capture(
             200,

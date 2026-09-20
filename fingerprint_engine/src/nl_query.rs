@@ -1052,12 +1052,16 @@ fn build_planner_prompt() -> String {
 
     let mut p = String::new();
     p.push_str("You are the Weissman NL-to-Plan planner. Convert the user's question into a JSON QueryPlan.\n\n");
-    p.push_str("You MUST output a single JSON object — nothing else (no ```json fences, no prose).\n\n");
+    p.push_str(
+        "You MUST output a single JSON object — nothing else (no ```json fences, no prose).\n\n",
+    );
     p.push_str("Schema:\n{\n");
     p.push_str("  \"table\":     \"<one of ");
     p.push_str(&names.join("|"));
     p.push_str(">\",\n");
-    p.push_str("  \"select\":    [\"col1\",\"col2\", ...]           // optional; default = all columns\n");
+    p.push_str(
+        "  \"select\":    [\"col1\",\"col2\", ...]           // optional; default = all columns\n",
+    );
     p.push_str("  \"filters\":   [\n");
     p.push_str("     {\"column\":\"severity\",\"op\":\"in\",\"value\":[\"critical\",\"high\"]},\n");
     p.push_str("     {\"column\":\"kev_listed\",\"op\":\"=\",\"value\":true},\n");
@@ -1066,9 +1070,15 @@ fn build_planner_prompt() -> String {
     p.push_str("  \"order_by\":  \"discovered_at\",                // optional\n");
     p.push_str("  \"order_desc\": true,                          // optional, default false\n");
     p.push_str("  \"limit\":     50,                             // REQUIRED integer 1-200 (fail-closed)\n");
-    p.push_str("  \"aggregate\": \"count\",                        // optional: count|avg|sum|min|max\n");
-    p.push_str("  \"aggregate_column\": \"id\",                    // optional; omit for COUNT(*)\n");
-    p.push_str("  \"group_by\":  \"severity\"                      // optional allow-listed column\n");
+    p.push_str(
+        "  \"aggregate\": \"count\",                        // optional: count|avg|sum|min|max\n",
+    );
+    p.push_str(
+        "  \"aggregate_column\": \"id\",                    // optional; omit for COUNT(*)\n",
+    );
+    p.push_str(
+        "  \"group_by\":  \"severity\"                      // optional allow-listed column\n",
+    );
     p.push_str("}\n\n");
     p.push_str("Operators allowed: =, !=, <, <=, >, >=, in, like, is_null, is_not_null.\n");
     p.push_str("Tables and columns are case-sensitive. Use only the schema below.\n\n");
@@ -1166,7 +1176,10 @@ mod tests {
         for t in SCHEMA.keys() {
             let spec = &SCHEMA[*t];
             let line = format!("- {}({})", spec.table, spec.columns.join(", "));
-            assert!(p.contains(&line), "planner prompt missing schema line: {line}");
+            assert!(
+                p.contains(&line),
+                "planner prompt missing schema line: {line}"
+            );
         }
         // The "<one of a|b|c>" enum lists exactly SCHEMA.len() pipe-separated tables.
         let enum_seg = p
@@ -1209,7 +1222,10 @@ mod tests {
         crate::cem_dago::sql_ast::validate_compiled_sql_ast(&c.sql)
             .expect("compiled plan must pass the AST gate");
         let bounded = crate::cem_dago::sql_ast::validate_and_bound_sql(&c.sql).unwrap();
-        assert!(bounded.contains("LIMIT 200"), "AST gate must clamp LIMIT to 200: {bounded}");
+        assert!(
+            bounded.contains("LIMIT 200"),
+            "AST gate must clamp LIMIT to 200: {bounded}"
+        );
     }
 
     #[test]

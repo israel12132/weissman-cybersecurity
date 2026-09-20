@@ -70,7 +70,13 @@ pub const ATTESTATION_SCHEMA_VERSION: &str = "weissman-isolation-attestation-v1"
 
 /// Pure: does a tenant table meet the ENABLE+FORCE+tenant-GUC, no-`USING(true)` contract?
 #[must_use]
-pub fn tenant_table_compliant(enabled: bool, forced: bool, has_guc: bool, has_true: bool, allowlisted: bool) -> bool {
+pub fn tenant_table_compliant(
+    enabled: bool,
+    forced: bool,
+    has_guc: bool,
+    has_true: bool,
+    allowlisted: bool,
+) -> bool {
     allowlisted || (enabled && forced && has_guc && !has_true)
 }
 
@@ -97,10 +103,14 @@ pub fn aggregate_compliant(
 ///
 /// # Errors
 /// Propagates any `sqlx` error from the introspection queries.
-pub async fn build_isolation_attestation(pool: &PgPool) -> Result<TenantIsolationAttestation, sqlx::Error> {
+pub async fn build_isolation_attestation(
+    pool: &PgPool,
+) -> Result<TenantIsolationAttestation, sqlx::Error> {
     // Active tenant ids the isolation protects (SECURITY DEFINER, ids only).
     let active_tenant_ids: Vec<i64> =
-        sqlx::query_scalar("SELECT * FROM public.active_tenant_ids()").fetch_all(pool).await?;
+        sqlx::query_scalar("SELECT * FROM public.active_tenant_ids()")
+            .fetch_all(pool)
+            .await?;
 
     // Contract 1: tenant_id tables — ENABLE + FORCE RLS + a tenant-GUC policy, no USING(true).
     // Same query as tests/rls_live_schema_contract.rs (the _probe exclusion keeps transient
@@ -219,9 +229,14 @@ pub async fn build_isolation_attestation(pool: &PgPool) -> Result<TenantIsolatio
 
     // Reuse the boot-guard introspection so the report and assert_pool_role agree. This reads
     // pg_db_role_setting (role config), so it is correct regardless of the building connection.
-    let tenant_guc_role_default_count = crate::role_guard::tenant_guc_role_default_count(pool).await?;
+    let tenant_guc_role_default_count =
+        crate::role_guard::tenant_guc_role_default_count(pool).await?;
 
-    let compliant = aggregate_compliant(&tenant_tables, &client_tables, tenant_guc_role_default_count);
+    let compliant = aggregate_compliant(
+        &tenant_tables,
+        &client_tables,
+        tenant_guc_role_default_count,
+    );
 
     Ok(TenantIsolationAttestation {
         schema_version: ATTESTATION_SCHEMA_VERSION.to_string(),
@@ -256,19 +271,37 @@ mod tests {
         // Full compliance.
         assert!(tenant_table_compliant(true, true, true, false, false));
         // Any missing pillar fails.
-        assert!(!tenant_table_compliant(false, true, true, false, false), "not enabled");
-        assert!(!tenant_table_compliant(true, false, true, false, false), "not forced");
-        assert!(!tenant_table_compliant(true, true, false, false, false), "no tenant-GUC policy");
+        assert!(
+            !tenant_table_compliant(false, true, true, false, false),
+            "not enabled"
+        );
+        assert!(
+            !tenant_table_compliant(true, false, true, false, false),
+            "not forced"
+        );
+        assert!(
+            !tenant_table_compliant(true, true, false, false, false),
+            "no tenant-GUC policy"
+        );
         // A USING(true) no-op defeats isolation even with everything else set.
-        assert!(!tenant_table_compliant(true, true, true, true, false), "USING(true) is a no-op");
+        assert!(
+            !tenant_table_compliant(true, true, true, true, false),
+            "USING(true) is a no-op"
+        );
         // Allowlisted globals are compliant by exception regardless of posture.
-        assert!(tenant_table_compliant(false, false, false, true, true), "allowlisted");
+        assert!(
+            tenant_table_compliant(false, false, false, true, true),
+            "allowlisted"
+        );
     }
 
     #[test]
     fn client_table_contract_logic() {
         assert!(client_table_compliant(true, false));
-        assert!(!client_table_compliant(false, false), "no client-visibility predicate");
+        assert!(
+            !client_table_compliant(false, false),
+            "no client-visibility predicate"
+        );
         assert!(client_table_compliant(false, true), "allowlisted global");
     }
 

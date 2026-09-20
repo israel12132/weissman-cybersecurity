@@ -87,16 +87,7 @@ pub async fn run_cloud_posture_result_ctx(target: &str, ctx: &EngineRunContext) 
         findings.extend(scan_iam_roles(&sdk, &opts, target, &mut graph).await);
     }
     if opts.wants("s3") {
-        findings.extend(
-            scan_s3(
-                &sdk,
-                &opts,
-                target,
-                home_region.as_ref(),
-                &mut graph,
-            )
-            .await,
-        );
+        findings.extend(scan_s3(&sdk, &opts, target, home_region.as_ref(), &mut graph).await);
     }
     if opts.wants("ec2") || opts.wants("vpc") {
         findings.extend(scan_ec2_vpc(&sdk, &opts, target, &mut graph).await);
@@ -127,9 +118,8 @@ pub async fn run_cloud_posture_result_ctx(target: &str, ctx: &EngineRunContext) 
     }
     if let Some(ref acct) = account_id {
         if opts.wants("account") {
-            findings.extend(
-                scan_account_s3_public_block(&sdk, acct, &opts, target, &mut graph).await,
-            );
+            findings
+                .extend(scan_account_s3_public_block(&sdk, acct, &opts, target, &mut graph).await);
         }
     }
     if opts.wants("eks") {
