@@ -18,6 +18,50 @@ metadata:
     nginx.ingress.kubernetes.io/limit-connections: "100"
     # --- Transport hardening ---
     nginx.ingress.kubernetes.io/ssl-protocols: "TLSv1.2 TLSv1.3"
+    # --- Maintenance / continuity page (automatic — no action needed) ---
+    # When the gateway cannot answer, ingress-nginx serves the branded Weissman page from the
+    # `weissman-maintenance` Service (deploy/k8s/maintenance-deployment.yaml; content from the
+    # generated ConfigMap deploy/k8s/maintenance-page-configmap.yaml) instead of its own bare
+    # "502 Bad Gateway" / "503 Service Temporarily Unavailable". Two paths lead there:
+    #   1. The gateway Service has no ready endpoints (a rollout, a node drain, or the manual
+    #      `kubectl -n weissman scale deploy/weissman-gateway --replicas=0`): ingress-nginx
+    #      sends the request straight to the default backend with its ORIGINAL URI and none
+    #      of the headers below. Scaling the gateway back up is all it takes to recover —
+    #      no flag, no reload.
+    #   2. The gateway answers 502/503/504 (backend refusing connections during a restart or
+    #      migration, an upstream timeout, the opt-in maintenance flag): `custom-http-errors`
+    #      turns on `proxy_intercept_errors` for this location, and ingress-nginx re-issues
+    #      the request to the default backend with the path rewritten to `/` and the original
+    #      request described in headers:
+    #        X-Code          the status it intercepted (502, 503 or 504)
+    #        X-Format        the visitor's Accept header
+    #        X-Original-URI  the path the visitor asked for, query string included
+    #      (plus X-Namespace, X-Ingress-Name, X-Service-Name, X-Service-Port, X-Request-ID).
+    #      The page's nginx (default.conf in the ConfigMap) routes on them: X-Original-URI
+    #      under /he → the Hebrew page, under /api → api.json, X-Format containing
+    #      application/json → api.json, anything else → the English page. Without the
+    #      headers (path 1) it routes on the real URI the same way.
+    # The default backend's own status passes through untouched (`proxy_intercept_errors off`
+    # in the generated @custom_ location), and the page answers 503 + `Retry-After: 30` +
+    # `Cache-Control: no-store` + `X-Weissman-Maintenance: 1` + `X-Robots-Tag: noindex`.
+    # That is deliberate: uptime monitors record a temporary failure instead of a 200
+    # "page", crawlers keep the real pages indexed and come back later, caches never keep a
+    # copy, and the layers in front (Cloudflare Worker, Command Center) read the header as
+    # "already branded". The page polls /api/health and reloads the visitor's original URL
+    # on the first genuine 200, so the way back is automatic too.
+    # 503 is in the list so a bare 503 from any layer without a page of its own is covered
+    # as well; the branded 503 the gateway already serves is simply served again (same bytes,
+    # one more hop). Two consequences to know about, because ingress-nginx cannot tell an
+    # application 503 from an infrastructure one:
+    #   - `limit-rps` / `limit-connections` rejections are 503 by default. Set
+    #     `limit-req-status-code: "429"` and `limit-conn-status-code: "429"` in the
+    #     ingress-nginx controller ConfigMap so a throttled client gets the SPA's 429 toast,
+    #     not the update page.
+    #   - An application 503 (POST /api/public/demo-request when SMTP is unconfigured) keeps
+    #     its status but its body becomes api.json; website/src/lib/submitDemoRequest.ts keys
+    #     on the status alone, so its mailto fallback still shows.
+    nginx.ingress.kubernetes.io/custom-http-errors: "502,503,504"
+    nginx.ingress.kubernetes.io/default-backend: weissman-maintenance
 spec:
   tls:
     - hosts:
