@@ -163,7 +163,8 @@ pub async fn build_isolation_attestation(pool: &PgPool) -> Result<TenantIsolatio
     let client_rows = sqlx::query(
         r#"
         WITH t AS (
-            SELECT c.oid, n.nspname AS schema_name, c.relname AS table_name
+            SELECT c.oid, n.nspname AS schema_name, c.relname AS table_name,
+                   c.relrowsecurity AS enabled, c.relforcerowsecurity AS forced
             FROM pg_class c
             JOIN pg_namespace n ON n.oid = c.relnamespace
             WHERE c.relkind = 'r'
@@ -183,7 +184,8 @@ pub async fn build_isolation_attestation(pool: &PgPool) -> Result<TenantIsolatio
                         OR pg_get_expr(polwithcheck, polrelid) ILIKE '%app_current_client_id%') AS has_vis
             FROM pg_policy GROUP BY polrelid
         )
-        SELECT t.schema_name, t.table_name, coalesce(p.has_vis, false) AS has_vis
+        SELECT t.schema_name, t.table_name, t.enabled, t.forced,
+               coalesce(p.has_vis, false) AS has_vis
         FROM t LEFT JOIN pol p ON p.polrelid = t.oid
         ORDER BY 1, 2
         "#,
@@ -195,13 +197,18 @@ pub async fn build_isolation_attestation(pool: &PgPool) -> Result<TenantIsolatio
     for row in &client_rows {
         let schema: String = row.get("schema_name");
         let table: String = row.get("table_name");
+        let enabled: bool = row.get("enabled");
+        let forced: bool = row.get("forced");
         let has_vis: bool = row.get("has_vis");
         let allowlisted = CLIENT_SCOPE_ALLOWLIST.contains(&table.as_str());
         client_tables.push(TableIsolationPosture {
             schema,
             table,
-            rls_enabled: true,
-            rls_forced: true,
+            // Introspected truthfully (was previously hard-coded true): for an allowlisted
+            // global with no RLS these are legitimately false, so the attestation must report
+            // the real posture rather than assert facts it never queried.
+            rls_enabled: enabled,
+            rls_forced: forced,
             has_tenant_guc_policy: false,
             has_using_true: false,
             has_client_visibility: has_vis,

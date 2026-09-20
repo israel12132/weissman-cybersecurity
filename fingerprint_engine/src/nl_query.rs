@@ -1213,6 +1213,47 @@ mod tests {
     }
 
     #[test]
+    fn aggregate_and_group_by_plans_pass_the_execute_plan_ast_gate() {
+        // Regression: compile_plan emits COUNT(*)/COUNT(col)/AVG|SUM|MIN|MAX(col) and
+        // `GROUP BY <col>`; the AST gate MUST admit exactly those (an earlier version
+        // rejected every aggregate/GROUP BY as a non-identifier projection, silently
+        // breaking Ask Weissman's count/avg/sum/min/max feature at runtime).
+        let base = QueryPlan {
+            table: "vulnerabilities".into(),
+            select: vec![],
+            filters: vec![],
+            order_by: None,
+            order_desc: false,
+            limit: Some(50),
+            aggregate: None,
+            aggregate_column: None,
+            group_by: None,
+        };
+        // COUNT(*)
+        let mut p = base.clone();
+        p.aggregate = Some("count".into());
+        let c = compile_plan(&p, 1).unwrap();
+        assert!(c.sql.contains("COUNT(*)"), "sanity: {}", c.sql);
+        crate::cem_dago::sql_ast::validate_compiled_sql_ast(&c.sql)
+            .expect("COUNT(*) plan must pass the AST gate");
+        // AVG(epss_score)
+        let mut p = base.clone();
+        p.aggregate = Some("avg".into());
+        p.aggregate_column = Some("epss_score".into());
+        let c = compile_plan(&p, 1).unwrap();
+        crate::cem_dago::sql_ast::validate_compiled_sql_ast(&c.sql)
+            .expect("AVG(col) plan must pass the AST gate");
+        // GROUP BY severity, COUNT(*)
+        let mut p = base.clone();
+        p.aggregate = Some("count".into());
+        p.group_by = Some("severity".into());
+        let c = compile_plan(&p, 1).unwrap();
+        assert!(c.sql.contains("GROUP BY severity"), "sanity: {}", c.sql);
+        crate::cem_dago::sql_ast::validate_compiled_sql_ast(&c.sql)
+            .expect("GROUP BY aggregate plan must pass the AST gate");
+    }
+
+    #[test]
     fn rejects_unknown_table() {
         let plan = QueryPlan {
             table: "users".into(),

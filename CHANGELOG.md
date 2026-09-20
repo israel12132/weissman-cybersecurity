@@ -103,6 +103,37 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ### Fixed
 
+- **Pre-merge adversarial review: 9 real defects in the new code found and fixed.** An
+  adversarial review (each area reviewed, then each finding independently verified;
+  9 raised, 9 confirmed) caught genuine bugs before merge:
+  1. **NL→SQL aggregate regression (high).** The independent AST gate wired into
+     `execute_plan` rejected every aggregate/`GROUP BY` plan `compile_plan` legitimately
+     emits (projection had to be a bare identifier; `GROUP BY` was refused) — silently
+     breaking Ask Weissman's count/avg/sum/min/max feature at runtime. The gate now admits
+     exactly the bounded aggregate grammar the compiler emits (`COUNT(*)` / `COUNT(col)` /
+     `AVG|SUM|MIN|MAX(col)` over allow-listed columns, `GROUP BY <allow-listed col>`; still
+     no OVER/FILTER/DISTINCT/subquery), with a regression test over the aggregate + group_by
+     paths.
+  2. **Supply-chain gate false-negatives (3×high, 2×medium).** `ci_supply_chain_gate.mjs`
+     could be fooled: `--error` matched an explanatory *comment* (ci.yml is now
+     comment-stripped); the blocking Trivy fs scan could be removed because `scan-type: fs`
+     also matched the non-blocking SBOM step (checks are now scoped per step block, requiring
+     `scan-type: fs` **and** `exit-code: "1"` on the *same* step); a scanner neutered with
+     `|| true` / `continue-on-error: true` went undetected (now caught, without
+     false-flagging a `|| true` on an auxiliary reporting line); the `permissions` check
+     matched any block (now anchored to the top-level token, rejecting a `write` escalation);
+     and an anchored-but-wildcard cosign identity (`^.*$`) passed (now must actually pin the
+     `github.com` workflow identity). `--selftest` now also proves all six weakenings are
+     caught on planted fixtures and a clean baseline stays green.
+  3. **Evidence-ledger tamper-evidence gaps (high + medium).** `verify_entry` fail-opened
+     when the HMAC receipt was `None` (a keyless hash chain is forgeable by stripping the
+     receipt) — it now fails closed whenever a signing key is configured; and
+     `canonical_bytes` was not injective (a header value containing the `\x1e` separator could
+     collide two different transcripts) — it now uses length-prefixed framing with explicit
+     list counts. Both pinned by new tests.
+  4. **Isolation-attestation honesty (medium).** The client-table posture hard-coded
+     `rls_enabled`/`rls_forced = true` without querying them (false for the allowlisted global
+     with no RLS); the emitter now introspects and reports the real values.
 - **The alert-pipeline meta-alerts are now proven to FIRE, not just present.** The promtool
   unit tests covered only the job-pipeline alerts; the two meta-alerts whose entire job is to
   detect a broken notification path — `AlertDeliveryFailing`

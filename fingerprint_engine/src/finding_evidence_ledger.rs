@@ -36,7 +36,6 @@ pub const LEDGER_VERSION: &str = "weissman-evidence-ledger-v1";
 /// Genesis previous-hash for the first entry in a finding's chain.
 pub const GENESIS_PREV: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 
-const RS: u8 = 0x1e; // ASCII record separator
 const MAX_SNIPPET: usize = 512;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -137,9 +136,14 @@ impl EvidenceTranscript {
     #[must_use]
     pub fn canonical_bytes(&self) -> Vec<u8> {
         let mut out = Vec::new();
+        // Length-prefixed framing: each field is written as its byte length (u32 LE) followed by
+        // the raw bytes. This is injective — a field value containing ANY byte cannot shift field
+        // boundaries or let two materially different transcripts collide on the same commitment.
+        // Each variable-length list additionally carries an explicit element count, so a
+        // different number of headers can never be reinterpreted as body content.
         let mut push = |s: &str| {
+            out.extend_from_slice(&(s.len() as u32).to_le_bytes());
             out.extend_from_slice(s.as_bytes());
-            out.push(RS);
         };
         push(LEDGER_VERSION);
         push(&self.verifier_version);
@@ -147,10 +151,14 @@ impl EvidenceTranscript {
         push(&self.elapsed_ms.to_string());
         push(&self.request.method);
         push(&self.request.url);
-        push(&self.request.header_names.join(","));
+        push(&self.request.header_names.len().to_string());
+        for n in &self.request.header_names {
+            push(n);
+        }
         push(&self.request.body_sha256);
         push(&self.request.body_len.to_string());
         push(&self.response.status.to_string());
+        push(&self.response.headers.len().to_string());
         for (k, v) in &self.response.headers {
             push(k);
             push(v);
@@ -172,9 +180,11 @@ impl EvidenceTranscript {
 #[must_use]
 fn chain_hash(prev_hash: &str, commitment: &str, finding_id: &str) -> String {
     let mut h = Sha256::new();
+    // Length-prefixed framing (same injectivity rationale as canonical_bytes): a finding_id
+    // containing any byte cannot shift the chain-hash field boundaries.
     for part in [LEDGER_VERSION, prev_hash, commitment, finding_id] {
+        h.update((part.len() as u32).to_le_bytes());
         h.update(part.as_bytes());
-        h.update([RS]);
     }
     hex::encode(h.finalize())
 }
@@ -213,7 +223,14 @@ pub fn verify_entry(entry: &LedgerEntry, transcript: &EvidenceTranscript, expect
     }
     match &entry.receipt {
         Some(r) => crate::finding_attestation::verify(&entry.entry_hash, r),
-        None => true,
+        None => {
+            // A missing receipt is acceptable ONLY when no signing key is configured (dev):
+            // the keyless hash chain still detects accidental corruption. But if a key IS
+            // available, an unsigned entry means it was never signed or the receipt was stripped
+            // to defeat tamper-evidence — fail closed. `attest` returns None iff there is no key,
+            // so `attest(..).is_none()` is true exactly in the legitimate keyless mode.
+            crate::finding_attestation::attest(&entry.entry_hash).is_none()
+        }
     }
 }
 
@@ -316,5 +333,41 @@ mod tests {
         let mut e2 = sign(&t, GENESIS_PREV, "VLN-1");
         e2.commitment = sha256_hex(b"fake");
         assert!(!verify_entry(&e2, &t, GENESIS_PREV));
+    }
+
+    #[test]
+    fn canonical_framing_is_injective_across_header_boundaries() {
+        // A response header VALUE containing the old \x1e separator must NOT let a transcript
+        // collide with a structurally different one (one header with an embedded separator vs.
+        // two separate headers). A naive separator-join canonicalization would collide here.
+        let mut a = sample();
+        a.response = EvidenceResponse::capture(200, &[("x".into(), "1\u{1e}y\u{1e}2".into())], b"body");
+        let mut b = sample();
+        b.response = EvidenceResponse::capture(
+            200,
+            &[("x".into(), "1".into()), ("y".into(), "2".into())],
+            b"body",
+        );
+        assert_ne!(
+            a.commitment(),
+            b.commitment(),
+            "length-prefixed framing must not collide on embedded separators / header-count changes"
+        );
+    }
+
+    #[test]
+    fn unsigned_entry_fails_closed_when_a_signing_key_is_available() {
+        // sign() sets receipt=Some when a key exists, None otherwise. Strip the receipt and
+        // assert verify_entry accepts the unsigned entry ONLY in the keyless (dev) mode — a
+        // stripped receipt must never pass tamper-evidence when signing is configured.
+        let t = sample();
+        let mut e = sign(&t, GENESIS_PREV, "VLN-1");
+        e.receipt = None;
+        let key_available = crate::finding_attestation::attest("probe").is_some();
+        assert_eq!(
+            verify_entry(&e, &t, GENESIS_PREV),
+            !key_available,
+            "unsigned entry must verify iff no signing key is configured"
+        );
     }
 }

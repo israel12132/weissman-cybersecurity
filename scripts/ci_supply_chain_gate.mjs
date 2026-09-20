@@ -155,71 +155,150 @@ function scanIaCStrict(files) {
 }
 
 // ── (A) Workflow fail-closed invariants ────────────────────────────────────────────
-function assertWorkflowInvariants() {
-  for (const wf of ['ci.yml', 'deploy.yml', 'codeql.yml']) {
-    if (!existsSync(join(WF_DIR, wf))) v(`missing workflow ${wf}`)
+// Full-line YAML comments are stripped before content checks so a control mentioned only in a
+// comment (e.g. an explanatory "Omitting --error means…") can never satisfy a presence check.
+function stripFullLineComments(s) {
+  return s
+    .split('\n')
+    .filter((l) => !/^\s*#/.test(l))
+    .join('\n')
+}
+
+// Split a workflow into per-step blocks (each starts at `- name:`) so a control's blocking-ness
+// is evaluated on the SAME step, not file-wide — otherwise a non-blocking sibling step (e.g. an
+// SBOM `scan-type: fs`) or an `exit-code: "1"` on a different Trivy step masks a removed gate.
+function stepBlocks(code) {
+  return code.split(/\n(?=\s*- name:)/)
+}
+
+// A step is neutered at the STEP level — present but unable to fail the job — via
+// continue-on-error: true. (A `|| true` on an auxiliary line, e.g. `cat report || true` inside a
+// failure handler, does NOT neuter the scanner, so it is checked per-command below, not here.)
+function stepNeutered(block) {
+  return /continue-on-error:\s*true/.test(block)
+}
+
+// True if the SCANNER command line itself swallows its own non-zero exit with a trailing
+// `|| true` / `|| :` — the direct way to keep a blocking scanner from failing the job.
+function cmdSwallowed(block, cmdRe) {
+  return block.split('\n').some((l) => cmdRe.test(l) && /\|\|\s*(true|:)\s*$/.test(l.trimEnd()))
+}
+
+/**
+ * Pure: given the raw ci.yml / deploy.yml text and a {name: content} map of every workflow
+ * file, return the list of fail-closed-invariant violations. Pure so `--selftest` can feed it
+ * deliberately-weakened fixtures and assert each weakening is caught.
+ */
+function collectWorkflowViolations(ci, dep, wfFiles) {
+  const out = []
+  const push = (m) => out.push(m)
+  const need = (cond, msg) => {
+    if (!cond) push(`ci.yml: ${msg}`)
   }
-  const files = existsSync(WF_DIR) ? readdirSync(WF_DIR).filter((n) => /\.ya?ml$/.test(n)) : []
-  if (!files.length) return v('no workflow files found under .github/workflows/')
 
   // Every third-party `uses:` must be a 40-hex commit SHA (no mutable @vN/@branch tag).
-  for (const n of files) {
-    const s = readFileSync(join(WF_DIR, n), 'utf8')
+  for (const [name, content] of Object.entries(wfFiles)) {
     const re = /uses:\s*([^\s#]+)/g
     let m
-    while ((m = re.exec(s))) {
+    while ((m = re.exec(content))) {
       const ref = m[1]
       if (ref.startsWith('./') || ref.startsWith('docker://')) continue // local / image action
       const at = ref.lastIndexOf('@')
       if (at === -1) {
-        v(`${n}: unpinned action (no @ref): ${ref}`)
+        push(`${name}: unpinned action (no @ref): ${ref}`)
         continue
       }
-      const pin = ref.slice(at + 1)
-      if (!/^[0-9a-f]{40}$/.test(pin)) v(`${n}: action not SHA-pinned: ${ref}`)
+      if (!/^[0-9a-f]{40}$/.test(ref.slice(at + 1))) push(`${name}: action not SHA-pinned: ${ref}`)
     }
   }
 
-  const ci = readFileSync(join(WF_DIR, 'ci.yml'), 'utf8')
-  const need = (cond, msg) => {
-    if (!cond) v(`ci.yml: ${msg}`)
-  }
-  // Least-privilege default token.
-  need(/permissions:\s*\n\s*contents:\s*read/.test(ci), 'missing top-level `permissions: contents: read`')
-  // Secret scanning (gitleaks), blocking.
-  need(/gitleaks detect/.test(ci), 'gitleaks detect step removed')
-  need(/gitleaks detect[^\n]*--exit-code 1|--exit-code 1[^\n]*\n[^\n]*gitleaks|gitleaks[\s\S]{0,400}--exit-code 1/.test(ci), 'gitleaks not blocking (--exit-code 1 gone)')
-  // Trivy dependency (fs) scan, blocking.
-  need(/scan-type:\s*fs/.test(ci), 'Trivy fs scan removed')
-  need(/exit-code:\s*"1"/.test(ci), 'no blocking Trivy scan (exit-code "1" gone)')
-  // Trivy IaC (config) scan of the deploy dir, blocking.
-  need(/scan-type:\s*config/.test(ci), 'Trivy IaC (config) scan removed')
-  need(/scan-ref:\s*deploy/.test(ci), 'Trivy IaC scan no longer targets deploy/')
-  // Semgrep SAST, blocking (--error makes findings fail the step).
-  need(/--error/.test(ci), 'Semgrep not blocking (--error gone)')
-  // Supply-chain provenance on publish.
-  need(/cosign sign/.test(ci), 'cosign image signing removed')
-  need(/attest-build-provenance/.test(ci), 'SLSA build-provenance attestation removed')
+  const ciCode = stripFullLineComments(ci)
+  const blocks = stepBlocks(ciCode)
 
-  // deploy.yml: fail-closed signature verification, anchored, BEFORE kubectl apply.
-  if (existsSync(join(WF_DIR, 'deploy.yml'))) {
-    const dep = readFileSync(join(WF_DIR, 'deploy.yml'), 'utf8')
-    // Strip full-line comments so a comment that merely mentions "kubectl apply" (e.g. the
-    // concurrency note) is not mistaken for the command when checking verify-before-apply.
-    const depCode = dep
-      .split('\n')
-      .filter((l) => !/^\s*#/.test(l))
-      .join('\n')
+  // Least-privilege default token at the TOP LEVEL (before the first `jobs:`) — a job-level
+  // `permissions: contents: read` must not mask a top-level escalation to write.
+  const topLevel = ciCode.split(/\njobs:/)[0]
+  need(
+    /(^|\n)permissions:\s*\n\s+contents:\s*read/.test(topLevel) && !/(^|\n)permissions:\s*\n\s+contents:\s*write/.test(topLevel),
+    'top-level `permissions: contents: read` missing or escalated to write',
+  )
+
+  // Secret scanning (gitleaks): present, blocking, and not neutered.
+  const gitleaks = blocks.filter((b) => /gitleaks detect/.test(b))
+  need(gitleaks.length > 0, 'gitleaks detect step removed')
+  need(
+    gitleaks.some((b) => /--exit-code 1\b/.test(b) && !stepNeutered(b) && !cmdSwallowed(b, /gitleaks detect/)),
+    'gitleaks not blocking (--exit-code 1 removed, or step neutered with `|| true` / continue-on-error)',
+  )
+
+  // Trivy dependency (fs) scan: a SINGLE step carrying both scan-type: fs AND exit-code "1",
+  // not neutered — so removing that step is not masked by the non-blocking SBOM fs step or by
+  // an exit-code "1" on the config/image steps.
+  const trivyFs = blocks.filter((b) => /scan-type:\s*fs\b/.test(b))
+  need(trivyFs.length > 0, 'Trivy fs scan removed')
+  need(
+    trivyFs.some((b) => /exit-code:\s*"1"/.test(b) && !stepNeutered(b)),
+    'no BLOCKING Trivy fs (dependency) scan — the fs step lost its `exit-code: "1"` or was neutered',
+  )
+
+  // Trivy IaC (config) scan of deploy/, blocking, not neutered.
+  const trivyCfg = blocks.filter((b) => /scan-type:\s*config\b/.test(b))
+  need(trivyCfg.length > 0, 'Trivy IaC (config) scan removed')
+  need(
+    trivyCfg.some((b) => /scan-ref:\s*deploy\b/.test(b) && /exit-code:\s*"1"/.test(b) && !stepNeutered(b)),
+    'Trivy IaC (config) scan no longer blocking or no longer targets deploy/',
+  )
+
+  // Semgrep SAST blocking (--error), on the semgrep step, not neutered. Comment-stripped, so the
+  // explanatory "Omitting --error means…" comment can no longer satisfy this.
+  const semgrep = blocks.filter((b) => /\bsemgrep\b/.test(b) && /--error\b/.test(b))
+  need(
+    semgrep.some((b) => !stepNeutered(b) && !cmdSwallowed(b, /semgrep\b/)),
+    'Semgrep not blocking (--error removed from the semgrep step, or step neutered)',
+  )
+
+  // Supply-chain provenance on publish.
+  need(/cosign sign/.test(ciCode), 'cosign image signing removed')
+  need(/attest-build-provenance/.test(ciCode), 'SLSA build-provenance attestation removed')
+
+  // deploy.yml: fail-closed signature verification, anchored AND constraining, BEFORE kubectl apply.
+  if (dep) {
+    const depCode = stripFullLineComments(dep)
     const verifyIdx = depCode.indexOf('cosign verify')
     const applyIdx = depCode.indexOf('kubectl apply')
-    if (verifyIdx === -1) v('deploy.yml: fail-closed `cosign verify` removed')
-    if (applyIdx === -1) v('deploy.yml: no `kubectl apply` (unexpected — cannot confirm verify ordering)')
+    if (verifyIdx === -1) push('deploy.yml: fail-closed `cosign verify` removed')
+    if (applyIdx === -1) push('deploy.yml: no `kubectl apply` (cannot confirm verify ordering)')
     if (verifyIdx !== -1 && applyIdx !== -1 && verifyIdx > applyIdx)
-      v('deploy.yml: `cosign verify` no longer runs BEFORE `kubectl apply`')
-    if (!/--certificate-identity-regexp\s+'(\^[^']*\$)'/.test(dep))
-      v('deploy.yml: cosign identity regexp is not anchored (^...$) — signer identity not constrained')
+      push('deploy.yml: `cosign verify` no longer runs BEFORE `kubectl apply`')
+    // The identity regexp must be anchored AND actually constrain the signer to this repo's
+    // workflow — an anchored-but-wildcard `^.*$` accepts a signature from any workflow/ref.
+    const idm = dep.match(/--certificate-identity-regexp\s+'([^']*)'/)
+    const rx = idm ? idm[1] : ''
+    const body = rx.replace(/^\^/, '').replace(/\$$/, '')
+    const constrains =
+      rx.startsWith('^') &&
+      rx.endsWith('$') &&
+      !/^\.[*+]?$/.test(body) &&
+      /github\\?\.com/.test(rx) && // the YAML value escapes the dot as `github\.com`
+      /workflows\/[^']*\.yml/.test(rx)
+    if (!constrains)
+      push('deploy.yml: cosign identity regexp does not CONSTRAIN the signer (must be anchored AND pin the github.com workflow identity, not a bare wildcard)')
     if (!/--certificate-github-workflow-repository/.test(dep))
-      v('deploy.yml: cosign verify not bound to the workflow repository')
+      push('deploy.yml: cosign verify not bound to the workflow repository')
+  }
+
+  return out
+}
+
+function assertWorkflowInvariants() {
+  for (const wf of ['ci.yml', 'deploy.yml', 'codeql.yml']) {
+    if (!existsSync(join(WF_DIR, wf))) v(`missing workflow ${wf}`)
+  }
+  const names = existsSync(WF_DIR) ? readdirSync(WF_DIR).filter((n) => /\.ya?ml$/.test(n)) : []
+  if (!names.length) return v('no workflow files found under .github/workflows/')
+  const wfFiles = Object.fromEntries(names.map((n) => [n, readFileSync(join(WF_DIR, n), 'utf8')]))
+  for (const m of collectWorkflowViolations(wfFiles['ci.yml'] || '', wfFiles['deploy.yml'] || '', wfFiles)) {
+    v(m)
   }
 }
 
@@ -268,6 +347,76 @@ function selftest() {
     for (const rule of ['no-runasnonroot', 'no-limits', 'image-latest']) {
       if (!strictHits.some((h) => h.rule === rule)) problems.push(`IaC strict detector missed: ${rule}`)
     }
+
+    // Workflow fail-closed invariants: a CLEAN baseline must raise nothing (no false positives),
+    // and each deliberate weakening must be caught (no false negatives).
+    const SHA = 'ed142fd0673e97e23eac54620cfb913e5ce36c25'
+    const baseCi = [
+      'name: ci',
+      'permissions:',
+      '  contents: read',
+      'jobs:',
+      '  security:',
+      '    steps:',
+      '      - name: Secret scan',
+      '        run: gitleaks detect --no-git --exit-code 1 --source .',
+      '      - name: Dep scan',
+      `        uses: aquasecurity/trivy-action@${SHA}`,
+      '        with:',
+      '          scan-type: fs',
+      '          exit-code: "1"',
+      '      - name: IaC scan',
+      `        uses: aquasecurity/trivy-action@${SHA}`,
+      '        with:',
+      '          scan-type: config',
+      '          scan-ref: deploy',
+      '          exit-code: "1"',
+      '      - name: SAST',
+      '        run: semgrep scan --error --config p/security-audit',
+      '      - name: Sign',
+      '        run: cosign sign --yes "img@sha256:x"',
+      '      - name: Provenance',
+      `        uses: actions/attest-build-provenance@${SHA}`,
+      '',
+    ].join('\n')
+    const baseDep = [
+      'name: deploy',
+      'jobs:',
+      '  deploy:',
+      '    steps:',
+      '      - name: Verify',
+      "        run: cosign verify --certificate-identity-regexp '^https://github\\.com/acme/repo/\\.github/workflows/ci\\.yml@refs/tags/v.*$' --certificate-github-workflow-repository acme/repo \"img@sha256:x\"",
+      '      - name: Apply',
+      '        run: kubectl apply -f deploy/k8s/x.yaml',
+      '',
+    ].join('\n')
+
+    const baseViol = collectWorkflowViolations(baseCi, baseDep, { 'ci.yml': baseCi, 'deploy.yml': baseDep })
+    if (baseViol.length) problems.push(`workflow baseline should be clean but flagged: ${baseViol.join('; ')}`)
+
+    const weakenings = [
+      // --error removed from the semgrep step but left in a comment (the exact false-negative).
+      [
+        'semgrep --error removed (kept only in a comment)',
+        baseCi.replace(
+          '        run: semgrep scan --error --config p/security-audit',
+          '        # Omitting --error means findings never fail the step\n        run: semgrep scan --config p/security-audit',
+        ),
+        baseDep,
+        /Semgrep/,
+      ],
+      ['gitleaks neutered with || true', baseCi.replace('--source .', '--source . || true'), baseDep, /gitleaks/],
+      ['top-level token escalated to write', baseCi.replace('  contents: read', '  contents: write'), baseDep, /permissions|contents: read/],
+      ['fs vuln step lost its exit-code (SBOM/config still present)', baseCi.replace('          scan-type: fs\n          exit-code: "1"', '          scan-type: fs'), baseDep, /Trivy fs/],
+      ['cosign identity wildcard', baseCi, baseDep.replace(/'\^https[^']*\$'/, "'^.*$'"), /cosign identity/],
+      [`action unpinned to a tag`, baseCi.replace(`@${SHA}`, '@v4'), baseDep, /not SHA-pinned/],
+    ]
+    for (const [label, ci2, dep2, rx] of weakenings) {
+      const viol = collectWorkflowViolations(ci2, dep2, { 'ci.yml': ci2, 'deploy.yml': dep2 })
+      if (!viol.some((m) => rx.test(m))) {
+        problems.push(`workflow gate MISSED weakening: ${label} :: got [${viol.join(' | ')}]`)
+      }
+    }
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -276,7 +425,10 @@ function selftest() {
     for (const p of problems) console.error(`  - ${p}`)
     process.exit(1)
   }
-  console.log('ci_supply_chain_gate --selftest OK: all secret + IaC detectors fired on planted fixtures.')
+  console.log(
+    'ci_supply_chain_gate --selftest OK: secret + IaC detectors fired on planted fixtures; ' +
+      'workflow baseline clean and all 6 fail-closed weakenings (semgrep/gitleaks/permissions/trivy-fs/cosign-identity/SHA-pin) caught.',
+  )
 }
 
 // ── main ─────────────────────────────────────────────────────────────────────────
