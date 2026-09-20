@@ -947,7 +947,6 @@ jobs:
           WEISSMAN_LOGIN_BURST: "120"
           WEISSMAN_TENANT_SCAN_POSTS_PER_MINUTE: "240"
           WEISSMAN_TENANT_SCAN_BURST: "120"
-          WEISSMAN_RATE_LIMIT_PER_SEC: "500"
           WEISSMAN_RATE_LIMIT_BURST: "2000"
           # Disable the periodic bulk-scan orchestrator for CI. It dispatches a HEAVY
           # `tenant_full_scan` per active tenant every 60s (60-min job timeout). Those jobs
