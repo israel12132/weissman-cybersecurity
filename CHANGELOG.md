@@ -100,6 +100,22 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
   `tests/e2e/test_scan_pipeline_live.py` to Rust/Node, and removing the `python-audit`
   gate + live pytest contract from `ci.yml` — that touches a required CI job and a live
   E2E stack, so it belongs in its own reviewed change rather than a blind edit.
+- **Finding provenance is honest: "has a sealed PoC" is no longer reported as "verified."**
+  The findings read path emitted `"verified": poc_sealed`, conflating two very different
+  assurance levels: `poc_sealed` means a tamper-evident PoC commitment was **sealed at
+  scan time** (proves evidence was captured), while an **independent live re-scan that
+  re-observed the finding** (`finding_live_verify`'s `reproducible`) is what proves it is
+  still exploitable *now*. The payload now carries both signals distinctly — `has_poc`
+  (sealed PoC commitment) and `reproduced` (live re-scan re-observed the finding) — so an
+  auditor can tell "we kept proof" from "we reproduced it." The findings report
+  (`ReportView`) surfaces the tiers honestly: the "How" column shows **reproduced (live)**
+  vs **crypto_seal (PoC)**, and the verification breakdown counts a `reproduced_live`
+  bucket separately instead of folding live-reproduced and merely-PoC-sealed findings into
+  one "verified" number. (`verified`/`poc_sealed` are unchanged for backward compatibility;
+  the new fields carry the honest distinction.) _Remaining Step 16 work (own reviewed
+  change):_ the full structured replayable evidence object (request/response transcript +
+  timing) with one-click reproduce, and the signed per-finding provenance ledger +
+  `engine_reality` call-graph as an auditor-verifiable attestation.
 - **Findings never show a fabricated CVSS; probe-sharing is disclosed at the source.**
   Two honesty gaps in how findings were scored and attributed:
   1. **CVSS display honesty.** Both the write path (`findings_persist.rs`) and the read

@@ -1436,6 +1436,17 @@ async fn api_findings(
                 &fid, &att_title, &att_sev, &target, "", att_receipt,
             );
 
+        // Provenance honesty: separate "a tamper-evident PoC was sealed at scan time"
+        // (poc_sealed / has_poc) from "an independent live re-scan RE-OBSERVED the finding"
+        // (reproduced). A sealed PoC proves the engine captured evidence; it does NOT prove
+        // the vuln is still reproducible now. `reproducible` is set only when the live
+        // re-verification (finding_live_verify) re-found the same finding_id on the target.
+        let reproduced = raw_data
+            .get("live_verification")
+            .and_then(|v| v.get("reproducible"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+
         out.push(json!({
             "id": format!("VLN-{}", raw_id),
             "raw_id": raw_id,
@@ -1450,6 +1461,11 @@ async fn api_findings(
             "discovered_at": r.try_get::<chrono::DateTime<Utc>, _>("discovered_at").ok().map(|d| d.to_rfc3339()),
             "poc_sealed": poc_sealed,
             "verified": poc_sealed,
+            // Distinct, auditor-honest provenance signals (see comment above):
+            //   has_poc    — a tamper-evident PoC commitment was sealed at scan time.
+            //   reproduced — an independent live re-scan re-observed the finding just now.
+            "has_poc": poc_sealed,
+            "reproduced": reproduced,
             "poc_commitment_sha256": r.try_get::<String, _>("poc_commitment_sha256").unwrap_or_default(),
             "cvss_score": cvss_display,
             "risk_score": risk,
