@@ -81,6 +81,25 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ### Security
 
+- **Least-privilege: revoked the unused BYPASSRLS write surface + dropped a dead
+  finding-write path.** `weissman_worker` is BYPASSRLS (it must claim the job bus
+  across tenants) yet had been granted full CRUD on seven tenant-scoped (FORCE RLS)
+  campaign/proof tables (`weissman_campaigns`, `weissman_campaign_{audit,events,steps,
+  world_states,detection_gaps}`, `weissman_proof_artifacts`) — a role that bypasses
+  RLS holding write on tenant tables can cross tenants with no RLS net. Those grants
+  are unused (the worker binary never references campaign/proof; every such write runs
+  through `begin_tenant_tx` on the NOBYPASSRLS `weissman_app` pool), so migration
+  `20260920130000_least_privilege_bypassrls_and_drop_dead_fuzz.sql` revokes them. The
+  same migration drops `promote_fuzz_candidate(bigint)` — a zero-caller SQL function
+  that INSERTed straight into `vulnerabilities`, bypassing the Rust evidence gate.
+  New live contract `crates/weissman-db/tests/bypassrls_write_grants_contract.rs`
+  fails CI if any BYPASSRLS service role gains write on a FORCE-RLS table outside a
+  documented control/auth-plane allowlist.
+  - _Follow-up (tracked, not in this change):_ `weissman_app` still holds blanket
+    INSERT/UPDATE on every table incl. `vulnerabilities`, so the "single gated write
+    path" is still a Rust convention rather than a DB boundary. Moving finding writes
+    behind a dedicated writer role/connection needs a runtime pool + credential change
+    validated in staging, so it is deferred to its own reviewed change.
 - **Customer (client) isolation backfilled onto 22 tenant tables that shipped
   without it** — `c2_covert_channel_audits`, `finding_candidates`, the four
   `ot_ics_*` tables, `surface_snapshots`, `vulnerability_lifecycle_events`,
