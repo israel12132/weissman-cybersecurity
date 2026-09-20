@@ -89,7 +89,7 @@ function shell(page: Page, locale: Locale, urlPath: string) {
   const canonical = `${ORIGIN}${urlPath}`
   const enUrl = `${ORIGIN}${localizeHref(page.path, 'en')}`
   const heUrl = `${ORIGIN}${localizeHref(page.path, 'he')}`
-  const ogImage = `${ORIGIN}/og-cover.svg`
+  const ogImage = `${ORIGIN}/brand-cover.jpg`
   const boot = locale === 'en' && urlPath === '/' ? '\n  <script src="/js/locale-boot.js"></script>' : ''
   return `<!DOCTYPE html>
 <html lang="${meta.htmlLang}" dir="${meta.dir}" data-page="${page.id}" data-locale="${locale}">
@@ -112,8 +112,12 @@ function shell(page: Page, locale: Locale, urlPath: string) {
   <meta property="og:title" content="${escapeHtml(seo.title)}" />
   <meta property="og:description" content="${escapeHtml(seo.description)}" />
   <meta property="og:image" content="${ogImage}" />
+  <meta property="og:image:width" content="952" />
+  <meta property="og:image:height" content="846" />
+  <meta property="og:image:alt" content="Weissman Cybersecurity" />
   <meta property="og:url" content="${canonical}" />
   <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="${ogImage}" />
   <meta name="twitter:title" content="${escapeHtml(seo.title)}" />
   <meta name="twitter:description" content="${escapeHtml(seo.description)}" />
   ${jsonLd(locale)}${boot}
