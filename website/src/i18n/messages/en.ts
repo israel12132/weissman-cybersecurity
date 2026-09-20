@@ -42,7 +42,7 @@ export const en = {
     'security-operations': {
       title: 'Security Operations — Weissman Cybersecurity',
       description:
-        'Command Center for live events, findings, playbooks, agents, and Ask Weissman — 145 operational routes for SOC teams.',
+        'Command Center for live events, findings, playbooks, agents, and Ask Weissman — 158 operational routes for SOC teams.',
     },
     'oast-validation': {
       title: 'OAST Validation — Weissman Cybersecurity',
@@ -644,7 +644,7 @@ export const en = {
       eyebrow: 'Operations',
       title: 'A Command Center built for the people on shift',
       summary:
-        '145 routes, live KPI strips, findings drawers, playbook builder, agent fleet, and Ask Weissman — English and Hebrew, including RTL.',
+        '158 routes, live KPI strips, findings drawers, playbook builder, agent fleet, and Ask Weissman — English and Hebrew, including RTL.',
       ctaLabel: 'See security operations',
       outcomes: [
         'One console for scans, evidence, and response',

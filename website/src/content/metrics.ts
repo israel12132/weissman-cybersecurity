@@ -31,12 +31,12 @@ export const metrics = {
     verify: 'node scripts/engine_reality_audit.mjs',
   },
   commandCenterRoutes: {
-    value: 145,
+    value: 158,
     label: 'Command Center routes',
     verify: 'node scripts/weissman-ui-audit.mjs',
   },
   auditedPages: {
-    value: 126,
+    value: 144,
     label: 'Audited UI pages',
     verify: 'node scripts/weissman-ui-audit.mjs',
   },

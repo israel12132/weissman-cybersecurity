@@ -42,7 +42,7 @@ export const he = {
     'security-operations': {
       title: 'תפעול אבטחה — Weissman Cybersecurity',
       description:
-        'Command Center לאירועים חיים, ממצאים, פלייבוקים, סוכנים ו-Ask Weissman — 145 מסלולים תפעוליים לצוותי SOC.',
+        'Command Center לאירועים חיים, ממצאים, פלייבוקים, סוכנים ו-Ask Weissman — 158 מסלולים תפעוליים לצוותי SOC.',
     },
     'oast-validation': {
       title: 'אימות OAST — Weissman Cybersecurity',
@@ -644,7 +644,7 @@ export const he = {
       eyebrow: 'תפעול',
       title: 'Command Center שנבנה למי שבמשמרת',
       summary:
-        '145 מסלולים, פסי KPI חיים, מגירות ממצאים, בונה פלייבוקים, צי סוכנים ו-Ask Weissman — אנגלית ועברית, כולל RTL.',
+        '158 מסלולים, פסי KPI חיים, מגירות ממצאים, בונה פלייבוקים, צי סוכנים ו-Ask Weissman — אנגלית ועברית, כולל RTL.',
       ctaLabel: 'לתפעול אבטחה',
       outcomes: [
         'קונסול אחד לסריקות, ראיות ותגובה',
