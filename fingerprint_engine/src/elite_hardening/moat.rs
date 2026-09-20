@@ -429,6 +429,7 @@ pub fn snapshot() -> Value {
     json!({
         "live": true,
         "engines_total": engines_total,
+        "palo_alto": palo_alto_bakeoff(),
         "lanes_total": LANES.len(),
         "lanes_covered": covered,
         "unmatched_stack": fusion,
@@ -457,6 +458,102 @@ pub fn snapshot() -> Value {
             "wss_key_bytes": wss_inner::KEY_BYTES,
         },
         "wss_inner_algo": wss_inner::ALGO,
+    })
+}
+
+/// Palo Alto bake-off inventory from **this binary**, not PAN telemetry.
+///
+/// Positioning (labelled `live: false`) is a category statement: Weissman finds and
+/// orchestrates; Palo sells inline prevention. Engine overlap and unique loops are
+/// live because they are derived from `PRODUCTION_ENGINE_IDS`.
+fn production_has(id: &str) -> bool {
+    PRODUCTION_ENGINE_IDS.contains(&id)
+}
+
+fn live_engine_ids(needles: &[&'static str]) -> Vec<&'static str> {
+    needles
+        .iter()
+        .copied()
+        .filter(|id| production_has(id))
+        .collect()
+}
+
+fn sku_overlap(sku: &str, needles: &[&'static str], maturity: &str) -> Value {
+    let ids = live_engine_ids(needles);
+    let agent_required_ids: Vec<&str> = ids
+        .iter()
+        .copied()
+        .filter(|id| weissman_core::models::engine_agent::is_agent_required_engine(id))
+        .collect();
+    json!({
+        "sku": sku,
+        "ids": ids,
+        "agent_required_ids": agent_required_ids,
+        "maturity": maturity,
+    })
+}
+
+fn palo_alto_bakeoff() -> Value {
+    let vngfw_admin = std::env::var("WEISSMAN_VNGFW_ADMIN").unwrap_or_default();
+    json!({
+        "live": true,
+        "source": "this_binary_inventory",
+        "not_palo_telemetry": true,
+        "positioning": {
+            "live": false,
+            "weissman": "assessment_plus_orchestrated_containment",
+            "palo_alto": "inline_prevention_plus_xsiam_cnapp_sase",
+            "honest": "companion_not_ngfw_replacement",
+        },
+        "catalog": crate::engine_accounting::to_json(),
+        "find_vs_block": {
+            "find": true,
+            "inline_packet_path": false,
+            "vngfw_engine_registered": production_has("weissman_vngfw"),
+            "vngfw_admin_configured": !vngfw_admin.trim().is_empty(),
+            "ngfw_posture_engine": production_has("ngfw_posture"),
+        },
+        "palo_sku_overlap": [
+            sku_overlap(
+                "Prisma Cloud",
+                &[
+                    "cnapp_continuous",
+                    "toxic_combo_runtime_proof",
+                    "iac_misconfig",
+                    "k8s_container",
+                    "aws_attack",
+                ],
+                "partial",
+            ),
+            sku_overlap(
+                "Cortex XDR",
+                &["host_isolation", "ebpf_sensor", "ioc_yara_hunt", "chronos"],
+                "partial",
+            ),
+            sku_overlap(
+                "Cortex Xpanse",
+                &["asm", "first_mover_surface_delta", "osint"],
+                "partial",
+            ),
+            sku_overlap(
+                "Prisma Access",
+                &["sase_security_bypass", "ai_casb_saas", "casb_saas_posture"],
+                "partial",
+            ),
+            sku_overlap(
+                "PAN-OS / WildFire",
+                &["ngfw_posture", "weissman_vngfw", "malware_detonation"],
+                "theater_to_partial",
+            ),
+        ],
+        "unique_closed_loops": [
+            {"id": "chronos", "present": production_has("chronos"), "loop": "web_parent_to_shell_process_delta"},
+            {"id": "ot_passive_active_safety", "present": production_has("ot_passive_active_safety"), "loop": "ot_read_only_fsm_plus_fair"},
+            {"id": "ot_crown_jewel_path", "present": production_has("ot_crown_jewel_path"), "loop": "ot_to_process_crown_jewel"},
+            {"id": "ot_cloud_identity_killpath", "present": production_has("ot_cloud_identity_killpath"), "loop": "ot_x_cloud_x_identity"},
+            {"id": "control_plane_of_controls", "present": production_has("control_plane_of_controls"), "loop": "prove_installed_preventers"},
+            {"id": "toxic_combo_runtime_proof", "present": production_has("toxic_combo_runtime_proof"), "loop": "cnapp_plus_safe_exposure"},
+        ],
     })
 }
 
@@ -514,6 +611,65 @@ mod tests {
 
     fn lane_id(lane: &Value) -> &str {
         lane["id"].as_str().unwrap_or("")
+    }
+
+    #[test]
+    fn palo_alto_bakeoff_is_companion_not_ngfw_and_ot_loops_are_live() {
+        let snap = snapshot();
+        let palo = &snap["palo_alto"];
+        assert_eq!(palo["live"], true);
+        assert_eq!(palo["not_palo_telemetry"], true);
+        assert_eq!(palo["positioning"]["live"], false);
+        assert_eq!(
+            palo["positioning"]["honest"],
+            "companion_not_ngfw_replacement"
+        );
+        assert_eq!(palo["find_vs_block"]["find"], true);
+        assert_eq!(palo["find_vs_block"]["inline_packet_path"], false);
+        let loops = palo["unique_closed_loops"].as_array().expect("loops");
+        for id in [
+            "ot_passive_active_safety",
+            "ot_crown_jewel_path",
+            "ot_cloud_identity_killpath",
+            "chronos",
+            "control_plane_of_controls",
+            "toxic_combo_runtime_proof",
+        ] {
+            let loop_row = loops
+                .iter()
+                .find(|l| l["id"] == id)
+                .unwrap_or_else(|| panic!("missing palo loop {id}"));
+            assert_eq!(
+                loop_row["present"],
+                production_has(id),
+                "{id} present flag must match PRODUCTION_ENGINE_IDS"
+            );
+        }
+        assert!(palo["catalog"]["total_ids"].as_u64().unwrap() >= 580);
+        assert!(
+            palo["catalog"]["alias_ids"].as_u64().unwrap() > 0,
+            "catalog honesty must surface alias inflation"
+        );
+        let xdr = palo["palo_sku_overlap"]
+            .as_array()
+            .expect("skus")
+            .iter()
+            .find(|s| s["sku"] == "Cortex XDR")
+            .expect("xdr sku");
+        let xdr_agent = xdr["agent_required_ids"].as_array().expect("xdr agent");
+        for id in ["host_isolation", "ebpf_sensor", "ioc_yara_hunt"] {
+            assert!(
+                xdr_agent.iter().any(|v| v.as_str() == Some(id)),
+                "Cortex XDR overlap must admit {id} is agent-required"
+            );
+        }
+        assert!(
+            !xdr_agent.iter().any(|v| v.as_str() == Some("chronos")),
+            "CHRONOS is a server hybrid, not agent-only"
+        );
+        if let Ok(path) = std::env::var("DUMP_PALO_JSON") {
+            std::fs::write(path, serde_json::to_string_pretty(palo).expect("palo json")).unwrap();
+        }
     }
 
     #[test]
