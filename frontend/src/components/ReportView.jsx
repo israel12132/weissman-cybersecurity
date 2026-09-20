@@ -9,6 +9,7 @@ import { apiFetch } from '../utils/apiFetch'
 import { apiUrl } from '../lib/apiBase'
 import { downloadApiFile } from '../lib/downloadApiFile'
 import StandaloneLabShell from './ui/StandaloneLabShell'
+import Button from './ui/Button'
 
 export default function ReportView() {
   const { t } = useTranslation()
@@ -93,7 +94,8 @@ export default function ReportView() {
       maxWidth="max-w-4xl"
       actions={!error ? (
         <div className="flex items-center gap-3">
-          <button
+          <Button
+            variant="unstyled"
             type="button"
             onClick={() => {
               downloadApiFile(`/api/clients/${clientId}/export/xlsx`, 'Weissman_Board.xlsx').catch((e) => {
@@ -103,7 +105,7 @@ export default function ReportView() {
             className="text-sm text-emerald-400 hover:underline"
           >
             {t('components.reportView.download_xlsx')}
-          </button>
+          </Button>
           <a
             href={apiUrl(`/api/clients/${clientId}/report/pdf`)}
             download

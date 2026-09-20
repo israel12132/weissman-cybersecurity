@@ -166,13 +166,9 @@ export default function ClientDetail() {
           <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-5 py-4 text-rose-300">
             {error}
           </div>
-          <button
-            type="button"
-            onClick={() => navigate('/clients')}
-            className="px-4 py-2 rounded-xl border border-white/12 bg-white/[0.04] text-white/70 hover:text-white font-mono text-sm transition-colors"
-          >
+          <Button variant="secondary" onClick={() => navigate('/clients')}>
             {t('client_detail.back')}
-          </button>
+          </Button>
         </div>
       </PageShell>
     )
@@ -183,13 +179,9 @@ export default function ClientDetail() {
       <PageShell title={t('client_detail.title')} subtitle={t('client_detail.not_found')}>
         <div className="max-w-2xl mx-auto text-center py-12">
           <p className="text-white/45">{t('client_detail.not_found')}</p>
-          <button
-            type="button"
-            onClick={() => navigate('/clients')}
-            className="mt-6 px-4 py-2 rounded-xl border border-white/12 bg-white/[0.04] text-white/70 hover:text-white font-mono text-sm transition-colors"
-          >
+          <Button variant="secondary" onClick={() => navigate('/clients')} className="mt-6">
             {t('client_detail.back')}
-          </button>
+          </Button>
         </div>
       </PageShell>
     )
@@ -250,13 +242,9 @@ export default function ClientDetail() {
           onRefresh={loadClient}
           refreshLabel={t('common.refresh')}
         >
-          <button
-            type="button"
-            onClick={() => navigate('/clients')}
-            className={navBtnClass}
-          >
+          <Button variant="unstyled" onClick={() => navigate('/clients')} className={navBtnClass}>
             {t('client_detail.back')}
-          </button>
+          </Button>
           <Link to={`/findings?client_id=${client.id}`} className={navBtnClass}>
             {t('client_detail.view_findings')}
           </Link>
