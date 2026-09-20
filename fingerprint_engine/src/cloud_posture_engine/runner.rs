@@ -1,4 +1,10 @@
 // ─── Entry points ──────────────────────────────────────────────────────────────
+// Real child module (Step 8, was inc/runner.inc.rs). `use super::*` re-imports the parent
+// cloud_posture_engine module's crate:: use-aliases (finding_rich, print_result,
+// EngineResult, EngineRunContext, assume_role_sdk_config, …) and the sibling-fragment types
+// (CloudScanOptions, ENGINE_ID, …), so this file compiles identically to when it was glued
+// in via include!(), but now with a real module boundary that cargo tooling can see.
+use super::*;
 
 pub async fn run_cloud_posture_result(target: &str) -> EngineResult {
     run_cloud_posture_result_ctx(target, &EngineRunContext::default()).await

@@ -43,6 +43,25 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ### Changed
 
+- **First `include!()` fragment converted to a real module (`cloud_posture_engine::runner`).**
+  The 385K-LOC monolith glues code together with 51 `include!()` directives that fake module
+  boundaries via shared scope, defeating cargo's per-module tooling. The safest leaf was
+  converted honestly: `cloud_posture_engine/inc/runner.inc.rs` (a pure consumer defining only
+  the 3 entry-point fns, referenced by nothing else) became `cloud_posture_engine/runner.rs`
+  via `mod runner;` + `pub use` (preserving the 5 external call-site paths) + `use super::*`
+  (re-importing the parent's `crate::` aliases and sibling-fragment types with zero visibility
+  edits). Build + the 5 `cloud_posture_engine::tests` green. This removes one shared-scope
+  `include!()` with the smallest possible blast radius; the domain sub-crate split and the
+  remaining `.inc` conversions stay deferred (they need arsenal_config/engine_result/dispatch
+  hoisted into a foundational crate first — multi-day, not build-safe incrementally).
+- **Behavioral coverage for the SSE zero-trust stream-binding decision (`verify_stream_context`).**
+  This pure function decides whether a hijacked/replayed SSE stream is terminated (403), yet its
+  only sibling test asserted trivial path-string matching — the security decision beside it had
+  ZERO coverage, so a refactor treating "no fingerprint supplied" as "skip the check" would have
+  silently turned stream binding into a no-op and passed CI. Four tests now pin the three
+  invariants: an IP-bound token rejects a different client IP; a fingerprint-bound token rejects
+  a connection that presents NO fingerprint (the fail-closed case) or a wrong one; and a
+  legacy/unbound token still passes. No product-code change — coverage that locks the contract.
 - **Dev/CI build profile: fast, small, unoptimized — fat-LTO stays release-only.** The
   workspace had no `[profile.dev]`/`[profile.test]`, so unoptimized builds carried full
   `debug = 2` info and every integration-test binary statically linked the 385K-LOC
@@ -235,6 +254,23 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ### Security
 
+- **Structured, tamper-evident, hash-chained per-finding evidence (`finding_evidence_ledger`).**
+  Live verification did real request/response I/O but collapsed it into a free-text `detail`
+  string — so a CONFIRMED verdict could not be shown to an auditor as the transcript that
+  justified it, and nothing bound that evidence into a tamper-evident chain. New module adds
+  `EvidenceTranscript` (request method/URL/**header names only** — never values, which carry
+  auth tokens — + body hash/len; response status/safe-header-subset/bounded snippet/body
+  hash/len; timing `started_at`+`elapsed_ms`; `verifier_version`), a deterministic
+  `canonical_bytes()` (fixed field order, sorted headers, record separators), a `commitment()`
+  SHA-256 over it, and `sign(prev_hash, finding_id)` fusing the two existing provenance
+  primitives — the `finding_attestation` HMAC receipt and the `nl_audit_*` prev-hash chain —
+  into one hash-chained `LedgerEntry` (`entry_hash = SHA256(version|prev_hash|commitment|finding_id)`
+  + HMAC receipt), with `verify_entry()` recomputing the commitment, chain link, and (when
+  present) constant-time-verifying the receipt. Any mutation of the transcript, chain link, or
+  finding id fails verification. Pure logic, 6 unit tests green (determinism, order-independence,
+  tamper detection, chain linkage, forgery rejection). This is the replayable-evidence + signed
+  ledger foundation of Step 16; wiring `finding_live_verify` to emit it, and one-click replay
+  against a live target, follow in their own change.
 - **CI supply-chain hardening is now self-enforcing locally, not just asserted on the runner.**
   The real controls (gitleaks, Trivy fs/config/image, Semgrep `--error`, CodeQL, cosign
   keyless signing + SLSA provenance + SBOM attestation, an anchored fail-closed
