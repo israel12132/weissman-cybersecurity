@@ -75,6 +75,81 @@ export function getRateLimitToastCallback() {
   return rateLimitToastCallback
 }
 
+let maintenanceCallback = null
+
+/**
+ * Register a callback for branded maintenance responses (used by MaintenanceProvider
+ * to raise the full-screen "Command Center is being updated" overlay). Called with
+ * `{ status, retryAfter }`; the provider is idempotent, so several concurrent
+ * requests failing at once (the normal case during an update) are harmless.
+ */
+export function setMaintenanceCallback(callback) {
+  maintenanceCallback = callback
+}
+
+/** Return the currently registered maintenance callback (shared with utils/apiFetch). */
+export function getMaintenanceCallback() {
+  return maintenanceCallback
+}
+
+/**
+ * True when a response is the gateway's branded continuity/maintenance answer
+ * rather than an ordinary application error.
+ *
+ * Every layer that serves the maintenance page (nginx gateway, VPS nginx, Caddy,
+ * the k8s default backend, the Cloudflare Worker, the service worker) answers
+ * 502/503/504 with the `X-Weissman-Maintenance: 1` header; `api.json` additionally
+ * carries `status: "maintenance"` (older builds: `error: "maintenance"`) for
+ * callers that only see a parsed body. A 503 WITHOUT either marker is a legitimate
+ * upstream answer (e.g. demo-request when SMTP is unconfigured) and must not raise
+ * the overlay, so the status code alone is never enough.
+ *
+ * @param {Response|{status:number, headers?:Headers}} response
+ * @param {unknown} [parsedBody] already-decoded JSON body, when the caller has it
+ */
+export function isMaintenanceResponse(response, parsedBody) {
+  const status = response?.status
+  if (status !== 502 && status !== 503 && status !== 504) return false
+  let header = null
+  try {
+    header = typeof response.headers?.get === 'function' ? response.headers.get('x-weissman-maintenance') : null
+  } catch {
+    header = null
+  }
+  if (header != null) return true
+  if (parsedBody && typeof parsedBody === 'object') {
+    return parsedBody.error === 'maintenance' || parsedBody.status === 'maintenance'
+  }
+  return false
+}
+
+/**
+ * Fire the maintenance callback when `response` is the branded maintenance answer.
+ * Reads a cloned body only when the header is absent (the body is the fallback
+ * marker). Never throws and never alters the response the caller receives.
+ */
+async function notifyMaintenance(response) {
+  if (!maintenanceCallback) return
+  if (response.status !== 502 && response.status !== 503 && response.status !== 504) return
+  let matched = isMaintenanceResponse(response)
+  if (!matched) {
+    try {
+      matched = isMaintenanceResponse(response, await response.clone().json())
+    } catch {
+      // not JSON (e.g. an HTML error page from a non-branded proxy) — not maintenance
+    }
+  }
+  if (!matched) return
+  try {
+    maintenanceCallback({
+      status: response.status,
+      retryAfter: parseRetryAfter(response.headers.get('Retry-After')),
+    })
+  } catch {
+    // a UI callback must never change the outcome of an API call
+  }
+}
+
 function parseRetryAfter(retryAfterHeader) {
   if (!retryAfterHeader) return 60
   const seconds = parseInt(retryAfterHeader, 10)
@@ -229,6 +304,11 @@ export async function apiFetch(pathOrUrl, init = {}) {
     }
     rateLimitToastCallback({ retryAfter, message })
   }
+
+  // Branded 502/503/504 from the gateway → raise the maintenance overlay. The
+  // response itself is returned unchanged below, so callers keep their exact
+  // error handling; the overlay only adds the "resumes automatically" layer.
+  await notifyMaintenance(response)
 
   // If 401 Unauthorized, attempt token refresh and retry
   if (response.status === 401 && !pathStr.includes('/api/auth/refresh') && !pathStr.includes('/api/login')) {

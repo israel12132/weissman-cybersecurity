@@ -1,0 +1,39 @@
+# Weissman maintenance Worker — Cloudflare edge layer of the continuity page.
+#
+# Deploy from this directory: `npx wrangler login` once, then `npx wrangler deploy`.
+# README.md next to this file has the full setup, the curl checks and the caveats.
+
+name = "weissman-maintenance"
+main = "src/worker.mjs"
+compatibility_date = "2026-09-01"
+
+# The Worker only makes sense in front of the real zone: on a *.workers.dev host there is
+# no origin behind it (fetch(request) would call the Worker's own hostname). Keep the
+# preview subdomain off so the routes below are the only way in.
+workers_dev = false
+
+# One route per public hostname that Cloudflare proxies to the origin (orange cloud).
+# A hostname that is "DNS only" (grey cloud) never reaches a Worker. Change the zone when
+# the site is served from another domain — deploy/nginx-weissman.conf and
+# deploy/k8s/ingress.yaml use weissmancyber.com, the website's canonical origin is
+# weissman.io.
+routes = [
+  { pattern = "weissman.io/*", zone_name = "weissman.io" },
+  { pattern = "www.weissman.io/*", zone_name = "weissman.io" },
+]
+
+# Announced windows — optional extra, OFF by default. The page appears by itself whenever
+# the origin cannot answer, so nothing here is required for it to work. Set
+# MAINTENANCE_MODE to "on" only to announce a window while the origin may still be up
+# (e.g. `npx wrangler deploy --var MAINTENANCE_MODE:on --var MAINTENANCE_REASON:"…"
+# --var MAINTENANCE_UNTIL:2026-09-27T04:00:00+03:00`); a plain `npx wrangler deploy`
+# restores these values and ends the window. MAINTENANCE_UNTIL is ISO-8601 with an offset.
+[vars]
+MAINTENANCE_MODE = "off"
+MAINTENANCE_REASON = ""
+MAINTENANCE_UNTIL = ""
+
+# Workers Logs (dashboard → the Worker → Logs) show when the page was served and to which
+# paths; the free plan includes a daily allowance. console output is not used otherwise.
+[observability]
+enabled = true

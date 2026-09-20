@@ -344,17 +344,42 @@ services:
       # To expose it, put a TLS terminator in front and point it at 127.0.0.1:80, or set
       # WEISSMAN_GATEWAY_BIND=0.0.0.0 to consciously accept cleartext on the network.
       - "${WEISSMAN_GATEWAY_BIND:-127.0.0.1}:${WEISSMAN_GATEWAY_PORT:-80}:8080"
+    volumes:
+      # Continuity ("maintenance") page state. The page itself is baked into the image and is
+      # AUTOMATIC: nginx serves it whenever the backend cannot answer (502/504) and stops the
+      # moment it can. Nothing here is needed for that. This mount only carries the OPT-IN
+      # announced-window flag and status.json written on the host by
+      # deploy/maintenance/maintenance-mode.sh — read-only, because the gateway must never be
+      # able to put itself into maintenance, and a compromised nginx must not be able to keep
+      # the site down by re-creating the flag. Set WEISSMAN_MAINTENANCE_STATE_DIR when the state
+      # dir lives outside the checkout (e.g. /etc/weissman/maintenance); it must exist, or Docker
+      # creates it root-owned and maintenance-mode.sh cannot write there. The default is the
+      # committed (git-ignored, .gitkeep only) deploy/maintenance/state/, so a plain
+      # `docker compose up` works with no extra setup. Never mounted with `rw`.
+      - "${WEISSMAN_MAINTENANCE_STATE_DIR:-./deploy/maintenance/state}:/var/lib/weissman/maintenance:ro"
     depends_on:
       backend:
-        condition: service_healthy
+        # service_started, not service_healthy. The gateway now degrades on its own: with the
+        # backend unreachable it serves the branded continuity page (503 + Retry-After) from
+        # deploy/maintenance/dist, so it must be up BEFORE the backend is healthy — on a cold
+        # `docker compose up` (host reboot, first start after `down`) the backend can spend
+        # 90 s in migrations, and with service_healthy nothing listened on the published port
+        # for that whole window: visitors got a connection error, the one thing this page
+        # exists to prevent. service_started is still required: nginx resolves the upstream
+        # name `backend` once at startup and refuses to start when the container does not exist.
+        condition: service_started
     healthcheck:
-      # Exercise the proxy path, not just the filesystem. The previous check fetched
-      # /command-center/ — a static file nginx serves from its own image — so it passed
-      # whenever nginx was alive, which is the one thing that was never in doubt. It stayed
-      # green with the backend unreachable, and "gateway healthy" told an operator nothing
-      # about whether the site actually worked. /api/health proxies to weissman_backend, so
-      # this now fails when the upstream is down.
-      test: ["CMD", "curl", "-sf", "http://localhost:8080/api/health"]
+      # Exercise the proxy path, not just the filesystem: /api/health goes through
+      # weissman_backend, so a wedged or misrouted proxy fails this check. But a backend that is
+      # down must NOT mark the gateway unhealthy — in that state nginx is doing exactly its job
+      # (serving the 503 continuity page), and an "unhealthy" gateway invites orchestrators and
+      # operators to restart the one container that is keeping the site presentable. Healthy
+      # therefore means: nginx answered the proxied path with the backend's 200 or with its own
+      # branded 503; anything else (000, 502 from a broken map, 404) is a gateway problem.
+      # `$$` — Compose interpolates `$var` inside this string at `docker compose config` time,
+      # so an unescaped `$code` became an empty string and the check compared "" to 200/503:
+      # the gateway could never report healthy. `$$` is the Compose escape for a literal `$`.
+      test: ["CMD-SHELL", "code=$$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/health); [ \"$$code\" = 200 ] || [ \"$$code\" = 503 ]"]
       interval: 10s
       timeout: 5s
       retries: 3

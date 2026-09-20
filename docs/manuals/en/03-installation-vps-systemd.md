@@ -165,6 +165,25 @@ sudo systemctl restart weissman-server weissman-worker
 
 Migrations run at server boot when `WEISSMAN_MIGRATE_URL` is set.
 
+### Zero-downtime upgrade and the continuity page
+
+The restart above is the only moment visitors could notice. It is covered **automatically**: the
+reverse proxy (`deploy/nginx-weissman.conf` or `deploy/Caddyfile`) serves the branded Weissman page
+as HTTP 503 + `Retry-After: 30` whenever `weissman-server` cannot answer, and the page returns each
+visitor to their original URL on the first 200 from `/api/health`. Nothing to switch on — the page
+only has to be on disk (`sudo bash deploy/maintenance/install.sh` → `/opt/weissman/maintenance`;
+the installer in step 3 does this as well).
+
+For routine rollouts prefer the one-command version of the upgrade, which builds first, restarts
+the units, waits for a genuine 200 and prints how long the origin was unreachable:
+
+```bash
+deploy/rebuild.sh --mode systemd        # --dry-run prints the plan
+```
+
+Runbook (what visitors see, announced windows, curl checks, troubleshooting):
+[`docs/operations/MAINTENANCE-PAGE-AND-ZERO-DOWNTIME-REBUILD.md`](../../operations/MAINTENANCE-PAGE-AND-ZERO-DOWNTIME-REBUILD.md).
+
 ---
 
 ## Troubleshooting
