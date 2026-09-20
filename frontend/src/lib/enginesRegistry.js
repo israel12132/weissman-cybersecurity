@@ -3373,7 +3373,7 @@ export const ENGINES_REGISTRY = [
     label: 'APT28 (Fancy Bear) TTPs',
     group: 'apt',
     mitre: 'T1566.001',
-    description: 'APT28/Fancy Bear technique simulation: X-Agent malware indicators, spear phishing with geopolitical lure documents, credential harvesting via Responder/Mimikatz, Zebrocy multi-stage loader patterns, Sofacy C2 communication patterns, DNC-style attack simulation',
+    description: 'APT28 (Fancy Bear) initial-access surface exposure (evidence-based): checks the target for internet-facing software and services APT28 (Fancy Bear) is publicly documented (CISA / Mandiant) to exploit for initial access, and reports only on a live HTTP/TCP response with the relevant CVE/KEV reference. External exposure mapping to the documented playbook — it does not deploy malware, run C2, or emulate phishing.',
     requiresTarget: true,
   },
   {
@@ -3381,7 +3381,7 @@ export const ENGINES_REGISTRY = [
     label: 'APT29 (Cozy Bear) TTPs',
     group: 'apt',
     mitre: 'T1566.002',
-    description: 'APT29/Cozy Bear technique simulation: WellMess/WellMail malware patterns, Sunburst/SolarWinds-style supply chain indicators, EnvyScout dropper detection, BlueLeaf/TAMESWORD indicators, slow-and-low lateral movement patterns',
+    description: 'APT29 (Cozy Bear) initial-access surface exposure (evidence-based): checks the target for internet-facing software and services APT29 (Cozy Bear) is publicly documented (CISA / Mandiant) to exploit for initial access, and reports only on a live HTTP/TCP response with the relevant CVE/KEV reference. External exposure mapping to the documented playbook — it does not deploy malware, run C2, or emulate phishing.',
     requiresTarget: true,
   },
   {
@@ -3389,7 +3389,7 @@ export const ENGINES_REGISTRY = [
     label: 'APT41 (Winnti/Double Dragon) TTPs',
     group: 'apt',
     mitre: 'T1195',
-    description: 'APT41 dual-purpose cyber espionage/crime TTPs: ShadowPad backdoor indicators, supply chain compromise (CCleaner/NetSarang), PlugX variant detection, financially-motivated ransomware alongside espionage, living-off-land government network techniques',
+    description: 'APT41 (Winnti / Double Dragon) initial-access surface exposure (evidence-based): checks the target for internet-facing software and services APT41 (Winnti / Double Dragon) is publicly documented (CISA / Mandiant) to exploit for initial access, and reports only on a live HTTP/TCP response with the relevant CVE/KEV reference. External exposure mapping to the documented playbook — it does not deploy malware, run C2, or emulate phishing.',
     requiresTarget: true,
   },
   {
@@ -3397,7 +3397,7 @@ export const ENGINES_REGISTRY = [
     label: 'Lazarus Group (DPRK) TTPs',
     group: 'apt',
     mitre: 'T1566.001',
-    description: 'Lazarus Group/Hidden Cobra technique simulation: AppleJeus cryptocurrency theft patterns, BLINDINGCAN/COPPERHEDGE malware indicators, fake job offer spear phishing, SWIFT payment system attacks, WannaCry ransomware genetic marker detection',
+    description: 'Lazarus Group (DPRK) initial-access surface exposure (evidence-based): checks the target for internet-facing software and services Lazarus Group (DPRK) is publicly documented (CISA / Mandiant) to exploit for initial access, and reports only on a live HTTP/TCP response with the relevant CVE/KEV reference. External exposure mapping to the documented playbook — it does not deploy malware, run C2, or emulate phishing.',
     requiresTarget: false,
   },
   {
@@ -3405,7 +3405,7 @@ export const ENGINES_REGISTRY = [
     label: 'Volt Typhoon (VANGUARD PANDA) TTPs',
     group: 'apt',
     mitre: 'T1078',
-    description: 'Volt Typhoon Chinese APT living-off-land techniques: SOHO router/VPN pivot infrastructure, PowerShell LOLBin abuse patterns, NTDS.dit credential extraction, RDP relay via VPN, Netlogon exploitation (Zerologon), ZTNA bypass techniques',
+    description: 'Volt Typhoon initial-access surface exposure (evidence-based): checks the target for internet-facing software and services Volt Typhoon is publicly documented (CISA / Mandiant) to exploit for initial access, and reports only on a live HTTP/TCP response with the relevant CVE/KEV reference. External exposure mapping to the documented playbook — it does not deploy malware, run C2, or emulate phishing.',
     requiresTarget: true,
   },
   {
@@ -3413,7 +3413,7 @@ export const ENGINES_REGISTRY = [
     label: 'Scattered Spider Social TTPs',
     group: 'apt',
     mitre: 'T1621',
-    description: 'Scattered Spider (0ktapus) technique simulation: SMS phishing for MFA bypass, Okta admin console takeover, Citrix/VDI exploitation, cloud environment takeover post-initial-access, ransomware deployment after data theft, extortion methodology',
+    description: 'Scattered Spider initial-access surface exposure (evidence-based): checks the target for internet-facing software and services Scattered Spider is publicly documented (CISA / Mandiant) to exploit for initial access, and reports only on a live HTTP/TCP response with the relevant CVE/KEV reference. External exposure mapping to the documented playbook — it does not deploy malware, run C2, or emulate phishing.',
     requiresTarget: true,
   },
   {
@@ -3421,7 +3421,7 @@ export const ENGINES_REGISTRY = [
     label: 'Salt Typhoon Telecom TTPs',
     group: 'apt',
     mitre: 'T1557',
-    description: 'Salt Typhoon APT (AT&T/Verizon breach) telecom attack simulation: lawful intercept system compromise, CALEA wiretap abuse, telecom core network lateral movement, GTP/Diameter protocol exploitation, 5G core network targeting',
+    description: 'Salt Typhoon initial-access surface exposure (evidence-based): checks the target for internet-facing software and services Salt Typhoon is publicly documented (CISA / Mandiant) to exploit for initial access, and reports only on a live HTTP/TCP response with the relevant CVE/KEV reference. External exposure mapping to the documented playbook — it does not deploy malware, run C2, or emulate phishing.',
     requiresTarget: false,
   },
   {
@@ -3429,7 +3429,7 @@ export const ENGINES_REGISTRY = [
     label: 'FIN7 Financial Crime TTPs',
     group: 'apt',
     mitre: 'T1566.001',
-    description: 'FIN7/Carbanak financial crime TTPs: Carbanak banking backdoor patterns, GRIFFON JS backdoor, fake AV company recruitment scam patterns, POS malware memory scraping techniques, Harpy/DICELOADER loader indicators',
+    description: 'FIN7 initial-access surface exposure (evidence-based): checks the target for internet-facing software and services FIN7 is publicly documented (CISA / Mandiant) to exploit for initial access, and reports only on a live HTTP/TCP response with the relevant CVE/KEV reference. External exposure mapping to the documented playbook — it does not deploy malware, run C2, or emulate phishing.',
     requiresTarget: true,
   },
   {
@@ -3437,7 +3437,7 @@ export const ENGINES_REGISTRY = [
     label: 'Conti Ransomware Group TTPs',
     group: 'apt',
     mitre: 'T1486',
-    description: 'Conti ransomware group technique simulation (from leaked playbook): BazarLoader initial access, Cobalt Strike beacon deployment, network enumeration with ADFind, Mimikatz credential dump, FileZilla data exfiltration, RYUK deployment patterns',
+    description: 'Conti initial-access surface exposure (evidence-based): checks the target for internet-facing software and services Conti is publicly documented (CISA / Mandiant) to exploit for initial access, and reports only on a live HTTP/TCP response with the relevant CVE/KEV reference. External exposure mapping to the documented playbook — it does not deploy malware, run C2, or emulate phishing.',
     requiresTarget: false,
   },
   {
@@ -3445,7 +3445,7 @@ export const ENGINES_REGISTRY = [
     label: 'LockBit Ransomware TTPs',
     group: 'apt',
     mitre: 'T1486',
-    description: 'LockBit 2.0/3.0/Black ransomware TTPs: bug bounty program exploitation, affiliate recruitment detection, VMware ESXi targeting, lateral movement via group policy, BYOVD kernel driver exploitation, LockBit ransomware note patterns',
+    description: 'LockBit initial-access surface exposure (evidence-based): checks the target for internet-facing software and services LockBit is publicly documented (CISA / Mandiant) to exploit for initial access, and reports only on a live HTTP/TCP response with the relevant CVE/KEV reference. External exposure mapping to the documented playbook — it does not deploy malware, run C2, or emulate phishing.',
     requiresTarget: false,
   },
   {
@@ -3453,7 +3453,7 @@ export const ENGINES_REGISTRY = [
     label: 'Cl0p Ransomware TTPs',
     group: 'apt',
     mitre: 'T1486',
-    description: 'Cl0p ransomware group TTPs: MOVEit Transfer exploitation pattern (CVE-2023-34362), GoAnywhere MFT exploitation, Accellion FTA exploitation, SQL injection in file transfer appliances, triple extortion methodology, data leak site management',
+    description: 'Cl0p initial-access surface exposure (evidence-based): checks the target for internet-facing software and services Cl0p is publicly documented (CISA / Mandiant) to exploit for initial access, and reports only on a live HTTP/TCP response with the relevant CVE/KEV reference. External exposure mapping to the documented playbook — it does not deploy malware, run C2, or emulate phishing.',
     requiresTarget: true,
   },
   {
@@ -3461,7 +3461,7 @@ export const ENGINES_REGISTRY = [
     label: 'BlackCat/ALPHV Ransomware TTPs',
     group: 'apt',
     mitre: 'T1486',
-    description: 'BlackCat/ALPHV ransomware TTPs: Rust-based ransomware analysis (mirroring real BlackCat), BYOVD via Mbed.sys, intermittent encryption for speed, Azure Storage exfiltration, Exmatter exfiltration tool patterns, Change Healthcare-style attack',
+    description: 'BlackCat / ALPHV initial-access surface exposure (evidence-based): checks the target for internet-facing software and services BlackCat / ALPHV is publicly documented (CISA / Mandiant) to exploit for initial access, and reports only on a live HTTP/TCP response with the relevant CVE/KEV reference. External exposure mapping to the documented playbook — it does not deploy malware, run C2, or emulate phishing.',
     requiresTarget: false,
   },
   {
@@ -3469,7 +3469,7 @@ export const ENGINES_REGISTRY = [
     label: 'Midnight Blizzard (APT29 Advanced) TTPs',
     group: 'apt',
     mitre: 'T1566.002',
-    description: 'Midnight Blizzard (SolarWinds/Microsoft/HPE attacks): OAuth application abuse for persistent access, Teams message phishing, device code phishing for token theft, Golden SAML technique, certificate-based authentication persistence',
+    description: 'Midnight Blizzard (APT29) initial-access surface exposure (evidence-based): checks the target for internet-facing software and services Midnight Blizzard (APT29) is publicly documented (CISA / Mandiant) to exploit for initial access, and reports only on a live HTTP/TCP response with the relevant CVE/KEV reference. External exposure mapping to the documented playbook — it does not deploy malware, run C2, or emulate phishing.',
     requiresTarget: true,
   },
   {
@@ -3477,7 +3477,7 @@ export const ENGINES_REGISTRY = [
     label: 'Earth Longzhi APT TTPs',
     group: 'apt',
     mitre: 'T1195',
-    description: 'Earth Longzhi (Trend Micro tracked) APT technique simulation: ESET-targeting BYOVD, SPHijacker stack-stomping, Croxloader/Roxwrench malware patterns, IIS module backdoor, Taiwan/Philippines telecom targeting methodology',
+    description: 'Earth Longzhi initial-access surface exposure (evidence-based): checks the target for internet-facing software and services Earth Longzhi is publicly documented (CISA / Mandiant) to exploit for initial access, and reports only on a live HTTP/TCP response with the relevant CVE/KEV reference. External exposure mapping to the documented playbook — it does not deploy malware, run C2, or emulate phishing.',
     requiresTarget: true,
   },
   {
@@ -3485,7 +3485,7 @@ export const ENGINES_REGISTRY = [
     label: 'Equation Group (NSA-linked) TTPs',
     group: 'apt',
     mitre: 'T1542',
-    description: 'Equation Group technique simulation: DOUBLEPULSAR kernel implant detection, ETERNALBLUE SMB exploit detection, BANANAGLEE IOS router implant patterns, GrayFish bootkit detection, Hive/Vault7 implant indicators, equation drug injection patterns',
+    description: 'Equation Group initial-access surface exposure (evidence-based): checks the target for internet-facing software and services Equation Group is publicly documented (CISA / Mandiant) to exploit for initial access, and reports only on a live HTTP/TCP response with the relevant CVE/KEV reference. External exposure mapping to the documented playbook — it does not deploy malware, run C2, or emulate phishing.',
     requiresTarget: false,
   },
   {
@@ -3493,7 +3493,7 @@ export const ENGINES_REGISTRY = [
     label: 'Sandworm (Voodoo Bear) TTPs',
     group: 'apt',
     mitre: 'T1485',
-    description: 'Sandworm/Voodoo Bear destructive TTPs: NotPetya wiper simulation, Industroyer/Crashoverride ICS attack patterns, Cyclops Blink router implant, Olympic Destroyer patterns, WhisperGate wiper indicators, Ukraine power grid attack recreation',
+    description: 'Sandworm initial-access surface exposure (evidence-based): checks the target for internet-facing software and services Sandworm is publicly documented (CISA / Mandiant) to exploit for initial access, and reports only on a live HTTP/TCP response with the relevant CVE/KEV reference. External exposure mapping to the documented playbook — it does not deploy malware, run C2, or emulate phishing.',
     requiresTarget: false,
   },
   {
@@ -3501,7 +3501,7 @@ export const ENGINES_REGISTRY = [
     label: 'Carbon Spider (Evil Corp) TTPs',
     group: 'apt',
     mitre: 'T1566.001',
-    description: 'Evil Corp/Carbon Spider criminal TTPs: WastedLocker ransomware patterns, SocGholish fake update initial access, Dridex banking trojan indicators, BitPaymer/Hades ransomware, sanctioned criminal syndicate attribution',
+    description: 'Carbon Spider (FIN7) initial-access surface exposure (evidence-based): checks the target for internet-facing software and services Carbon Spider (FIN7) is publicly documented (CISA / Mandiant) to exploit for initial access, and reports only on a live HTTP/TCP response with the relevant CVE/KEV reference. External exposure mapping to the documented playbook — it does not deploy malware, run C2, or emulate phishing.',
     requiresTarget: true,
   },
   {
@@ -3509,7 +3509,7 @@ export const ENGINES_REGISTRY = [
     label: 'Wizard Spider (TrickBot/Conti) TTPs',
     group: 'apt',
     mitre: 'T1566.001',
-    description: 'Wizard Spider/TrickBot group TTPs: TrickBot module analysis (networkDll, pwgrab), BazarLoader delivery, Anchor backdoor C2 patterns, Ryuk predecessor for Conti, banking trojan lateral movement',
+    description: 'Wizard Spider initial-access surface exposure (evidence-based): checks the target for internet-facing software and services Wizard Spider is publicly documented (CISA / Mandiant) to exploit for initial access, and reports only on a live HTTP/TCP response with the relevant CVE/KEV reference. External exposure mapping to the documented playbook — it does not deploy malware, run C2, or emulate phishing.',
     requiresTarget: false,
   },
   {
@@ -3517,7 +3517,7 @@ export const ENGINES_REGISTRY = [
     label: 'UNC2452 (SolarWinds) TTPs',
     group: 'apt',
     mitre: 'T1195.002',
-    description: 'UNC2452/Dark Halo supply chain technique simulation: DGA-based Sunburst C2, Teardrop memory-only dropper, GoldMax/GoldFinder/Sibot second-stage patterns, Azure AD federation manipulation, token forgery post-compromise',
+    description: 'UNC2452 initial-access surface exposure (evidence-based): checks the target for internet-facing software and services UNC2452 is publicly documented (CISA / Mandiant) to exploit for initial access, and reports only on a live HTTP/TCP response with the relevant CVE/KEV reference. External exposure mapping to the documented playbook — it does not deploy malware, run C2, or emulate phishing.',
     requiresTarget: true,
   },
   {
@@ -3525,7 +3525,7 @@ export const ENGINES_REGISTRY = [
     label: 'UNC3944/Octo Tempest TTPs',
     group: 'apt',
     mitre: 'T1621',
-    description: 'UNC3944 (Scattered Spider/Octo Tempest) advanced TTPs: SIM swapping for account takeover, IT helpdesk social engineering, Okta/Azure AD administrative takeover, cloud environment ransomware, MGM Resorts-style attack simulation, ALPHV affiliate methodology',
+    description: 'UNC3944 (Scattered Spider) initial-access surface exposure (evidence-based): checks the target for internet-facing software and services UNC3944 (Scattered Spider) is publicly documented (CISA / Mandiant) to exploit for initial access, and reports only on a live HTTP/TCP response with the relevant CVE/KEV reference. External exposure mapping to the documented playbook — it does not deploy malware, run C2, or emulate phishing.',
     requiresTarget: true,
   },
   {

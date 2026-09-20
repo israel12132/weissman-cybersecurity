@@ -100,6 +100,23 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
   `tests/e2e/test_scan_pipeline_live.py` to Rust/Node, and removing the `python-audit`
   gate + live pytest contract from `ci.yml` — that touches a required CI job and a live
   E2E stack, so it belongs in its own reviewed change rather than a blind edit.
+- **Actor engine descriptions no longer claim malware/C2/phishing the engine never runs.**
+  The Command Center engine registry described the 20 threat-actor engines
+  (`apt28_techniques` … `unc3944_ttps`) as "technique **simulation**" of specific malware
+  and offensive TTPs — "X-Agent malware indicators", "credential harvesting via
+  Responder/Mimikatz", "Sofacy C2 communication patterns", "DNC-style attack simulation",
+  "AppleJeus cryptocurrency theft", "WannaCry ransomware genetic marker detection", etc.
+  The actual engine (`advanced_apt_engines.rs::actor_exposure_scan`, made honest at the
+  source in Step 7) does **none** of that: it maps the target's internet-facing attack
+  surface to the software each actor is publicly documented (CISA/Mandiant) to exploit for
+  initial access, and reports only on a live HTTP/TCP response with the relevant CVE/KEV —
+  a remote unauthenticated scanner cannot "become" APT41. All 20 descriptions are rewritten
+  to state exactly that (external, evidence-based initial-access exposure mapping — not
+  malware, C2, or phishing emulation), so the UI stops advertising capabilities that don't
+  exist. Registry structure unchanged (engine-wiring audit green; backend carried none of
+  these claims). This is the honest actor-attributed-exposure repositioning from Step 17.
+  _Remaining Step 17 work (own reviewed change):_ the per-tenant exportable, DB-enforced
+  isolation attestation report built on the Step-1 live RLS introspection.
 - **Finding provenance is honest: "has a sealed PoC" is no longer reported as "verified."**
   The findings read path emitted `"verified": poc_sealed`, conflating two very different
   assurance levels: `poc_sealed` means a tamper-evident PoC commitment was **sealed at
