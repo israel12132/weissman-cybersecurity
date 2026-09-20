@@ -38,8 +38,8 @@ ALTER TABLE honey_route_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE honey_route_sessions FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS honey_route_sessions_tenant ON honey_route_sessions;
 CREATE POLICY honey_route_sessions_tenant ON honey_route_sessions FOR ALL
-    USING (tenant_id = current_setting('app.current_tenant_id', true)::bigint)
-    WITH CHECK (tenant_id = current_setting('app.current_tenant_id', true)::bigint);
+    USING (tenant_id = public.app_current_tenant_id())
+    WITH CHECK (tenant_id = public.app_current_tenant_id());
 
 CREATE TABLE IF NOT EXISTS honey_route_payloads (
     id                  BIGSERIAL PRIMARY KEY,
@@ -66,8 +66,8 @@ ALTER TABLE honey_route_payloads ENABLE ROW LEVEL SECURITY;
 ALTER TABLE honey_route_payloads FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS honey_route_payloads_tenant ON honey_route_payloads;
 CREATE POLICY honey_route_payloads_tenant ON honey_route_payloads FOR ALL
-    USING (tenant_id = current_setting('app.current_tenant_id', true)::bigint)
-    WITH CHECK (tenant_id = current_setting('app.current_tenant_id', true)::bigint);
+    USING (tenant_id = public.app_current_tenant_id())
+    WITH CHECK (tenant_id = public.app_current_tenant_id());
 
 CREATE TABLE IF NOT EXISTS honey_route_vhost_bindings (
     id                  BIGSERIAL PRIMARY KEY,
@@ -84,8 +84,8 @@ ALTER TABLE honey_route_vhost_bindings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE honey_route_vhost_bindings FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS honey_route_vhost_bindings_tenant ON honey_route_vhost_bindings;
 CREATE POLICY honey_route_vhost_bindings_tenant ON honey_route_vhost_bindings FOR ALL
-    USING (tenant_id = current_setting('app.current_tenant_id', true)::bigint)
-    WITH CHECK (tenant_id = current_setting('app.current_tenant_id', true)::bigint);
+    USING (tenant_id = public.app_current_tenant_id())
+    WITH CHECK (tenant_id = public.app_current_tenant_id());
 
 -- Live FAIR ARO floor when a honey-route attack is in progress (architecture: min 3.0).
 CREATE TABLE IF NOT EXISTS honey_route_fair_overrides (
@@ -104,8 +104,8 @@ ALTER TABLE honey_route_fair_overrides ENABLE ROW LEVEL SECURITY;
 ALTER TABLE honey_route_fair_overrides FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS honey_route_fair_overrides_tenant ON honey_route_fair_overrides;
 CREATE POLICY honey_route_fair_overrides_tenant ON honey_route_fair_overrides FOR ALL
-    USING (tenant_id = current_setting('app.current_tenant_id', true)::bigint)
-    WITH CHECK (tenant_id = current_setting('app.current_tenant_id', true)::bigint);
+    USING (tenant_id = public.app_current_tenant_id())
+    WITH CHECK (tenant_id = public.app_current_tenant_id());
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON honey_route_sessions TO weissman_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON honey_route_payloads TO weissman_app;

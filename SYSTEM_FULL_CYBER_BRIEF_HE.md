@@ -29,7 +29,7 @@ Weissman היא פלטפורמת סייבר רב-שכבתית עבור Red Team 
    - RLS לכל טבלאות multi-tenant.
 4. **weissman-worker (Rust)**
    - צריכת משימות async מ-Postgres queue (`FOR UPDATE SKIP LOCKED`).
-5. **Engines (253 production engines + agent capability layer)**
+5. **Engines (595 production engines + agent capability layer)**
    - Web/Cloud/OT/AI/Supply Chain/Network/Mobile/OSINT/Fuzzing ועוד.
 6. **weissman-agent (Endpoint)**
    - Service מקומי (Linux/macOS/Windows), WSS+JWT מול backend.
@@ -68,7 +68,7 @@ Weissman היא פלטפורמת סייבר רב-שכבתית עבור Red Team 
 
 ### 4.3 Engine Fabric
 - רג׳יסטר production ב-`backend/weissman-core/src/models/engine.rs`.
-- `PRODUCTION_ENGINE_IDS`: 253 מזהים פעילים מאומתים.
+- `PRODUCTION_ENGINE_IDS`: 595 מזהים פעילים מאומתים.
 - dispatch רק ל-engine ID מאושר.
 - **מדיניות evidence:** אין mock findings; כל finding נשען על probe אמיתי (HTTP/TCP/DNS/TLS/host artifact/intel hit).
 

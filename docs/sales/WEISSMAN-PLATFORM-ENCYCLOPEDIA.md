@@ -80,7 +80,7 @@
 | [041](#page-041) | API — Integrations & Webhooks | API |
 | [042](#page-042) | מפת API מלאה — כל ה-endpoints | API |
 
-### חלק ו׳ — 533 מנועים
+### חלק ו׳ — 595 מנועים
 
 | עמוד | נושא | סוג |
 |------|------|-----|
@@ -692,7 +692,7 @@
 | **מתי** | לפני demo, RFP, due diligence, onboarding מנהלים, או הדרכת צוות מכירות. |
 | **איפה** | PDF / Markdown — `docs/sales/WEISSMAN-PLATFORM-ENCYCLOPEDIA.md` |
 | **איך** | פתחו את תוכן העניינים → קפצו לעמוד לפי מספר → קראו את ששת הממדים (מה·למה·מתי·איפה·איך·כמה). |
-| **כמה** | 533+ מנועים · 94+ מסכי Command Center · 9 crates Rust · multi-tenant SaaS |
+| **כמה** | 595+ מנועים · 94+ מסכי Command Center · 9 crates Rust · multi-tenant SaaS |
 | **למי** | CEO, VP Sales, Pre-Sales, CISO, MSSP |
 | **מה יוצא** | הבנה מלאה של היקף המוצר ללא גישה לסביבה |
 ---
@@ -720,7 +720,7 @@
 | **מתי** | פתיחת כל שיחת מכירה. |
 | **איפה** | https://<host>/command-center/ |
 | **איך** | Login → Cockpit → Client → Scan → Job → Finding → Report. מנועים ב-Engine Matrix או Hub ייעודי. |
-| **כמה** | 533 מנועים · strict billing ב-production · RLS per tenant |
+| **כמה** | 595 מנועים · strict billing ב-production · RLS per tenant |
 | **למי** | Pre-Sales, Architect |
 | **מה יוצא** | תמונה מental של זרימת הנתונים |
 ---
@@ -772,7 +772,7 @@
 ## עמוד 007 — סוכן קצה (Endpoint Agent)
 
 | **מה** | weissman-agent — בינארי per-OS, WebSocket לשרת, detections מקומיות. |
-| **למה** | 45+ מנועים דורשים Agent — malware, network local, exfil, hardware. |
+| **למה** | 59+ מנועים דורשים Agent — malware, network local, exfil, hardware. |
 | **מתי** | לפני OT/EDR/malware engagements. |
 | **איפה** | /command-center/agents, /install/agent.sh |
 | **איך** | Agents → token → curl install script → online → Run agent-required engine. |
@@ -996,7 +996,7 @@
 > **סוג:** surface · **מזהה:** `ws-agents`
 
 | **מה** | Agent ↔ server bidirectional: detections, commands, heartbeat. |
-| **למה** | 45+ מנועים endpoint-only. |
+| **למה** | 59+ מנועים endpoint-only. |
 | **מתי** | כל agent מותקן. |
 | **איפה** | Agent config WEISSMAN_SERVER_URL |
 | **איך** | agent.sh → WS register → detections push. |
@@ -1227,7 +1227,7 @@
 > **סוג:** api · **מזהה:** `api-engines`
 
 | **מה** | Production list, capabilities, history, export, top-tier, telemetry. |
-| **למה** | 533 engines registry truth. |
+| **למה** | 595 engines registry truth. |
 | **מתי** | Engine Matrix, profiles. |
 | **איפה** | /api/engines/production · /api/engines/capabilities |
 | **איך** | GET production → dispatch by id. |
@@ -11427,10 +11427,10 @@ GET /dashboard |
 |-----|------|
 | עמודים | 634 |
 | לוחות UI | 2 |
-| מנועים | 592 |
+| מנועים | 595 |
 | HTTP API routes | 8 |
 | Surfaces (install, WS, legal) | 10 |
-| Agent-required engines | 58 |
+| Agent-required engines | 59 |
 
 *מחולל: `node scripts/generate_platform_encyclopedia.mjs`*
 

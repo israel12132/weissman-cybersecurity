@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Deploy, enroll, and operate the Weissman endpoint agent (`weissman-agent`) for on-host detections, UEBA, and ~45 **agent-required** engines that cannot run as remote probes.
+Deploy, enroll, and operate the Weissman endpoint agent (`weissman-agent`) for on-host detections, UEBA, and 59 **agent-required** engines that cannot run as remote probes.
 
 ---
 
