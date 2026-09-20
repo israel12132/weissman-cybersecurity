@@ -111,6 +111,90 @@ jobs:
       - name: Gateway security contract
         run: bash scripts/test_gateway_contract.sh
 
+  maintenance-contract:
+    name: Maintenance page contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # The continuity page is what a visitor sees for the ~90 s a restart, rebuild or startup
+    # migration keeps the backend from answering — and gateway-contract never exercises it:
+    # that job runs the real nginx-gateway.conf against a LIVE stub, so the nginx-generated
+    # 502/504 → branded-503 path (proxy_intercept_errors, error_page inheritance, the
+    # locale/JSON map) would ship untested, and `nginx -t` cannot vouch for any of it. This
+    # job proves the automatic path with the backend down and NO flag on both nginx site
+    # configs, that the committed renders still match deploy/maintenance/src, that the
+    # Cloudflare Worker behaves, and that the Caddyfile parses. Docker-free by design: the
+    # contract script runs three local nginx masters on 127.0.0.1:1808x as the unprivileged
+    # runner user (no daemon, no root, no network), so the same command works on a laptop
+    # and next to a systemd install.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # No `npm ci`, no lockfile, no cache: build.mjs, the Worker and its tests are
+      # dependency-free on purpose, so all setup-node contributes is the pinned major —
+      # build.mjs refuses anything below 22, and `node --test` semantics differ across majors.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+
+      - name: Install nginx
+        # On noble, nginx-light installs the same `nginx` binary as nginx-full minus the extra
+        # dynamic modules, and the two site configs only use what is compiled in (proxy, map,
+        # ssl, headers, gzip). The contract script SKIPS with exit 0 when nginx is absent —
+        # right on a laptop, a silent green in CI — so this step must succeed first.
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends nginx-light
+
+      - name: Generated page artifacts match their sources
+        # dist/, frontend/public/offline.html, the Worker's assets.generated.mjs and the k8s
+        # ConfigMap are all committed renders of deploy/maintenance/src. A copy edit that
+        # skipped `node deploy/maintenance/build.mjs` would otherwise ship four diverging pages.
+        run: node deploy/maintenance/build.mjs --check
+
+      - name: Cloudflare Worker unit tests
+        # The FILE, not the directory: on Node 22 `node --test <dir>/` resolves the argument
+        # as a module and dies with MODULE_NOT_FOUND instead of discovering *.test.mjs in it.
+        run: node --test deploy/cloudflare/maintenance-worker/worker.test.mjs
+
+      - name: nginx continuity-page contract (gateway + VPS site)
+        # Deliberately NOT under sudo: unprivileged, the script omits the `user` directive,
+        # keeps every path (pid, logs, temp dirs, the throw-away TLS cert) inside a mktemp
+        # prefix and binds only high loopback ports, so root would add nothing but a
+        # root-owned work dir the cleanup trap then has to remove.
+        run: bash scripts/test_maintenance_contract.sh
+
+      - name: Install Caddy from the official apt repository
+        # Caddy's own cloudsmith repository is the only one that tracks Caddy 2 releases
+        # (Ubuntu's `caddy` package is frozen at 2.6). That host is outside GitHub's control,
+        # so an unreachable repo must not turn every push red: continue-on-error keeps the
+        # job alive, and the validation step below decides — from whether a `caddy` binary
+        # actually exists — between validating strictly and skipping with a visible ::notice.
+        # These are the documented install steps in their apt-get form.
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y --no-install-recommends debian-keyring debian-archive-keyring apt-transport-https curl
+          curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+          curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+          sudo chmod o+r /usr/share/keyrings/caddy-stable-archive-keyring.gpg /etc/apt/sources.list.d/caddy-stable.list
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends caddy
+          caddy version
+
+      - name: Validate deploy/Caddyfile
+        # `caddy validate` adapts the Caddyfile and loads the resulting config without binding
+        # a port or requesting a certificate, so matcher syntax, the handle_errors blocks and
+        # every file_server root are checked exactly as `systemctl reload caddy` would check
+        # them — the command the Caddyfile header documents, pointed at the checkout. Skipping
+        # is allowed ONLY when there is no caddy binary at all (the repository above was
+        # unreachable); with caddy present, an invalid Caddyfile fails the job.
+        run: |
+          set -euo pipefail
+          if ! command -v caddy >/dev/null 2>&1; then
+            echo "::notice title=Caddy validation skipped::No caddy binary — the official apt repository (dl.cloudsmith.io) could not be reached in this run, so deploy/Caddyfile was not validated. Run locally: caddy validate --config deploy/Caddyfile --adapter caddyfile"
+            exit 0
+          fi
+          caddy version
+          caddy validate --config deploy/Caddyfile --adapter caddyfile
+
   launcher-contract:
     name: Production launcher contract
     runs-on: ubuntu-latest
