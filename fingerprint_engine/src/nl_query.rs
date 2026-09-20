@@ -692,6 +692,16 @@ pub async fn execute_plan(
     let start = Instant::now();
     let compiled = compile_plan(&plan, tenant_id)?;
 
+    // Defense-in-depth: an independent, parser-based gate on the COMPILED SQL before it
+    // reaches the weissman_ro pool. `compile_plan` already assembles the statement from
+    // allow-listed identifiers + bound params, so this is a second line, not the first —
+    // but it fails closed on any future compile-path regression: it admits exactly one
+    // SELECT over allow-listed tables/columns, clamps LIMIT to 200, and rejects
+    // CTE/UNION/subquery/function/concatenation. Validate the INNER statement here; the
+    // `wrap_nl_sql` envelope below adds an outer `SELECT * FROM (…)` that the AST gate
+    // (correctly) treats as a nested query, so it must not see the wrapped form.
+    crate::cem_dago::sql_ast::validate_compiled_sql_ast(&compiled.sql)?;
+
     // Set the per-statement RLS GUC so policies see our tenant. set_config(..., true) is
     // transaction-local, so the SELECT MUST run inside the SAME transaction: on a bare pooled
     // connection every statement autocommits, which would discard the GUC before the query and
@@ -1137,6 +1147,34 @@ mod tests {
         assert!(c.sql.contains("severity IN ($2, $3)"));
         assert!(c.sql.contains("ORDER BY discovered_at DESC"));
         assert!(c.sql.ends_with("LIMIT 50"));
+    }
+
+    #[test]
+    fn compiled_plan_passes_the_execute_plan_ast_gate() {
+        // Guards the defense-in-depth gate wired into execute_plan: a legitimate
+        // compiled plan must sail through validate_compiled_sql_ast (so the second
+        // line never rejects a query compile_plan already blessed), while an
+        // over-large LIMIT is clamped to 200 in the bounded rewrite.
+        let plan = QueryPlan {
+            table: "vulnerabilities".into(),
+            select: vec!["id".into(), "title".into(), "severity".into()],
+            filters: vec![Filter {
+                column: "severity".into(),
+                op: "in".into(),
+                value: json!(["critical", "high"]),
+            }],
+            order_by: Some("discovered_at".into()),
+            order_desc: true,
+            limit: Some(9999),
+            aggregate: None,
+            aggregate_column: None,
+            group_by: None,
+        };
+        let c = compile_plan(&plan, 1).unwrap();
+        crate::cem_dago::sql_ast::validate_compiled_sql_ast(&c.sql)
+            .expect("compiled plan must pass the AST gate");
+        let bounded = crate::cem_dago::sql_ast::validate_and_bound_sql(&c.sql).unwrap();
+        assert!(bounded.contains("LIMIT 200"), "AST gate must clamp LIMIT to 200: {bounded}");
     }
 
     #[test]

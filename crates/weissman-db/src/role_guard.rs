@@ -147,6 +147,31 @@ pub async fn tenant_guc_role_default_count(pool: &PgPool) -> Result<i64, sqlx::E
     .await
 }
 
+/// Tables in `public` that the CURRENT role (expected `weissman_ro`) can `SELECT`
+/// but that are **not** on [`RO_SELECT_TABLES`]. A non-empty result is grant drift:
+/// the read-only NL→SQL role can read a table the allow-list never sanctioned (a
+/// stray `GRANT SELECT … TO weissman_ro`, a `GRANT … TO PUBLIC`, or a role-membership
+/// change), so Ask Weissman could surface data the allow-list was meant to fence off.
+///
+/// Uses the two-argument `has_table_privilege(table, 'SELECT')`, which resolves the
+/// effective privilege of the connected role — direct grants, `PUBLIC`, and inherited
+/// role memberships alike — so it catches over-reach the migration text cannot.
+/// [`assert_pool_role`] hard-fails a production boot when this is non-empty.
+pub async fn ro_select_grant_overreach(pool: &PgPool) -> Result<Vec<String>, sqlx::Error> {
+    let allow: Vec<String> = RO_SELECT_TABLES.iter().map(|s| (*s).to_string()).collect();
+    sqlx::query_scalar(
+        r#"SELECT t.tablename::text
+           FROM pg_tables t
+           WHERE t.schemaname = 'public'
+             AND has_table_privilege(format('%I.%I', t.schemaname, t.tablename), 'SELECT')
+             AND t.tablename <> ALL($1::text[])
+           ORDER BY t.tablename"#,
+    )
+    .bind(&allow)
+    .fetch_all(pool)
+    .await
+}
+
 fn env_flag(name: &str) -> bool {
     std::env::var(name)
         .ok()
@@ -363,6 +388,37 @@ pub async fn assert_pool_role(pool: &PgPool, kind: PoolKind) -> Result<(), sqlx:
                 statement_timeout = %timeout,
                 "weissman_ro statement_timeout is not 15s (Ask Weissman budget)"
             );
+        }
+
+        // Fail-closed guard against SELECT-grant drift: the NL→SQL role must be able to
+        // read only the allow-listed tables. A stray grant (or a GRANT … TO PUBLIC) would
+        // widen what Ask Weissman can surface past RO_SELECT_TABLES, defeating the
+        // application-layer allow-list. Mirror the tenant-GUC drift check: hard-fail a
+        // production boot, warn otherwise.
+        match ro_select_grant_overreach(pool).await {
+            Ok(extra) if extra.is_empty() => {}
+            Ok(extra) => {
+                let msg = format!(
+                    "weissman_ro can SELECT {} table(s) not on RO_SELECT_TABLES: [{}]. \
+                     Ask Weissman would be able to read them past the allow-list. Revoke the \
+                     stray grant(s) or add the table to RO_SELECT_TABLES + the RO grant migration",
+                    extra.len(),
+                    extra.join(", ")
+                );
+                if strict {
+                    return Err(sqlx::Error::Configuration(msg.into()));
+                }
+                tracing::warn!(target: "weissman_db::role_guard", "{msg}");
+            }
+            Err(e) => {
+                if strict {
+                    return Err(e);
+                }
+                tracing::warn!(
+                    target: "weissman_db::role_guard",
+                    "weissman_ro grant-drift check skipped (catalog read failed): {e}"
+                );
+            }
         }
     }
 

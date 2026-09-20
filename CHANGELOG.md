@@ -155,6 +155,43 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ### Security
 
+- **NL→SQL & IOC-credential defense-in-depth (Ask Weissman hardening).** Four layered
+  gaps closed on the read-only NL→SQL and global IOC-credential paths — none was
+  exploitable on its own (the app-layer allow-lists and RBAC held), but each removes a
+  latent second-order risk and makes the boundary self-enforcing:
+  1. **Independent AST gate on every executed NL query.** `nl_query::execute_plan` now
+     runs `cem_dago::sql_ast::validate_compiled_sql_ast` on the compiled statement
+     before it reaches the weissman_ro pool — a second, parser-based line behind
+     `compile_plan`'s identifier allow-list that admits exactly one SELECT over
+     allow-listed tables/columns, clamps LIMIT to 200, and rejects
+     CTE/UNION/subquery/function/concatenation. It validates the inner statement (the
+     `wrap_nl_sql` envelope adds an outer subquery the gate correctly rejects). This gate
+     was already applied on the CEM-DAGO sandbox path; it now covers the `/api/ask`
+     path too, so a future `compile_plan` regression fails closed.
+  2. **Fail-closed weissman_ro SELECT-grant drift guard at boot.** `role_guard::assert_pool_role`
+     (ReadOnly) now asserts, via `has_table_privilege`, that the NL→SQL role can SELECT
+     **only** the `RO_SELECT_TABLES` allow-list. A stray `GRANT SELECT … TO weissman_ro`
+     or `GRANT … TO PUBLIC` — which would let Ask Weissman read past the allow-list —
+     hard-fails a production boot (warns in dev), mirroring the existing tenant-GUC drift
+     guard. Verified against live Postgres: an over-grant is detected, and clears once
+     the table is allow-listed.
+  3. **Blind-oracle / rate guard wired to `/api/ask`.** `ask_oracle_guard::admit_ask` — a
+     fully-implemented, tested per-user burst limit (10/min, Redis fail-closed in prod)
+     and enumeration detector (sequential "starts with A/B/C" walks, one-letter-flip
+     membership probes) — was dead code: the handler never called it. It now runs before
+     the daily quota, so an abusive client-name enumeration scan is rejected without even
+     consuming the tenant's 50/day allowance.
+  4. **IOC feed-credential writes moved behind a SECURITY DEFINER function.** The global
+     `ioc_feed_credentials` table (AES-256-GCM envelopes of the platform's abuse.ch / OTX
+     / MISP keys) granted `weissman_app` full INSERT/UPDATE/DELETE, so any app-role code
+     path or SQL sink could mass-delete the secrets or forge `updated_by`/`updated_at`.
+     New migration `20260920140000` (mirrored to both trees) revokes that DML and routes
+     the single admin-gated writer through `set_ioc_feed_credential(...)` — a SECURITY
+     DEFINER function (EXECUTE revoked from PUBLIC, granted only to weissman_app) that
+     enforces the safe upsert shape (server-derived `updated_at`, no DELETE, non-empty
+     key). weissman_app keeps SELECT for the process-cache refresh. Verified against live
+     Postgres: direct INSERT/DELETE as weissman_app is denied, the function succeeds, and
+     SELECT still works.
 - **Integrity lock: no randomness in the finding scoring/persist path.** New CI gate
   `scripts/verify_no_rand_in_scoring.mjs` fails the build if `findings_persist.rs`,
   `findings_gate.rs` or `intel_epss.rs` ever import or use a randomness source
