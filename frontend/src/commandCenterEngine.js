@@ -362,12 +362,31 @@ export const CC_CSS = `
   .sla-foot b{font-family:var(--font-mono);font-size:17px;color:var(--ok);font-variant-numeric:tabular-nums;}
 
   /* ══ Crown Path — attack-path graph + choke-point analysis ══ */
-  .crownpath{display:flex;flex-direction:column;gap:11px;}
+  .crownpath{position:relative;display:flex;flex-direction:column;gap:11px;}
   .cp-graph{width:100%;border-radius:14px;overflow:hidden;background:linear-gradient(160deg,color-mix(in srgb,var(--a2) 7%,transparent),transparent);}
   .cp-graph svg{width:100%;height:auto;display:block;}
-  .cp-edge{fill:none;stroke:var(--hairline);stroke-width:1.4;opacity:.5;}
+  .cp-hit{fill:none;stroke:transparent;stroke-width:13;pointer-events:stroke;cursor:help;}
+  .cp-edge{fill:none;stroke:var(--hairline);stroke-width:1.4;opacity:.5;pointer-events:none;transition:opacity .35s;}
   .cp-edge.hot{stroke-width:2.6;opacity:1;stroke-dasharray:7 6;animation:cpFlow 1s linear infinite;}
+  .cp-edge.dim{opacity:.1;} .cp-edge.severed{stroke:var(--muted);stroke-dasharray:2 5;opacity:.4;animation:none;}
   @keyframes cpFlow{to{stroke-dashoffset:-26;}}
+  .cp-node{transition:opacity .35s;}
+  .cp-node.cp-act{cursor:pointer;}
+  .cp-node.cp-act:hover .cp-nrect{stroke-width:2.4;filter:brightness(1.12);}
+  .cp-node.cp-act:focus-visible{outline:none;} .cp-node.cp-act:focus-visible .cp-nrect{stroke:var(--a1);stroke-width:2.6;filter:drop-shadow(0 0 6px var(--a1));}
+  .cp-node.cp-dim{opacity:.3;} .cp-node.cp-focused .cp-nrect{stroke-width:2.6;}
+  .cp-node.cp-sev .cp-nrect{stroke-dasharray:4 4;opacity:.55;}
+  .cp-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .cp-remedy{font-family:var(--font-mono);font-size:10px;font-weight:600;color:#0a1733;background:linear-gradient(120deg,var(--warn),#fb923c);border:none;border-radius:9px;padding:8px 13px;cursor:pointer;transition:.15s;}
+  .cp-remedy:hover{transform:translateY(-1px);box-shadow:0 4px 13px -5px var(--warn);}
+  .cp-remedy.on{color:#0a1733;background:linear-gradient(120deg,var(--ok),var(--a1));}
+  .cp-chiplab{font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-inline-start:4px;}
+  .cp-chip{font-family:var(--font-mono);font-size:10px;color:var(--text);background:var(--track);border:1px solid var(--edge2);border-radius:8px;padding:7px 10px;cursor:pointer;transition:.14s;}
+  .cp-chip:hover{border-color:var(--a1);color:var(--a1);}
+  .cp-chip.on{color:#0a1733;background:linear-gradient(120deg,var(--a1),var(--a2));border-color:transparent;}
+  .cp-tip{position:absolute;z-index:20;pointer-events:none;font-family:var(--font-mono);font-size:10px;color:var(--text);white-space:nowrap;
+    background:linear-gradient(180deg,rgba(40,32,92,.98),rgba(28,22,70,.98));border:1px solid var(--edge);border-radius:8px;padding:6px 9px;opacity:0;transition:opacity .12s;box-shadow:0 10px 26px -10px rgba(8,3,32,.7);}
+  .cp-tip.on{opacity:1;} .cp-tip b{color:var(--a1);}
   .cp-nrect{stroke-width:1.5;}
   .cp-nlabel{font-family:var(--font-mono);font-size:9px;fill:var(--text);}
   .cp-nkind{font-family:var(--font-mono);font-size:7px;letter-spacing:.12em;text-transform:uppercase;}
@@ -442,6 +461,20 @@ export const CC_CSS = `
 
   ::-webkit-scrollbar{width:8px;height:8px;} ::-webkit-scrollbar-thumb{background:var(--edge2);border-radius:4px;} ::-webkit-scrollbar-track{background:transparent;}
 
+  /* ══ Accessibility: visible keyboard focus (mouse users unaffected) ══ */
+  #deck a:focus-visible,#deck button:focus-visible,#deck input:focus-visible,#deck select:focus-visible,#deck [tabindex]:focus-visible,#deck [role="button"]:focus-visible{
+    outline:2px solid var(--a1);outline-offset:2px;border-radius:8px;}
+  #deck :focus:not(:focus-visible){outline:none;}
+
+  /* ══ First-run onboarding hint ══ */
+  .cc-hint{display:flex;align-items:center;gap:11px;background:linear-gradient(120deg,color-mix(in srgb,var(--a1) 12%,var(--track)),color-mix(in srgb,var(--a2) 10%,var(--track)));
+    border:1px solid var(--edge2);border-inline-start:3px solid var(--a1);border-radius:12px;padding:10px 13px;margin:0 0 12px;font-family:var(--font-mono);font-size:11px;color:var(--text);}
+  .cc-hint .cc-hint-ic{font-size:16px;flex:0 0 auto;}
+  .cc-hint b{color:var(--a1);}
+  .cc-hint .cc-hint-x{margin-inline-start:auto;flex:0 0 auto;width:22px;height:22px;border-radius:7px;display:grid;place-items:center;cursor:pointer;
+    background:var(--track);border:1px solid var(--edge2);color:var(--muted);font-size:12px;line-height:1;}
+  .cc-hint .cc-hint-x:hover{color:var(--text);border-color:var(--a1);}
+
   @media (max-width:1100px){
     .ledger{grid-template-columns:repeat(3,1fr);}
     .s2{grid-column:span 3;} .s3{grid-column:span 6;} .s4{grid-column:span 6;} .s6{grid-column:span 12;} .s8{grid-column:span 12;}
@@ -460,7 +493,10 @@ export const CC_CSS = `
     .kpi .k-val{font-size:22px;}
     .launch{grid-template-columns:1fr;}
   }
-  @media (prefers-reduced-motion:reduce){.pill i,#aurora::after,.view.on{animation:none;}}
+  @media (prefers-reduced-motion:reduce){
+    #deck *,#deck *::before,#deck *::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important;}
+    .pill i,#aurora::after,.view.on,.cp-edge.hot,.cp-choke-ring,.paqit.done{animation:none!important;}
+  }
 `;
 
 export const CC_HTML = `<div id="deck" data-dir="nebula" dir="ltr">
@@ -537,6 +573,7 @@ export const CC_HTML = `<div id="deck" data-dir="nebula" dir="ltr">
           <button class="iconbtn" id="resetLayoutBtn"><span class="ic">⟲</span><span data-t="ccReset">Reset</span></button>
         </div>
       </div>
+      <div class="cc-hint" id="ccHint" role="note" style="display:none;"></div>
       <div class="grid" id="cockpitGrid"></div>
       <div class="footnote"><span data-t="foot">Cockpit replacement · every card folds a cockpit module into a menu route</span> · <b data-t="footb">zero black by design</b></div>
     </section>
@@ -606,10 +643,10 @@ export const CC_HTML = `<div id="deck" data-dir="nebula" dir="ltr">
       <div class="footnote"><b data-t="wrFoot">World-class war room</b> <span data-t="wrFoot2">· cinematic, actionable, never-black — draft for your direction</span></div>
     </section>
 
-  <div id="widgetModal" class="wmodal" aria-hidden="true">
+  <div id="widgetModal" class="wmodal" role="dialog" aria-modal="true" aria-labelledby="wmodalTitle" aria-hidden="true">
     <div class="wmodal-card">
       <div class="wmodal-head">
-        <b data-t="ccAddTitle">Add to cockpit</b>
+        <b id="wmodalTitle" data-t="ccAddTitle">Add to cockpit</b>
         <div class="wmodal-search"><span>⌕</span><input id="widgetSearch" data-tph="ccSearch" placeholder="Search metrics, modules, engines…" aria-label="Search widgets" /></div>
         <button class="menu-x" id="widgetModalClose" aria-label="Close">✕</button>
       </div>
@@ -683,6 +720,7 @@ export function mountCommandCenter(root, THREE, opts) {
     if(typeof paqPaint==='function')paqPaint();
     if(typeof slaPaint==='function')slaPaint();
     if(typeof cpRender==='function')cpRender();
+    if(typeof renderHint==='function')renderHint();
   }
 
   /* ─── domain vocab ─── */
@@ -1103,45 +1141,84 @@ export function mountCommandCenter(root, THREE, opts) {
     var top=paths[0]||{seq:[],p:0};
     var chokePaths=paths.filter(function(pt){return pt.seq.indexOf(choke)>=0;}).length;
     return {paths:paths,top:top,choke:choke,chokePaths:chokePaths,total:paths.length};}
-  var cpHot={};
+  var cpHot={},cpChoke=null,cpFocusCrown=null,cpRemediated=false,cpRestoreT=null;
   function cpGeom(){var W=760,H=344,pad=30,cols=5,byTier=[[],[],[],[],[]];
     CP_NODES.forEach(function(n){byTier[n.tier].push(n);});
     var pos={};for(var t=0;t<cols;t++){var cx=pad+40+t*((W-2*pad-80)/(cols-1)),arr=byTier[t],n=arr.length;
       arr.forEach(function(nd,i){var cy=44+(i+0.5)*((H-70)/n);pos[nd.id]={x:cx,y:cy};});}
     return {W:W,H:H,pos:pos};}
+  function cpPathsSet(paths){var nodes={},edges={};paths.forEach(function(pt){pt.seq.forEach(function(id,i){nodes[id]=1;if(i>0)edges[pt.seq[i-1]+'>'+id]=1;});});return {nodes:nodes,edges:edges};}
+  function cpAria(a){var c=cpNodeById[a.choke];return LANG==='he'
+    ?'גרף נתיבי-תקיפה: '+a.total+' נתיבים אל נכסי-על · צוואר בקבוק '+(c?c.lab.he:'')+' חוצה '+a.chokePaths+' נתיבים'
+    :'Attack-path graph: '+a.total+' paths to crown jewels; choke point '+(c?c.lab.en:'')+' crosses '+a.chokePaths+' paths';}
   function cpRender(){var host=document.getElementById('crownPath');if(!host)return;
-    var g=cpGeom(),a=cpAnalyze(),NW=120,NH=30;cpHot={};
-    for(var i=0;i<a.top.seq.length-1;i++)cpHot[a.top.seq[i]+'>'+a.top.seq[i+1]]=1;
-    var svg='<svg viewBox="0 0 '+g.W+' '+g.H+'" preserveAspectRatio="xMidYMid meet">';
-    // tier labels
+    var g=cpGeom(),a=cpAnalyze(),NW=120,NH=30,rtl=LANG==='he';cpChoke=a.choke;
+    var universe=cpRemediated?a.paths.filter(function(pt){return pt.seq.indexOf(a.choke)<0;}):a.paths;
+    var focusPaths=cpFocusCrown?universe.filter(function(pt){return pt.seq[pt.seq.length-1]===cpFocusCrown;}):null;
+    var lit=cpPathsSet(focusPaths||universe);
+    var hotPool=(focusPaths&&focusPaths.length)?focusPaths:universe;
+    var top=hotPool.slice().sort(function(x,y){return y.p-x.p;})[0]||{seq:[],p:0};
+    cpHot={};for(var i=0;i<top.seq.length-1;i++)cpHot[top.seq[i]+'>'+top.seq[i+1]]=1;
+    var svg='<svg viewBox="0 0 '+g.W+' '+g.H+'" preserveAspectRatio="xMidYMid meet" role="img" aria-label="'+cpAria(a)+'">';
     CP_TIERS.forEach(function(tr,t){var any=CP_NODES.filter(function(n){return n.tier===t;})[0];if(!any)return;
-      svg+='<text class="cp-tierlab" x="'+g.pos[any.id].x+'" y="20" text-anchor="middle">'+(LANG==='he'?tr.lab.he:tr.lab.en)+'</text>';});
-    // edges (curved)
+      svg+='<text class="cp-tierlab" x="'+g.pos[any.id].x+'" y="20" text-anchor="middle">'+(rtl?tr.lab.he:tr.lab.en)+'</text>';});
+    // edges: invisible wide hit-path (for hover) + visible path
     CP_EDGES.forEach(function(e){var s=g.pos[e[0]],d=g.pos[e[1]];if(!s||!d)return;
-      var x1=s.x+NW/2,y1=s.y,x2=d.x-NW/2,y2=d.y,mx=(x1+x2)/2,hot=cpHot[e[0]+'>'+e[1]];
-      svg+='<path class="cp-edge'+(hot?' hot':'')+'" '+(hot?'stroke="var(--crit)" ':'')+'d="M'+x1+','+y1+' C'+mx+','+y1+' '+mx+','+y2+' '+x2+','+y2+'"/>';});
+      var x1=s.x+NW/2,y1=s.y,x2=d.x-NW/2,y2=d.y,mx=(x1+x2)/2,dd='M'+x1+','+y1+' C'+mx+','+y1+' '+mx+','+y2+' '+x2+','+y2,
+        hot=cpHot[e[0]+'>'+e[1]],crossesChoke=(e[0]===a.choke||e[1]===a.choke),severed=cpRemediated&&crossesChoke,
+        dim=(!severed)&&focusPaths&&!lit.edges[e[0]+'>'+e[1]];
+      svg+='<path class="cp-hit" data-edge="'+e[0]+'>'+e[1]+'" data-tech="'+e[2]+'" data-p="'+Math.round(e[3]*100)+'" d="'+dd+'"/>';
+      svg+='<path class="cp-edge'+(hot&&!severed?' hot':'')+(severed?' severed':'')+(dim?' dim':'')+'"'+(hot&&!severed?' stroke="var(--crit)"':'')+' d="'+dd+'"/>';});
     // nodes
-    CP_NODES.forEach(function(n){var p=g.pos[n.id],col=CP_TIERS[n.tier].col,crown=n.tier===4,choke=n.id===a.choke,onHot=a.top.seq.indexOf(n.id)>=0;
-      var x=p.x-NW/2,y=p.y-NH/2;
-      if(choke)svg+='<rect class="cp-choke-ring" x="'+(x-5)+'" y="'+(y-5)+'" width="'+(NW+10)+'" height="'+(NH+10)+'" rx="12"/>';
-      svg+='<g'+(crown?' class="cp-crown-glow"':'')+'>';
+    CP_NODES.forEach(function(n){var p=g.pos[n.id],col=CP_TIERS[n.tier].col,crown=n.tier===4,choke=n.id===a.choke,onHot=top.seq.indexOf(n.id)>=0;
+      var x=p.x-NW/2,y=p.y-NH/2,severed=cpRemediated&&choke,dim=(!severed)&&focusPaths&&!lit.nodes[n.id],interactive=crown||choke;
+      if(choke&&!cpRemediated)svg+='<rect class="cp-choke-ring" x="'+(x-5)+'" y="'+(y-5)+'" width="'+(NW+10)+'" height="'+(NH+10)+'" rx="12"/>';
+      svg+='<g class="cp-node'+(crown?' cp-crown-glow':'')+(interactive?' cp-act':'')+(dim?' cp-dim':'')+(severed?' cp-sev':'')+(cpFocusCrown===n.id?' cp-focused':'')+'" data-node="'+n.id+'"'+(interactive?' tabindex="0" role="button" aria-label="'+(rtl?n.lab.he:n.lab.en)+'"':'')+'>';
       svg+='<rect class="cp-nrect" x="'+x+'" y="'+y+'" width="'+NW+'" height="'+NH+'" rx="9" fill="color-mix(in srgb,'+col+' '+(onHot?'26':'15')+'%,var(--track))" stroke="'+col+'" '+(onHot?'stroke-width="2.2"':'')+'/>';
-      var rtl=LANG==='he',dotX=rtl?(x+NW-11):(x+11);
+      var dotX=rtl?(x+NW-11):(x+11);
       svg+='<circle cx="'+dotX+'" cy="'+p.y+'" r="3.4" fill="'+col+'"/>';
       var lab=rtl?n.lab.he:n.lab.en;if(lab.length>16)lab=lab.slice(0,15)+'…';lab=(crown?'♛ ':'')+lab;
       svg+='<text class="cp-nlabel" x="'+(rtl?(x+NW-20):(x+20))+'" y="'+(p.y+3.2)+'" text-anchor="'+(rtl?'end':'start')+'"'+(rtl?' direction="rtl"':'')+'>'+lab+'</text>';
       svg+='</g>';
-      if(choke)svg+='<text class="cp-choke-tag" x="'+p.x+'" y="'+(y-9)+'" text-anchor="middle">◆ '+(LANG==='he'?'צוואר בקבוק':'CHOKE POINT')+'</text>';});
+      if(choke)svg+='<text class="cp-choke-tag'+(cpRemediated?' ok':'')+'" x="'+p.x+'" y="'+(y-9)+'" text-anchor="middle">'+(cpRemediated?'✓ '+(rtl?'טופל':'REMEDIATED'):'◆ '+(rtl?'צוואר בקבוק':'CHOKE POINT'))+'</text>';});
     svg+='</svg>';
-    var chokeNode=cpNodeById[a.choke],cut=Math.round(a.chokePaths/a.total*100);
-    var ins=LANG==='he'
-      ? '<span class="cp-ic">◈</span><div>תקן את צוואר-הבקבוק <b class="hi">'+(chokeNode?chokeNode.lab.he:'')+'</b> ← ינתק <b class="hi">'+a.chokePaths+'</b> מתוך <b>'+a.total+'</b> נתיבי-תקיפה אל נכסי-העל · חיתוך <b class="cy">'+cut+'%</b> מהחשיפה. סבירות הנתיב החם <b class="cy">'+Math.round(a.top.p*100)+'%</b>.</div>'
-      : '<span class="cp-ic">◈</span><div>Remediate the choke point <b class="hi">'+(chokeNode?chokeNode.lab.en:'')+'</b> → severs <b class="hi">'+a.chokePaths+'</b> of <b>'+a.total+'</b> attack paths to crown jewels · cuts <b class="cy">'+cut+'%</b> of exposure. Hottest path likelihood <b class="cy">'+Math.round(a.top.p*100)+'%</b>.</div>';
-    host.innerHTML='<div class="cp-graph">'+svg+'</div><div class="cp-insight">'+ins+'</div>'+
-      '<div class="cp-legend">'+CP_TIERS.map(function(tr){return '<span><i style="background:'+tr.col+'"></i>'+(LANG==='he'?tr.lab.he:tr.lab.en)+'</span>';}).join('')+'</div>';
-    var nEl=document.getElementById('cpN');if(nEl)nEl.textContent=a.total+' '+(LANG==='he'?'נתיבים · חם ':'paths · top ')+Math.round(a.top.p*100)+'%';}
+    var chokeNode=cpNodeById[a.choke],cut=Math.round(a.chokePaths/a.total*100),ins;
+    if(cpRemediated){ins=rtl
+      ?'<span class="cp-ic" style="color:var(--ok)">✓</span><div>צוואר-הבקבוק <b>'+chokeNode.lab.he+'</b> טופל · <b class="cy">'+a.chokePaths+'</b> נתיבים נותקו · נותרו <b>'+universe.length+'</b> מתוך <b>'+a.total+'</b> · החשיפה צנחה ב-<b class="cy">'+cut+'%</b>.</div>'
+      :'<span class="cp-ic" style="color:var(--ok)">✓</span><div>Choke point <b>'+chokeNode.lab.en+'</b> remediated · <b class="cy">'+a.chokePaths+'</b> paths severed · <b>'+universe.length+'</b> of <b>'+a.total+'</b> remain · exposure dropped <b class="cy">'+cut+'%</b>.</div>';}
+    else if(cpFocusCrown){var fc=cpNodeById[cpFocusCrown];ins=rtl
+      ?'<span class="cp-ic">⌖</span><div><b class="hi">'+focusPaths.length+'</b> נתיבי-תקיפה מגיעים אל <b>'+fc.lab.he+'</b> · הנתיב החם <b class="cy">'+Math.round(top.p*100)+'%</b>. לחצו שוב לניקוי.</div>'
+      :'<span class="cp-ic">⌖</span><div><b class="hi">'+focusPaths.length+'</b> attack paths reach <b>'+fc.lab.en+'</b> · hottest <b class="cy">'+Math.round(top.p*100)+'%</b>. Click again to clear.</div>';}
+    else {ins=rtl
+      ?'<span class="cp-ic">◈</span><div>תקנו את צוואר-הבקבוק <b class="hi">'+chokeNode.lab.he+'</b> ← ינתק <b class="hi">'+a.chokePaths+'</b> מתוך <b>'+a.total+'</b> נתיבים אל נכסי-העל · חיתוך <b class="cy">'+cut+'%</b> מהחשיפה.</div>'
+      :'<span class="cp-ic">◈</span><div>Remediate the choke point <b class="hi">'+chokeNode.lab.en+'</b> → severs <b class="hi">'+a.chokePaths+'</b> of <b>'+a.total+'</b> paths to crown jewels · cuts <b class="cy">'+cut+'%</b> of exposure.</div>';}
+    var remLab=cpRemediated?(rtl?'⟲ שחזר':'⟲ Restore'):(rtl?'◆ תקן צוואר-בקבוק':'◆ Remediate choke');
+    var chips=CP_NODES.filter(function(n){return n.tier===4;}).map(function(n){var on=cpFocusCrown===n.id;
+      return '<button class="cp-chip'+(on?' on':'')+'" data-focus="'+n.id+'" aria-pressed="'+on+'">♛ '+(rtl?n.lab.he:n.lab.en)+'</button>';}).join('');
+    var controls='<div class="cp-controls"><button class="cp-remedy'+(cpRemediated?' on':'')+'" data-remedy="1">'+remLab+'</button>'+
+      '<span class="cp-chiplab">'+(rtl?'עקוב אל:':'Trace to:')+'</span>'+chips+'</div>';
+    host.innerHTML='<div class="cp-graph">'+svg+'</div>'+controls+'<div class="cp-insight">'+ins+'</div>'+
+      '<div class="cp-legend">'+CP_TIERS.map(function(tr){return '<span><i style="background:'+tr.col+'"></i>'+(rtl?tr.lab.he:tr.lab.en)+'</span>';}).join('')+'</div>'+
+      '<div class="cp-tip" id="cpTip" aria-hidden="true"></div>';
+    var nEl=document.getElementById('cpN');if(nEl)nEl.textContent=(cpRemediated?universe.length:a.total)+' '+(rtl?'נתיבים · חם ':'paths · top ')+Math.round(top.p*100)+'%';}
+  function cpSetFocus(id){cpFocusCrown=(cpFocusCrown===id?null:id);cpRender();}
+  function cpToggleRemedy(){if(cpRestoreT){clearTimeout(cpRestoreT);cpRestoreT=null;}
+    cpRemediated=!cpRemediated;if(cpRemediated)cpRestoreT=setTimeout(function(){cpRemediated=false;cpRestoreT=null;cpRender();},4500);cpRender();}
+  deck.addEventListener('click',function(e){
+    if(e.target.closest('[data-remedy]')){cpToggleRemedy();return;}
+    var chip=e.target.closest('[data-focus]');if(chip){cpSetFocus(chip.getAttribute('data-focus'));return;}
+    var node=e.target.closest('[data-node]');if(node){var id=node.getAttribute('data-node'),nd=cpNodeById[id];if(!nd)return;
+      if(nd.tier===4)cpSetFocus(id);else if(id===cpChoke)cpToggleRemedy();}});
+  deck.addEventListener('keydown',function(e){if(e.key!=='Enter'&&e.key!==' ')return;var node=e.target.closest&&e.target.closest('.cp-node[role="button"]');
+    if(node){e.preventDefault();var id=node.getAttribute('data-node'),nd=cpNodeById[id];if(nd&&nd.tier===4)cpSetFocus(id);else if(id===cpChoke)cpToggleRemedy();}});
+  deck.addEventListener('mousemove',function(e){var host=document.getElementById('crownPath');if(!host)return;var tip=document.getElementById('cpTip');if(!tip)return;
+    var edge=e.target.closest('[data-edge]'),node=e.target.closest('[data-node]');
+    if(!edge&&!node){tip.classList.remove('on');return;}var r=host.getBoundingClientRect(),txt;
+    if(edge){txt='<b>'+edge.getAttribute('data-tech')+'</b> · '+(LANG==='he'?'סבירות ':'likelihood ')+edge.getAttribute('data-p')+'%';}
+    else {var nd=cpNodeById[node.getAttribute('data-node')];if(!nd){tip.classList.remove('on');return;}txt='<b>'+(LANG==='he'?nd.lab.he:nd.lab.en)+'</b> · '+(LANG==='he'?CP_TIERS[nd.tier].lab.he:CP_TIERS[nd.tier].lab.en);}
+    tip.innerHTML=txt;tip.style.insetInlineStart=(e.clientX-r.left+12)+'px';tip.style.top=(e.clientY-r.top+12)+'px';tip.classList.add('on');});
   function initCrownPath(){cpRender();}
-  IV(function(){if(!document.getElementById('crownPath'))return;
+  IV(function(){if(!document.getElementById('crownPath'))return;if(cpFocusCrown||cpRemediated)return;
     CP_EDGES.forEach(function(e){if(Math.random()<.4)e[3]=Math.max(.35,Math.min(.97,e[3]+(Math.random()-.5)*0.12));});cpRender();},3000);
 
   /* ══════════ Cockpit widget catalog + customization ══════════ */
@@ -1174,7 +1251,7 @@ export function mountCommandCenter(root, THREE, opts) {
   var activeDraws=[];
   function renderCockpit(){var grid=document.getElementById('cockpitGrid');if(!grid)return;grid.innerHTML='';activeDraws=[];
     layout.forEach(function(id){var c=catById[id];if(!c)return;var card=document.createElement('div');card.className='card '+c.size;card.setAttribute('data-wid',id);card.setAttribute('draggable','true');
-      var inner='<button class="wx" data-x="'+id+'" title="remove">✕</button>';
+      var wxLab=(LANG==='he'?'הסר ':'Remove ')+(c.t||'');var inner='<button class="wx" data-x="'+id+'" title="'+wxLab+'" aria-label="'+wxLab+'">✕</button>';
       if(c.kind==='metric'){inner+=metricBody(c.ref);}
       else if(c.kind==='engine'){inner+='<div class="cbody">'+engineBody(c.ref)+'</div>';}
       else {var mo=c.ref,cs=mo.cbodyStyle?(' style="'+mo.cbodyStyle+'"'):'';inner+='<div class="ch"><div class="ht"><b>'+mo.t+'</b><span class="rt">'+(mo.sub||'')+'</span></div>'+(mo.hr||'')+'</div><div class="cbody '+(mo.cbody||'')+'"'+cs+'>'+mo.bh+'</div>';}
@@ -1211,8 +1288,11 @@ export function mountCommandCenter(root, THREE, opts) {
   function renderCatalogList(){var body=document.getElementById('widgetCatalog');if(!body)return;var q=(document.getElementById('widgetSearch').value||'').toLowerCase();
     body.innerHTML=CATALOG.filter(function(c){return c.group===wmTab&&c.t.toLowerCase().indexOf(q)>=0;}).map(function(c){var added=layout.indexOf(c.id)>=0;
       return '<div class="wcat'+(added?' added':'')+'"><div class="wc-ic">'+c.ic+'</div><div class="wc-m"><div class="wc-t">'+c.t+'</div><div class="wc-s">'+c.group+'</div></div><button class="wc-add" data-add="'+c.id+'">'+(added?(LANG==='he'?'נוסף':'Added'):(LANG==='he'?'＋ הוסף':'＋ Add'))+'</button></div>';}).join('');}
-  function openWidgetModal(){document.getElementById('widgetTabs').innerHTML=['Metrics','Modules','Engines'].map(function(g){return '<button data-g="'+g+'"'+(g===wmTab?' class="on"':'')+'>'+g+'</button>';}).join('');document.getElementById('widgetModal').classList.add('on');renderCatalogList();}
-  function closeWidgetModal(){document.getElementById('widgetModal').classList.remove('on');}
+  function openWidgetModal(){document.getElementById('widgetTabs').innerHTML=['Metrics','Modules','Engines'].map(function(g){return '<button data-g="'+g+'"'+(g===wmTab?' class="on"':'')+'>'+g+'</button>';}).join('');
+    var wm=document.getElementById('widgetModal');wm.classList.add('on');wm.setAttribute('aria-hidden','false');renderCatalogList();
+    var s=document.getElementById('widgetSearch');if(s)try{s.focus();}catch(e){}}
+  function closeWidgetModal(){var wm=document.getElementById('widgetModal');wm.classList.remove('on');wm.setAttribute('aria-hidden','true');
+    try{document.getElementById('addWidgetBtn').focus();}catch(e){}}
   document.getElementById('widgetTabs').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;wmTab=b.getAttribute('data-g');[].forEach.call(this.children,function(x){x.classList.toggle('on',x===b);});renderCatalogList();});
   document.getElementById('widgetSearch').addEventListener('input',renderCatalogList);
   document.getElementById('widgetCatalog').addEventListener('click',function(e){var b=e.target.closest('.wc-add');if(!b)return;addWidget(b.getAttribute('data-add'));renderCatalogList();});
@@ -1222,6 +1302,16 @@ export function mountCommandCenter(root, THREE, opts) {
   document.getElementById('editLayoutBtn').addEventListener('click',function(){deck.classList.toggle('editing');this.classList.toggle('on');});
   document.getElementById('resetLayoutBtn').addEventListener('click',resetLayout);
   (function(){var sel=document.getElementById('ccClientSel');if(sel){sel.innerHTML=CLIENTS.map(function(c){return '<option value="'+c.id+'">'+c.name+'</option>';}).join('');sel.addEventListener('change',function(){switchClient(this.value);});}})();
+
+  /* first-run onboarding hint (shown once, dismissible) */
+  var hintDismissed=false;try{hintDismissed=localStorage.getItem('wm_cc_hint_seen')==='1';}catch(e){}
+  function renderHint(){var el=document.getElementById('ccHint');if(!el)return;if(hintDismissed){el.style.display='none';return;}
+    el.style.display='flex';el.innerHTML=(LANG==='he'
+      ? '<span class="cc-hint-ic">◈</span><div>הקוקפיט הזה שלך לסידור — לחצו <b>＋ הוסף ווידג׳ט</b> כדי להוסיף כל מדד, מודול או מנוע, או <b>✦ עריכת פריסה</b> לגרירה וסידור מחדש. כל לקוח והתצוגה שלו.</div>'
+      : '<span class="cc-hint-ic">◈</span><div>This cockpit is yours to arrange — press <b>＋ Add widget</b> to add any metric, module or engine, or <b>✦ Edit layout</b> to drag &amp; reorder. Every client, their own view.</div>')
+      + '<button class="cc-hint-x" id="ccHintX" aria-label="'+(LANG==='he'?'סגור טיפ':'Dismiss tip')+'">✕</button>';}
+  deck.addEventListener('click',function(e){if(e.target&&e.target.id==='ccHintX'){hintDismissed=true;try{localStorage.setItem('wm_cc_hint_seen','1');}catch(er){}var el=document.getElementById('ccHint');if(el)el.style.display='none';}});
+  renderHint();
 
   /* boot cockpit surfaces */
   initCortex();renderCouncil();
@@ -1243,11 +1333,19 @@ export function mountCommandCenter(root, THREE, opts) {
   buildMenuNav();
 
   var scrim=document.getElementById('scrim'),menu=document.getElementById('menu'),menuOpen=false;
-  function openMenu(){menuOpen=true;menu.classList.add('on');scrim.classList.add('on');}
-  function closeMenu(){menuOpen=false;menu.classList.remove('on');scrim.classList.remove('on');}
+  menu.setAttribute('aria-hidden','true');
+  function openMenu(){menuOpen=true;menu.classList.add('on');scrim.classList.add('on');menu.setAttribute('aria-hidden','false');
+    var f=menu.querySelector('.launch button');if(f)try{f.focus();}catch(e){}}
+  function closeMenu(){menuOpen=false;menu.classList.remove('on');scrim.classList.remove('on');menu.setAttribute('aria-hidden','true');
+    try{document.getElementById('menuBtn').focus();}catch(e){}}
   document.getElementById('menuBtn').addEventListener('click',openMenu);
   document.getElementById('menuClose').addEventListener('click',closeMenu);
   scrim.addEventListener('click',closeMenu);
+  /* Global keyboard: Escape closes the modal first, then the menu */
+  addWin('keydown',function(e){if(e.key!=='Escape')return;
+    var wm=document.getElementById('widgetModal');
+    if(wm&&wm.classList.contains('on')){closeWidgetModal();}
+    else if(menuOpen){closeMenu();}});
 
   var state={view:'cockpit',hist:[]};
   function showView(v){state.view=v;document.getElementById('view-cockpit').classList.toggle('on',v==='cockpit');document.getElementById('view-warroom').classList.toggle('on',v==='warroom');
