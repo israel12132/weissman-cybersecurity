@@ -7,21 +7,21 @@ should link here rather than copying figures.
 
 | Metric | Value | Source of truth |
 |--------|-------|-----------------|
-| Production engine IDs | 592 | `scripts/engine_reality_audit.mjs` |
-| — real live probes | 330 | same (322 distinct impls) |
+| Production engine IDs | 595 | `scripts/engine_reality_audit.mjs` |
+| — real live probes | 329 | same (321 distinct impls) |
 | — aliases | 204 | same |
-| — agent-required | 58 | same |
-| Rust test fns (`#[test]`/`#[tokio::test]`, incl. parameterized) | 3696 | grep over workspace |
-| HTTP route registrations (`.route(`) | 410 | grep over `fingerprint_engine/src` + `backend` |
-| Migrations — `crates/weissman-db/migrations` | 173 | `ls crates/weissman-db/migrations` |
-| Migrations — `fingerprint_engine/migrations` | 174 | `ls fingerprint_engine/migrations` |
+| — agent-required | 59 | same |
+| Rust test fns (`#[test]`/`#[tokio::test]`, incl. parameterized) | 4164 | grep over workspace |
+| HTTP route registrations (`.route(`) | 458 | grep over `fingerprint_engine/src` + `backend` |
+| Migrations — `crates/weissman-db/migrations` | 180 | `ls crates/weissman-db/migrations` |
+| Migrations — `fingerprint_engine/migrations` | 180 | `ls fingerprint_engine/migrations` |
 
-**Reading the engine count honestly:** the 592 catalog IDs resolve to
-**322 distinct probe implementations** — 204 are
-aliases that re-tag a canonical probe, 58 are agent-required host
+**Reading the engine count honestly:** the 595 catalog IDs resolve to
+**321 distinct probe implementations** — 204 are
+aliases that re-tag a canonical probe, 59 are agent-required host
 techniques, and several "real" IDs delegate to a shared runner (e.g. APT-group
 surface profiles). The catalog number reflects breadth of technique coverage, not
-592 independent scanners. Every ID still maps to a real execution path
+595 independent scanners. Every ID still maps to a real execution path
 (`engine_reality_audit.mjs` fails on any `no_path`).
 
 > Verify locally: `node scripts/sync_doc_metrics.mjs --check`.

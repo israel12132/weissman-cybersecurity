@@ -94,5 +94,5 @@ node scripts/generate_platform_encyclopedia.mjs
 
 - **אל** תפתח את `docs/manuals/` בפגישת CEO — זה DevOps.
 - **כן** תפתח `viewer/index.html` — זה Product Bible.
-- הדגש: **Live Only** (עמוד 008) + **563 engine IDs** (303 real probes + 212 aliases + 48 agent) (חלק ו׳).
+- הדגש: **Live Only** (עמוד 008) + **595 engine IDs** (329 real probes + 204 aliases + 59 agent) (חלק ו׳).
 - אם שואלים "מה חסר?" — חפש במסמך; אם לא נמצא, זה באג בתיעוד — לא feature gap.

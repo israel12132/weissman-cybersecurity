@@ -66,6 +66,26 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ### Fixed
 
+- **Repaired the RED engine-count / metric source-of-truth gate and reconciled every
+  headline number.** `node scripts/sync_doc_metrics.mjs --check` was failing on the
+  committed tree (stale `docs/METRICS.md`) and the engine count was stated three
+  different ways in `README.md` alone (594, 592, 563) — a "CI-verified numbers" claim
+  that its own CI gate was red on. Regenerated `docs/METRICS.md` and
+  `shared/engine_catalog.snapshot.json` from source, and reconciled every headline
+  engine/migration figure to the single computed value (**595** production engine IDs =
+  329 real live probes + 3 advisory-only + 204 aliases + 59 agent-required; 321 distinct
+  impls; 180 migrations) across `README.md`, `AGENTS.md`, `docs/architecture.md`,
+  `docs/SOC_ENGINES_ARCHITECTURE.md`, `SECURITY_AND_COMPLIANCE.md`, the two inspection
+  runbooks, `SIG_CAIQ_PREP_QA.md`, `SYSTEM_TESTING_CHECKLIST.md` and
+  `docs/sales/HOW-TO-PRESENT-he.md`. Hardened the guards so it cannot silently recur:
+  `scripts/verify_doc_metrics.mjs` now asserts **every** occurrence of a gated metric
+  (not just the first — the exact hole that let the second "592" through), covers the
+  diagram/`entries` spots in `architecture.md` / `SOC_ENGINES_ARCHITECTURE.md`, and gates
+  the advisory-only count; and CI now fails on any content drift of
+  `engine_catalog.snapshot.json` (ignoring only its `generated_at` timestamp). _Deferred:_
+  the `Weissman_Cybersecurity_Executive_Technical_Briefing` .md/.pdf pair (EN + HE) still
+  carries a much older count (563 / 303 / 212 / 48) and needs a dedicated reconciliation +
+  PDF regeneration.
 - **SOAR playbook E2E verifier is hermetic.** `scripts/verify_soar_playbook_e2e.mjs`
   fired against a hard-coded `tenant_id: 1` / `client_id: 1`, violating the
   `soar_action_executions.client_id → clients(id)` foreign key on any stack where
