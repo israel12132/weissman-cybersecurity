@@ -15,6 +15,7 @@ pub mod llm_usage;
 pub mod bulk_copy;
 pub mod pg_binary_copy;
 pub mod secret;
+pub mod isolation_attestation;
 pub mod no_tx_migrations;
 pub mod role_guard;
 

@@ -254,6 +254,22 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ### Security
 
+- **Exportable per-tenant DB-enforced isolation attestation (`isolation_attestation`).** The
+  Step-1 RLS/client-scope introspection was real but trapped inside pass/fail test bodies, so
+  the DB truth that would BE an attestation was computed and thrown away — nothing could
+  export it for a regulated buyer. New reusable emitter
+  `build_isolation_attestation(pool) -> TenantIsolationAttestation` runs the same `pg_catalog`
+  queries the contract test proves correct and returns the structured, serde-serializable live
+  posture: per-table RLS enable/force/tenant-GUC-policy/`USING(true)` facts, per-table
+  customer-visibility coverage, the active tenant ids (`active_tenant_ids()`), the
+  tenant-GUC-role default guard, and a single `compliant` verdict. Compliance logic is pure and
+  unit-tested (3 tests); the full emitter is covered by a live-Postgres test
+  (`isolation_attestation_live`). Verified against the live migrated schema: **148 tenant
+  tables + 88 client tables all compliant, 4 active tenants, compliant=true**. The scope is
+  tenant/client ISOLATION posture (all connection-independent introspection), so the attestation
+  is correct regardless of which pool builds it. _Deferred (its own change):_ the per-tenant
+  HTTP export endpoint + PDF packaging, a signature/hash-chain over the exported report, and
+  unifying the contract tests to consume this emitter as the single source of truth.
 - **Structured, tamper-evident, hash-chained per-finding evidence (`finding_evidence_ledger`).**
   Live verification did real request/response I/O but collapsed it into a free-text `detail`
   string — so a CONFIRMED verdict could not be shown to an auditor as the transcript that
