@@ -157,7 +157,7 @@ pub async fn api_signup(
             Json(json!({
                 "ok": false,
                 "code": "self_serve_disabled",
-                "detail": "Self-serve signup is not enabled on this deployment. Contact sales@weissman.io to request an account."
+                "detail": "Self-serve signup is not enabled on this deployment. Contact weissmancybersecurity@gmail.com to request an account."
             })),
         )
             .into_response();

@@ -104,7 +104,7 @@ pub async fn api_demo_request(
             Json(json!({
                 "ok": false,
                 "code": "smtp_unconfigured",
-                "detail": "This deployment is not configured to accept demo requests over email. Contact sales@weissman.io."
+                "detail": "This deployment is not configured to accept demo requests over email. Contact weissmancybersecurity@gmail.com."
             })),
         )
             .into_response();
@@ -119,7 +119,7 @@ pub async fn api_demo_request(
             StatusCode::OK,
             Json(json!({
                 "ok": true,
-                "detail": "Request received. We will reply from sales@weissman.io."
+                "detail": "Request received. We will reply from weissmancybersecurity@gmail.com."
             })),
         )
             .into_response(),
@@ -130,7 +130,7 @@ pub async fn api_demo_request(
                 Json(json!({
                     "ok": false,
                     "code": "smtp_failed",
-                    "detail": "The request could not be emailed from this deployment. Contact sales@weissman.io."
+                    "detail": "The request could not be emailed from this deployment. Contact weissmancybersecurity@gmail.com."
                 })),
             )
                 .into_response()
@@ -147,7 +147,7 @@ async fn send_sales_email(subject: &str, body: &str) -> Result<(), String> {
     let user = std::env::var("WEISSMAN_SMTP_USER").unwrap_or_default();
     let pass = std::env::var("WEISSMAN_SMTP_PASSWORD").unwrap_or_default();
     let from = std::env::var("WEISSMAN_SMTP_FROM").map_err(|_| "WEISSMAN_SMTP_FROM")?;
-    let to = std::env::var("WEISSMAN_SALES_EMAIL").unwrap_or_else(|_| "sales@weissman.io".into());
+    let to = std::env::var("WEISSMAN_SALES_EMAIL").unwrap_or_else(|_| "weissmancybersecurity@gmail.com".into());
     let subject = subject.to_string();
     let body = body.to_string();
 
