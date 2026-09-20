@@ -32,6 +32,7 @@ const replaceable = [
   'robots.txt',
   'favicon.svg',
   'og-cover.svg',
+  'brand-cover.jpg',
   '_shared.css',
   'assets',
   'platform',
