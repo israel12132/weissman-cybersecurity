@@ -1,6 +1,10 @@
 // Maintenance page template — one function renders every locale/variant.
 // Copy lives in ./strings.mjs; behaviour in ./maintenance.js; the mark in ./logo.svg.
 // Design contract (ids, tokens, layout, BIDI, a11y): deploy/maintenance/README.md.
+// Tokens are the website's (website/src/styles/tokens.css) with one deliberate deviation:
+// --text-dim is #857f74 here, not #7d776c — the site's value is 4.49:1 on --bg-deep, a hair
+// under WCAG AA for the ~11.5 px footer line and the wordsub, which this page sets in it
+// (5.0:1 now); the Command Center variant's #6b7a93 on #020617 is 4.6:1 for the same reason.
 import { STRINGS, EMAIL } from './strings.mjs';
 
 export const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -23,9 +27,9 @@ const favicon = (mark) => 'data:image/svg+xml,' + encodeURIComponent(
 const langPill = (S) => `  <a class="lang" href="${S.switchHref}" lang="${S.switchLang}" hreflang="${S.switchLang}" dir="${S.switchDir}" title="${esc(S.switchTitle)}">${S.switchLabel}</a>\n`;
 
 const css = (fonts) => `
-:root{--bg-deep:#07090c;--bg-charcoal:#10141b;--bg-elevated:#161b24;--bg-glow:rgba(34,211,238,.08);--text:#f4efe6;--text-muted:#b7b1a6;--text-dim:#7d776c;--accent:#22d3ee;--accent-dim:rgba(34,211,238,.16);--accent-deep:#0ea5e9;--risk:#e8b86d;--ops:#3ee0b2;--danger:#f07167;--line:rgba(244,239,230,.1);--line-strong:rgba(244,239,230,.18);--radius:14px;--radius-sm:10px;--shadow:0 18px 50px rgba(0,0,0,.35);--ease:cubic-bezier(.22,1,.36,1);--duration-swift:180ms;--duration:280ms;--duration-slow:480ms;--font-sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;--font-brand:"Orbitron",var(--font-sans);--font-mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono","Courier New",monospace;--font-he:"Heebo",var(--font-sans);--dot:var(--accent);--dot-ring:var(--accent-dim)}
+:root{--bg-deep:#07090c;--bg-charcoal:#10141b;--bg-elevated:#161b24;--bg-glow:rgba(34,211,238,.08);--text:#f4efe6;--text-muted:#b7b1a6;--text-dim:#857f74;--accent:#22d3ee;--accent-dim:rgba(34,211,238,.16);--accent-deep:#0ea5e9;--risk:#e8b86d;--ops:#3ee0b2;--danger:#f07167;--line:rgba(244,239,230,.1);--line-strong:rgba(244,239,230,.18);--radius:14px;--radius-sm:10px;--shadow:0 18px 50px rgba(0,0,0,.35);--ease:cubic-bezier(.22,1,.36,1);--duration-swift:180ms;--duration:280ms;--duration-slow:480ms;--font-sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;--font-brand:"Orbitron",var(--font-sans);--font-mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono","Courier New",monospace;--font-he:"Heebo",var(--font-sans);--dot:var(--accent);--dot-ring:var(--accent-dim)}
 /* Command Center variant: same design family, palette leans to the app's slate. */
-html[data-variant=command-center]{--bg-deep:#020617;--bg-charcoal:#0f172a;--bg-elevated:#1e293b;--line:rgba(226,232,240,.1);--line-strong:rgba(226,232,240,.18);--text:#e2e8f0;--text-muted:#94a3b8;--text-dim:#64748b}
+html[data-variant=command-center]{--bg-deep:#020617;--bg-charcoal:#0f172a;--bg-elevated:#1e293b;--line:rgba(226,232,240,.1);--line-strong:rgba(226,232,240,.18);--text:#e2e8f0;--text-muted:#94a3b8;--text-dim:#6b7a93}
 @media (prefers-reduced-motion:reduce){:root{--duration-swift:1ms;--duration:1ms;--duration-slow:1ms}}
 @font-face{font-family:"Orbitron";font-style:normal;font-weight:700;font-display:swap;src:url(data:font/woff2;base64,${fonts.orbitron}) format("woff2");unicode-range:U+0000-00FF,U+2000-206F}
 @font-face{font-family:"Heebo";font-style:normal;font-weight:500;font-display:swap;src:url(data:font/woff2;base64,${fonts.heebo}) format("woff2");unicode-range:U+0590-05FF,U+200C-2010,U+20AA,U+25CC,U+FB1D-FB4F}
@@ -123,7 +127,7 @@ html[dir=rtl] .details .lead dt{font-family:var(--font-he)}
 .footer p{margin:0}
 .footer .city{white-space:nowrap}
 .footer .tech{font-family:var(--font-mono);font-size:.72rem;letter-spacing:.02em;color:var(--text-dim);white-space:nowrap}
-@media (max-width:600px){.meta,.planned dl,.details{grid-template-columns:1fr}.meta{gap:.9rem}.details>div{border-inline-start:0;padding-inline:0;padding-block:.95rem;border-top:1px solid var(--line)}.details>div:first-child{border-top:0}.details>div.lead{border-bottom:0}.actions{align-items:stretch;flex-direction:column}.actions .btn{width:100%}.hint{font-size:.8rem}.footer{flex-direction:column;align-items:flex-start;gap:.4rem}}
+@media (max-width:600px){.meta,.planned dl,.details{grid-template-columns:1fr}.meta{gap:.9rem}.details>div{border-inline-start:0;padding-inline:0;padding-block:.95rem;border-top:1px solid var(--line)}.details>div:first-child{border-top:0}.details>div.lead{border-bottom:0}.actions{align-items:stretch;flex-direction:column}.actions .btn{width:100%}.actions .btn-ghost{order:1}.hint{font-size:.8rem}.footer{flex-direction:column;align-items:flex-start;gap:.4rem}}
 @media (max-width:400px){.footer .sep{display:none}.footer .city{display:block}}
 @media (max-width:360px){.details .lead dd{font-size:.92rem}.lang{padding:.3rem .55rem;font-size:.8rem}.wordmark{font-size:.74rem}.wordsub{font-size:.625rem}}
 @media (min-width:900px){.page{max-width:44rem}}

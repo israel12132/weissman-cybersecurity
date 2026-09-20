@@ -19,7 +19,7 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
   assets; `deploy/rebuild.sh` rolls out new code (Compose or systemd) while the page covers
   the origin and reports how long it was unreachable; the announced-window flag
   (`deploy/maintenance/maintenance-mode.sh on|off`) is optional and off by default.
-  Contract suite `scripts/test_maintenance_contract.sh` (docker-free, 225 checks) and
+  Contract suite `scripts/test_maintenance_contract.sh` (docker-free, 311 checks) and
   Worker tests (`node --test deploy/cloudflare/maintenance-worker/worker.test.mjs`).
   Runbook: `docs/operations/MAINTENANCE-PAGE-AND-ZERO-DOWNTIME-REBUILD.md` (+ Hebrew).
 

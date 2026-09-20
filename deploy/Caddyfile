@@ -57,6 +57,13 @@
 		file_server
 	}
 
+	# The state directory sits under the page root so install.sh creates both with one
+	# owner. Only status.json (above) belongs on the wire; the flag file and its timestamp
+	# do not — the same 404 nginx-weissman.conf answers for this prefix.
+	handle /maintenance/state/* {
+		respond 404
+	}
+
 	handle /maintenance/* {
 		root * /opt/weissman/maintenance
 		uri strip_prefix /maintenance
@@ -105,22 +112,27 @@
 				Cache-Control no-store
 				X-Weissman-Maintenance 1
 				X-Content-Type-Options nosniff
+				X-Frame-Options DENY
 				X-Robots-Tag "noindex, nofollow"
 				# The app normally sets the security headers; on this page Caddy is the
-				# only source. This policy is exactly what the page needs: one same-origin
-				# script, inline <style>, data: fonts and favicon, fetch to /api/health.
+				# only source, and the header contract is the same one nginx-weissman.conf
+				# sends (HSTS included — the site is HTTPS-only). This policy is exactly what
+				# the page needs: one same-origin script, inline <style>, data: fonts and
+				# favicon, fetch to /api/health.
+				Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
 				Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
 			}
 			# Pick the file the way nginx's `map` does — this is a `route`, so the lines
 			# run in order and the last matching `vars` wins. Everything gets the page in
 			# the visitor's language (the Hebrew site lives under /he); API-shaped
 			# requests get api.json (application/json) instead, so the Command Center,
-			# webhooks, WebSocket upgrades and any JSON client see a machine-readable 503
-			# and never an HTML document. Nested `handle` blocks would not do here: inside
+			# webhooks, WebSocket upgrades, a `curl … /install/agent.sh | sh` and any JSON
+			# client see a machine-readable 503 and never an HTML document — the same
+			# prefix set as the two nginx confs. Nested `handle` blocks would not do here: inside
 			# `route` they are not mutually exclusive on the Caddy that Debian/Ubuntu ship
 			# (2.6), so the catch-all would win and every visitor would get the English page.
 			@he path /he /he/*
-			@json expression "path('/api/*', '/hooks/*', '/ws/*') || header({'Accept': ['*application/json*']})"
+			@json expression "path('/api/*', '/hooks/*', '/ws/*', '/install/*') || header({'Accept': ['*application/json*']})"
 			vars maint_page /index.html
 			vars @he maint_page /he/index.html
 			vars @json maint_page /api.json

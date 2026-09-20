@@ -37,7 +37,14 @@ What "the page" is, in every layer:
   other; eyebrow *Scheduled update*, headline *A platform update is in progress.* / *מתבצע עדכון
   מערכת.*, the assurance that data, scheduled scans and queued jobs are preserved, a live
   *Last checked / Next check* card, *Check again*, *Status updates* → `/status`, the standard
-  window (Sundays 02:00–04:00 Israel time) and the contact address.
+  window (Sundays 02:00–04:00 Israel time) and the contact address. "Any path" means every
+  path that reaches the backend. On the **Docker gateway** the marketing pages (`/`, `/he/`,
+  `/pricing`…) and the Command Center shell are static files in the image and keep serving
+  from disk (200) while the backend is away; there the page appears at `/status`, as
+  `api.json` on `/api/*`, `/ws/*`, `/hooks/*`, `/install/*`, and inside the Command Center
+  (overlay + `offline.html`) — `/` and `/he/` become the 503 page only with the flag (§3). On
+  **VPS nginx and Caddy** everything is proxied, so every path, `/` and `/he/` included, gets
+  the page.
 - **`api.json`** for machines — `/api/*`, `/hooks/*`, `/ws/*`, `/install/*` (nginx), or any
   request whose `Accept` contains `application/json`; a POST/PUT/DELETE at the Cloudflare layer:
 
@@ -190,8 +197,12 @@ deploy/maintenance/maintenance-mode.sh off                                      
 `on` writes `maintenance.on` and `status.json`
 (`{"mode":"planned","reason":…,"until":…,"since":…}`) into the state directory; `off` removes
 both files. `--until` accepts ISO-8601 with an offset (`2026-09-27T04:00:00+03:00`) or anything
-GNU `date -d` parses (`"2026-09-27 04:00"`); an ETA already in the past is never shown. Both are
-evaluated per request — no nginx/Caddy reload for `on` or `off`.
+GNU `date -d` parses (`"2026-09-27 04:00"`). A value **without** an offset is read as **Israel
+time**, not the host's clock — a VPS usually runs on UTC, and `04:00` read there would be
+announced as "07:00 Israel time" — so the two forms above are the same instant (override with
+`WEISSMAN_MAINTENANCE_TZ=<zone>`; needs `tzdata`); the script prints the stored value, offset
+included. An ETA already in the past is never shown. Both files are evaluated per request — no
+nginx/Caddy reload for `on` or `off`.
 
 | Topology | State directory (`WEISSMAN_MAINTENANCE_STATE_DIR`) | Command |
 |----------|-----------------------------------------------------|---------|
@@ -260,8 +271,11 @@ How it triggers (both automatic):
 1. The gateway Service has no ready endpoints (rollout, drain, scale to 0) → ingress-nginx
    sends the request straight to `weissman-maintenance` with the original URI.
 2. The gateway answers 502/503/504 → `custom-http-errors` re-issues the request to the default
-   backend with path `/` and headers `X-Code`, `X-Format` (the Accept header), `X-Original-URI`;
-   `default.conf` routes `/he*` → Hebrew, `/api*` or `application/json` → `api.json`, else English.
+   backend with path `/` and headers `X-Code`, `X-Format` (the Accept header), `X-Original-URI`,
+   and the **original method**; `default.conf` routes `/he*` → Hebrew, `/api/*`, `/hooks/*`,
+   `/ws/*`, `/install/*` or `application/json` → `api.json`, else English, and reaches the page
+   through a URI `error_page` so a POST/PUT/DELETE gets the 503 body too (a named location would
+   keep the method and nginx's static handler would answer its own 405 — measured).
 
 Manual "gateway down" (e.g. a risky change): `kubectl -n weissman scale deploy/weissman-gateway --replicas=0`
 → every visitor gets the page; `… --replicas=2` brings the site back. No flag is involved.
@@ -273,13 +287,21 @@ kubectl -n weissman port-forward svc/weissman-maintenance 8080:80 &
 curl -si localhost:8080/ | head -1                                 # HTTP/1.1 503 …, English page
 curl -si -H 'X-Original-URI: /he/' localhost:8080/ | grep -o '<html[^>]*>'   # lang="he" dir="rtl"
 curl -si -H 'X-Format: application/json' localhost:8080/ | grep -i content-type  # application/json
+curl -si -X POST -H 'X-Original-URI: /api/login' localhost:8080/ | grep -iE '^(HTTP|content-type)'  # 503, application/json (not 405)
+curl -si -X DELETE -H 'X-Original-URI: /he/x' localhost:8080/ | head -1   # HTTP/1.1 503 …, Hebrew page (not 405)
+curl -si -H 'X-Original-URI: /hooks/paddle' localhost:8080/ | grep -i content-type   # application/json
 curl -si localhost:8080/healthz | head -1                          # HTTP/1.1 200 OK
 ```
 
+The same `default.conf` runs under `scripts/test_maintenance_contract.sh` (§6), so these cases
+are also asserted in CI.
+
 Notes: set `limit-req-status-code: "429"` and `limit-conn-status-code: "429"` in the ingress-nginx
 controller ConfigMap, otherwise edge rate-limit rejections (503 by default) are shown as the
-update page. `default.conf` keeps `listen [::]:8080` (the image default) — on an IPv6-less node
-the pod would crash-loop; regenerate without that line if needed.
+update page. `default.conf` listens on IPv4 only (`listen 8080`), like the gateway pod's nginx:
+the image's default `listen [::]:8080` makes nginx probe an IPv6 socket at config test, and on a
+node with `ipv6.disable=1` the pod crash-loops before serving a page. An IPv6-only cluster adds
+that line back in `deploy/maintenance/src/k8s-default.conf` and rebuilds.
 
 ---
 
@@ -290,17 +312,19 @@ Run these before merging a change to any of the layers (the gate for this featur
 | Command | Expect |
 |---------|--------|
 | `node deploy/maintenance/build.mjs --check` | `build.mjs --check: all generated files are up to date`, exit 0 (exit 1 lists drifted files → run `node deploy/maintenance/build.mjs` and commit) |
-| `bash scripts/test_maintenance_contract.sh` | `Maintenance contract: 225 passed, 0 failed`, exit 0. Docker-free: real `nginx-gateway.conf` and `nginx-weissman.conf` under a local nginx on `127.0.0.1:18080–18084` against a dead and a stub upstream, flag on/off, JSON/Hebrew routing, headers exactly once. Needs `nginx`, `curl`, `openssl` (the full `nginx` package, not `nginx-light`); prints `SKIP: nginx unavailable` and exits 0 without nginx. `KEEP=1` keeps the work dir |
+| `bash scripts/test_maintenance_contract.sh` | `Maintenance contract: 311 passed, 0 failed`, exit 0. Docker-free: the real `nginx-gateway.conf`, `nginx-weissman.conf` and the Kubernetes `default.conf` under a local nginx on `127.0.0.1:18080–18085` against a dead and a stub upstream, flag on/off, JSON/Hebrew routing, request methods, normalised paths, headers exactly once. Needs `nginx`, `curl`, `openssl` — on Ubuntu 24.04 `nginx-light` is enough (it is what CI installs: the same binary minus dynamic modules); on 22.04 install `nginx-full`, whose `nginx-light` lacks `limit_req`/`limit_conn`/`realip`. Prints `SKIP: nginx unavailable` and exits 0 without nginx. `KEEP=1` keeps the work dir |
 | `node --test deploy/cloudflare/maintenance-worker/worker.test.mjs` | `# pass 37`, `# fail 0` (Node 22 runs a bare directory as one file — name the file or use the glob `'deploy/cloudflare/maintenance-worker/*.test.mjs'`) |
 | `caddy validate --config deploy/Caddyfile --adapter caddyfile` | `Valid configuration` |
 | `deploy/rebuild.sh --dry-run` | The numbered plan for this host; `maintenance flag: not used — opt in with --with-maintenance-flag …` |
 
 Live check on a host (Compose shown; on a VPS use `https://<host>` and
-`sudo systemctl stop weissman-server`):
+`sudo systemctl stop weissman-server`). On the Docker gateway check a **proxied** URL: `/` there
+is the static marketing site served from the image and stays 200 with the backend away (§1);
+on VPS nginx / Caddy everything is proxied and `https://<host>/` shows the same headers.
 
 ```bash
 docker compose stop backend                       # or: sudo systemctl stop weissman-server
-curl -si http://127.0.0.1/ | grep -iE '^(HTTP|content-type|retry-after|cache-control|x-weissman-maintenance|x-robots-tag)'
+curl -si http://127.0.0.1/status | grep -iE '^(HTTP|content-type|retry-after|cache-control|x-weissman-maintenance|x-robots-tag)'
 ```
 
 ```
@@ -313,12 +337,14 @@ X-Robots-Tag: noindex, nofollow
 ```
 
 ```bash
-curl -s  http://127.0.0.1/he/ | grep -o '<html[^>]*>'          # <html lang="he" dir="rtl" …>
 curl -si http://127.0.0.1/api/health | grep -iE '^(HTTP|content-type)'   # 503, application/json
 curl -s  http://127.0.0.1/api/health                            # the api.json body from §1
 curl -si -X POST http://127.0.0.1/api/login | head -1           # 503 api.json (not 405)
+curl -si http://127.0.0.1/ | head -1                            # Compose: 200 — the static marketing page (§1)
+curl -s  https://<host>/he/ | grep -o '<html[^>]*>'             # VPS nginx / Caddy: <html lang="he" dir="rtl" …> (Compose: only with the flag, §3)
 curl -sI http://127.0.0.1/maintenance/maintenance.js | grep -iE '^(HTTP|content-type)'  # 200, javascript
 curl -si http://127.0.0.1/maintenance/status.json | head -1     # 404 (nothing announced)
+curl -si https://<host>/maintenance/state/maintenance.on | head -1   # VPS nginx / Caddy: 404 — the state dir is never served
 docker compose start backend                                    # or: sudo systemctl start weissman-server
 curl -si http://127.0.0.1/api/health | grep -iE '^(HTTP|x-weissman)'    # 200, no maintenance header
 ```
@@ -347,7 +373,7 @@ Work down the list; each row is one `curl` away.
 | `/maintenance/status.json` is 404 although the flag is on | Which state dir did `maintenance-mode.sh` write to? `status` prints it | Must be the directory the gateway reads: Compose `${WEISSMAN_MAINTENANCE_STATE_DIR:-./deploy/maintenance/state}` (bind-mounted at `/var/lib/weissman/maintenance`), VPS `/opt/weissman/maintenance/state` — pass `WEISSMAN_MAINTENANCE_STATE_DIR` accordingly |
 | Compose: `maintenance-mode.sh on` fails with permission denied | State dir set outside the checkout and created by Docker (root-owned) | Create the directory yourself before `docker compose up`, or run `install.sh` with `WEISSMAN_MAINTENANCE_OWNER=user:group` |
 | An API 503 is answered with the app's own JSON, not `api.json` | Is it an application 503 (`POST /api/public/demo-request` without SMTP)? | By design on nginx/Caddy: only the proxy's own 502/504 become the page. Cloudflare/ingress-nginx replace the body only, status kept |
-| Kubernetes: ingress-nginx's own error page | `kubectl -n weissman get endpoints weissman-maintenance` — empty? Applied in the wrong order? Pod crash-looping (`listen [::]` on an IPv6-less node)? | Apply ConfigMap → Deployment → wait `rollout status` → Ingress (§5). The controller logs an error and uses its global default backend while the Service has no endpoints |
+| Kubernetes: ingress-nginx's own error page | `kubectl -n weissman get endpoints weissman-maintenance` — empty? Applied in the wrong order? Pod crash-looping (`kubectl -n weissman logs deploy/weissman-maintenance`; an IPv6-only cluster needs `listen [::]:8080` added back, §5)? | Apply ConfigMap → Deployment → wait `rollout status` → Ingress (§5). The controller logs an error and uses its global default backend while the Service has no endpoints |
 | Kubernetes: throttled clients see the update page | `limit-rps` / `limit-connections` rejections are 503 by default | `limit-req-status-code: "429"`, `limit-conn-status-code: "429"` in the controller ConfigMap |
 | `build.mjs --check` fails in CI | Someone edited a generated file, or the sources changed without a rebuild | `node deploy/maintenance/build.mjs`, commit the outputs. The copyright year is the literal `YEAR` in `deploy/maintenance/src/strings.mjs` — bump it by hand each January |
 | Uptime monitor pages during a rebuild | It sees the 503 | Expected and intended (Retry-After 30). Key the monitor on `X-Weissman-Maintenance: 1` to classify it as maintenance rather than an outage |

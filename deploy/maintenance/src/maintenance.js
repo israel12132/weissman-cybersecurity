@@ -31,7 +31,7 @@
  *
  * All user-facing strings come from data-l10n-* attributes on #maint-live, so
  * the same file serves the English and Hebrew pages (and the Command Center
- * variant). Stable id contract: see NOTES.md next to the design.
+ * variant). Stable id contract: deploy/maintenance/README.md (Design contract).
  */
 (function () {
   'use strict';
@@ -80,6 +80,7 @@
   var pollTimer = null;
   var tickTimer = null;
   var lastText = { state: null, countdown: null };
+  var lastAnnounced = null;
 
   var reducedMotion = false;
   try {
@@ -116,9 +117,18 @@
     try { el.hidden = !!hidden; } catch (e) { /* ignore */ }
   }
 
-  function setState(name, text) {
+  // The live line is the page's one `role="status"` region. Screen readers must hear a
+  // REAL change of state — still updating, restored, offline, overrun — and not the
+  // transient "Checking…" wording, which would otherwise be read twice every 5–60 s for
+  // the whole outage (checking → pending → checking …). A transient state, and a repeat
+  // of the sentence already announced, are written with the region switched off; the
+  // attribute is set before the text so assistive tech sees it in that order.
+  function setState(name, text, announce) {
+    var quiet = !announce || lastAnnounced === text;
     setAttr(live, 'data-state', name);
+    setAttr(stateEl, 'aria-live', quiet ? 'off' : 'polite');
     setText(stateEl, text, 'state');
+    if (!quiet) { lastAnnounced = text; }
   }
 
   function setBusy(on) {
@@ -210,7 +220,7 @@
       // Health answered 200, but this page was reloaded seconds ago and is
       // still being served: the origin is settling. Wait out a full guard
       // interval instead of bouncing the visitor back and forth.
-      setState('pending', pendingMessage());
+      setState('pending', pendingMessage(), true);
       delay = RELOAD_GUARD_MS;
       schedule(RELOAD_GUARD_MS);
       return;
@@ -218,7 +228,7 @@
     try { win.sessionStorage.setItem(RELOAD_KEY, String(Date.now())); } catch (e) { /* ignore */ }
     restored = true;
     clearTimers();
-    setState('up', t('up', 'Update complete — returning you to Weissman…'));
+    setState('up', t('up', 'Update complete — returning you to Weissman…'), true);
     if (countdownEl) { setText(countdownEl, t('now', 'now'), 'countdown'); }
     setBusy(true);
     // Short pause so the "restored" state is perceivable, then reload the
@@ -229,7 +239,7 @@
   }
 
   function onStillPending() {
-    setState('pending', pendingMessage());
+    setState('pending', pendingMessage(), true);
     delay = Math.min(MAX_DELAY, Math.round(delay * GROWTH));
     schedule(jittered(delay));
   }
@@ -240,7 +250,7 @@
     checking = true;
     checks += 1;
     clearTimers();
-    setState('checking', t('checking', 'Checking service availability…'));
+    setState('checking', t('checking', 'Checking service availability…'), false);
     renderCountdown();
     setBusy(true);
 
@@ -319,7 +329,7 @@
     setAttr(untilEl, 'datetime', untilIso);
     setHidden(untilRow, !untilText);
     setAttr(root, 'data-overdue', overdue ? '1' : null);
-    if (overdue !== wasOverdue && !checking && !restored && !offline) { setState('pending', pendingMessage()); }
+    if (overdue !== wasOverdue && !checking && !restored && !offline) { setState('pending', pendingMessage(), true); }
 
     // A heading-only block says nothing: hide the whole section when both rows are empty.
     setHidden(plannedEl, !(reason || untilText));
@@ -331,7 +341,7 @@
     setAttr(root, 'data-overdue', null);
     if (overdue) {
       overdue = false;
-      if (!checking && !restored && !offline) { setState('pending', pendingMessage()); }
+      if (!checking && !restored && !offline) { setState('pending', pendingMessage(), true); }
     }
   }
 
@@ -350,7 +360,7 @@
   function goOffline() {
     offline = true;
     clearTimers();
-    setState('offline', t('offline', 'Your device appears to be offline. Checks resume when the connection returns.'));
+    setState('offline', t('offline', 'Your device appears to be offline. Checks resume when the connection returns.'), true);
     renderCountdown();
   }
 

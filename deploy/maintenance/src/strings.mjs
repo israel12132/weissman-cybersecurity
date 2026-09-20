@@ -12,6 +12,10 @@ export const YEAR = 2026;
 // The ONE contact address, for assistance and for security reports alike.
 export const EMAIL = 'weissmancybersecurity@gmail.com';
 
+// The status link is shown as the bare path (`/status`): the same page ships to weissman.io
+// (the Worker) and to weissmancyber.com (VPS nginx, Kubernetes), and a visitor must never read
+// a domain other than the one they are on.
+
 // Machine-facing copy (dist/api.json — served for /api/* while the origin is out).
 export const API = {
   message: 'Scheduled platform update in progress; service resumes automatically.',
@@ -42,7 +46,7 @@ export const STRINGS = {
     retry: 'Check again', retryHint: 'Checks availability now.', statusBtn: 'Status updates',
     assure: 'All data, scheduled scans and queued jobs are preserved; in-flight work resumes automatically.',
     contactLead: 'Need assistance or want to report something?',
-    ctStatus: 'Status page', ctStatusText: 'weissman.io/status',
+    ctStatus: 'Status page', ctStatusText: '/status',
     ctWindow: 'Standard maintenance window (Israel time)', ctWindowValue: '<span dir="ltr">Sundays 02:00–04:00</span>',
     footerCopy: `<span dir="ltr" lang="en">© ${YEAR} Weissman Cybersecurity Ltd.</span><span class="sep"> · </span><span class="city">Tel&nbsp;Aviv‑Yafo</span>`,
     footerTech: 'HTTP 503 · Retry-After: 30 s',
@@ -55,7 +59,8 @@ export const STRINGS = {
       'tz-il': 'Israel time',
       overdue: 'The update is taking longer than scheduled; this page keeps re‑checking.',
     },
-    // Command Center variant copy (frontend/public/offline.html) — same design family, different headline/lede.
+    // Command Center variant copy (frontend/public/offline.html) — same design family, different
+    // headline/lede. English only: the Command Center has no Hebrew, so `he` carries no `cc`.
     cc: {
       title: 'Scheduled update — Weissman Command Center',
       h1: 'Command Center is being updated.',
@@ -81,7 +86,7 @@ export const STRINGS = {
     retry: 'בדקו שוב', retryHint: 'בדיקת זמינות עכשיו.', statusBtn: 'עדכוני סטטוס',
     assure: 'כל הנתונים, הסריקות המתוזמנות והמשימות שבתור נשמרים; עבודה שהייתה בביצוע תתחדש אוטומטית.',
     contactLead: 'זקוקים לסיוע או רוצים לדווח?',
-    ctStatus: 'דף הסטטוס', ctStatusText: 'weissman.io/status',
+    ctStatus: 'דף הסטטוס', ctStatusText: '/status',
     ctWindow: 'חלון תחזוקה קבוע (שעון ישראל)', ctWindowValue: 'ימי ראשון, <span dir="ltr">02:00–04:00</span>',
     footerCopy: `<span dir="ltr" lang="en">© ${YEAR} Weissman Cybersecurity Ltd.</span><span class="sep"> · </span><span class="city">תל&nbsp;אביב‑יפו</span>`,
     footerTech: 'HTTP 503 · Retry-After: 30 s',
@@ -93,12 +98,6 @@ export const STRINGS = {
       next: 'בעוד {n} שניות', 'next-one': 'בעוד שנייה', 'next-two': 'בעוד שתי שניות', now: 'עכשיו',
       'tz-il': 'שעון ישראל',
       overdue: 'העדכון נמשך מעבר לזמן שתוכנן; הדף ממשיך לבדוק מחדש.',
-    },
-    cc: {
-      title: 'עדכון מערכת — Weissman Command Center',
-      h1: 'מרכז הפיקוד מתעדכן.',
-      lede: 'ההפעלה שלכם תתחדש באופן אוטומטי עם השלמת העדכון. פעילות הניטור והסריקות נמשכת כסדרה לאורך כל העדכון, ואין צורך בפעולה מצדכם.',
-      brandLabel: 'Weissman Command Center', brandHref: '/command-center/',
     },
   },
 };

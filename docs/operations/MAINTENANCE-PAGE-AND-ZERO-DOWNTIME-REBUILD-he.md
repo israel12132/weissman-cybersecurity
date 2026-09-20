@@ -38,7 +38,12 @@
   עליונה "עדכון מערכת", כותרת "מתבצע עדכון מערכת." / *A platform update is in progress.*,
   ההבטחה שהנתונים, הסריקות המתוזמנות והמשימות שבתור נשמרים, כרטיס חי "בדיקה אחרונה / הבדיקה
   הבאה", "בדקו שוב", "עדכוני סטטוס" → `/status`, חלון התחזוקה הקבוע (ימי ראשון 02:00–04:00
-  שעון ישראל) וכתובת הקשר.
+  שעון ישראל) וכתובת הקשר. "בכל נתיב" פירושו כל נתיב שמגיע ל-backend. ב-**gateway של Docker**
+  דפי השיווק (`/`, `/he/`, `/pricing`…) ומעטפת ה-Command Center הם קבצים סטטיים בתוך ה-image
+  וממשיכים להיות מוגשים מהדיסק (200) בזמן שה-backend לא זמין; שם הדף מופיע ב-`/status`,
+  כ-`api.json` ב-`/api/*`, `/ws/*`, `/hooks/*`, `/install/*`, ובתוך ה-Command Center
+  (overlay + `offline.html`) — `/` ו-`/he/` הופכים לדף ה-503 רק עם הדגל (§3). ב-**nginx של
+  VPS וב-Caddy** הכול עובר proxy, ולכן כל נתיב, כולל `/` ו-`/he/`, מקבל את הדף.
 - **`api.json`** למכונות — `/api/*`, `/hooks/*`, `/ws/*`, `/install/*` (nginx), או כל בקשה
   שה-`Accept` שלה מכיל `application/json`; בשכבת Cloudflare גם כל POST/PUT/DELETE:
 
@@ -107,7 +112,7 @@ deploy/rebuild.sh --mode compose
 ```
 
 1. `docker compose build` — החלק האיטי; ה-stack הרץ ממשיך להגיש.
-2. שומר migrations: ה-image החדש של ה-backend חייב להכיל כל `crates/weissman-db/migrations/*.sql`
+2. בדיקת migrations: ה-image החדש של ה-backend חייב להכיל כל `crates/weissman-db/migrations/*.sql`
    שב-checkout, אחרת הריצה נעצרת **לפני** שמשהו נוצר מחדש (backend ב-crash loop הוא הדבר
    היחיד שהדף לא יכול לתקן).
 3. יצירה מחדש של ה-**gateway** עם `--no-deps` — רק אם ה-image id שלו השתנה (ראו 2.3),
@@ -184,8 +189,12 @@ deploy/maintenance/maintenance-mode.sh off                                      
 
 `on` כותב `maintenance.on` ו-`status.json` (`{"mode":"planned","reason":…,"until":…,"since":…}`)
 לתיקיית ה-state; `off` מוחק את שני הקבצים. `--until` מקבל ISO-8601 עם offset
-(`2026-09-27T04:00:00+03:00`) או כל מה ש-`date -d` של GNU מפענח (`"2026-09-27 04:00"`); צפי
-שכבר עבר לעולם לא מוצג. שניהם נבדקים בכל בקשה — אין צורך ב-reload של nginx/Caddy ל-`on` או `off`.
+(`2026-09-27T04:00:00+03:00`) או כל מה ש-`date -d` של GNU מפענח (`"2026-09-27 04:00"`). ערך
+**בלי** offset נקרא כ**שעון ישראל**, לא לפי שעון המארח — VPS רץ בדרך כלל על UTC, ו-`04:00`
+שנקרא שם היה מוכרז כ"07:00 שעון ישראל" — כך ששתי הצורות למעלה הן אותו רגע (דריסה עם
+`WEISSMAN_MAINTENANCE_TZ=<zone>`; דורש `tzdata`); הסקריפט מדפיס את הערך שנשמר, כולל ה-offset.
+צפי שכבר עבר לעולם לא מוצג. שני הקבצים נבדקים בכל בקשה — אין צורך ב-reload של nginx/Caddy
+ל-`on` או `off`.
 
 | טופולוגיה | תיקיית ה-state (`WEISSMAN_MAINTENANCE_STATE_DIR`) | פקודה |
 |-----------|----------------------------------------------------|-------|
@@ -253,8 +262,11 @@ kubectl -n weissman apply -f deploy/k8s/ingress.yaml
 1. ל-Service של ה-gateway אין endpoints במצב Ready (rollout, drain, scale ל-0) → ingress-nginx
    שולח את הבקשה ישירות ל-`weissman-maintenance` עם ה-URI המקורי.
 2. ה-gateway עונה 502/503/504 → `custom-http-errors` שולח את הבקשה מחדש ל-default backend עם
-   הנתיב `/` וה-headers `X-Code`, `X-Format` (ה-Accept), `X-Original-URI`; `default.conf` מנתב
-   `/he*` → עברית, `/api*` או `application/json` → `api.json`, אחרת אנגלית.
+   הנתיב `/` וה-headers `X-Code`, `X-Format` (ה-Accept), `X-Original-URI`, ועם **ה-method
+   המקורי**; `default.conf` מנתב `/he*` → עברית, `/api/*`, `/hooks/*`, `/ws/*`, `/install/*` או
+   `application/json` → `api.json`, אחרת אנגלית, ומגיע לדף דרך `error_page` עם URI, כך שגם
+   POST/PUT/DELETE מקבלים את גוף ה-503 (named location היה שומר על ה-method, וה-static handler
+   של nginx היה עונה 405 משלו — נמדד).
 
 "gateway down" ידני (למשל שינוי מסוכן): `kubectl -n weissman scale deploy/weissman-gateway --replicas=0`
 → כל מבקר מקבל את הדף; `… --replicas=2` מחזיר את האתר. בלי שום דגל.
@@ -266,13 +278,21 @@ kubectl -n weissman port-forward svc/weissman-maintenance 8080:80 &
 curl -si localhost:8080/ | head -1                                 # HTTP/1.1 503 …, דף אנגלי
 curl -si -H 'X-Original-URI: /he/' localhost:8080/ | grep -o '<html[^>]*>'   # lang="he" dir="rtl"
 curl -si -H 'X-Format: application/json' localhost:8080/ | grep -i content-type  # application/json
+curl -si -X POST -H 'X-Original-URI: /api/login' localhost:8080/ | grep -iE '^(HTTP|content-type)'  # 503, application/json (לא 405)
+curl -si -X DELETE -H 'X-Original-URI: /he/x' localhost:8080/ | head -1   # HTTP/1.1 503 …, הדף העברי (לא 405)
+curl -si -H 'X-Original-URI: /hooks/paddle' localhost:8080/ | grep -i content-type   # application/json
 curl -si localhost:8080/healthz | head -1                          # HTTP/1.1 200 OK
 ```
 
+אותו `default.conf` רץ תחת `scripts/test_maintenance_contract.sh` (§6), כך שהמקרים האלה
+נבדקים גם ב-CI.
+
 הערות: להגדיר `limit-req-status-code: "429"` ו-`limit-conn-status-code: "429"` ב-ConfigMap של
 ה-controller של ingress-nginx, אחרת דחיות rate-limit בקצה (503 כברירת מחדל) יוצגו כדף העדכון.
-`default.conf` שומר על `listen [::]:8080` (ברירת המחדל של ה-image) — על node בלי IPv6 ה-pod
-ייכנס ל-crash loop; במקרה כזה לייצר מחדש בלי השורה הזאת.
+`default.conf` מאזין על IPv4 בלבד (`listen 8080`), כמו ה-nginx של ה-gateway pod: ברירת המחדל
+של ה-image, `listen [::]:8080`, גורמת ל-nginx לבדוק socket של IPv6 בזמן בדיקת הקונפיגורציה,
+ועל node עם `ipv6.disable=1` ה-pod נכנס ל-crash loop לפני שהגיש דף אחד. cluster שהוא IPv6 בלבד
+מחזיר את השורה ב-`deploy/maintenance/src/k8s-default.conf` ומייצר מחדש.
 
 ---
 
@@ -283,16 +303,19 @@ curl -si localhost:8080/healthz | head -1                          # HTTP/1.1 20
 | פקודה | תוצאה צפויה |
 |-------|-------------|
 | `node deploy/maintenance/build.mjs --check` | `build.mjs --check: all generated files are up to date`, exit 0 (exit 1 מציג קבצים שסטו → להריץ `node deploy/maintenance/build.mjs` ולעשות commit) |
-| `bash scripts/test_maintenance_contract.sh` | `Maintenance contract: 225 passed, 0 failed`, exit 0. בלי Docker: `nginx-gateway.conf` ו-`nginx-weissman.conf` האמיתיים תחת nginx מקומי על `127.0.0.1:18080–18084` מול upstream מת ומול stub, דגל on/off, ניתוב JSON/עברית, headers פעם אחת בדיוק. דורש `nginx`, `curl`, `openssl` (חבילת `nginx` המלאה, לא `nginx-light`); בלי nginx מדפיס `SKIP: nginx unavailable` ויוצא 0. `KEEP=1` שומר את תיקיית העבודה |
+| `bash scripts/test_maintenance_contract.sh` | `Maintenance contract: 311 passed, 0 failed`, exit 0. בלי Docker: `nginx-gateway.conf`, `nginx-weissman.conf` ו-`default.conf` של Kubernetes האמיתיים תחת nginx מקומי על `127.0.0.1:18080–18085` מול upstream מת ומול stub, דגל on/off, ניתוב JSON/עברית, methods של בקשות, נתיבים מנורמלים, headers פעם אחת בדיוק. דורש `nginx`, `curl`, `openssl` — ב-Ubuntu 24.04 מספיק `nginx-light` (זה מה ש-CI מתקין: אותו binary בלי המודולים הדינמיים); ב-22.04 להתקין `nginx-full`, כי ה-`nginx-light` שם חסר `limit_req`/`limit_conn`/`realip`. בלי nginx מדפיס `SKIP: nginx unavailable` ויוצא 0. `KEEP=1` שומר את תיקיית העבודה |
 | `node --test deploy/cloudflare/maintenance-worker/worker.test.mjs` | `# pass 37`, `# fail 0` (Node 22 מריץ תיקייה כקובץ אחד — לציין את הקובץ או glob: `'deploy/cloudflare/maintenance-worker/*.test.mjs'`) |
 | `caddy validate --config deploy/Caddyfile --adapter caddyfile` | `Valid configuration` |
 | `deploy/rebuild.sh --dry-run` | התוכנית הממוספרת למארח הזה; `maintenance flag: not used — opt in with --with-maintenance-flag …` |
 
-בדיקה חיה על מארח (מוצג Compose; ב-VPS להשתמש ב-`https://<host>` וב-`sudo systemctl stop weissman-server`):
+בדיקה חיה על מארח (מוצג Compose; ב-VPS להשתמש ב-`https://<host>` וב-`sudo systemctl stop weissman-server`).
+ב-gateway של Docker בודקים כתובת שעוברת **proxy**: `/` שם הוא אתר השיווק הסטטי מתוך ה-image ונשאר
+200 כשה-backend לא זמין (§1); ב-nginx של VPS / Caddy הכול עובר proxy ו-`https://<host>/` מציג את
+אותם headers.
 
 ```bash
 docker compose stop backend                       # או: sudo systemctl stop weissman-server
-curl -si http://127.0.0.1/ | grep -iE '^(HTTP|content-type|retry-after|cache-control|x-weissman-maintenance|x-robots-tag)'
+curl -si http://127.0.0.1/status | grep -iE '^(HTTP|content-type|retry-after|cache-control|x-weissman-maintenance|x-robots-tag)'
 ```
 
 ```
@@ -305,12 +328,14 @@ X-Robots-Tag: noindex, nofollow
 ```
 
 ```bash
-curl -s  http://127.0.0.1/he/ | grep -o '<html[^>]*>'          # <html lang="he" dir="rtl" …>
 curl -si http://127.0.0.1/api/health | grep -iE '^(HTTP|content-type)'   # 503, application/json
 curl -s  http://127.0.0.1/api/health                            # ה-api.json מסעיף 1
 curl -si -X POST http://127.0.0.1/api/login | head -1           # 503 api.json (לא 405)
+curl -si http://127.0.0.1/ | head -1                            # Compose: 200 — דף השיווק הסטטי (§1)
+curl -s  https://<host>/he/ | grep -o '<html[^>]*>'             # nginx של VPS / Caddy: <html lang="he" dir="rtl" …> (Compose: רק עם הדגל, §3)
 curl -sI http://127.0.0.1/maintenance/maintenance.js | grep -iE '^(HTTP|content-type)'  # 200, javascript
 curl -si http://127.0.0.1/maintenance/status.json | head -1     # 404 (אין הכרזה)
+curl -si https://<host>/maintenance/state/maintenance.on | head -1   # nginx של VPS / Caddy: 404 — תיקיית ה-state לעולם לא מוגשת
 docker compose start backend                                    # או: sudo systemctl start weissman-server
 curl -si http://127.0.0.1/api/health | grep -iE '^(HTTP|x-weissman)'    # 200, בלי header של maintenance
 ```
@@ -339,7 +364,7 @@ Command Center: לפתוח `/command-center/`, לעצור את ה-backend — ה
 | `/maintenance/status.json` מחזיר 404 למרות שהדגל דלוק | לאיזו תיקיית state כתב `maintenance-mode.sh`? `status` מדפיס אותה | חייבת להיות התיקייה שה-gateway קורא: Compose `${WEISSMAN_MAINTENANCE_STATE_DIR:-./deploy/maintenance/state}` (bind-mount ב-`/var/lib/weissman/maintenance`), VPS `/opt/weissman/maintenance/state` — להעביר `WEISSMAN_MAINTENANCE_STATE_DIR` בהתאם |
 | Compose: `maintenance-mode.sh on` נכשל עם permission denied | תיקיית state מחוץ ל-checkout שנוצרה על ידי Docker (בבעלות root) | ליצור את התיקייה בעצמכם לפני `docker compose up`, או להריץ `install.sh` עם `WEISSMAN_MAINTENANCE_OWNER=user:group` |
 | 503 של API נענה ב-JSON של האפליקציה ולא ב-`api.json` | זה 503 של האפליקציה (`POST /api/public/demo-request` בלי SMTP)? | בכוונה ב-nginx/Caddy: רק ה-502/504 של ה-proxy עצמו הופכים לדף. Cloudflare/ingress-nginx מחליפים רק את ה-body, הסטטוס נשמר |
-| Kubernetes: דף השגיאה של ingress-nginx עצמו | `kubectl -n weissman get endpoints weissman-maintenance` — ריק? apply בסדר לא נכון? ה-pod ב-crash loop (`listen [::]` על node בלי IPv6)? | apply: ConfigMap → Deployment → להמתין ל-`rollout status` → Ingress (§5). ה-controller רושם שגיאה ומשתמש ב-default backend הגלובלי כל עוד ל-Service אין endpoints |
+| Kubernetes: דף השגיאה של ingress-nginx עצמו | `kubectl -n weissman get endpoints weissman-maintenance` — ריק? apply בסדר לא נכון? ה-pod ב-crash loop (`kubectl -n weissman logs deploy/weissman-maintenance`; cluster שהוא IPv6 בלבד צריך להחזיר את `listen [::]:8080`, §5)? | apply: ConfigMap → Deployment → להמתין ל-`rollout status` → Ingress (§5). ה-controller רושם שגיאה ומשתמש ב-default backend הגלובלי כל עוד ל-Service אין endpoints |
 | Kubernetes: לקוחות מוגבלי-קצב רואים את דף העדכון | דחיות `limit-rps` / `limit-connections` הן 503 כברירת מחדל | `limit-req-status-code: "429"`, `limit-conn-status-code: "429"` ב-ConfigMap של ה-controller |
 | `build.mjs --check` נכשל ב-CI | מישהו ערך קובץ מיוצר, או שהמקורות השתנו בלי rebuild | `node deploy/maintenance/build.mjs`, commit לפלטים. שנת ה-copyright היא הקבוע `YEAR` ב-`deploy/maintenance/src/strings.mjs` — לעדכן ידנית כל ינואר |
 | מוניטור uptime מתריע בזמן rebuild | הוא רואה את ה-503 | צפוי ומכוון (Retry-After 30). לסווג לפי `X-Weissman-Maintenance: 1` כתחזוקה ולא כ-outage |

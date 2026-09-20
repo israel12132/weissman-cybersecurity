@@ -241,6 +241,13 @@ export default function MaintenanceOverlay({ status = 503, retryAfter = 30, onRe
       : phase === 'up'
         ? 'Update complete — resuming your session…'
         : 'Update in progress — this screen re‑checks automatically.'
+  // What screen readers hear. The visible line swaps to "Checking…" on every probe (every
+  // 5–30 s for the whole outage); announcing that, then the pending sentence again, would
+  // read two lines per cycle. The live region therefore holds only the settled state: its
+  // text does not change while a probe is in flight, and React leaves an unchanged text
+  // node alone, so nothing is announced until the state really changes.
+  const announcedSentence =
+    phase === 'checking' ? 'Update in progress — this screen re‑checks automatically.' : stateSentence
 
   const nextCheckText =
     phase === 'checking' ? 'now' : phase === 'up' ? '—' : `in ${secondsLeft} s`
@@ -316,8 +323,15 @@ export default function MaintenanceOverlay({ status = 503, retryAfter = 30, onRe
                 }`}
                 aria-hidden="true"
               />
-              <p role="status" aria-live="polite" className="text-sm leading-relaxed text-text-primary">
+              <p
+                aria-hidden="true"
+                data-testid="maintenance-state"
+                className="text-sm leading-relaxed text-text-primary"
+              >
                 {stateSentence}
+              </p>
+              <p role="status" aria-live="polite" className="sr-only">
+                {announcedSentence}
               </p>
             </div>
 

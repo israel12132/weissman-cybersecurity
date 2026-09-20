@@ -18,17 +18,23 @@
 #   * every 503 carries Retry-After, Cache-Control: no-store, X-Weissman-Maintenance and the
 #     security headers exactly once (the page location REPLACES the originating location's set);
 #   * POST / DELETE / HEAD get the page too — a named-location error_page target keeps the
-#     original method and nginx's static handler answers 405 to anything but GET/HEAD (measured);
-#   * the page's internal URI is not reachable directly;
+#     original method and nginx's static handler answers 405 to anything but GET/HEAD (measured;
+#     the Kubernetes default backend had exactly that bug, so it is under the same test);
+#   * the body follows the NORMALISED path: `/he/../api/health` is proxied as /api/health and
+#     must get api.json, not the Hebrew page (measured on a map keyed on $request_uri);
+#   * the page's internal URI is not reachable directly, and that 404 carries none of the
+#     page's headers (a monitor keyed on X-Weissman-Maintenance must not read it as an outage);
 #   * the marketing site and its 404 map keep working while the backend is down;
 #   * the flag is re-read per request — on/off without a reload.
 #
 # Docker-free by design (the gateway-contract job needs a daemon; this one must also run on a
 # laptop and in the systemd job): the REAL config files are copied, host paths and ports are
-# rewritten into a temporary prefix, and three nginx masters run on 127.0.0.1:18080–18099 —
-# the gateway, the VPS site (with a throw-away self-signed cert for its 443 block) and a stub
-# upstream that is started only for the "backend up" phase. Skips (exit 0) when nginx is not
-# installed; every other problem is a failure.
+# rewritten into a temporary prefix, and four nginx masters run on 127.0.0.1:18080–18099 —
+# the gateway, the VPS site (with a throw-away self-signed cert for its 443 block), the
+# Kubernetes default backend (deploy/maintenance/src/k8s-default.conf, byte-identical to the
+# ConfigMap key — `build.mjs --check` guards that) and a stub upstream that is started only
+# for the "backend up" phase. Skips (exit 0) when nginx is not installed; every other problem
+# is a failure.
 #
 # Usage: bash scripts/test_maintenance_contract.sh        (KEEP=1 keeps the work dir)
 set -uo pipefail
@@ -38,6 +44,7 @@ GW_PORT=18080
 STUB_PORT=18082
 VPS_HTTP_PORT=18083
 VPS_HTTPS_PORT=18084
+K8S_PORT=18085
 
 pass=0; fail=0
 ok()  { echo "  PASS  $1"; pass=$((pass+1)); }
@@ -48,12 +55,12 @@ for tool in nginx curl openssl; do
 done
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/weissman-maint-XXXXXX")"
-GWD="$WORK/gateway"; VD="$WORK/vps"; SD="$WORK/stub"
+GWD="$WORK/gateway"; VD="$WORK/vps"; SD="$WORK/stub"; KD="$WORK/k8s"
 HDR_FILE="$WORK/hdr"; BODY_FILE="$WORK/body"
 DIST="$ROOT/deploy/maintenance/dist"
 
 cleanup() {
-  for d in "$GWD" "$VD" "$SD"; do
+  for d in "$GWD" "$VD" "$SD" "$KD"; do
     [[ -f "$d/nginx.pid" ]] && kill "$(cat "$d/nginx.pid")" >/dev/null 2>&1
   done
   sleep 0.2
@@ -193,14 +200,31 @@ write_wrapper "$VD" "include $ROOT/deploy/nginx-snippet-websocket-map.conf;"
 VPS_FLAG="$VD/opt/maintenance/state/maintenance.on"
 VPS_STATUS="$VD/opt/maintenance/state/status.json"
 
+# ── Kubernetes default backend: the ConfigMap's nginx, files laid out as the pod mounts them ──
+mkdir -p "$KD/html"
+cp "$DIST/index.html"    "$KD/html/index.html"
+cp "$DIST/he/index.html" "$KD/html/he.html"
+cp "$DIST/maintenance.js" "$KD/html/maintenance.js"
+cp "$DIST/api.json"      "$KD/html/api.json"
+sed -e "s|listen 8080 default_server;|listen 127.0.0.1:$K8S_PORT default_server;|" \
+    -e "s|/usr/share/nginx/html|$KD/html|g" \
+    "$ROOT/deploy/maintenance/src/k8s-default.conf" >"$KD/site.conf"
+for needle in "listen 127.0.0.1:$K8S_PORT" "root $KD/html;"; do
+  grep -qF -- "$needle" "$KD/site.conf" || bad "k8s: expected '$needle' in the rewritten config (sed anchor drifted?)"
+done
+grep -v '^[[:space:]]*#' "$KD/site.conf" | grep -qF -- "/usr/share/nginx" && bad "k8s: '/usr/share/nginx' survived the rewrite"
+write_wrapper "$KD"
+
 [[ "$fail" -eq 0 ]] || { printf '\nMaintenance contract: %d passed, %d failed (setup)\n' "$pass" "$fail"; exit 1; }
 
 start_nginx "$GWD" "$GW_PORT" "gateway" || exit 1
 start_nginx "$VD"  "$VPS_HTTP_PORT" "vps" || exit 1
+start_nginx "$KD"  "$K8S_PORT" "k8s default backend" || exit 1
 
 GW="http://127.0.0.1:$GW_PORT"
 VPS="https://127.0.0.1:$VPS_HTTPS_PORT"
 VPS_PLAIN="http://127.0.0.1:$VPS_HTTP_PORT"
+K8S="http://127.0.0.1:$K8S_PORT"
 
 # ── request helpers ─────────────────────────────────────────────────────────────
 # req <url> [curl args…]  → CODE, SECS; headers in $HDR_FILE, body in $BODY_FILE
@@ -243,6 +267,11 @@ assert_json() {
   grep -qi '^application/json' <<<"$(hdr content-type)" && ok "$label: application/json" || bad "$label: Content-Type is '$(hdr content-type)'"
   cmp -s "$BODY_FILE" "$DIST/api.json" && ok "$label: body is dist/api.json byte-for-byte" || bad "$label: body differs from dist/api.json"
 }
+# A response that is NOT the page must not look like one to a monitor.
+assert_not_branded() {
+  local label=$1
+  [[ -z "$(hdr retry-after)" && -z "$(hdr x-weissman-maintenance)" ]] && ok "$label: no Retry-After / X-Weissman-Maintenance" || bad "$label: carries Retry-After '$(hdr retry-after)' / X-Weissman-Maintenance '$(hdr x-weissman-maintenance)'"
+}
 
 # ═══ Gateway — backend down, NO flag anywhere: the primary, automatic path ═══════════════════
 echo "── gateway: backend down, no flag"
@@ -266,6 +295,14 @@ req "$GW/api/health" -I
 [[ "$CODE" == "503" ]] && [[ "$(hdr x-weissman-maintenance)" == "1" ]] && ok "HEAD /api/health: 503 + X-Weissman-Maintenance" || bad "HEAD /api/health returned $CODE"
 req "$GW/maintenance/_503"
 [[ "$CODE" == "404" ]] && ok "the page's internal URI is not reachable directly (404)" || bad "/maintenance/_503 returned $CODE when asked for directly"
+assert_not_branded "direct /maintenance/_503"
+# The body follows the path nginx actually routed (normalised $uri), not the raw request line.
+req "$GW/he/../api/health" --path-as-is
+assert_json "/he/../api/health sent as-is (proxied as /api/health)"
+req "$GW/api%2Fhealth"
+assert_json "/api%2Fhealth (decoded to /api/health)"
+req "$GW/he/../status" --path-as-is
+assert_html_en "/he/../status sent as-is (proxied as /status: English, not Hebrew)"
 req "$GW/ws/events"
 assert_json "/ws/events"
 req "$GW/hooks/paddle"
@@ -321,6 +358,8 @@ assert_html_he "flag: /he?x=1"
 req "$GW/api/anything"
 assert_json "flag: /api/anything"
 assert_maint_headers "flag: /api/anything"
+req "$GW/he/../api/anything" --path-as-is
+assert_json "flag: /he/../api/anything sent as-is"
 req "$GW/command-center/"
 assert_html_en "flag: /command-center/"
 req "$GW/maintenance/maintenance.js"
@@ -375,6 +414,11 @@ req "$VPS/dashboard" -X POST --data 'a=1'
 assert_html_en "vps POST /dashboard"
 req "$VPS/maintenance/_503"
 [[ "$CODE" == "404" ]] && ok "vps: the page's internal URI is not reachable directly (404)" || bad "vps /maintenance/_503 returned $CODE"
+assert_not_branded "vps direct /maintenance/_503"
+req "$VPS/he/../api/health" --path-as-is
+assert_json "vps /he/../api/health sent as-is (proxied as /api/health)"
+req "$VPS/he/../dashboard" --path-as-is
+assert_html_en "vps /he/../dashboard sent as-is (English, not Hebrew)"
 req "$VPS/ws/live"
 assert_json "vps /ws/live"
 req "$VPS/install/agent.sh"
@@ -412,6 +456,56 @@ req "$VPS/maintenance/status.json"
 req "$VPS/maintenance/state/maintenance.on"
 [[ "$CODE" == "404" ]] && ok "vps flag: the flag file itself is not served" || bad "vps flag: /maintenance/state/maintenance.on returned $CODE"
 rm -f "$VPS_FLAG"
+
+# ═══ Kubernetes default backend: routed on ingress-nginx's headers, or on its own URI ═══════
+# ingress-nginx re-issues an intercepted 502/503/504 to this backend as "/" with the ORIGINAL
+# method and X-Original-URI / X-Format; a Service with no ready endpoints forwards verbatim.
+echo "── k8s default backend"
+req "$K8S/"
+assert_html_en "k8s GET /"
+assert_maint_headers "k8s GET /"
+[[ "$(hdr x-frame-options)" == "DENY" ]] && ok "k8s GET /: X-Frame-Options DENY" || bad "k8s GET /: X-Frame-Options is '$(hdr x-frame-options)'"
+req "$K8S/" -X POST -H 'Content-Type: application/json' --data '{}' -H 'X-Original-URI: /api/login' -H 'X-Code: 502'
+assert_json "k8s POST / for /api/login (not 405)"
+assert_maint_headers "k8s POST / for /api/login"
+req "$K8S/" -X DELETE -H 'X-Original-URI: /he/x'
+assert_html_he "k8s DELETE / for /he/x (not 405)"
+req "$K8S/" -X OPTIONS
+assert_html_en "k8s OPTIONS / (not 405)"
+req "$K8S/api/v1/things/42" -X PUT --data '{}'
+assert_json "k8s PUT /api/v1/things/42 forwarded verbatim (not 405)"
+req "$K8S/" -H 'X-Original-URI: /hooks/paddle'
+assert_json "k8s / for /hooks/paddle"
+req "$K8S/" -H 'X-Original-URI: /ws/events'
+assert_json "k8s / for /ws/events"
+req "$K8S/" -H 'X-Original-URI: /install/agent.sh'
+assert_json "k8s / for /install/agent.sh"
+req "$K8S/" -H 'X-Original-URI: /apiary'
+assert_html_en "k8s / for /apiary (prefix only matches /api/)"
+req "$K8S/" -H 'X-Original-URI: /he/'
+assert_html_he "k8s / for /he/"
+req "$K8S/he"
+assert_html_he "k8s /he forwarded verbatim"
+req "$K8S/" -H 'X-Format: application/json'
+assert_json "k8s / with X-Format: application/json"
+req "$K8S/" -H 'X-Format: application/json' -H 'X-Original-URI: /he/'
+assert_json "k8s / JSON wins over the Hebrew path"
+req "$K8S/" -I -H 'X-Original-URI: /api/x'
+[[ "$CODE" == "503" ]] && [[ "$(hdr x-weissman-maintenance)" == "1" ]] && ok "k8s HEAD /: 503 + X-Weissman-Maintenance" || bad "k8s HEAD / returned $CODE"
+req "$K8S/maintenance/maintenance.js"
+[[ "$CODE" == "200" ]] && cmp -s "$BODY_FILE" "$DIST/maintenance.js" && ok "k8s /maintenance/maintenance.js is 200 and matches dist" || bad "k8s maintenance.js returned $CODE"
+grep -qi '^application/javascript' <<<"$(hdr content-type)" && ok "k8s maintenance.js is application/javascript" || bad "k8s maintenance.js Content-Type is '$(hdr content-type)'"
+req "$K8S/" -H 'X-Original-URI: /maintenance/maintenance.js'
+[[ "$CODE" == "200" ]] && cmp -s "$BODY_FILE" "$DIST/maintenance.js" && ok "k8s / for /maintenance/maintenance.js is the script, 200" || bad "k8s script via X-Original-URI returned $CODE"
+req "$K8S/maintenance/status.json"
+[[ "$CODE" == "404" ]] && ok "k8s /maintenance/status.json is 404 (no window on this layer)" || bad "k8s status.json returned $CODE"
+assert_not_branded "k8s /maintenance/status.json"
+req "$K8S/healthz"
+[[ "$CODE" == "200" ]] && body_is "ok" && ok "k8s /healthz is 200 ok (probes)" || bad "k8s /healthz returned $CODE '$(head -c 20 "$BODY_FILE")'"
+req "$K8S/_503"
+[[ "$CODE" == "404" ]] && ok "k8s: the page's internal URI is not reachable directly (404)" || bad "k8s /_503 returned $CODE"
+assert_not_branded "k8s direct /_503"
+grep -qE '^[[:space:]]*if[[:space:]]*\(' "$ROOT/deploy/maintenance/src/k8s-default.conf" && bad "k8s: default.conf uses \`if\`" || ok "k8s: default.conf has no \`if\`"
 
 # ═══ Backend UP: start the stub, both edges must get out of the way ═════════════════════════
 echo "── backend up (stub upstream)"
@@ -463,7 +557,7 @@ assert_html_en "vps after the backend went away again: /"
 
 # nginx logs the expected "connect() failed (111)" as [error]; anything louder is a real
 # problem (a [crit] stat() on the flag path, for one, silently disables the flag).
-for d in "$GWD" "$VD"; do
+for d in "$GWD" "$VD" "$KD"; do
   if grep -qE '\[(crit|alert|emerg)\]' "$d/error.log" 2>/dev/null; then
     bad "$(basename "$d"): nginx error.log has crit/alert/emerg lines:"
     grep -E '\[(crit|alert|emerg)\]' "$d/error.log" | tail -3 | sed 's/^/        /'

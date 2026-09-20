@@ -16,6 +16,9 @@
 #
 # State directory: $WEISSMAN_MAINTENANCE_STATE_DIR (default: ./state next to this
 # script). Files: maintenance.on (flag), status.json (served at /maintenance/status.json).
+# --until: ISO-8601 with an offset or Z (2026-09-27T04:00:00+03:00) is stored as given.
+# A value WITHOUT an offset ("2026-09-27 04:00") is read as Israel time — the page shows the
+# ETA in Israel time, and a VPS clock is usually UTC — override with WEISSMAN_MAINTENANCE_TZ.
 set -euo pipefail
 
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -24,7 +27,7 @@ FLAG="$STATE_DIR/maintenance.on"
 STATUS="$STATE_DIR/status.json"
 
 usage() {
-  sed -n '2,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '2,21p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
 die() { echo "maintenance-mode: $*" >&2; exit 2; }
@@ -41,12 +44,18 @@ json_escape() {
 }
 
 # Accept an ISO-8601 instant as-is; otherwise let GNU date parse it (e.g. "2026-09-27 04:00").
+# The bare form is read in Israel time, not the host's zone: an operator types the hour the
+# page will display, and a VPS clock is almost always UTC — read there, "04:00" would be
+# announced as "07:00 Israel time", three hours late (measured). The zone must exist in the
+# host's tzdata; GNU date silently falls back to UTC for an unknown TZ, which is exactly the
+# wrong ETA this guards against.
 normalize_until() {
-  local u=$1
+  local u=$1 tz="${WEISSMAN_MAINTENANCE_TZ:-Asia/Jerusalem}"
   if [[ $u =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2})?(Z|[+-][0-9]{2}:?[0-9]{2})$ ]]; then
     printf '%s' "$u"; return 0
   fi
-  if out=$(date -d "$u" '+%Y-%m-%dT%H:%M:%S%:z' 2>/dev/null); then
+  [[ -f "/usr/share/zoneinfo/$tz" ]] || die "time zone '$tz' is not installed (tzdata) — pass --until with an offset, e.g. 2026-09-27T04:00:00+03:00"
+  if out=$(TZ="$tz" date -d "$u" '+%Y-%m-%dT%H:%M:%S%:z' 2>/dev/null); then
     printf '%s' "$out"; return 0
   fi
   die "--until must be ISO-8601 (e.g. 2026-09-27T04:00:00+03:00), got: $u"

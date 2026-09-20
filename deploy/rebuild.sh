@@ -98,8 +98,8 @@ Options:
   -h, --help                this message
 
 What happens by default:
-  compose : build images → recreate backend/worker/worker-soar (--no-deps) → recreate the
-            gateway only if its image changed → wait for /api/health 200 → summary
+  compose : build images → recreate the gateway (--no-deps) only if its image changed →
+            recreate backend/worker/worker-soar (--no-deps) → wait for /api/health 200 → summary
   systemd : cargo build --release + Command Center → install → restart units → wait → summary
 USAGE
 }

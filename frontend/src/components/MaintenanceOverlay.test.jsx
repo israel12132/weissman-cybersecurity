@@ -80,6 +80,8 @@ describe('MaintenanceProvider + MaintenanceOverlay', () => {
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Command Center is being updated.')
     expect(dialog).toHaveTextContent('Your session resumes automatically once the update completes.')
     expect(screen.getByRole('status')).toHaveAttribute('aria-live', 'polite')
+    expect(screen.getByRole('status')).toHaveTextContent('re‑checks automatically')
+    expect(screen.getByTestId('maintenance-state')).toHaveTextContent('re‑checks automatically')
     expect(screen.getByTestId('app')).toBeInTheDocument() // children keep rendering underneath
     expect(dialog).toHaveTextContent('HTTP 503 · Retry-After: 30 s')
     expect(screen.getByTestId('maintenance-next-check')).toHaveTextContent('in 5 s')
@@ -146,7 +148,11 @@ describe('MaintenanceProvider + MaintenanceOverlay', () => {
     const btn = screen.getByRole('button', { name: 'Retry now' })
     expect(btn).toBeDisabled()
     expect(btn).toHaveAttribute('aria-busy', 'true')
-    expect(screen.getByRole('status')).toHaveTextContent('Checking service availability…')
+    // The visible line says "Checking…"; the live region keeps the settled sentence so a
+    // screen reader is not told "checking" + "still in progress" on every probe.
+    expect(screen.getByTestId('maintenance-state')).toHaveTextContent('Checking service availability…')
+    expect(screen.getByRole('status')).toHaveTextContent('re‑checks automatically')
+    expect(screen.getByRole('status')).not.toHaveTextContent('Checking')
     expect(screen.getByTestId('maintenance-next-check')).toHaveTextContent('now')
     await act(async () => {
       resolveProbe(health(503))
@@ -171,6 +177,7 @@ describe('MaintenanceProvider + MaintenanceOverlay', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(onRestored).not.toHaveBeenCalled()
     expect(screen.getByRole('status')).toHaveTextContent('re‑checks automatically')
+    expect(screen.getByTestId('maintenance-state')).toHaveTextContent('re‑checks automatically')
     // Timeout: the probe aborts after 8 s and the cycle continues.
     fetchMock.mockImplementationOnce(
       (_url, { signal }) =>
