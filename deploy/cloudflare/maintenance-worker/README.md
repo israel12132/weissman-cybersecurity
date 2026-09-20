@@ -26,7 +26,7 @@ The branded answer, decided in this order:
 | Any method other than GET / HEAD | `api.json`, **503** (a POST never gets HTML) |
 | `GET /maintenance/maintenance.js` | The page's script, **200** (browsers refuse to run a script that arrives as 5xx) |
 | `GET /maintenance/status.json` | The announced window, 200 — or **404** = nothing announced |
-| `/api/…`, `/hooks/…`, or `Accept: application/json` | `api.json`, **503** |
+| `/api/…`, `/hooks/…`, `/ws/…` (no `Upgrade`), `/install/…`, or `Accept: application/json` | `api.json`, **503** — the same prefix set nginx / Caddy / k8s map to JSON, so `curl …/install/agent.sh \| sh` never gets HTML |
 | `/he`, `/he/…`, or `Accept-Language` preferring Hebrew (`he`, `iw`) | The Hebrew page, **503** |
 | Everything else | The English page, **503** |
 

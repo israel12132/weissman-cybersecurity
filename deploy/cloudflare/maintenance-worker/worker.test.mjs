@@ -244,6 +244,22 @@ describe('JSON answers', () => {
     assert.equal(await (await handleRequest(req('/apix'), {})).text(), HTML_EN);
   });
 
+  test('/install/agent.sh, /install and /ws/… (no Upgrade) → api.json 503, never HTML', async () => {
+    // `curl https://<host>/install/agent.sh | sh` must never receive the 40 KB page; every
+    // other layer (nginx gateway, VPS nginx, Caddy, the k8s default backend) maps these
+    // prefixes to api.json, and a non-Upgrade GET on /ws/… is an agent poll, not a browser.
+    mockOrigin(originThrows);
+    for (const path of ['/install/agent.sh', '/install/agent.ps1', '/install', '/ws/events', '/ws']) {
+      const res = await handleRequest(req(path, { headers: { Accept: '*/*' } }), {});
+      assertBranded(res);
+      assert.equal(res.headers.get('Content-Type'), 'application/json; charset=utf-8', path);
+      assert.equal(await res.text(), API_JSON, path);
+    }
+    // Prefix match only: /installer and /wsx are ordinary pages.
+    assert.equal(await (await handleRequest(req('/installer'), {})).text(), HTML_EN);
+    assert.equal(await (await handleRequest(req('/wsx'), {})).text(), HTML_EN);
+  });
+
   test('Accept: application/json → JSON regardless of path', async () => {
     mockOrigin(originThrows);
     const res = await handleRequest(req('/dashboard', { headers: { Accept: 'application/json, text/plain;q=0.9' } }), {});

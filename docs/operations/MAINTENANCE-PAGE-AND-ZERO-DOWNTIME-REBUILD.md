@@ -45,7 +45,7 @@ What "the page" is, in every layer:
   (overlay + `offline.html`) — `/` and `/he/` become the 503 page only with the flag (§3). On
   **VPS nginx and Caddy** everything is proxied, so every path, `/` and `/he/` included, gets
   the page.
-- **`api.json`** for machines — `/api/*`, `/hooks/*`, `/ws/*`, `/install/*` (nginx), or any
+- **`api.json`** for machines — `/api/*`, `/hooks/*`, `/ws/*`, `/install/*` (nginx and the Cloudflare Worker alike), or any
   request whose `Accept` contains `application/json`; a POST/PUT/DELETE at the Cloudflare layer:
 
   ```json
@@ -313,7 +313,7 @@ Run these before merging a change to any of the layers (the gate for this featur
 |---------|--------|
 | `node deploy/maintenance/build.mjs --check` | `build.mjs --check: all generated files are up to date`, exit 0 (exit 1 lists drifted files → run `node deploy/maintenance/build.mjs` and commit) |
 | `bash scripts/test_maintenance_contract.sh` | `Maintenance contract: 311 passed, 0 failed`, exit 0. Docker-free: the real `nginx-gateway.conf`, `nginx-weissman.conf` and the Kubernetes `default.conf` under a local nginx on `127.0.0.1:18080–18085` against a dead and a stub upstream, flag on/off, JSON/Hebrew routing, request methods, normalised paths, headers exactly once. Needs `nginx`, `curl`, `openssl` — on Ubuntu 24.04 `nginx-light` is enough (it is what CI installs: the same binary minus dynamic modules); on 22.04 install `nginx-full`, whose `nginx-light` lacks `limit_req`/`limit_conn`/`realip`. Prints `SKIP: nginx unavailable` and exits 0 without nginx. `KEEP=1` keeps the work dir |
-| `node --test deploy/cloudflare/maintenance-worker/worker.test.mjs` | `# pass 37`, `# fail 0` (Node 22 runs a bare directory as one file — name the file or use the glob `'deploy/cloudflare/maintenance-worker/*.test.mjs'`) |
+| `node --test deploy/cloudflare/maintenance-worker/worker.test.mjs` | `# pass 38`, `# fail 0` (Node 22 runs a bare directory as one file — name the file or use the glob `'deploy/cloudflare/maintenance-worker/*.test.mjs'`) |
 | `caddy validate --config deploy/Caddyfile --adapter caddyfile` | `Valid configuration` |
 | `deploy/rebuild.sh --dry-run` | The numbered plan for this host; `maintenance flag: not used — opt in with --with-maintenance-flag …` |
 

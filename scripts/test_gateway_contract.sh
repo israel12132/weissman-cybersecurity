@@ -63,6 +63,10 @@ cp "$ROOT/deploy/nginx-security-headers.inc" "$WORK/conf/security-headers.inc"
 cp "$ROOT/deploy/nginx-strip-internal-headers.inc" "$WORK/conf/strip-internal-headers.inc"
 printf 'SPA-SHELL\n'  > "$WORK/html/command-center/index.html"
 printf 'MARKETING\n'  > "$WORK/html/index.html"
+# The Hebrew site is a directory: /he without its slash exercises nginx's automatic directory
+# redirect, the one redirect this config does not write out by hand.
+mkdir -p "$WORK/html/public/he"
+printf 'MARKETING-HE\n' > "$WORK/html/public/he/index.html"
 mkdir -p "$WORK/html/command-center/assets"
 printf 'console.log(1)\n' > "$WORK/html/command-center/assets/ok-test.js"
 
@@ -108,6 +112,19 @@ else
 fi
 body="$(curl -sL -m 5 "$B/command-center" | head -1)"
 [[ "$body" == "SPA-SHELL" ]] && ok "following the redirect reaches the SPA" || bad "redirect landed on '$body'"
+
+# ── Automatic directory redirect ────────────────────────────────────────────────
+# /he is not a `return`, it is nginx's own directory redirect — the one the location-level
+# `absolute_redirect off` never covered. It emitted `Location: http://host:8080/he/` and the
+# browser followed it into "can't connect". The server-level directive must keep it relative.
+code="$(curl -s -o /dev/null -m 5 -w '%{http_code}' "$B/he")"
+loc="$(curl -s -o /dev/null -m 5 -D- "$B/he" | awk 'tolower($1)=="location:"{print $2}' | tr -d '\r')"
+[[ "$code" == "301" ]] && ok "/he redirects (301)" || bad "/he returned $code, not 301"
+if [[ "$loc" == "/he/" ]]; then
+  ok "/he redirect Location is relative (/he/)"
+else
+  bad "/he redirect Location is '$loc' — nginx's directory redirect leaked the internal listen port"
+fi
 
 # ── Unknown paths must 404, not serve the homepage with 200 ─────────────────────
 code="$(curl -s -o /dev/null -m 5 -w '%{http_code}' "$B/definitely-not-a-real-path-9f3a")"

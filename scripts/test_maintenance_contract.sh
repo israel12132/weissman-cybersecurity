@@ -341,6 +341,14 @@ req "$GW/he/definitely-not-a-real-path-9f3a"
 [[ "$CODE" == "404" ]] && body_is "NOT-FOUND-HE" && ok "unknown Hebrew path is still the Hebrew 404" || bad "unknown Hebrew path returned $CODE '$(head -c 40 "$BODY_FILE")'"
 req "$GW/command-center/"
 [[ "$CODE" == "200" ]] && body_is "SPA-SHELL" && ok "Command Center shell still serves (200) with the backend down" || bad "/command-center/ returned $CODE"
+# /he without its slash is nginx's automatic directory redirect. With the default
+# absolute_redirect it pointed at http://<host>:8080/he/ — the container's unpublished listen
+# port — and the browser reported "can't connect" for a path that was never down. The
+# server-level `absolute_redirect off` keeps every Location relative; this is the one redirect
+# the config does not write by hand, so it is asserted here.
+req "$GW/he"
+[[ "$CODE" == "301" ]] && ok "/he (no slash) redirects (301) while the backend is down" || bad "/he returned $CODE, not 301"
+[[ "$(hdr location)" == "/he/" ]] && ok "/he redirect Location is relative (/he/)" || bad "/he redirect Location is '$(hdr location)' — nginx's directory redirect leaked the internal listen port"
 
 # ═══ Gateway — announced-window flag present ════════════════════════════════════════════════
 echo "── gateway: flag present"

@@ -44,7 +44,7 @@
   כ-`api.json` ב-`/api/*`, `/ws/*`, `/hooks/*`, `/install/*`, ובתוך ה-Command Center
   (overlay + `offline.html`) — `/` ו-`/he/` הופכים לדף ה-503 רק עם הדגל (§3). ב-**nginx של
   VPS וב-Caddy** הכול עובר proxy, ולכן כל נתיב, כולל `/` ו-`/he/`, מקבל את הדף.
-- **`api.json`** למכונות — `/api/*`, `/hooks/*`, `/ws/*`, `/install/*` (nginx), או כל בקשה
+- **`api.json`** למכונות — `/api/*`, `/hooks/*`, `/ws/*`, `/install/*` (ב-nginx וב-Worker של Cloudflare כאחד), או כל בקשה
   שה-`Accept` שלה מכיל `application/json`; בשכבת Cloudflare גם כל POST/PUT/DELETE:
 
   ```json
@@ -304,7 +304,7 @@ curl -si localhost:8080/healthz | head -1                          # HTTP/1.1 20
 |-------|-------------|
 | `node deploy/maintenance/build.mjs --check` | `build.mjs --check: all generated files are up to date`, exit 0 (exit 1 מציג קבצים שסטו → להריץ `node deploy/maintenance/build.mjs` ולעשות commit) |
 | `bash scripts/test_maintenance_contract.sh` | `Maintenance contract: 311 passed, 0 failed`, exit 0. בלי Docker: `nginx-gateway.conf`, `nginx-weissman.conf` ו-`default.conf` של Kubernetes האמיתיים תחת nginx מקומי על `127.0.0.1:18080–18085` מול upstream מת ומול stub, דגל on/off, ניתוב JSON/עברית, methods של בקשות, נתיבים מנורמלים, headers פעם אחת בדיוק. דורש `nginx`, `curl`, `openssl` — ב-Ubuntu 24.04 מספיק `nginx-light` (זה מה ש-CI מתקין: אותו binary בלי המודולים הדינמיים); ב-22.04 להתקין `nginx-full`, כי ה-`nginx-light` שם חסר `limit_req`/`limit_conn`/`realip`. בלי nginx מדפיס `SKIP: nginx unavailable` ויוצא 0. `KEEP=1` שומר את תיקיית העבודה |
-| `node --test deploy/cloudflare/maintenance-worker/worker.test.mjs` | `# pass 37`, `# fail 0` (Node 22 מריץ תיקייה כקובץ אחד — לציין את הקובץ או glob: `'deploy/cloudflare/maintenance-worker/*.test.mjs'`) |
+| `node --test deploy/cloudflare/maintenance-worker/worker.test.mjs` | `# pass 38`, `# fail 0` (Node 22 מריץ תיקייה כקובץ אחד — לציין את הקובץ או glob: `'deploy/cloudflare/maintenance-worker/*.test.mjs'`) |
 | `caddy validate --config deploy/Caddyfile --adapter caddyfile` | `Valid configuration` |
 | `deploy/rebuild.sh --dry-run` | התוכנית הממוספרת למארח הזה; `maintenance flag: not used — opt in with --with-maintenance-flag …` |
 

@@ -88,7 +88,12 @@ const MAINTENANCE_HEADERS = Object.freeze({
 });
 
 const HE_PATH = /^\/he(?:\/|$)/;
-const JSON_PATH = /^\/(?:api|hooks)(?:\/|$)/;
+// The same prefix set every other layer maps to api.json (nginx gateway, VPS nginx, Caddy,
+// the k8s default backend): /ws is a WebSocket handshake or an agent poll, /install is
+// `curl https://<host>/install/agent.sh | sh` — an installer piped into a shell must never
+// receive 40 KB of HTML with its 503. The Worker is the layer that answers when the machine
+// is off, so it is the one where a gap here actually reaches the shell.
+const JSON_PATH = /^\/(?:api|hooks|ws|install)(?:\/|$)/;
 
 /** MAINTENANCE_MODE is a string variable in wrangler.toml; only "on" (any case) announces a window. */
 export function isMaintenanceMode(env) {
@@ -128,7 +133,7 @@ export function localeFor(request, pathname) {
   return acceptsHebrew(request.headers.get('Accept-Language')) ? 'he' : 'en';
 }
 
-/** API-shaped request: /api/…, /hooks/…, or a client that asked for JSON. */
+/** API-shaped request: /api/…, /hooks/…, /ws/…, /install/…, or a client that asked for JSON. */
 export function wantsJson(request, pathname) {
   if (JSON_PATH.test(pathname)) { return true; }
   const accept = request.headers.get('Accept') || '';
