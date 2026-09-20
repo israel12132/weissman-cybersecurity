@@ -81,7 +81,7 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
         try:
-            with urllib.request.urlopen(url, timeout=15) as resp:
+            with urllib.request.urlopen(url, timeout=15) as resp:  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected -- scheme constrained to http(s) by the startswith("http") guard above; file:// and other local schemes are rejected with 400 before this call
                 blob = resp.read(8_000_000)
         except Exception as e:
             body = json.dumps({"ok": False, "detail": str(e)}).encode()

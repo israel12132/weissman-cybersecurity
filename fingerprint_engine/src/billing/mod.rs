@@ -969,8 +969,13 @@ mod tests {
     fn sql_errors_are_store_down_not_quota_or_plan_guess() {
         let src = include_str!("mod.rs");
         let impl_src = src.split("#[cfg(test)]").next().expect("impl");
-        assert!(impl_src.contains(
-            "record_scans_started(pool, tenant_id, job_count)\n        .await\n        .map_err(|_| \"store_down\".to_string())"
+        // Whitespace-normalized: rustfmt reindents the `.await`/`.map_err` continuation
+        // (e.g. under `return`), so assert on the token stream rather than exact
+        // indentation. The invariant preserved is that the `record_scans_started` result
+        // is mapped to "store_down" — a SQL error is never swallowed into a quota guess.
+        let impl_compact: String = impl_src.chars().filter(|c| !c.is_whitespace()).collect();
+        assert!(impl_compact.contains(
+            "record_scans_started(pool,tenant_id,job_count).await.map_err(|_|\"store_down\".to_string())"
         ));
         assert!(impl_src.contains("Result<Option<String>, String>"));
         assert!(impl_src.contains("Err(_) => return Err(\"store_down\".into())"));
