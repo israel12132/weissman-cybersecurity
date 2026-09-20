@@ -48,6 +48,7 @@ Last updated: 2026-08-18
 - **SEV-1:** Customer notification within **30 minutes** of detection.
 - **SEV-2:** Customer notification within **2 hours** of detection.
 - Incident updates and maintenance notices are communicated via email, the `/status` endpoint, and the customer portal.
+- While the production origin cannot answer (restart, rebuild, migration, host outage), every layer in front of it — the nginx gateway, VPS nginx/Caddy, the Kubernetes ingress default backend, the Cloudflare edge Worker and the Command Center itself — serves the branded Weissman continuity page as **HTTP 503 with `Retry-After: 30`** (never a browser, nginx or Cloudflare error), in English and Hebrew, with a JSON body for API clients. The page re-checks `/api/health` and returns visitors to their original URL automatically; it shows the `/status` link, the standard maintenance window and the contact address weissmancybersecurity@gmail.com. Runbook: `docs/operations/MAINTENANCE-PAGE-AND-ZERO-DOWNTIME-REBUILD.md`.
 
 ## 6) Data residency & regions
 
@@ -76,6 +77,8 @@ Weissman supports the following deployment regions:
 - Standard maintenance window: **Sundays 02:00–04:00 Israel time (UTC+2/UTC+3)**.
 - Emergency patches may be applied with **4-hour notice** for critical CVEs (CVSS ≥ 9.0).
 - Zero-downtime rolling deployments are the default; blue/green switchover is used for DB migrations.
+- Rebuilds and rollouts use `deploy/rebuild.sh` (build first, recreate/restart, wait for `/api/health` → 200, report how long the origin was unreachable); the continuity page in §5 covers that window automatically, with no flag and no operator step.
+- Announced windows (≥ 72 h notice per §2) may additionally be flagged on the day with `deploy/maintenance/maintenance-mode.sh on --reason "…" --until <ISO-8601>`, which makes the page read "Planned maintenance" with the reason and the expected return time; `… off` ends the announcement. The flag is optional and off by default.
 
 ## 9) Scope and legal note
 

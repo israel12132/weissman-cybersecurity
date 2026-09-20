@@ -7,6 +7,10 @@ page polls `/api/health` and reloads the visitor's original URL on the first gen
 The maintenance *flag* below is an optional extra for announced windows, never a step in a
 normal rebuild.
 
+Operator runbook (what visitors see per failure mode, `deploy/rebuild.sh`, announced windows,
+Cloudflare, Kubernetes, curl checks, troubleshooting):
+`docs/operations/MAINTENANCE-PAGE-AND-ZERO-DOWNTIME-REBUILD.md` (Hebrew: `…-he.md`).
+
 ## What is here
 
 | Path | Role |
@@ -35,8 +39,14 @@ variant), `deploy/cloudflare/maintenance-worker/assets.generated.mjs`,
 
 ## Where each layer reads it
 
+- **Docker Compose gateway** — `deploy/frontend.Dockerfile` COPYs `dist/` into the image at
+  `/usr/share/nginx/html/maintenance`; `docker-compose.yml` bind-mounts the host state dir
+  (`${WEISSMAN_MAINTENANCE_STATE_DIR:-./deploy/maintenance/state}`) read-only at
+  `/var/lib/weissman/maintenance`. Same routing and headers as the host layer below.
 - **Host nginx / Caddy** — `install.sh` copies `dist/` to `/opt/weissman/maintenance`
-  (`WEISSMAN_MAINTENANCE_ROOT`). The gateway serves it at `/maintenance/` and falls back to it
+  (`WEISSMAN_MAINTENANCE_ROOT`; state dir `WEISSMAN_MAINTENANCE_STATE_DIR`, default
+  `$ROOT/state` = `/opt/weissman/maintenance/state`; `--no-build` only verifies the committed
+  dist). The gateway serves it at `/maintenance/` and falls back to it
   on 502/504/connection failure (`/he/…` → `he/index.html`, `Accept: application/json` or
   `/api/*` → `api.json`) with `503` + `Retry-After: 30` + `Cache-Control: no-store` +
   `X-Weissman-Maintenance: 1`. `maintenance.js` itself must be served with **200**.
@@ -57,15 +67,21 @@ variant), `deploy/cloudflare/maintenance-worker/assets.generated.mjs`,
 
 ```
 deploy/maintenance/maintenance-mode.sh on --reason "Database migration" --until 2026-09-27T04:00:00+03:00
-deploy/maintenance/maintenance-mode.sh status
+deploy/maintenance/maintenance-mode.sh status [--json]
+deploy/maintenance/maintenance-mode.sh is-on          # exit 0 = on, 1 = off
 deploy/maintenance/maintenance-mode.sh off
 ```
 
-Writes `maintenance.on` + `status.json` under `WEISSMAN_MAINTENANCE_STATE_DIR` (default `state/`).
-The gateway serves `status.json` at `/maintenance/status.json`; the page then shows
-"Planned maintenance", the reason and a localized "Expected back by" (an ETA already in the
-past is never shown). `404` is the normal answer when nothing is announced. `off` by default;
-nothing depends on it.
+`on` writes `maintenance.on` + `status.json` (`{"mode":"planned","reason":…,"until":…,"since":…}`)
+under `WEISSMAN_MAINTENANCE_STATE_DIR` (default `state/` next to the script; on a VPS pass
+`/opt/weissman/maintenance/state`); `off` removes both files. `--until` takes ISO-8601 with an
+offset or anything GNU `date -d` parses. While the flag exists, nginx/Caddy answer every request
+except `/maintenance/*` with the 503 page even if the app is up; the gateway serves `status.json`
+at `/maintenance/status.json` and the page then shows "Planned maintenance", the reason and a
+localized "Expected back by" (an ETA already in the past is never shown). `404` is the normal
+answer when nothing is announced. Both files are checked per request — no reload. `off` by
+default; nothing depends on it. `deploy/rebuild.sh --with-maintenance-flag` raises and clears it
+around a rollout.
 
 ## Design contract (short)
 
