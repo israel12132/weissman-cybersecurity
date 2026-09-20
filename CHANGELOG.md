@@ -84,6 +84,19 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ### Fixed
 
+- **The alert-pipeline meta-alerts are now proven to FIRE, not just present.** The promtool
+  unit tests covered only the job-pipeline alerts; the two meta-alerts whose entire job is to
+  detect a broken notification path — `AlertDeliveryFailing`
+  (`rate(alertmanager_notifications_failed_total[10m]) > 0`) and `AlertingPipelineUnverified`
+  (`up{job="alertmanager"} == 0`) — had NO firing test. `go_live_check.sh` only greps that the
+  rules are present, and a present-but-unrunnable rule "reads as coverage" — the exact failure
+  mode (a rule that fires but is never delivered) behind the documented multi-day silent
+  outage. Added promtool cases proving each meta-alert fires on a threshold breach (climbing
+  failure counter; Alertmanager unscrapeable) past its `for:` window AND stays silent when the
+  pipeline is healthy (flat counter; `up == 1`), with the rendered operator-facing
+  summary/description asserted. Verified: `promtool test rules` SUCCESS, `promtool check rules`
+  SUCCESS on all rule files. _Deferred (needs a live Prometheus/Alertmanager):_ end-to-end
+  delivery of a real notification to a real receiver.
 - **Ask Weissman planner prompt is generated from the query SCHEMA (no more drift).**
   The NL→Plan LLM system prompt hand-listed the tables/columns it may target, and had
   silently fallen **4 tables behind** the real `nl_query::SCHEMA` allow-list — the
