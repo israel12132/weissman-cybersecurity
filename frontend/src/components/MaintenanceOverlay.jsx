@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { apiUrl } from '../lib/apiBase'
+import Button from './ui/Button'
 
 /**
  * MaintenanceOverlay — the in-app counterpart of the branded continuity page
@@ -258,7 +259,7 @@ export default function MaintenanceOverlay({ status = 503, retryAfter = 30, onRe
       tabIndex={-1}
       data-testid="maintenance-overlay"
       data-phase={phase}
-      className="fixed inset-0 z-[1000] overflow-y-auto bg-slate-950 text-slate-200 font-sans antialiased outline-none"
+      className="fixed inset-0 z-[1000] overflow-y-auto bg-bg-0 text-text-primary font-sans antialiased outline-none"
       style={{
         backgroundImage:
           'radial-gradient(60rem 30rem at 50% -8rem, rgba(34,211,238,0.10), transparent 70%)',
@@ -268,10 +269,10 @@ export default function MaintenanceOverlay({ status = 503, retryAfter = 30, onRe
         <header className="flex items-center gap-3" dir="ltr">
           <ShieldMark className="h-8 w-8 shrink-0 drop-shadow-[0_0_10px_rgba(34,211,238,0.32)]" />
           <div className="leading-none">
-            <div className="font-holo text-[0.82rem] font-bold tracking-[0.24em] text-slate-200">
+            <div className="font-holo text-[0.82rem] font-bold tracking-[0.24em] text-text-primary">
               WEISSMAN
             </div>
-            <div className="mt-1 font-mono text-[11px] tracking-[0.28em] text-slate-500">
+            <div className="mt-1 font-mono text-[11px] tracking-[0.28em] text-text-muted">
               COMMAND CENTER
             </div>
           </div>
@@ -287,12 +288,12 @@ export default function MaintenanceOverlay({ status = 503, retryAfter = 30, onRe
           </p>
           <h1
             id="maint-overlay-headline"
-            className="text-3xl font-semibold leading-tight text-slate-100 sm:text-4xl"
+            className="text-3xl font-semibold leading-tight text-text-primary sm:text-4xl"
             style={{ textWrap: 'balance' }}
           >
             Command Center is being updated.
           </h1>
-          <p id="maint-overlay-lede" className="mt-4 max-w-xl text-base leading-relaxed text-slate-400">
+          <p id="maint-overlay-lede" className="mt-4 max-w-xl text-base leading-relaxed text-text-secondary">
             Your session resumes automatically once the update completes. Security monitoring and
             scanning operations continue as planned throughout, and no action is required on your
             side.
@@ -300,11 +301,11 @@ export default function MaintenanceOverlay({ status = 503, retryAfter = 30, onRe
 
           <section
             aria-labelledby="maint-overlay-card-title"
-            className="mt-8 rounded-[14px] border border-slate-200/10 bg-slate-900 p-5 shadow-[0_18px_50px_rgba(0,0,0,0.35)] sm:p-6"
+            className="mt-8 rounded-[14px] border border-border-subtle bg-bg-1 p-5 shadow-[0_18px_50px_rgba(0,0,0,0.35)] sm:p-6"
           >
             <h2
               id="maint-overlay-card-title"
-              className="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-slate-500"
+              className="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-text-muted"
             >
               Service availability
             </h2>
@@ -315,50 +316,52 @@ export default function MaintenanceOverlay({ status = 503, retryAfter = 30, onRe
                 }`}
                 aria-hidden="true"
               />
-              <p role="status" aria-live="polite" className="text-sm leading-relaxed text-slate-200">
+              <p role="status" aria-live="polite" className="text-sm leading-relaxed text-text-primary">
                 {stateSentence}
               </p>
             </div>
 
             <dl className="mt-5 grid grid-cols-2 gap-4 font-mono text-sm tabular-nums">
               <div>
-                <dt className="text-[0.7rem] uppercase tracking-[0.18em] text-slate-500">Last checked</dt>
-                <dd className="mt-1 text-slate-200" data-testid="maintenance-last-checked">
+                <dt className="text-[0.7rem] uppercase tracking-[0.18em] text-text-muted">Last checked</dt>
+                <dd className="mt-1 text-text-primary" data-testid="maintenance-last-checked">
                   {lastChecked ? formatClock(lastChecked) : 'when this screen appeared'}
                 </dd>
               </div>
               <div>
-                <dt className="text-[0.7rem] uppercase tracking-[0.18em] text-slate-500">Next check</dt>
-                <dd className="mt-1 text-slate-200" data-testid="maintenance-next-check">
+                <dt className="text-[0.7rem] uppercase tracking-[0.18em] text-text-muted">Next check</dt>
+                <dd className="mt-1 text-text-primary" data-testid="maintenance-next-check">
                   {nextCheckText}
                 </dd>
               </div>
             </dl>
 
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
-              <button
+              <Button
                 type="button"
+                variant="primary"
+                size="md"
                 onClick={retryNow}
                 disabled={phase === 'checking'}
                 aria-busy={phase === 'checking' ? 'true' : 'false'}
                 aria-describedby="maint-overlay-retry-hint"
-                className="inline-flex h-[2.65rem] items-center justify-center rounded-[10px] bg-cyan-400 px-5 text-sm font-semibold text-slate-950 transition hover:brightness-110 active:scale-[0.98] disabled:cursor-progress disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
+                className="h-[2.65rem] rounded-[10px] px-5"
               >
                 Retry now
-              </button>
+              </Button>
               <a
                 href="/status"
-                className="inline-flex h-[2.65rem] items-center justify-center rounded-[10px] border border-slate-200/20 px-5 text-sm font-medium text-slate-200 transition hover:border-slate-200/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
+                className="inline-flex h-[2.65rem] items-center justify-center rounded-[10px] border border-border px-5 text-sm font-medium text-text-primary transition hover:border-border-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
               >
                 Status updates
               </a>
-              <span id="maint-overlay-retry-hint" className="text-xs text-slate-500">
+              <span id="maint-overlay-retry-hint" className="text-xs text-text-muted">
                 Checks availability now.
               </span>
             </div>
           </section>
 
-          <p className="mt-6 flex items-start gap-2 text-sm leading-relaxed text-slate-400">
+          <p className="mt-6 flex items-start gap-2 text-sm leading-relaxed text-text-secondary">
             <svg
               className="mt-0.5 h-[18px] w-[18px] shrink-0 text-emerald-400"
               viewBox="0 0 24 24"
@@ -377,8 +380,8 @@ export default function MaintenanceOverlay({ status = 503, retryAfter = 30, onRe
             automatically.
           </p>
 
-          <dl className="mt-8 border-y border-slate-200/10 py-4">
-            <dt className="text-base text-slate-200">Need assistance or want to report something?</dt>
+          <dl className="mt-8 border-y border-border-subtle py-4">
+            <dt className="text-base text-text-primary">Need assistance or want to report something?</dt>
             <dd className="mt-1 font-mono text-sm">
               <a
                 href={`mailto:${CONTACT_EMAIL}`}
@@ -390,7 +393,7 @@ export default function MaintenanceOverlay({ status = 503, retryAfter = 30, onRe
           </dl>
         </main>
 
-        <footer className="flex flex-col gap-2 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+        <footer className="flex flex-col gap-2 text-xs text-text-muted sm:flex-row sm:items-center sm:justify-between">
           <span>© 2026 Weissman Cybersecurity Ltd. · Tel Aviv‑Yafo</span>
           <span className="whitespace-nowrap font-mono text-[0.72rem]" dir="ltr">
             HTTP {status} · Retry-After: {retryAfter} s
