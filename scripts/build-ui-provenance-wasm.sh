@@ -21,23 +21,9 @@ fi
 
 mkdir -p "$OUT_DIR"
 
-if command -v wasm-bindgen >/dev/null 2>&1; then
-  BINDGEN=wasm-bindgen
-elif command -v wasm-pack >/dev/null 2>&1; then
-  # wasm-pack wraps bindgen; use bindgen from cargo install if available
-  BINDGEN="$(command -v wasm-bindgen || true)"
-fi
-
-if [[ -z "${BINDGEN:-}" ]]; then
-  echo "Installing wasm-bindgen-cli..."
-  cargo install wasm-bindgen-cli --locked 2>/dev/null || true
-  BINDGEN="$(command -v wasm-bindgen)"
-fi
-
-if [[ -z "${BINDGEN:-}" ]]; then
-  echo "ERROR: wasm-bindgen-cli required. Run: cargo install wasm-bindgen-cli" >&2
-  exit 1
-fi
+# Resolve a wasm-bindgen CLI that matches the crate version pinned in Cargo.lock.
+# shellcheck source=scripts/lib/ensure-wasm-bindgen.sh
+source "$ROOT/scripts/lib/ensure-wasm-bindgen.sh"
 
 "$BINDGEN" "$WASM_PATH" \
   --out-dir "$OUT_DIR" \
