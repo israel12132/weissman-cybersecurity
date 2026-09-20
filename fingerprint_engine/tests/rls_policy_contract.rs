@@ -194,6 +194,17 @@ const RLS_FORCE_ALLOWLIST: &[&str] = &[
     "ueba_sovereign_binary_allowlist",
     // Corrupt MessagePack with no tenant identity cannot insert under FORCE RLS.
     "cem_dago_telemetry_quarantine_global",
+    // Platform-global threat-intel / feed infrastructure — no tenant_id column,
+    // shared across every tenant exactly like kev_intel / epss_intel above.
+    "ioc_indicators",
+    "ioc_feed_runs",
+    "ioc_feed_credentials",
+    // Global crawl knowledge base (intel.discovery_knowledge) — seed/learned
+    // discovery hints shared platform-wide, no tenant_id.
+    "discovery_knowledge",
+    // Public marketing contact form — unauthenticated submissions, no tenant
+    // identity yet (same posture as pending_signups above).
+    "public_contact_leads",
 ];
 
 fn sql_idents_after(hay: &str, needle_lc: &str) -> Vec<String> {
@@ -208,8 +219,17 @@ fn sql_idents_after(hay: &str, needle_lc: &str) -> Vec<String> {
                 rest = rest[prefix.len()..].trim_start();
             }
         }
-        if rest.starts_with("public.") {
-            rest = &rest["public.".len()..];
+        // Strip an optional schema qualifier (public., intel., …) so the ident is
+        // the bare table name — the RLS contract is per table, not per schema.
+        if let Some(dot) = rest.find('.') {
+            let schema = &rest[..dot];
+            if !schema.is_empty()
+                && schema
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '_')
+            {
+                rest = &rest[dot + 1..];
+            }
         }
         let ident: String = rest
             .chars()
@@ -321,8 +341,26 @@ fn post_cast_safety_policies_use_app_current_tenant_id() {
         "current_setting('app.current_tenant_id', true)::bigint",
         "current_setting('app.current_tenant_id'::text, true)::bigint",
     ];
+    // Migrations whose tenant policies have been restated with the cast-safe
+    // helper by a later follow-on. The originals are already applied, so their
+    // files are never edited (sqlx verifies checksums) — the raw-cast text stays
+    // on disk and is intentionally skipped here.
+    //   20260827120000 -> 20260827120600_cicd_scan_events_rls_cast_safe
+    //   the rest        -> 20260920120000_rls_cast_safety_and_static_force_backfill
+    const SUPERSEDED_BY_CAST_SAFE_FOLLOWON: &[&str] = &[
+        "20260827120000_",
+        "20260827160000_",
+        "20260910140000_",
+        "20260910160000_",
+        "20260911230000_",
+        "20260912010000_",
+        "20260912120200_",
+        "20260912160200_",
+        "20260913120000_",
+    ];
     let mut offenders = Vec::new();
     let mut saw_cast_safe_followon = false;
+    let mut saw_backfill_followon = false;
     for dir in dirs {
         let rd = std::fs::read_dir(&dir).unwrap_or_else(|e| panic!("read {}: {e}", dir.display()));
         for ent in rd.flatten() {
@@ -334,14 +372,19 @@ fn post_cast_safety_policies_use_app_current_tenant_id() {
             if name.starts_with("20260827120600_") {
                 saw_cast_safe_followon = true;
             }
+            if name.starts_with("20260920120000_") {
+                saw_backfill_followon = true;
+            }
             let Some(ver) = name.split('_').next() else {
                 continue;
             };
             if ver <= "20260811000000" {
                 continue;
             }
-            // Already-applied; the 20600 follow-on restates the policy.
-            if name.starts_with("20260827120000_") {
+            if SUPERSEDED_BY_CAST_SAFE_FOLLOWON
+                .iter()
+                .any(|p| name.starts_with(p))
+            {
                 continue;
             }
             let text = std::fs::read_to_string(ent.path()).unwrap_or_default();
@@ -356,6 +399,11 @@ fn post_cast_safety_policies_use_app_current_tenant_id() {
     assert!(
         saw_cast_safe_followon,
         "20260827120600_cicd_scan_events_rls_cast_safe.sql must exist in both trees"
+    );
+    assert!(
+        saw_backfill_followon,
+        "20260920120000_rls_cast_safety_and_static_force_backfill.sql must exist \
+         in both trees — it restates the policies excluded above"
     );
     assert!(
         offenders.is_empty(),
