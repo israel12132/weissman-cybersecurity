@@ -32,7 +32,8 @@ fn default_role() -> String {
     "viewer".to_string()
 }
 
-const ROLE_ERROR_DETAIL: &str = "role must be one of viewer|analyst|operator|admin|ceo|owner|client";
+const ROLE_ERROR_DETAIL: &str =
+    "role must be one of viewer|analyst|operator|admin|ceo|owner|client";
 
 /// The roles an admin API may assign. `owner` is here too but is additionally
 /// gated by `require_can_assign_owner`; `superadmin` is a flag, never a role.
@@ -356,8 +357,8 @@ pub async fn api_admin_users_create(
     // An owner may create a peer owner ("the owner can add another owner"), so the
     // strict lower-rank rule is waived for that one case (still gated below by
     // require_can_assign_owner). Every other equal-or-higher creation is blocked.
-    let owner_grant = role == crate::rbac::roles::OWNER
-        && crate::rbac::can_assign_owner_role(&auth);
+    let owner_grant =
+        role == crate::rbac::roles::OWNER && crate::rbac::can_assign_owner_role(&auth);
     if !auth.is_superadmin
         && !owner_grant
         && crate::rbac::role_rank(&role) >= effective_rank(&auth.role, auth.is_superadmin)

@@ -40,10 +40,7 @@ impl CreateIncidentAdapter for JiraAdapter {
         let project = config_str(&ctx.integration.config, &["project", "project_key"])
             .unwrap_or_else(|| "SEC".into());
         let client = http_client(20).map_err(AdapterError::Provider)?;
-        let url = format!(
-            "{}/rest/api/3/issue",
-            base.trim_end_matches('/')
-        );
+        let url = format!("{}/rest/api/3/issue", base.trim_end_matches('/'));
         let body = json!({
             "fields": {
                 "project": { "key": project },

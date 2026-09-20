@@ -831,8 +831,7 @@ pub async fn run_risk_superposition_collapse_result(
         return empty_ok(ENGINE_ID, target);
     }
 
-    let raw_findings = match load_raw_findings(pool, tenant_id, client_id, cfg.max_findings).await
-    {
+    let raw_findings = match load_raw_findings(pool, tenant_id, client_id, cfg.max_findings).await {
         Ok(v) => v,
         Err(_) => return EngineResult::error("store_down"),
     };

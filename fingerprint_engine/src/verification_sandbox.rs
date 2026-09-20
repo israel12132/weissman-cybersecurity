@@ -101,7 +101,11 @@ pub enum StepSink {
     },
 }
 
-async fn push_step(sink: &Option<StepSink>, step: &str, detail: Option<String>) -> Result<(), String> {
+async fn push_step(
+    sink: &Option<StepSink>,
+    step: &str,
+    detail: Option<String>,
+) -> Result<(), String> {
     let ts = chrono::Utc::now().timestamp();
     match sink {
         None => Ok(()),
@@ -1085,7 +1089,11 @@ pub async fn verify_patch_ephemeral_docker(
 
 /// Append a named step to a live sink (reuses the sink's shared sequence counter), so callers
 /// outside this module (e.g. the self-repair loop) can annotate the verification timeline.
-pub async fn record_step(sink: &StepSink, step: &str, detail: Option<String>) -> Result<(), String> {
+pub async fn record_step(
+    sink: &StepSink,
+    step: &str,
+    detail: Option<String>,
+) -> Result<(), String> {
     push_step(&Some(sink.clone()), step, detail).await
 }
 
@@ -1124,7 +1132,10 @@ async fn fail(sink: &Option<StepSink>, msg: String) -> VerificationResult {
     .await
 }
 
-async fn attach_steps(sink: &Option<StepSink>, mut result: VerificationResult) -> VerificationResult {
+async fn attach_steps(
+    sink: &Option<StepSink>,
+    mut result: VerificationResult,
+) -> VerificationResult {
     match collect_steps_only(sink).await {
         Ok(s) => {
             result.steps = s;

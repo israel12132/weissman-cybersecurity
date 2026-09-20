@@ -46,7 +46,12 @@ fn backoff_secs(attempts: i32) -> i64 {
 /// Persist a `pending` delivery row for one channel BEFORE the first attempt. Returns the row id, or
 /// `None` if the outbox is unreachable (the caller's immediate attempt still stands — enqueue must
 /// never itself become the thing that drops the alert path).
-pub async fn enqueue(pool: &PgPool, tenant_id: i64, channel: &str, envelope: &Value) -> Option<i64> {
+pub async fn enqueue(
+    pool: &PgPool,
+    tenant_id: i64,
+    channel: &str,
+    envelope: &Value,
+) -> Option<i64> {
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await.ok()?;
     let id = sqlx::query_scalar::<_, i64>(
         r#"INSERT INTO notification_outbox (tenant_id, channel, payload, status, next_attempt_at)

@@ -10,7 +10,10 @@ pub struct IntegrationRecord {
     pub config: Value,
 }
 
-pub async fn load_integrations(pool: &PgPool, tenant_id: i64) -> Result<Vec<IntegrationRecord>, String> {
+pub async fn load_integrations(
+    pool: &PgPool,
+    tenant_id: i64,
+) -> Result<Vec<IntegrationRecord>, String> {
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
         .map_err(|_| "store_down".to_string())?;

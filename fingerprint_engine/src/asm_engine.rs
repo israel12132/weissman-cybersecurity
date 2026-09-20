@@ -1967,8 +1967,7 @@ pub async fn run_asm_result_ctx(
         }
         if wildcard_dns && live_ai {
             if let Some(pool) = ctx.discovery_knowledge_pool() {
-                let stored = match crate::discovery_knowledge::load_subdomain_prefixes(pool).await
-                {
+                let stored = match crate::discovery_knowledge::load_subdomain_prefixes(pool).await {
                     Ok(v) => v,
                     Err(_) => return EngineResult::error("store_down"),
                 };

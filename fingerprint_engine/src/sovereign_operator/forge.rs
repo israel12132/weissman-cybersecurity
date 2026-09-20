@@ -240,19 +240,18 @@ pub async fn forge_prove(
         .await
         {
             Ok(job_id) => {
-                let waited = match wait_live_finding(pool, tenant_id, job_id, &engine_id, &target)
-                    .await
-                {
-                    Ok(v) => v,
-                    Err(_) => {
-                        return ToolOutcome {
-                            ok: false,
-                            name: "forge_prove".into(),
-                            detail: "store_down".into(),
-                            payload: json!({ "job_id": job_id.to_string() }),
-                        };
-                    }
-                };
+                let waited =
+                    match wait_live_finding(pool, tenant_id, job_id, &engine_id, &target).await {
+                        Ok(v) => v,
+                        Err(_) => {
+                            return ToolOutcome {
+                                ok: false,
+                                name: "forge_prove".into(),
+                                detail: "store_down".into(),
+                                payload: json!({ "job_id": job_id.to_string() }),
+                            };
+                        }
+                    };
                 let proved = waited
                     .get("proved")
                     .and_then(Value::as_bool)
@@ -774,16 +773,15 @@ async fn wait_live_finding(
             Ok(t) => t,
             Err(_) => continue,
         };
-        let row = match sqlx::query(
-            "SELECT status, result_json FROM weissman_async_jobs WHERE id = $1",
-        )
-        .bind(job_id)
-        .fetch_optional(&mut *tx)
-        .await
-        {
-            Ok(r) => r,
-            Err(_) => continue,
-        };
+        let row =
+            match sqlx::query("SELECT status, result_json FROM weissman_async_jobs WHERE id = $1")
+                .bind(job_id)
+                .fetch_optional(&mut *tx)
+                .await
+            {
+                Ok(r) => r,
+                Err(_) => continue,
+            };
         let n: i64 = match sqlx::query_scalar::<_, i64>(
             r#"SELECT count(*)::bigint FROM weissman_sovereign_engine_logs
                WHERE job_id = $1 AND phase = 'finding'"#,

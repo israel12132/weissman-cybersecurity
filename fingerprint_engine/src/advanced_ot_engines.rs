@@ -708,11 +708,13 @@ pub async fn run_iec61850_attack_result(t: &str) -> EngineResult {
     }
     let host = extract_host(t);
     let policy = crate::ot_ics_hardening::policy::OtSafetyPolicy::default();
-    if let Some(h) = crate::ot_ics_hardening::probes::probe_iec61850_mms_safe(&host, &policy).await {
+    if let Some(h) = crate::ot_ics_hardening::probes::probe_iec61850_mms_safe(&host, &policy).await
+    {
         let fp = OtFingerprint::from(&h);
         return EngineResult::ok(
             vec![ot_fingerprint_finding(&fp, "iec61850_attack", t)],
-            "iec61850_attack: MMS/ISO-on-TCP confirmed (hardened BER depth-capped parser)".to_string(),
+            "iec61850_attack: MMS/ISO-on-TCP confirmed (hardened BER depth-capped parser)"
+                .to_string(),
         );
     }
     if tcp_open(&host, 102).await {

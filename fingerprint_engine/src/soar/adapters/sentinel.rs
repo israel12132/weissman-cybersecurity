@@ -28,11 +28,8 @@ impl SlackNotifyAdapter for SentinelAdapter {
                 verify_probe: None,
             });
         }
-        let url = config_str(
-            &ctx.integration.config,
-            &["ingest_url", "dce_url", "url"],
-        )
-        .ok_or_else(|| AdapterError::Config("sentinel ingest_url required".into()))?;
+        let url = config_str(&ctx.integration.config, &["ingest_url", "dce_url", "url"])
+            .ok_or_else(|| AdapterError::Config("sentinel ingest_url required".into()))?;
         let token = config_str(
             &ctx.integration.config,
             &["access_token", "token", "bearer"],

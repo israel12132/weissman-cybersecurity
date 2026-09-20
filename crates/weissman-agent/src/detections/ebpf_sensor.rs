@@ -19,28 +19,25 @@ pub async fn run(engine: &str, params: &Value) -> anyhow::Result<Vec<Value>> {
             .and_then(Value::as_u64)
             .unwrap_or(2)
             .clamp(1, 8);
-        let traced = tokio::time::timeout(
-            std::time::Duration::from_secs(seconds + 1),
-            async {
-                tokio::process::Command::new("timeout")
-                    .args([
-                        &seconds.to_string(),
-                        "bpftrace",
-                        "-e",
-                        "tracepoint:syscalls:sys_enter_execve { printf(\"%s\\n\", comm); }",
-                    ])
-                    .output()
-                    .await
-            },
-        )
+        let traced = tokio::time::timeout(std::time::Duration::from_secs(seconds + 1), async {
+            tokio::process::Command::new("timeout")
+                .args([
+                    &seconds.to_string(),
+                    "bpftrace",
+                    "-e",
+                    "tracepoint:syscalls:sys_enter_execve { printf(\"%s\\n\", comm); }",
+                ])
+                .output()
+                .await
+        })
         .await;
         match traced {
             Ok(Ok(out)) if out.status.success() || !out.stdout.is_empty() => {
                 let stdout = String::from_utf8_lossy(&out.stdout);
                 let lines = stdout.lines().filter(|l| !l.trim().is_empty()).count();
                 extras.insert("execve_events".into(), json!(lines));
-                    extras.insert("sensor".into(), json!("bpftrace"));
-                    return Ok(vec![finding(
+                extras.insert("sensor".into(), json!("bpftrace"));
+                return Ok(vec![finding(
                     engine,
                     "eBPF execve trace completed",
                     if lines > 0 { "info" } else { "low" },

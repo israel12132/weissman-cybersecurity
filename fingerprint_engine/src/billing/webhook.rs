@@ -137,7 +137,10 @@ fn tenant_id_from_custom(obj: &Value) -> Option<i64> {
     v.as_str()?.trim().parse().ok()
 }
 
-async fn tenant_id_by_paddle_customer(pool: &PgPool, customer_id: &str) -> Result<Option<i64>, String> {
+async fn tenant_id_by_paddle_customer(
+    pool: &PgPool,
+    customer_id: &str,
+) -> Result<Option<i64>, String> {
     sqlx::query_scalar::<_, i64>(
         "SELECT tenant_id FROM tenant_paddle_customers WHERE paddle_customer_id = $1",
     )
@@ -147,7 +150,10 @@ async fn tenant_id_by_paddle_customer(pool: &PgPool, customer_id: &str) -> Resul
     .map_err(|_| "store_down".to_string())
 }
 
-async fn resolve_tenant_for_subscription(pool: &PgPool, sub: &Value) -> Result<Option<i64>, String> {
+async fn resolve_tenant_for_subscription(
+    pool: &PgPool,
+    sub: &Value,
+) -> Result<Option<i64>, String> {
     if let Some(t) = tenant_id_from_custom(sub) {
         return Ok(Some(t));
     }
