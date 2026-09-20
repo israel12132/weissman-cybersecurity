@@ -14,7 +14,7 @@
 //! We map common alias keys defensively so any engine that emits `cvss`/`risk`/`description`
 //! still produces a useful row.
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use std::sync::LazyLock;
@@ -22,7 +22,7 @@ use tokio::sync::{Semaphore, SemaphorePermit};
 
 use crate::db;
 use crate::findings_correlator::{self, ClusterAttrs};
-use crate::findings_gate::{self, Sealed, VulnerabilitiesWriter, gate_finding};
+use crate::findings_gate::{self, gate_finding, Sealed, VulnerabilitiesWriter};
 use crate::fp_feedback;
 use crate::intel_epss;
 use crate::intel_kev;
@@ -357,10 +357,9 @@ pub async fn persist_engine_findings(
     // findings in this call share `engine`, so a single query replaces the former per-finding
     // is_suppressed() that opened its own tenant transaction each time (N+1). Matched hashes are
     // collected and their hit_count telemetry is bumped in one statement before commit.
-    let active_suppressions =
-        fp_feedback::active_suppressions_for_engine(pool, tenant_id, engine)
-            .await
-            .map_err(|_| "store_down".to_string())?;
+    let active_suppressions = fp_feedback::active_suppressions_for_engine(pool, tenant_id, engine)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let mut suppression_hits: Vec<String> = Vec::new();
 
     let mut inserted: u64 = 0;

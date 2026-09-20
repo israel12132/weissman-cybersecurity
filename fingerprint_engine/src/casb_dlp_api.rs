@@ -309,17 +309,18 @@ pub async fn graph_dlp_findings(target: &str, token: &str) -> Vec<Value> {
         .send()
         .await;
     match resp {
-        Ok(r) if r.status().is_success() => match r.json::<Value>().await {
-            Ok(body) => match graph_value_array(&body) {
-                Some(msgs) => {
-                let hay: String = msgs
-                    .iter()
-                    .filter_map(|m| m.get("bodyPreview").and_then(Value::as_str))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                let hits = dlp_hits(&hay);
-                if hits.is_empty() {
-                    out.push(finding(
+        Ok(r) if r.status().is_success() => {
+            match r.json::<Value>().await {
+                Ok(body) => match graph_value_array(&body) {
+                    Some(msgs) => {
+                        let hay: String = msgs
+                            .iter()
+                            .filter_map(|m| m.get("bodyPreview").and_then(Value::as_str))
+                            .collect::<Vec<_>>()
+                            .join("\n");
+                        let hits = dlp_hits(&hay);
+                        if hits.is_empty() {
+                            out.push(finding(
                         "dlp_content_scan",
                         &format!("Graph mailbox sample scanned ({} messages, no DLP pattern)", msgs.len()),
                         "info",
@@ -327,9 +328,9 @@ pub async fn graph_dlp_findings(target: &str, token: &str) -> Vec<Value> {
                         "GET /me/messages bodyPreview did not match PAN/SSN/secret regexes.",
                         target,
                     ));
-                } else {
-                    for h in hits {
-                        out.push(finding(
+                        } else {
+                            for h in hits {
+                                out.push(finding(
                             "dlp_content_scan",
                             &format!("DLP pattern in Graph mail preview: {h}"),
                             "high",
@@ -337,11 +338,11 @@ pub async fn graph_dlp_findings(target: &str, token: &str) -> Vec<Value> {
                             "Live Microsoft Graph message preview matched a sensitive-data pattern.",
                             target,
                         ));
+                            }
+                        }
                     }
-                }
-                }
-                None => {
-                    out.push(finding(
+                    None => {
+                        out.push(finding(
                         "dlp_content_scan",
                         "Graph mail DLP body unreadable",
                         "medium",
@@ -349,10 +350,10 @@ pub async fn graph_dlp_findings(target: &str, token: &str) -> Vec<Value> {
                         "GET /me/messages returned HTTP 200 but `value` was missing or not an array. Mailbox DLP is not a clean empty scan.",
                         target,
                     ));
-                }
-            },
-            Err(_) => {
-                out.push(finding(
+                    }
+                },
+                Err(_) => {
+                    out.push(finding(
                     "dlp_content_scan",
                     "Graph mail DLP body unreadable",
                     "medium",
@@ -360,8 +361,9 @@ pub async fn graph_dlp_findings(target: &str, token: &str) -> Vec<Value> {
                     "GET /me/messages returned HTTP 200 but JSON could not be parsed. Mailbox DLP is not a clean empty scan.",
                     target,
                 ));
+                }
             }
-        },
+        }
         Ok(r) => {
             out.push(finding(
                 "dlp_content_scan",
@@ -484,10 +486,9 @@ pub async fn google_dlp_findings(target: &str, token: &str) -> Vec<Value> {
         .send()
         .await;
     match list {
-        Ok(r) if r.status().is_success() => {
-            match r.json::<Value>().await {
-                Ok(body) => match gmail_message_ids(&body) {
-                    Some(ids) => {
+        Ok(r) if r.status().is_success() => match r.json::<Value>().await {
+            Ok(body) => match gmail_message_ids(&body) {
+                Some(ids) => {
                     let mut hay = String::new();
                     let mut scanned = 0usize;
                     let mut unread = 0usize;
@@ -581,9 +582,9 @@ pub async fn google_dlp_findings(target: &str, token: &str) -> Vec<Value> {
                             ));
                         }
                     }
-                    }
-                    None => {
-                        out.push(finding(
+                }
+                None => {
+                    out.push(finding(
                             "dlp_content_scan",
                             "Gmail DLP list messages field unreadable",
                             "medium",
@@ -591,10 +592,10 @@ pub async fn google_dlp_findings(target: &str, token: &str) -> Vec<Value> {
                             "GET users/me/messages returned HTTP 200 but `messages` was not an array. Mailbox DLP is not a clean empty scan.",
                             target,
                         ));
-                    }
                 }
-                Err(_) => {
-                    out.push(finding(
+            },
+            Err(_) => {
+                out.push(finding(
                         "dlp_content_scan",
                         "Gmail DLP list body unreadable",
                         "medium",
@@ -602,9 +603,8 @@ pub async fn google_dlp_findings(target: &str, token: &str) -> Vec<Value> {
                         "GET users/me/messages returned HTTP 200 but JSON could not be parsed. Mailbox DLP is not a clean empty scan.",
                         target,
                     ));
-                }
             }
-        }
+        },
         Ok(r) => {
             out.push(finding(
                 "dlp_content_scan",

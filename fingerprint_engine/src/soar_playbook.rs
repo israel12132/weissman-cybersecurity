@@ -292,7 +292,11 @@ pub async fn dispatch_event(
         };
 
         // Audit row + counters.
-        if !dry_run && record_run(pool, &pb, &event, &dedup, &actions, &status).await.is_err() {
+        if !dry_run
+            && record_run(pool, &pb, &event, &dedup, &actions, &status)
+                .await
+                .is_err()
+        {
             status = "failed".to_string();
         }
         results.push(PlaybookRunResult {

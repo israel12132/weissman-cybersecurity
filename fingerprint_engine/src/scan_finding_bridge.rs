@@ -431,7 +431,9 @@ pub async fn snapshot(
     let rows = load_rows(pool, tenant_id, client_id, limit)
         .await
         .map_err(|e| (500, e))?;
-    let integrations = load_integrations(pool, tenant_id).await.map_err(|e| (503, e))?;
+    let integrations = load_integrations(pool, tenant_id)
+        .await
+        .map_err(|e| (503, e))?;
     let cortex = pick_cortex(&integrations);
     let cortex_configured = cortex.is_some();
     let cortex_mode = cortex
@@ -528,7 +530,9 @@ pub async fn flush(
     let rows = load_rows(pool, tenant_id, client_id, MAX_LIST)
         .await
         .map_err(|e| (500, e))?;
-    let integrations = load_integrations(pool, tenant_id).await.map_err(|e| (503, e))?;
+    let integrations = load_integrations(pool, tenant_id)
+        .await
+        .map_err(|e| (503, e))?;
     if pick_cortex(&integrations).is_none() {
         return Err((
             409,

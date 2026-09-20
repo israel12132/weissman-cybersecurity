@@ -55,7 +55,9 @@ impl VaultKey {
         key_str.zeroize();
         parsed
             .map(Self::from_bytes)
-            .ok_or(VaultCryptoError::InvalidHex { env_var: env_var.to_string() })
+            .ok_or(VaultCryptoError::InvalidHex {
+                env_var: env_var.to_string(),
+            })
     }
 
     /// Load the dedicated CEO / sovereign vault key (`WEISSMAN_VAULT_KEY`, 64 hex). No JWT fallback.
@@ -70,9 +72,10 @@ impl VaultKey {
     ///
     /// Does **not** fall back to `WEISSMAN_JWT_SECRET`.
     pub fn load_integrations_key() -> Result<Self, VaultCryptoError> {
-        let mut raw = env::var(INTEGRATIONS_VAULT_KEY_ENV).map_err(|_| VaultCryptoError::Missing {
-            env_var: INTEGRATIONS_VAULT_KEY_ENV.to_string(),
-        })?;
+        let mut raw =
+            env::var(INTEGRATIONS_VAULT_KEY_ENV).map_err(|_| VaultCryptoError::Missing {
+                env_var: INTEGRATIONS_VAULT_KEY_ENV.to_string(),
+            })?;
         let key = integrations_key_from_material(raw.trim());
         raw.zeroize();
         key
@@ -336,17 +339,29 @@ impl std::fmt::Display for VaultCryptoError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Missing { env_var } => {
-                write!(f, "{env_var} is not set; dedicated vault key required (no JWT fallback)")
+                write!(
+                    f,
+                    "{env_var} is not set; dedicated vault key required (no JWT fallback)"
+                )
             }
             Self::InvalidHex { env_var } => {
-                write!(f, "{env_var} must be 64 hex characters (32 bytes) for AES-256")
+                write!(
+                    f,
+                    "{env_var} must be 64 hex characters (32 bytes) for AES-256"
+                )
             }
             Self::WeakMaterial { env_var, len } => {
-                write!(f, "{env_var} is {len} characters; need 64 hex or a passphrase ≥32 chars")
+                write!(
+                    f,
+                    "{env_var} is {len} characters; need 64 hex or a passphrase ≥32 chars"
+                )
             }
             Self::Encrypt => write!(f, "AES-256-GCM encryption failed"),
             Self::Decrypt => {
-                write!(f, "AES-256-GCM decryption failed (tampered payload or invalid key)")
+                write!(
+                    f,
+                    "AES-256-GCM decryption failed (tampered payload or invalid key)"
+                )
             }
             Self::Utf8 => write!(f, "decrypted payload is not valid UTF-8"),
             Self::Serialize => write!(f, "config JSON (de)serialisation failed"),

@@ -76,7 +76,9 @@ async fn quarantine(engine: &str, params: &Value) -> anyhow::Result<Vec<Value>> 
             "medium",
             "T1485",
             &format!("rename {path} failed: {e}"),
-            json_extras(json!({ "action": "quarantine", "applied": false, "error": e.to_string() })),
+            json_extras(
+                json!({ "action": "quarantine", "applied": false, "error": e.to_string() }),
+            ),
         )]),
     }
 }
@@ -101,7 +103,17 @@ async fn isolate(engine: &str) -> anyhow::Result<Vec<Value>> {
             .status()
             .await;
         let allow_dns = tokio::process::Command::new("nft")
-            .args(["add", "rule", "inet", "weissman_isolate", "output", "udp", "dport", "53", "accept"])
+            .args([
+                "add",
+                "rule",
+                "inet",
+                "weissman_isolate",
+                "output",
+                "udp",
+                "dport",
+                "53",
+                "accept",
+            ])
             .status()
             .await;
         let mut c2_ok = 0u32;
@@ -172,7 +184,13 @@ async fn isolate(engine: &str) -> anyhow::Result<Vec<Value>> {
                 .await;
         }
         let st = tokio::process::Command::new("netsh")
-            .args(["advfirewall", "set", "allprofiles", "firewallpolicy", "blockinbound,blockoutbound"])
+            .args([
+                "advfirewall",
+                "set",
+                "allprofiles",
+                "firewallpolicy",
+                "blockinbound,blockoutbound",
+            ])
             .status()
             .await;
         if st.map(|s| s.success()).unwrap_or(false) {
@@ -248,7 +266,13 @@ async fn release(engine: &str) -> anyhow::Result<Vec<Value>> {
     #[cfg(target_os = "windows")]
     {
         let st = tokio::process::Command::new("netsh")
-            .args(["advfirewall", "set", "allprofiles", "firewallpolicy", "blockinbound,allowoutbound"])
+            .args([
+                "advfirewall",
+                "set",
+                "allprofiles",
+                "firewallpolicy",
+                "blockinbound,allowoutbound",
+            ])
             .status()
             .await;
         let ok = st.map(|s| s.success()).unwrap_or(false);

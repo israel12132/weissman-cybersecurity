@@ -43,11 +43,12 @@ impl RedisRateLimiter {
         // Bound the acquire with tokio::timeout, and bound every subsequent command with the
         // connection's own response timeout — together these turn a hung Redis into an error
         // (→ fail-closed) instead of an unbounded await on the per-request hot path.
-        let mut conn = tokio::time::timeout(timeout, self.client.get_multiplexed_async_connection())
-            .await
-            .map_err(|_| {
-                redis::RedisError::from((redis::ErrorKind::IoError, "redis connect timeout"))
-            })??;
+        let mut conn =
+            tokio::time::timeout(timeout, self.client.get_multiplexed_async_connection())
+                .await
+                .map_err(|_| {
+                    redis::RedisError::from((redis::ErrorKind::IoError, "redis connect timeout"))
+                })??;
         conn.set_response_timeout(timeout);
         Ok(conn)
     }
@@ -210,10 +211,7 @@ pub async fn list_violations(tenant_id: i64, limit: usize) -> Option<Vec<serde_j
     let rl = shared()?;
     let mut conn = rl.conn().await.ok()?;
     let key = format!("weissman:rl:violations:{tenant_id}");
-    let rows: Vec<String> = conn
-        .lrange(&key, 0, limit as isize - 1)
-        .await
-        .ok()?;
+    let rows: Vec<String> = conn.lrange(&key, 0, limit as isize - 1).await.ok()?;
     Some(
         rows.into_iter()
             .filter_map(|s| serde_json::from_str(&s).ok())

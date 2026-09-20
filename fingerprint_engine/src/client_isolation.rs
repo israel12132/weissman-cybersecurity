@@ -432,7 +432,10 @@ mod tests {
 
         // A below-admin human bound to a client is scoped to it.
         let scoped_operator = ctx("operator", false, Some(5));
-        assert_eq!(bind_requested_client(&scoped_operator, None).unwrap(), Some(5));
+        assert_eq!(
+            bind_requested_client(&scoped_operator, None).unwrap(),
+            Some(5)
+        );
         assert!(bind_requested_client(&scoped_operator, Some(9)).is_err());
 
         // A below-admin human with no assignment is refused, never given "all".
@@ -513,6 +516,9 @@ mod tests {
         assert!(payload_visible_to(&staff, &json!({"client_id": 4})));
         // A below-admin human with no assignment sees nothing.
         let unbound_analyst = ctx("analyst", false, None);
-        assert!(!payload_visible_to(&unbound_analyst, &json!({"client_id": 4})));
+        assert!(!payload_visible_to(
+            &unbound_analyst,
+            &json!({"client_id": 4})
+        ));
     }
 }

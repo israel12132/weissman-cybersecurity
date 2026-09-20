@@ -2,7 +2,7 @@
 //! blast-radius scoring, and D3/WebGL export for AI + cockpit visualisation.
 
 use chrono::Utc;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use sqlx::{Postgres, Row, Transaction};
 use std::collections::{HashMap, HashSet, VecDeque};
 

@@ -74,8 +74,12 @@ pub async fn enqueue_sovereign_from_buffer_row(
     let Some(r) = row else {
         return Err("buffer row not found".into());
     };
-    let fp: String = r.try_get("target_fingerprint").map_err(|_| "store_down".to_string())?;
-    let ctx: Value = r.try_get("failure_context").map_err(|_| "store_down".to_string())?;
+    let fp: String = r
+        .try_get("target_fingerprint")
+        .map_err(|_| "store_down".to_string())?;
+    let ctx: Value = r
+        .try_get("failure_context")
+        .map_err(|_| "store_down".to_string())?;
     tx.commit().await.map_err(|_| "store_down".to_string())?;
     let payload = json!({
         "target_seed": fp.trim(),

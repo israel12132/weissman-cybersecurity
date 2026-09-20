@@ -218,7 +218,7 @@ async fn send_smtp_critical_optional(
         title.chars().take(80).collect::<String>()
     );
     tokio::task::spawn_blocking(move || {
-        use lettre::message::{Mailbox, Message, header::ContentType};
+        use lettre::message::{header::ContentType, Mailbox, Message};
         use lettre::transport::smtp::authentication::Credentials;
         use lettre::{SmtpTransport, Transport};
         let from_m: Mailbox = from

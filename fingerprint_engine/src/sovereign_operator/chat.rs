@@ -57,9 +57,7 @@ pub async fn load_llm_config(pool: &PgPool, tenant_id: i64) -> Result<LlmConfig,
     .fetch_optional(&mut *tx)
     .await
     {
-        Ok(v) => v
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty()),
+        Ok(v) => v.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
         Err(_) => {
             let _ = tx.rollback().await;
             return Err("store_down".into());
@@ -72,9 +70,7 @@ pub async fn load_llm_config(pool: &PgPool, tenant_id: i64) -> Result<LlmConfig,
     .fetch_optional(&mut *tx)
     .await
     {
-        Ok(v) => v
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty()),
+        Ok(v) => v.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
         Err(_) => {
             let _ = tx.rollback().await;
             return Err("store_down".into());

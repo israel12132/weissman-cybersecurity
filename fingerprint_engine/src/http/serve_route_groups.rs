@@ -1067,7 +1067,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/cem-dago/waves", get(api_cem_dago_waves))
         .route("/api/cem-dago/blackboard", get(api_cem_dago_blackboard))
         // ── Elite hardening + market readiness (server_handlers_elite_hardening.inc) ──
-        .route("/api/elite-hardening/status", get(api_elite_hardening_status))
+        .route(
+            "/api/elite-hardening/status",
+            get(api_elite_hardening_status),
+        )
         .route("/api/market-readiness", get(api_market_readiness))
         // ── Previously-orphaned routes for already-compiled handlers ──
         .route(
@@ -1114,7 +1117,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/competitive-delta",
             get(crate::competitive_delta::api_competitive_delta),
         )
-        .route("/api/competitive/panw-displacement", get(api_panw_displacement))
+        .route(
+            "/api/competitive/panw-displacement",
+            get(api_panw_displacement),
+        )
         // ── Board evidence pack (board_pack module) ──
         .route("/api/board-pack", get(api_board_pack))
 }

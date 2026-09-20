@@ -837,10 +837,9 @@ pub async fn persist_candidates_from_probes(
     host: &str,
     probes: &[ProbeEvidence],
 ) -> Result<i32, sqlx::Error> {
-    let suppressions =
-        fp_feedback::active_suppressions_for_engine(pool, tenant_id, ENGINE_ID)
-            .await
-            .unwrap_or_default();
+    let suppressions = fp_feedback::active_suppressions_for_engine(pool, tenant_id, ENGINE_ID)
+        .await
+        .unwrap_or_default();
     let mut drafts = Vec::new();
     for ev in probes {
         let cve = crate::intel_findings_backfill::extract_cve_from_value(&json!({

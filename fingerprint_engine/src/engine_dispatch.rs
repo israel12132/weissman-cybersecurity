@@ -104,9 +104,7 @@ pub async fn load_tenant_oast_configs(
         .fetch_optional(&mut **tx)
         .await
         .map_err(|_| "store_down".to_string())?;
-        Ok(val
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty()))
+        Ok(val.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()))
     }
     let listener = cfg(&mut tx, tenant_id, "oast_listener_url").await?;
     let domain = cfg(&mut tx, tenant_id, "oast_domain").await?;
@@ -129,7 +127,7 @@ mod engine_dispatch_agent;
 
 pub(crate) use engine_dispatch_agent::merge_agent_hybrid;
 pub use engine_dispatch_agent::{
-    AGENT_REQUIRED_ENGINES, is_agent_required_engine, run_agent_required_engine,
+    is_agent_required_engine, run_agent_required_engine, AGENT_REQUIRED_ENGINES,
 };
 
 /// Apply owner/tuner aggression knobs from free-form `job_params` onto stealth.
@@ -173,13 +171,8 @@ pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -
     let mut ctx_live = ctx.clone();
     let slice = match (ctx.app_pool.as_ref(), ctx.tenant_id) {
         (Some(pool), Some(tid)) if tid > 0 => {
-            match crate::sovereign_operator::memory::hydrate(
-                pool.as_ref(),
-                tid,
-                engine_id,
-                target,
-            )
-            .await
+            match crate::sovereign_operator::memory::hydrate(pool.as_ref(), tid, engine_id, target)
+                .await
             {
                 Ok(s) => s,
                 Err(_) => return EngineResult::error("store_down"),

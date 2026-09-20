@@ -66,7 +66,9 @@ pub async fn run(engine: &str, params: &Value) -> anyhow::Result<Vec<Value>> {
                             "critical",
                             "T1083",
                             &format!("{} hashed to {digest}", path.display()),
-                            json_map(json!({ "path": path.display().to_string(), "sha256": digest })),
+                            json_map(
+                                json!({ "path": path.display().to_string(), "sha256": digest }),
+                            ),
                         ));
                     }
                 }
@@ -79,7 +81,11 @@ pub async fn run(engine: &str, params: &Value) -> anyhow::Result<Vec<Value>> {
                                     "String IOC matched on disk",
                                     "high",
                                     "T1083",
-                                    &format!("{} contains needle (len {})", path.display(), n.len()),
+                                    &format!(
+                                        "{} contains needle (len {})",
+                                        path.display(),
+                                        n.len()
+                                    ),
                                     json_map(json!({ "path": path.display().to_string() })),
                                 ));
                             }

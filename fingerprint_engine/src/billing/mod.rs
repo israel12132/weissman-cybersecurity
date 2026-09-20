@@ -96,7 +96,9 @@ pub async fn enforce_client_create(
             status
         ));
     }
-    let max_c: i32 = r.try_get("max_clients").map_err(|_| "store_down".to_string())?;
+    let max_c: i32 = r
+        .try_get("max_clients")
+        .map_err(|_| "store_down".to_string())?;
     let count = count_tenant_clients(app_pool, tenant_id).await?;
     if count >= max_c as i64 {
         return Err(format!(
@@ -155,7 +157,9 @@ pub async fn enforce_scan_quota(
             status
         ));
     }
-    let max_s: i32 = r.try_get("max_scans_month").map_err(|_| "store_down".to_string())?;
+    let max_s: i32 = r
+        .try_get("max_scans_month")
+        .map_err(|_| "store_down".to_string())?;
     if max_s <= 0 {
         return Ok(());
     }
@@ -820,7 +824,10 @@ pub async fn register_tenant_and_admin(
         return Err("invalid or inactive plan_slug".to_string());
     }
     let hash = bcrypt::hash(password, bcrypt::DEFAULT_COST).map_err(|e| e.to_string())?;
-    let mut tx = auth_pool.begin().await.map_err(|_| "store_down".to_string())?;
+    let mut tx = auth_pool
+        .begin()
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let tid: i64 = sqlx::query_scalar(
         "INSERT INTO tenants (slug, name, active) VALUES ($1, $2, true) RETURNING id",
     )
