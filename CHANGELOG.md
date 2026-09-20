@@ -66,6 +66,21 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ### Fixed
 
+- **Scan-quota enforcement is now atomic (no TOCTOU revenue leak) + handler-honesty
+  ratchet re-armed.** `gate_scan_enqueue_n` (billing) was a check-then-increment race:
+  `enforce_scan_quota` read `scans_started`, then `record_scans_started` incremented it
+  as a separate statement, so two concurrent enqueues both read the same value, both
+  passed, and both incremented — overshooting the monthly cap (strict billing is on by
+  default in production). It now increments and checks in ONE transaction via
+  `INSERT … ON CONFLICT DO UPDATE … RETURNING scans_started`, so concurrent enqueues
+  serialize on the `(tenant_id, period_ym)` row and an over-cap caller rolls its own
+  increment back. Proven against a live Postgres: 30 concurrent atomic increments land
+  exactly 30 (no lost updates). Separately, the `verify_handler_honesty.mjs` ratchet
+  baseline was stale at **263** while the real count is **49** — 214 slots of silent
+  regression room — so it is re-snapshotted to 49; any new store-down dishonesty now
+  fails the build. _Deferred (tracked):_ burning the remaining 49 down (propagate DB
+  failures as 503 + a generic client message instead of leaking `e.to_string()`), which
+  is concentrated in `server_handlers_platform.inc` and `server_handlers_rest4.inc`.
 - **Automated backups on the recommended docker-compose path + honest HA scoping.**
   The recommended compose stack ran ONE Postgres with no automated backups — a disk
   failure or a bad boot-time auto-migration was unrecoverable, while marketing a

@@ -96,7 +96,9 @@ pub async fn enforce_client_create(
             status
         ));
     }
-    let max_c: i32 = r.try_get("max_clients").map_err(|_| "store_down".to_string())?;
+    let max_c: i32 = r
+        .try_get("max_clients")
+        .map_err(|_| "store_down".to_string())?;
     let count = count_tenant_clients(app_pool, tenant_id).await?;
     if count >= max_c as i64 {
         return Err(format!(
@@ -155,7 +157,9 @@ pub async fn enforce_scan_quota(
             status
         ));
     }
-    let max_s: i32 = r.try_get("max_scans_month").map_err(|_| "store_down".to_string())?;
+    let max_s: i32 = r
+        .try_get("max_scans_month")
+        .map_err(|_| "store_down".to_string())?;
     if max_s <= 0 {
         return Ok(());
     }
@@ -188,6 +192,16 @@ pub async fn gate_scan_enqueue(pool: &PgPool, tenant_id: i64) -> Result<(), Stri
 }
 
 /// Enforce quota for a bulk enqueue (run-all, schedules, cron) and record all jobs atomically.
+///
+/// The quota check and the usage increment happen as ONE atomic step, not a separate
+/// read-then-write. The old `enforce_scan_quota` (SELECT used) followed by
+/// `record_scans_started` (INSERT..increment) was a check-then-increment TOCTOU: two
+/// concurrent enqueues both read the same `used`, both passed, and both incremented —
+/// overshooting the monthly cap (a revenue leak, since strict billing is on by default
+/// in production). Here the increment-and-check runs under the ON CONFLICT DO UPDATE row
+/// lock in a single transaction, so concurrent enqueues serialize on the
+/// `(tenant_id, period_ym)` row and each sees the exact running total; an over-cap caller
+/// rolls its own increment back.
 pub async fn gate_scan_enqueue_n(
     pool: &PgPool,
     tenant_id: i64,
@@ -196,10 +210,68 @@ pub async fn gate_scan_enqueue_n(
     if job_count == 0 {
         return Ok(());
     }
-    enforce_scan_quota(pool, tenant_id, job_count).await?;
-    record_scans_started(pool, tenant_id, job_count)
-        .await
-        .map_err(|_| "store_down".to_string())
+    // Not strict → no cap, but still record usage for accounting (unchanged behaviour).
+    if !billing_strict_enabled() {
+        return record_scans_started(pool, tenant_id, job_count)
+            .await
+            .map_err(|_| "store_down".to_string());
+    }
+
+    // Subscription gate (status + monthly cap). Stable relative to the usage counter, so
+    // it stays a plain read; the race was only ever on the counter.
+    let row = sqlx::query(
+        r#"SELECT ts.status, bp.max_scans_month
+           FROM tenant_subscriptions ts
+           INNER JOIN billing_plans bp ON bp.slug = ts.plan_slug
+           WHERE ts.tenant_id = $1"#,
+    )
+    .bind(tenant_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|_| "store_down".to_string())?;
+    let Some(r) = row else {
+        return Err("Subscription not provisioned for tenant".to_string());
+    };
+    let status: String = r.try_get("status").map_err(|_| "store_down".to_string())?;
+    if !subscription_allows_usage(&status) {
+        return Err(format!(
+            "Subscription not active (status={status}). Complete Paddle checkout or update payment method."
+        ));
+    }
+    let max_s: i32 = r
+        .try_get("max_scans_month")
+        .map_err(|_| "store_down".to_string())?;
+
+    let increment = i64::try_from(job_count).unwrap_or(i64::MAX);
+    let period = period_ym_now();
+
+    // Atomic increment-then-check. Same pool / RLS context as the previous
+    // `record_scans_started` write, just wrapped in a transaction so an over-cap
+    // increment can be rolled back.
+    let mut tx = pool.begin().await.map_err(|_| "store_down".to_string())?;
+    let new_total: i64 = sqlx::query_scalar(
+        r#"INSERT INTO tenant_usage_counters (tenant_id, period_ym, scans_started)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (tenant_id, period_ym)
+           DO UPDATE SET scans_started = tenant_usage_counters.scans_started + $3
+           RETURNING scans_started"#,
+    )
+    .bind(tenant_id)
+    .bind(&period)
+    .bind(increment)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|_| "store_down".to_string())?;
+
+    if max_s > 0 && new_total > max_s as i64 {
+        let _ = tx.rollback().await;
+        let used_before = new_total - increment;
+        return Err(format!(
+            "Monthly scan limit would be exceeded ({used_before}/{max_s} used; requested {increment} more). Upgrade or wait for the next billing period."
+        ));
+    }
+    tx.commit().await.map_err(|_| "store_down".to_string())?;
+    Ok(())
 }
 
 pub async fn record_scan_started(pool: &PgPool, tenant_id: i64) -> Result<(), sqlx::Error> {
@@ -820,7 +892,10 @@ pub async fn register_tenant_and_admin(
         return Err("invalid or inactive plan_slug".to_string());
     }
     let hash = bcrypt::hash(password, bcrypt::DEFAULT_COST).map_err(|e| e.to_string())?;
-    let mut tx = auth_pool.begin().await.map_err(|_| "store_down".to_string())?;
+    let mut tx = auth_pool
+        .begin()
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let tid: i64 = sqlx::query_scalar(
         "INSERT INTO tenants (slug, name, active) VALUES ($1, $2, true) RETURNING id",
     )
