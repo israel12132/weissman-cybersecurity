@@ -81,6 +81,28 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ### Security
 
+- **Customer (client) isolation backfilled onto 22 tenant tables that shipped
+  without it** — `c2_covert_channel_audits`, `finding_candidates`, the four
+  `ot_ics_*` tables, `surface_snapshots`, `vulnerability_lifecycle_events`,
+  `underground_snapshots`, the `honey_route_*` and `weissman_sovereign_*` tables,
+  and others created after the one-time client-scope sweeps
+  (`20260826120000` / `20260826180000`). Each carried the tenant RLS predicate
+  but not `weissman_client_row_visible(client_id)`, so a portal-scoped customer
+  (`app.current_client_id` set) could read a **sibling customer's** rows *inside
+  the same tenant* (tenant RLS does not catch cross-customer reads). Migration
+  `20260920120000_client_scope_backfill_new_tables.sql` (mirrored to both
+  migration trees) re-runs the idempotent, INSERT-policy-safe sweep to AND the
+  visibility predicate onto every `client_id` table's policy.
+- **New live RLS/client-scope contract test**
+  (`crates/weissman-db/tests/rls_live_schema_contract.rs`, run in the
+  `WEISSMAN_REQUIRE_DB_TESTS` CI job) introspects the **fully-migrated live
+  schema** rather than migration text: it fails the build if any base table with
+  a `tenant_id` column is not `ENABLE`d **and** `FORCE`d with a tenant-GUC policy
+  (and no `USING (true)`), if any `client_id` table lacks the customer-visibility
+  predicate, or — behaviourally — if a `weissman_app` session scoped to customer
+  A can see customer B's rows. This closes the gap where the prior static
+  migration-text guard could not see a disabled/`USING(true)`/wrong-column policy
+  or dynamic `DO`-block DDL.
 - **Removed the `genpdf` dependency** from `fingerprint_engine`, clearing the
   `RUSTSEC-2026-0187` `lopdf` deeply-nested-parse stack-overflow advisory (reached
   only via `genpdf → printpdf → lopdf`) and dropping the whole unmaintained subtree
