@@ -623,34 +623,85 @@ async fn execute_job_unscoped(
                     "executing",
                     Some(&format!("dispatch: {engine}")),
                 );
-                let (res, telem) = crate::engine_stack_runtime::run_on_large_stack(move || {
-                    let eng_outer = eng.clone();
-                    let tgt = tgt.clone();
-                    let ctx_owned = ctx_owned.clone();
-                    async move {
-                        let eng_ref = eng_outer.clone();
-                        crate::engine_resilience::run_with_resilience(
-                            &eng_ref,
-                            &tgt,
-                            crate::engine_resilience::DEFAULT_ATTEMPT_TIMEOUT,
-                            move |variant, hint| {
-                                let eng = eng_outer.clone();
-                                let mut ctx = ctx_owned.clone();
-                                // WAF/rate-limit retry → go stealthy on this attempt.
-                                if hint.force_ghost_network {
-                                    crate::engine_dispatch::apply_ghost_escalation(
-                                        &mut ctx.stealth,
-                                    );
-                                }
-                                async move {
-                                    crate::engine_dispatch::run_engine(&eng, &variant, &ctx).await
-                                }
+                // Overall wall-clock budget for one command-center engine job. The
+                // per-attempt resilience budget escalates (45→90→180s) and retries every
+                // target variant, so a single slow engine (e.g. `asm` against a host whose
+                // connects hang rather than RST) can hold the job in `running` for ~5 min —
+                // past any client poll window. Bound the whole run like the `poe_synthesis`
+                // arm above. Use the *cancellable* large-stack runner: a plain drop on
+                // timeout would leave the engine thread running to completion (see
+                // engine_stack_runtime docs), holding its DB connections and sockets; this
+                // stops it at its next await instead.
+                let wall_secs: u64 = std::env::var("WEISSMAN_CC_ENGINE_WALL_SECS")
+                    .ok()
+                    .and_then(|s| s.trim().parse().ok())
+                    .unwrap_or(120)
+                    .clamp(30, 870);
+                let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel::<()>();
+                let budget_timer = tokio::spawn(async move {
+                    tokio::time::sleep(Duration::from_secs(wall_secs)).await;
+                    let _ = cancel_tx.send(());
+                });
+                let run_started = std::time::Instant::now();
+                let run_out = crate::engine_stack_runtime::run_on_large_stack_cancellable(
+                    move || {
+                        let eng_outer = eng.clone();
+                        let tgt = tgt.clone();
+                        let ctx_owned = ctx_owned.clone();
+                        async move {
+                            let eng_ref = eng_outer.clone();
+                            crate::engine_resilience::run_with_resilience(
+                                &eng_ref,
+                                &tgt,
+                                crate::engine_resilience::DEFAULT_ATTEMPT_TIMEOUT,
+                                move |variant, hint| {
+                                    let eng = eng_outer.clone();
+                                    let mut ctx = ctx_owned.clone();
+                                    // WAF/rate-limit retry → go stealthy on this attempt.
+                                    if hint.force_ghost_network {
+                                        crate::engine_dispatch::apply_ghost_escalation(
+                                            &mut ctx.stealth,
+                                        );
+                                    }
+                                    async move {
+                                        crate::engine_dispatch::run_engine(&eng, &variant, &ctx)
+                                            .await
+                                    }
+                                },
+                            )
+                            .await
+                        }
+                    },
+                    cancel_rx,
+                )
+                .await;
+                budget_timer.abort();
+                let (res, telem) = match run_out {
+                    Some(pair) => pair,
+                    None => {
+                        // Budget elapsed → the engine was stopped at its next await. Report a
+                        // terminal error result (so the job completes rather than hanging) and
+                        // synthetic telemetry classified as a timeout.
+                        let elapsed_ms = run_started.elapsed().as_millis() as u64;
+                        let msg = format!(
+                            "engine '{eng_label}' exceeded {wall_secs}s wall-clock budget \
+                             (target unreachable or scan too slow)"
+                        );
+                        (
+                            crate::engine_result::EngineResult::error(msg.clone()),
+                            crate::engine_resilience::EngineExecTelemetry {
+                                engine_id: eng_label.clone(),
+                                attempts: 1,
+                                strategy: "wall_clock_timeout".to_string(),
+                                elapsed_ms,
+                                status: "timeout".to_string(),
+                                recovered: false,
+                                error: Some(msg),
+                                failure_class: Some("timeout".to_string()),
                             },
                         )
-                        .await
                     }
-                })
-                .await;
+                };
                 if telem.attempts > 1 || telem.status != "ok" {
                     tracing::info!(
                         target: "engine_resilience",
