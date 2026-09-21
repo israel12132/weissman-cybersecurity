@@ -516,7 +516,7 @@ export default function RiskGraphVisualization() {
               <span className="text-sm text-[var(--text-tertiary)]">{t('pages.riskGraphVisualization.total_assets')}</span>
               <Target className="w-4 h-4 text-cyan-400" />
             </div>
-            <div className="text-2xl font-bold text-white">{graphUnavailable ? '—' : stats.totalAssets}</div>
+            <div className="text-2xl font-bold text-[var(--text-primary)]">{graphUnavailable ? '—' : stats.totalAssets}</div>
           </div>
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
@@ -537,7 +537,7 @@ export default function RiskGraphVisualization() {
               <span className="text-sm text-[var(--text-tertiary)]">{t('pages.riskGraphVisualization.avg_risk_score')}</span>
               <Shield className="w-4 h-4 text-purple-400" />
             </div>
-            <div className="text-2xl font-bold text-white">{stats.avgRiskScore}</div>
+            <div className="text-2xl font-bold text-[var(--text-primary)]">{stats.avgRiskScore}</div>
           </div>
         </div>
 
@@ -571,7 +571,7 @@ export default function RiskGraphVisualization() {
             <select
               value={layout}
               onChange={(e) => setLayout(e.target.value)}
-              className="px-3 py-2 bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="px-3 py-2 bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             >
               <option value="force">{t('pages.riskGraphVisualization.layout_force')}</option>
               <option value="hierarchical">{t('pages.riskGraphVisualization.layout_hierarchical')}</option>
@@ -610,7 +610,7 @@ export default function RiskGraphVisualization() {
         {/* Dijkstra attack paths — internet_exposed → crown_jewel (EPSS/CVSS weighted) */}
         <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
           <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-red-400" />
               {t(`${NS}.attack_paths_heading`)}
             </h3>
@@ -667,7 +667,7 @@ export default function RiskGraphVisualization() {
         <div className="grid lg:grid-cols-[1fr_320px] gap-4">
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
             <div className="p-4 border-b border-[var(--border-default)]">
-              <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
                 <GitBranch className="w-4 h-4 text-cyan-400" />
                 {t('pages.riskGraphVisualization.graph_heading')}
               </h3>
@@ -704,13 +704,13 @@ export default function RiskGraphVisualization() {
           </div>
 
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-5 min-h-[200px]">
-            <h3 className="text-sm font-semibold text-white mb-4">{t('pages.riskGraphVisualization.node_detail')}</h3>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-4">{t('pages.riskGraphVisualization.node_detail')}</h3>
             {!selectedNode ? (
               <p className="text-xs text-[var(--text-muted)]">{t('pages.riskGraphVisualization.node_hint')}</p>
             ) : (
               <div className="space-y-4">
                 <div>
-                  <h4 className="text-base font-bold text-white">{selectedNode.name}</h4>
+                  <h4 className="text-base font-bold text-[var(--text-primary)]">{selectedNode.name}</h4>
                   <p className="text-xs text-[var(--text-tertiary)] mt-1">
                     {selectedNode.description || meta.description || meta.summary || t('pages.riskGraphVisualization.no_description')}
                   </p>
@@ -718,7 +718,7 @@ export default function RiskGraphVisualization() {
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
                     <span className="text-xs text-[var(--text-tertiary)] block">{t('pages.riskGraphVisualization.risk_score')}</span>
-                    <span className="text-lg font-bold text-white">{selectedNode.risk_score ?? 0}</span>
+                    <span className="text-lg font-bold text-[var(--text-primary)]">{selectedNode.risk_score ?? 0}</span>
                   </div>
                   <div>
                     <span className="text-xs text-[var(--text-tertiary)] block">{t('pages.riskGraphVisualization.severity')}</span>
@@ -728,11 +728,11 @@ export default function RiskGraphVisualization() {
                   </div>
                   <div>
                     <span className="text-xs text-[var(--text-tertiary)] block">{t('pages.riskGraphVisualization.type')}</span>
-                    <span className="text-white">{selectedNode.node_type || '—'}</span>
+                    <span className="text-[var(--text-primary)]">{selectedNode.node_type || '—'}</span>
                   </div>
                   <div>
                     <span className="text-xs text-[var(--text-tertiary)] block">{t('pages.riskGraphVisualization.choke_point')}</span>
-                    <span className="text-white">{selectedNode.is_choke_point ? t('common.yes') : t('common.no')}</span>
+                    <span className="text-[var(--text-primary)]">{selectedNode.is_choke_point ? t('common.yes') : t('common.no')}</span>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -779,7 +779,7 @@ export default function RiskGraphVisualization() {
         </div>
 
         <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-6">
-          <h3 className="text-sm font-semibold text-white mb-4">{t('pages.riskGraphVisualization.legend')}</h3>
+          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-4">{t('pages.riskGraphVisualization.legend')}</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {Object.entries(SEVERITY_COLORS).map(([sev, color]) => (
               <div key={sev} className="flex items-center gap-3">

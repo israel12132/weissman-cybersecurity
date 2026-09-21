@@ -49,7 +49,7 @@ const GROUP = {
 function Field({ label, value, mono = true }) {
   if (value === null || value === undefined || value === '' || value === false) return null
   return (
-    <div className="flex items-baseline justify-between gap-3 py-1 border-b border-white/5 last:border-0">
+    <div className="flex items-baseline justify-between gap-3 py-1 border-b border-[var(--border-subtle)] last:border-0">
       <span className="text-[11px] uppercase tracking-wider text-text-muted">{label}</span>
       <span className={`text-sm text-text-secondary text-right ${mono ? 'font-mono' : ''}`}>{String(value)}</span>
     </div>
@@ -61,7 +61,7 @@ function ConfidenceBar({ value }) {
   const color = v >= 80 ? 'bg-emerald-500' : v >= 55 ? 'bg-amber-500' : 'bg-rose-500'
   return (
     <div className="flex items-center gap-2">
-      <div className="h-2 flex-1 rounded-full bg-white/10 overflow-hidden">
+      <div className="h-2 flex-1 rounded-full bg-[var(--bg-2)] overflow-hidden">
         <div className={`h-full ${color}`} style={{ width: `${v}%` }} />
       </div>
       <span className="text-xs font-mono text-text-secondary tabular-nums w-10 text-right">{v}%</span>
@@ -137,7 +137,7 @@ export default function TargetIntelligence() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 text-text-secondary">
       <header className="mb-5">
-        <h1 className="text-2xl font-semibold tracking-tight text-white flex items-center gap-2">
+        <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)] flex items-center gap-2">
           <span aria-hidden>🎯</span> {t('targetIntel.title')}
         </h1>
         <p className="text-sm text-text-tertiary mt-1">{t('targetIntel.subtitle')}</p>
@@ -155,7 +155,7 @@ export default function TargetIntelligence() {
             onChange={(ev) => setTarget(ev.target.value)}
             placeholder={t('targetIntel.placeholder')}
             aria-label={t('targetIntel.title')}
-            className="flex-1 rounded-lg border border-white/10 bg-bg-2 px-3 py-2 text-sm font-mono text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="flex-1 rounded-lg border border-[var(--border-default)] bg-bg-2 px-3 py-2 text-sm font-mono text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
           <Button
             variant="unstyled"
@@ -188,7 +188,7 @@ export default function TargetIntelligence() {
       {data && (
         <div className="grid gap-5 md:grid-cols-2">
           {/* ── Target profile ── */}
-          <section className="rounded-xl border border-white/10 bg-bg-2 p-4">
+          <section className="rounded-xl border border-[var(--border-default)] bg-bg-2 p-4">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-text-tertiary">
                 {t('targetIntel.profile')}
@@ -201,7 +201,7 @@ export default function TargetIntelligence() {
             </div>
 
             <div className="mb-3">
-              <div className="text-lg font-semibold text-white">{p.asset_class}</div>
+              <div className="text-lg font-semibold text-[var(--text-primary)]">{p.asset_class}</div>
               <div className="text-xs text-text-tertiary font-mono break-all">{p.host}</div>
               {data.resolved ? (
                 <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-mono text-emerald-400">
@@ -260,7 +260,7 @@ export default function TargetIntelligence() {
                   {p.facets.map((f) => (
                     <span
                       key={f}
-                      className="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] font-mono text-text-secondary"
+                      className="rounded border border-[var(--border-default)] bg-[var(--bg-2)] px-1.5 py-0.5 text-[10px] font-mono text-text-secondary"
                     >
                       {f}
                     </span>
@@ -287,7 +287,7 @@ export default function TargetIntelligence() {
           </section>
 
           {/* ── Engine selection ── */}
-          <section className="rounded-xl border border-white/10 bg-bg-2 p-4">
+          <section className="rounded-xl border border-[var(--border-default)] bg-bg-2 p-4">
             <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-text-tertiary">
                 {t('targetIntel.engineSelection')}
@@ -309,7 +309,7 @@ export default function TargetIntelligence() {
                   onClick={exportPdf}
                   disabled={!filteredRanked.length}
                   title={t('common.export_pdf')}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/15 text-[11px] font-mono text-text-secondary hover:bg-white/10 disabled:opacity-40 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border-strong)] text-[11px] font-mono text-text-secondary hover:bg-[var(--row-hover-bg)] disabled:opacity-40 transition-colors"
                 >
                   <FileText className="w-3.5 h-3.5" />
                   {t('common.export_pdf')}
@@ -327,7 +327,7 @@ export default function TargetIntelligence() {
                 onChange={(ev) => setSearchQuery(ev.target.value)}
                 placeholder={t('targetIntel.searchEngines')}
                 aria-label={t('targetIntel.searchEngines')}
-                className="w-full pl-8 pr-3 py-1.5 rounded-lg text-xs font-mono bg-bg-2 border border-white/10 text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                className="w-full pl-8 pr-3 py-1.5 rounded-lg text-xs font-mono bg-bg-2 border border-[var(--border-default)] text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               />
             </div>
 
@@ -355,7 +355,7 @@ export default function TargetIntelligence() {
               {filteredRanked.map((c) => (
                 <li
                   key={c.engine_id}
-                  className="flex items-center gap-2 rounded-md border border-white/5 bg-white/[0.02] px-2 py-1.5"
+                  className="flex items-center gap-2 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-2)] px-2 py-1.5"
                 >
                   <span
                     className={`w-9 text-center rounded text-[11px] font-mono tabular-nums ${c.score > 0 ? 'text-emerald-400' : c.score < 0 ? 'text-text-muted' : 'text-text-tertiary'}`}
@@ -371,7 +371,7 @@ export default function TargetIntelligence() {
                   </span>
                   {c.group && (
                     <span
-                      className={`shrink-0 rounded border px-1.5 py-0.5 text-[9px] font-mono uppercase ${GROUP[c.group] || 'bg-white/5 text-text-tertiary border-white/10'}`}
+                      className={`shrink-0 rounded border px-1.5 py-0.5 text-[9px] font-mono uppercase ${GROUP[c.group] || 'bg-[var(--bg-2)] text-text-tertiary border-[var(--border-default)]'}`}
                     >
                       {c.group}
                     </span>
@@ -384,7 +384,7 @@ export default function TargetIntelligence() {
       )}
 
       {!data && !loading && !error && (
-        <div className="rounded-xl border border-dashed border-white/10 bg-bg-2 px-6 py-12 text-center text-sm text-text-muted">
+        <div className="rounded-xl border border-dashed border-[var(--border-default)] bg-bg-2 px-6 py-12 text-center text-sm text-text-muted">
           {t('targetIntel.emptyState')}
         </div>
       )}

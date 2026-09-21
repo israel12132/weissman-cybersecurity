@@ -247,7 +247,7 @@ export default function ClientEvidenceVault() {
       cell: ({ row }) => {
         const ev = row.original
         return (
-          <div className="text-white">
+          <div className="text-[var(--text-primary)]">
             <div className="font-medium">{ev.filename}</div>
             <div className="text-[11px] text-[var(--text-muted)]">{new Date(ev.created_at).toLocaleString()}</div>
           </div>
@@ -303,7 +303,7 @@ export default function ClientEvidenceVault() {
             <Button variant="unstyled"
               type="button"
               onClick={() => downloadEvidence(ev)}
-              className="px-3 py-1 text-xs bg-[var(--bg-4)] text-white rounded hover:bg-[var(--bg-4)]"
+              className="px-3 py-1 text-xs bg-[var(--bg-4)] text-[var(--text-primary)] rounded hover:bg-[var(--bg-4)]"
             >
               {t('pages.clientEvidenceVault.download')}
             </Button>
@@ -368,7 +368,7 @@ export default function ClientEvidenceVault() {
         <div className="p-6 bg-[var(--bg-3)]/40 border border-[var(--border-default)] rounded-xl">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <h2 className="text-lg font-semibold text-white">{t('pages.clientEvidenceVault.upload_heading')}</h2>
+              <h2 className="text-lg font-semibold text-[var(--text-primary)]">{t('pages.clientEvidenceVault.upload_heading')}</h2>
               <p className="text-xs text-[var(--text-tertiary)] mt-1">{t('pages.clientEvidenceVault.upload_body')}</p>
             </div>
             <Button variant="unstyled"
@@ -386,7 +386,7 @@ export default function ClientEvidenceVault() {
               <label className="block text-xs text-[var(--text-tertiary)] mb-1">{t('pages.clientEvidenceVault.file')}</label>
               <input
                 type="file"
-                className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-white"
+                className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-[var(--text-primary)]"
                 onChange={(e) => setFile(e.target.files?.[0] || null)}
               />
               {file && (
@@ -399,7 +399,7 @@ export default function ClientEvidenceVault() {
             <div>
               <label className="block text-xs text-[var(--text-tertiary)] mb-1">{t('pages.clientEvidenceVault.label_optional')}</label>
               <input
-                className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-white"
+                className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-[var(--text-primary)]"
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
                 placeholder={t('pages.clientEvidenceVault.label_placeholder')}
@@ -409,7 +409,7 @@ export default function ClientEvidenceVault() {
             <div>
               <label className="block text-xs text-[var(--text-tertiary)] mb-1">{t('pages.clientEvidenceVault.engagement_id_optional')}</label>
               <input
-                className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-white font-mono"
+                className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] font-mono"
                 value={engagementId}
                 onChange={(e) => setEngagementId(e.target.value)}
                 placeholder="123"
@@ -419,7 +419,7 @@ export default function ClientEvidenceVault() {
             <div>
               <label className="block text-xs text-[var(--text-tertiary)] mb-1">{t('pages.clientEvidenceVault.vuln_id_optional')}</label>
               <input
-                className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-white font-mono"
+                className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] font-mono"
                 value={vulnerabilityId}
                 onChange={(e) => setVulnerabilityId(e.target.value)}
                 placeholder="456"
@@ -429,7 +429,7 @@ export default function ClientEvidenceVault() {
             <div className="md:col-span-2">
               <label className="block text-xs text-[var(--text-tertiary)] mb-1">{t('pages.clientEvidenceVault.notes_optional')}</label>
               <textarea
-                className="w-full min-h-24 px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-white"
+                className="w-full min-h-24 px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-[var(--text-primary)]"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder={t('pages.clientEvidenceVault.notes_placeholder')}
@@ -440,7 +440,7 @@ export default function ClientEvidenceVault() {
 
         <div className="p-6 bg-[var(--bg-3)]/40 border border-[var(--border-default)] rounded-xl">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white">{t('pages.clientEvidenceVault.items_heading')}</h2>
+            <h2 className="text-lg font-semibold text-[var(--text-primary)]">{t('pages.clientEvidenceVault.items_heading')}</h2>
             {!error && (
               <span className="text-xs text-[var(--text-muted)]">{t('pages.clientEvidenceVault.total', { count: evidence.length })}</span>
             )}

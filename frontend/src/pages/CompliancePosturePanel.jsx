@@ -52,7 +52,7 @@ function SeverityBar({ stat }) {
   const total = Number(stat?.finding_count) || 0
   if (!total) return null
   return (
-    <div className="flex h-1.5 w-full max-w-[160px] rounded-full overflow-hidden bg-white/5">
+    <div className="flex h-1.5 w-full max-w-[160px] rounded-full overflow-hidden bg-[var(--bg-2)]">
       {SEV_ORDER.map((k) => {
         const v = Number(stat[k]) || 0
         if (!v) return null
@@ -125,28 +125,28 @@ export default function CompliancePosturePanel() {
   }, [error, filteredFrameworks])
 
   return (
-    <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
+    <div className="bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
       <div className="px-4 pt-4">
         <EvidenceNotice>
           Live posture from GET /api/compliance/posture/:clientId — open findings crossed against the
           tenant-scoped CWE→control map. No fabricated control telemetry.
         </EvidenceNotice>
       </div>
-      <div className="p-4 border-b border-white/10 flex items-center justify-between gap-3 flex-wrap">
-        <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+      <div className="p-4 border-b border-[var(--border-default)] flex items-center justify-between gap-3 flex-wrap">
+        <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
           <ClipboardCheck className="w-4 h-4 text-emerald-400" />
           {t('pages.complianceFrameworks.posture_heading')}
         </h3>
         <div className="flex items-center gap-3 flex-wrap">
           <div className="relative">
-            <Search className="w-3 h-3 text-white/30 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Search className="w-3 h-3 text-[var(--text-muted)] absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={t('common.search')}
               aria-label={t('common.search')}
-              className="w-40 pl-6 pr-2 py-1 rounded-md text-[11px] bg-black/40 border border-white/10 text-white/80 placeholder-white/30 focus:outline-none focus:border-emerald-500/40"
+              className="w-40 pl-6 pr-2 py-1 rounded-md text-[11px] bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-secondary)] placeholder-white/30 focus:outline-none focus:border-emerald-500/40"
             />
           </div>
           <ShellScanActions
@@ -162,7 +162,7 @@ export default function CompliancePosturePanel() {
             onClick={exportPdf}
             disabled={!!error || filteredFrameworks.length === 0}
             title={t('common.export_pdf')}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-white/15 text-white/70 hover:bg-white/10 disabled:opacity-40 transition-colors"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] disabled:opacity-40 transition-colors"
           >
             <FileText className="w-3.5 h-3.5" />
             {t('common.export_pdf')}
@@ -180,14 +180,14 @@ export default function CompliancePosturePanel() {
       ) : frameworks.length === 0 ? (
         <div className="p-4"><EmptyState compact icon="shield" title={t('pages.complianceFrameworks.posture_empty')} /></div>
       ) : filteredFrameworks.length === 0 ? (
-        <div className="p-4 text-[11px] text-white/35">{t('pages.complianceFrameworks.posture_no_match')}</div>
+        <div className="p-4 text-[11px] text-[var(--text-muted)]">{t('pages.complianceFrameworks.posture_no_match')}</div>
       ) : (
         <div className="divide-y divide-white/5">
           {filteredFrameworks.map((g) => (
             <div key={g.framework} className="p-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-semibold text-emerald-300">{g.framework}</span>
-                <span className="text-[10px] font-mono text-white/40 tabular-nums">
+                <span className="text-[10px] font-mono text-[var(--text-muted)] tabular-nums">
                   {t('pages.complianceFrameworks.posture_summary', {
                     controls: g.control_count,
                     findings: g.finding_count,
@@ -197,10 +197,10 @@ export default function CompliancePosturePanel() {
               <div className="space-y-1.5">
                 {(Array.isArray(g.controls) ? g.controls : []).map((c) => (
                   <div key={c.control} className="flex items-center gap-2">
-                    <span className="w-24 shrink-0 text-[11px] font-mono text-white/70">{c.control}</span>
-                    <span className="flex-1 min-w-0 text-[11px] text-white/50 truncate" title={c.title}>{c.title}</span>
+                    <span className="w-24 shrink-0 text-[11px] font-mono text-[var(--text-secondary)]">{c.control}</span>
+                    <span className="flex-1 min-w-0 text-[11px] text-[var(--text-muted)] truncate" title={c.title}>{c.title}</span>
                     <SeverityBar stat={c} />
-                    <span className="w-8 shrink-0 text-right text-xs font-bold tabular-nums text-white">{c.finding_count}</span>
+                    <span className="w-8 shrink-0 text-right text-xs font-bold tabular-nums text-[var(--text-primary)]">{c.finding_count}</span>
                   </div>
                 ))}
               </div>

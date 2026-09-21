@@ -139,7 +139,7 @@ export default function IdentityContextManager() {
                 <Shield className="w-5 h-5 text-cyan-400" />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-white mb-1">
+                <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1">
                   {t('pages.identityContextManager.oauth_hub_title')}
                 </h3>
                 <p className="text-xs text-[var(--text-tertiary)] max-w-xl">
@@ -192,7 +192,7 @@ export default function IdentityContextManager() {
               <span className="text-sm text-[var(--text-tertiary)]">{t('pages.identityContextManager.total_identities')}</span>
               <Users className="w-4 h-4 text-cyan-400" />
             </div>
-            <div className="text-2xl font-bold text-white">{error ? '—' : stats.total}</div>
+            <div className="text-2xl font-bold text-[var(--text-primary)]">{error ? '—' : stats.total}</div>
           </motion.div>
 
           <motion.div
@@ -239,7 +239,7 @@ export default function IdentityContextManager() {
         {/* Identities List */}
         <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
           <div className="p-4 border-b border-[var(--border-default)] space-y-3">
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
               <Users className="w-4 h-4 text-cyan-400" />
               {t('pages.identityContextManager.identities_heading', { count: error ? '—' : identities.length })}
             </h3>
@@ -303,7 +303,7 @@ export default function IdentityContextManager() {
 
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
-                          <h4 className="text-sm font-semibold text-white">{identity.username}</h4>
+                          <h4 className="text-sm font-semibold text-[var(--text-primary)]">{identity.username}</h4>
                           {identity.is_privileged && (
                             <span className="px-2 py-1 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded text-xs font-medium">
                               {t('pages.identityContextManager.privileged_badge')}
@@ -358,7 +358,7 @@ export default function IdentityContextManager() {
           >
             <div className="flex items-center gap-2 mb-2">
               <AlertTriangle className="w-5 h-5 text-red-400" />
-              <h3 className="text-sm font-semibold text-white">{t('pages.identityContextManager.high_risk_title')}</h3>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('pages.identityContextManager.high_risk_title')}</h3>
             </div>
             <p className="text-sm text-[var(--text-secondary)]">
               {t('pages.identityContextManager.high_risk_body', { count: stats.highRisk })}
@@ -420,7 +420,7 @@ function IdentityDetailModal({ identity, onClose }) {
           aria-labelledby="modal-title"
         >
           <div className="flex items-center justify-between mb-6">
-            <h3 id="modal-title" className="text-lg font-bold text-white">{identity.username}</h3>
+            <h3 id="modal-title" className="text-lg font-bold text-[var(--text-primary)]">{identity.username}</h3>
             <Button variant="unstyled"
               onClick={onClose}
               className="p-1 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)] rounded-lg transition-all"
@@ -438,7 +438,7 @@ function IdentityDetailModal({ identity, onClose }) {
                 transition={{ delay: 0.1 }}
               >
                 <span className="text-xs text-[var(--text-tertiary)] block mb-1">{t('pages.identityContextManager.email_label')}</span>
-                <div className="text-sm text-white">{identity.email}</div>
+                <div className="text-sm text-[var(--text-primary)]">{identity.email}</div>
               </motion.div>
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
@@ -446,7 +446,7 @@ function IdentityDetailModal({ identity, onClose }) {
                 transition={{ delay: 0.15 }}
               >
                 <span className="text-xs text-[var(--text-tertiary)] block mb-1">{t('pages.identityContextManager.risk_score_label')}</span>
-                <div className="text-sm font-semibold text-white">{identity.risk_score}</div>
+                <div className="text-sm font-semibold text-[var(--text-primary)]">{identity.risk_score}</div>
               </motion.div>
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
@@ -454,7 +454,7 @@ function IdentityDetailModal({ identity, onClose }) {
                 transition={{ delay: 0.2 }}
               >
                 <span className="text-xs text-[var(--text-tertiary)] block mb-1">{t('pages.identityContextManager.last_login_label')}</span>
-                <div className="text-sm text-white">
+                <div className="text-sm text-[var(--text-primary)]">
                   {identity.last_login ? new Date(identity.last_login).toLocaleString() : t('pages.identityContextManager.never')}
                 </div>
               </motion.div>
@@ -464,7 +464,7 @@ function IdentityDetailModal({ identity, onClose }) {
                 transition={{ delay: 0.25 }}
               >
                 <span className="text-xs text-[var(--text-tertiary)] block mb-1">{t('pages.identityContextManager.anomalies_label')}</span>
-                <div className="text-sm text-white">{identity.anomaly_count || 0}</div>
+                <div className="text-sm text-[var(--text-primary)]">{identity.anomaly_count || 0}</div>
               </motion.div>
             </div>
           </div>

@@ -21,13 +21,13 @@ import EmptyState from '../components/ui/EmptyState'
 
 const AGENT_PLATFORMS = ['linux', 'windows', 'macos']
 const inputCls =
-  'w-full px-3 py-2 bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg text-white placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40 text-sm'
+  'w-full px-3 py-2 bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40 text-sm'
 const textareaCls = `${inputCls} font-mono`
 
 function Section({ icon: Icon, title, children }) {
   return (
     <section className="rounded-2xl border border-[var(--border-default)] bg-gradient-to-b from-white/[0.04] to-black/40 p-5 space-y-4">
-      <div className="flex items-center gap-2 text-sm font-semibold text-white">
+      <div className="flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
         <Icon className="w-4 h-4 text-cyan-400" />
         {title}
       </div>
@@ -245,7 +245,7 @@ export default function ClientIntegrations() {
           onChange={(e) => setSearchQuery(e.target.value)}
           aria-label={t('pages.clientIntegrations.search_placeholder')}
           placeholder={t('pages.clientIntegrations.search_placeholder')}
-          className="w-full px-3 py-2 rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] text-sm text-white placeholder-[var(--text-muted)]"
+          className="w-full px-3 py-2 rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)]"
         />
       </div>
       <ClientReadinessBanner clientId={id} />
@@ -375,7 +375,7 @@ export default function ClientIntegrations() {
           <aside className="space-y-4">
             <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
               <h3 className="text-xs font-mono uppercase text-[var(--text-muted)] mb-3">{t('pages.clientOnboarding.readiness')}</h3>
-              <div className="text-2xl font-bold text-white mb-1">{integrationsGetFailed ? '—' : `${readiness.percent}%`}</div>
+              <div className="text-2xl font-bold text-[var(--text-primary)] mb-1">{integrationsGetFailed ? '—' : `${readiness.percent}%`}</div>
               <div className="h-1.5 rounded-full bg-[var(--row-hover-bg)] mb-4 overflow-hidden">
                 <div className="h-full bg-gradient-to-r from-cyan-500 to-emerald-500 transition-all" style={{ width: integrationsGetFailed ? '0%' : `${readiness.percent}%` }} />
               </div>

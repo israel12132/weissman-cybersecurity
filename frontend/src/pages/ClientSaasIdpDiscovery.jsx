@@ -178,7 +178,7 @@ export default function ClientSaasIdpDiscovery() {
         ) : (
         <>
         <div className="p-6 bg-[var(--bg-3)]/40 border border-[var(--border-default)] rounded-xl">
-          <h2 className="text-lg font-semibold text-white">{t('pages.clientSaasIdpDiscovery.domains_heading')}</h2>
+          <h2 className="text-lg font-semibold text-[var(--text-primary)]">{t('pages.clientSaasIdpDiscovery.domains_heading')}</h2>
           <div className="mt-2 text-sm text-[var(--text-secondary)]">
             {domains.length === 0 ? (
               <span className="text-[var(--text-tertiary)]">{t('pages.clientSaasIdpDiscovery.empty_domains')}</span>
@@ -207,7 +207,7 @@ export default function ClientSaasIdpDiscovery() {
         )}
 
         <div className="p-6 bg-[var(--bg-3)]/40 border border-[var(--border-default)] rounded-xl">
-          <h2 className="text-lg font-semibold text-white">{t('pages.clientSaasIdpDiscovery.idp_heading')}</h2>
+          <h2 className="text-lg font-semibold text-[var(--text-primary)]">{t('pages.clientSaasIdpDiscovery.idp_heading')}</h2>
           {idps.length === 0 ? (
             <div className="mt-2 text-sm text-[var(--text-tertiary)]">{t('pages.clientSaasIdpDiscovery.empty_idp')}</div>
           ) : visibleIdps.length === 0 ? (
@@ -230,7 +230,7 @@ export default function ClientSaasIdpDiscovery() {
                     <div key={c.vendor} className="p-4 bg-[var(--bg-1)]/40 border border-[var(--border-default)] rounded-lg">
                       <div className="flex items-start justify-between gap-4">
                         <div>
-                          <div className="text-white font-semibold">{vendorLabel(c.vendor)}</div>
+                          <div className="text-[var(--text-primary)] font-semibold">{vendorLabel(c.vendor)}</div>
                           <div className="text-xs text-[var(--text-tertiary)] mt-1">
                             {t('pages.clientSaasIdpDiscovery.confidence', { pct: pct(c.confidence) })}
                           </div>
@@ -240,7 +240,7 @@ export default function ClientSaasIdpDiscovery() {
                             <Button variant="unstyled"
                               type="button"
                               onClick={() => copy(issuer)}
-                              className="px-3 py-1 text-xs bg-[var(--bg-4)] text-white rounded hover:bg-[var(--bg-4)]"
+                              className="px-3 py-1 text-xs bg-[var(--bg-4)] text-[var(--text-primary)] rounded hover:bg-[var(--bg-4)]"
                             >
                               {t('pages.clientSaasIdpDiscovery.copy_issuer')}
                             </Button>
@@ -249,7 +249,7 @@ export default function ClientSaasIdpDiscovery() {
                             <Button variant="unstyled"
                               type="button"
                               onClick={() => copy(finalHost)}
-                              className="px-3 py-1 text-xs bg-[var(--bg-4)] text-white rounded hover:bg-[var(--bg-4)]"
+                              className="px-3 py-1 text-xs bg-[var(--bg-4)] text-[var(--text-primary)] rounded hover:bg-[var(--bg-4)]"
                             >
                               {t('pages.clientSaasIdpDiscovery.copy_host')}
                             </Button>
@@ -284,7 +284,7 @@ export default function ClientSaasIdpDiscovery() {
         </div>
 
         <div className="p-6 bg-[var(--bg-3)]/40 border border-[var(--border-default)] rounded-xl">
-          <h2 className="text-lg font-semibold text-white">{t('pages.clientSaasIdpDiscovery.saas_heading')}</h2>
+          <h2 className="text-lg font-semibold text-[var(--text-primary)]">{t('pages.clientSaasIdpDiscovery.saas_heading')}</h2>
           {saas.length === 0 ? (
             <div className="mt-2 text-sm text-[var(--text-tertiary)]">{t('pages.clientSaasIdpDiscovery.empty_saas')}</div>
           ) : visibleSaas.length === 0 ? (
@@ -298,7 +298,7 @@ export default function ClientSaasIdpDiscovery() {
             <div className="mt-4 space-y-3">
               {visibleSaas.map((s) => (
                 <div key={s.name} className="p-4 bg-[var(--bg-1)]/40 border border-[var(--border-default)] rounded-lg">
-                  <div className="text-white font-semibold">{s.name}</div>
+                  <div className="text-[var(--text-primary)] font-semibold">{s.name}</div>
                   <div className="mt-2 text-xs text-[var(--text-secondary)] font-mono space-y-1">
                     {(Array.isArray(s.evidence) ? s.evidence : []).slice(0, 10).map((e) => (
                       <div key={e} className="break-all">{e}</div>
