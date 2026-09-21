@@ -726,6 +726,10 @@ export default function EngineMatrix() {
 
   const totalEnabled = enabledSet.size
   const liveCount = productionCount || productionEngines.length
+  const runningTotal = useMemo(
+    () => Object.values(engineStates).filter((s) => s?.status === 'running').length,
+    [engineStates],
+  )
   const tierCounts = useMemo(() => ({
     all: baseRegistry.length,
     live: productionEngines.filter((e) => isProduction(e.id)).length,
@@ -844,6 +848,24 @@ export default function EngineMatrix() {
             {t('weissmanFindings.last_updated', { time: lastMatrixSync.toLocaleString() })}
           </p>
         )}
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            { label: t('engines.fleet_live'), value: liveCount, color: '#22d3ee' },
+            { label: t('engines.fleet_enabled'), value: configUnavailable ? '—' : totalEnabled, color: '#34d399' },
+            { label: t('engines.fleet_runnable'), value: configUnavailable ? '—' : totalRunnable, color: '#a78bfa' },
+            { label: t('engines.fleet_running'), value: runningTotal, color: runningTotal > 0 ? '#fbbf24' : '#64748b' },
+          ].map((s) => (
+            <div
+              key={s.label}
+              className="rounded-2xl border border-white/[0.08] bg-[var(--table-surface)] backdrop-blur-md px-4 py-3"
+            >
+              <div className="text-[9px] font-mono uppercase tracking-[0.16em] text-[var(--text-muted)]">{s.label}</div>
+              <div className="mt-1 text-2xl font-bold font-mono tabular-nums" style={{ color: s.color }}>{s.value}</div>
+            </div>
+          ))}
+        </div>
+
         <div className="flex flex-col lg:flex-row gap-3">
           <div className="relative flex-1 min-w-[220px]">
             <input

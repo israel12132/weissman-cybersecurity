@@ -776,6 +776,10 @@
   "engines": {
     "title": "Engine Grid",
     "live_engines": "{{count}} Live Engines",
+    "fleet_live": "Live engines",
+    "fleet_enabled": "Enabled",
+    "fleet_runnable": "Runnable",
+    "fleet_running": "Running now",
     "search_placeholder": "Search engines by ID, label, MITRE, or description…",
     "show_only_enabled": "Show only enabled",
     "matches": "{{count}} match",

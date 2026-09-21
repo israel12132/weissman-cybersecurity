@@ -704,6 +704,10 @@
   "engines": {
     "title": "רשת מנועים",
     "live_engines": "{{count}} מנועים פעילים",
+    "fleet_live": "מנועים פעילים",
+    "fleet_enabled": "מופעלים",
+    "fleet_runnable": "ניתנים להרצה",
+    "fleet_running": "רצים כעת",
     "search_placeholder": "חפש לפי ID, שם, MITRE או תיאור…",
     "show_only_enabled": "הצג רק פעילים",
     "matches": "התאמה אחת",
