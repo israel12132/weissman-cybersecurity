@@ -11,7 +11,7 @@ import EvidenceNotice from './components/ui/EvidenceNotice'
 function CockpitEvidenceStrip() {
   const { t } = useTranslation()
   return (
-    <div className="shrink-0 border-b border-white/[0.06] bg-black/45 px-3 py-1.5">
+    <div className="shrink-0 border-b border-[var(--border-subtle)] bg-[var(--table-surface)] px-3 py-1.5">
       <EvidenceNotice className="rounded-lg border-cyan-500/15 bg-cyan-500/[0.03] px-3 py-2 text-[10px] leading-snug">
         {t('pages.cockpit.evidence_notice')}
       </EvidenceNotice>
