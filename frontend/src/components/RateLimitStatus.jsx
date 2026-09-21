@@ -85,10 +85,10 @@ export default function RateLimitStatus({ compact = false }) {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'critical': return 'text-red-400 bg-red-500/10 border-red-500/30';
-      case 'warning': return 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30';
-      case 'healthy': return 'text-green-400 bg-green-500/10 border-green-500/30';
-      default: return 'text-amber-200 bg-amber-500/10 border-amber-500/30';
+      case 'critical': return 'text-[var(--severity-critical)] bg-red-500/10 border-red-500/30';
+      case 'warning': return 'text-[var(--severity-medium)] bg-yellow-500/10 border-yellow-500/30';
+      case 'healthy': return 'text-[var(--severity-low)] bg-green-500/10 border-green-500/30';
+      default: return 'text-[var(--severity-medium)] bg-amber-500/10 border-amber-500/30';
     }
   };
 
@@ -122,8 +122,8 @@ export default function RateLimitStatus({ compact = false }) {
     return (
       <p
         className={compact
-          ? 'flex items-center gap-2 px-3 py-1.5 rounded-lg border text-amber-200 bg-amber-500/10 border-amber-500/30 text-xs'
-          : 'text-sm text-amber-200/90'}
+          ? 'flex items-center gap-2 px-3 py-1.5 rounded-lg border text-[var(--severity-medium)] bg-amber-500/10 border-amber-500/30 text-xs'
+          : 'text-sm text-[var(--severity-medium)]'}
         data-testid="rate-limit-unavailable"
         role="alert"
       >

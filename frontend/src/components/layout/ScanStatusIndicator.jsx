@@ -48,7 +48,7 @@ export default function ScanStatusIndicator() {
   if (mode === 'unknown') {
     return (
       <span
-        className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-300 text-[10px] font-mono uppercase tracking-wider"
+        className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-full border border-amber-500/30 bg-amber-500/10 text-[var(--severity-medium)] text-[10px] font-mono uppercase tracking-wider"
         role="status"
         aria-live="polite"
         data-testid="scan-status-unavailable"
@@ -62,7 +62,7 @@ export default function ScanStatusIndicator() {
 
   return (
     <span
-      className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-[10px] font-mono uppercase tracking-wider"
+      className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-[var(--severity-low)] text-[10px] font-mono uppercase tracking-wider"
       role="status"
       aria-live="polite"
       title={t('scanStatus.active_hint')}
