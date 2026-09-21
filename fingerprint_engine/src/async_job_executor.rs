@@ -446,6 +446,41 @@ pub async fn execute_job(
     out
 }
 
+/// Terminal result + telemetry for a command-center engine job whose overall wall-clock
+/// budget elapsed (the cancellable runner returned `None`).
+///
+/// The result carries `error` status so the job reaches `completed` rather than hanging;
+/// telemetry is classed as a `timeout` with a distinct `wall_clock_timeout` strategy so
+/// operators can tell a budget cut from a normal resilience run. `attempts` is a floor of
+/// 1: the resilience future is dropped on cancellation, so its true (often higher)
+/// per-attempt count is unrecoverable here — the `strategy` field is what disambiguates.
+fn wall_clock_timeout_outcome(
+    engine_id: &str,
+    wall_secs: u64,
+    elapsed_ms: u64,
+) -> (
+    crate::engine_result::EngineResult,
+    crate::engine_resilience::EngineExecTelemetry,
+) {
+    let msg = format!(
+        "engine '{engine_id}' exceeded {wall_secs}s wall-clock budget \
+         (target unreachable or scan too slow)"
+    );
+    (
+        crate::engine_result::EngineResult::error(msg.clone()),
+        crate::engine_resilience::EngineExecTelemetry {
+            engine_id: engine_id.to_string(),
+            attempts: 1,
+            strategy: "wall_clock_timeout".to_string(),
+            elapsed_ms,
+            status: "timeout".to_string(),
+            recovered: false,
+            error: Some(msg),
+            failure_class: Some("timeout".to_string()),
+        },
+    )
+}
+
 async fn execute_job_unscoped(
     app_pool: Arc<PgPool>,
     intel_pool: Arc<PgPool>,
@@ -678,29 +713,12 @@ async fn execute_job_unscoped(
                 budget_timer.abort();
                 let (res, telem) = match run_out {
                     Some(pair) => pair,
-                    None => {
-                        // Budget elapsed → the engine was stopped at its next await. Report a
-                        // terminal error result (so the job completes rather than hanging) and
-                        // synthetic telemetry classified as a timeout.
-                        let elapsed_ms = run_started.elapsed().as_millis() as u64;
-                        let msg = format!(
-                            "engine '{eng_label}' exceeded {wall_secs}s wall-clock budget \
-                             (target unreachable or scan too slow)"
-                        );
-                        (
-                            crate::engine_result::EngineResult::error(msg.clone()),
-                            crate::engine_resilience::EngineExecTelemetry {
-                                engine_id: eng_label.clone(),
-                                attempts: 1,
-                                strategy: "wall_clock_timeout".to_string(),
-                                elapsed_ms,
-                                status: "timeout".to_string(),
-                                recovered: false,
-                                error: Some(msg),
-                                failure_class: Some("timeout".to_string()),
-                            },
-                        )
-                    }
+                    // Budget elapsed → the engine was stopped at its next await.
+                    None => wall_clock_timeout_outcome(
+                        &eng_label,
+                        wall_secs,
+                        run_started.elapsed().as_millis() as u64,
+                    ),
                 };
                 if telem.attempts > 1 || telem.status != "ok" {
                     tracing::info!(
@@ -2510,6 +2528,26 @@ async fn execute_job_unscoped(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wall_clock_timeout_outcome_is_terminal_and_classified() {
+        let (res, telem) = wall_clock_timeout_outcome("asm", 120, 121_000);
+        // Must yield a TERMINAL result so the job completes instead of hanging past the
+        // client poll window — never `ok`/`waiting_for_agent`, and never any findings.
+        assert_eq!(res.status, "error");
+        assert!(!res.success);
+        assert!(res.findings.is_empty());
+        assert!(crate::engine_resilience::should_retry_status(&res.status));
+        assert!(res.message.contains("asm"));
+        assert!(res.message.contains("120s"));
+        // Telemetry is classed as a wall-clock cut, distinct from a normal resilience run.
+        assert_eq!(telem.engine_id, "asm");
+        assert_eq!(telem.status, "timeout");
+        assert_eq!(telem.strategy, "wall_clock_timeout");
+        assert_eq!(telem.failure_class.as_deref(), Some("timeout"));
+        assert_eq!(telem.elapsed_ms, 121_000);
+        assert!(!telem.recovered);
+    }
 
     #[test]
     fn tenant_consistency_ok_when_payload_has_no_tenant_id() {

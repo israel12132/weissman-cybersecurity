@@ -46,12 +46,17 @@ UPDATE risk_graph_nodes
      OR graph_key LIKE 'https:%'
      OR node_type IN ('asset', 'network')
      AND (
-          -- `metadata` is a TEXT column holding JSON text (default '{}'), not JSONB,
-          -- so `->>` needs an explicit ::jsonb cast; without it Postgres raises
-          -- "operator does not exist: text ->>", which aborts the whole auto-tag
-          -- transaction and fails the risk-graph build on every scan.
-          COALESCE(metadata::jsonb->>'public', '') IN ('true', '1')
-       OR COALESCE(metadata::jsonb->>'internet_exposed', '') IN ('true', '1')
+          -- `metadata` is a TEXT column holding JSON text (default '{}'), not JSONB
+          -- (see migration 20260608130100_attack_path_flags.sql), so `->>` needs an
+          -- explicit ::jsonb cast — without it Postgres raises "operator does not
+          -- exist: text ->>". The cast is guarded by `IS JSON OBJECT` inside a CASE
+          -- (CASE guarantees the THEN branch is only evaluated when the guard holds,
+          -- unlike a bare `AND`): a row whose TEXT metadata is not a valid JSON object
+          -- is treated as no-match instead of raising "invalid input syntax for type
+          -- json", which would abort the whole auto-tag transaction — the very failure
+          -- this predicate must not reintroduce. Honors the caller's best-effort intent.
+          COALESCE(CASE WHEN metadata IS JSON OBJECT THEN metadata::jsonb->>'public' END, '') IN ('true', '1')
+       OR COALESCE(CASE WHEN metadata IS JSON OBJECT THEN metadata::jsonb->>'internet_exposed' END, '') IN ('true', '1')
      )
    )
 "#;
