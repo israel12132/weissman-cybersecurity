@@ -158,6 +158,17 @@ export default function ExecutiveOverview() {
   const showUeba = tileMatches(t(`${NS}.ueba`), t(`${NS}.ueba_sub`))
   const showCrypto = tileMatches(t(`${NS}.crypto`), t(`${NS}.crypto_sub`))
   const platformVisible = showPosture || showCoverage || showIocs || showIntel || showUeba || showCrypto
+  // "Needs attention" restates areas already in a bad state from live data —
+  // never invents a metric, and only counts areas whose data actually loaded.
+  const attentionFlags = useMemo(() => {
+    const f = []
+    if (posture && (Number(posture.score) < 60 || ['d', 'f'].includes(String(posture.grade || '').toLowerCase()))) {
+      f.push(t(`${NS}.flag_posture`))
+    }
+    if (uebaList && uebaCritHigh > 0) f.push(t(`${NS}.flag_ueba`, { count: uebaCritHigh }))
+    if (global.crypto && !pqReady) f.push(t(`${NS}.flag_crypto`))
+    return f
+  }, [posture, uebaList, uebaCritHigh, pqReady, global.crypto, t])
   const showAle = tileMatches(t(`${NS}.ale`))
   const showPaths = tileMatches(t(`${NS}.paths`))
   const showTopRisk = tileMatches(t(`${NS}.top_risk`))
@@ -218,6 +229,19 @@ export default function ExecutiveOverview() {
         {/* Global posture row */}
         <div>
           <h2 className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-3">{t(`${NS}.platform_heading`)}</h2>
+          {!global.loading && !global.error && platformVisible && (
+            attentionFlags.length ? (
+              <div className="mb-3 flex items-start gap-2.5 rounded-xl border border-amber-500/25 bg-amber-500/[0.07] px-3.5 py-2.5 text-[11px] font-mono text-amber-200" role="status">
+                <span aria-hidden="true">⚠</span>
+                <span>{t(`${NS}.attention_some`, { count: attentionFlags.length })} — {attentionFlags.join(' · ')}</span>
+              </div>
+            ) : (
+              <div className="mb-3 flex items-center gap-2.5 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] px-3.5 py-2.5 text-[11px] font-mono text-emerald-200" role="status">
+                <span aria-hidden="true">✓</span>
+                <span>{t(`${NS}.attention_none`)}</span>
+              </div>
+            )
+          )}
           {global.loading ? (
             <SkeletonWidgetGrid count={6} />
           ) : !platformVisible ? (
