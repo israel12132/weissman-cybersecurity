@@ -165,6 +165,15 @@ export default function ThreatFeeds() {
     [indicators],
   )
 
+  const byType = useMemo(() => {
+    const m = {}
+    for (const i of indicators) {
+      const ty = (i.type || '').toLowerCase()
+      if (ty) m[ty] = (m[ty] || 0) + 1
+    }
+    return m
+  }, [indicators])
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return indicators.filter((i) => {
@@ -190,10 +199,10 @@ export default function ThreatFeeds() {
 
   const typePills = useMemo(
     () => [
-      { id: 'all', label: t(`${NS}.all_types`), active: typeFilter === 'all', onClick: () => setTypeFilter('all') },
-      ...types.map((ty) => ({ id: ty, label: ty, active: typeFilter === ty, onClick: () => setTypeFilter(ty) })),
+      { id: 'all', label: t(`${NS}.all_types`), count: indicators.length, active: typeFilter === 'all', onClick: () => setTypeFilter('all') },
+      ...types.map((ty) => ({ id: ty, label: ty, count: byType[ty] || 0, active: typeFilter === ty, onClick: () => setTypeFilter(ty) })),
     ],
-    [types, typeFilter, t],
+    [types, typeFilter, t, indicators.length, byType],
   )
 
   const exportCsv = useCallback(() => {
