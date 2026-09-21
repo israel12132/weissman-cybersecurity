@@ -61,7 +61,7 @@ export default function EliteHardeningCommandCenter() {
     load()
   }, [load])
 
-  const controls = Array.isArray(data?.controls) ? data.controls : []
+  const controls = useMemo(() => (Array.isArray(data?.controls) ? data.controls : []), [data])
   const sections = useMemo(() => {
     const seen = []
     for (const c of controls) {

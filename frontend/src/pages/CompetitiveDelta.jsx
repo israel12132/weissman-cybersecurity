@@ -79,7 +79,7 @@ export default function CompetitiveDelta() {
     load()
   }, [load])
 
-  const lanes = Array.isArray(data?.moat?.lanes) ? data.moat.lanes : []
+  const lanes = useMemo(() => (Array.isArray(data?.moat?.lanes) ? data.moat.lanes : []), [data])
   const clusters = Array.isArray(data?.moat?.market_research?.clusters)
     ? data.moat.market_research.clusters
     : []
