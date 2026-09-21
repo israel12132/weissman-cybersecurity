@@ -433,13 +433,15 @@ export default function DarkWebMonitor() {
                 key={s}
                 type="button"
                 onClick={() => setSeverityFilter(s)}
+                aria-pressed={severityFilter === s}
                 className={`px-2.5 py-1 rounded-md text-[10px] font-mono uppercase transition-all ${
                   severityFilter === s
                     ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
                     : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                 }`}
               >
-                {s === 'all' ? t('pages.darkWebMonitor.filter_all') : s}
+                {s === 'all' ? t('pages.darkWebMonitor.filter_all') : s}{' '}
+                <span className="opacity-70 tabular-nums">{s === 'all' ? stats.total : (stats[s] || 0)}</span>
               </Button>
             ))}
           </div>
