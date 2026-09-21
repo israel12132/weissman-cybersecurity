@@ -691,7 +691,10 @@ async fn crtsh_subdomains(client: &reqwest::Client, domain: &str, cap: usize) ->
         if let Some(name) = e.get("name_value").and_then(Value::as_str) {
             for n in name.split('\n') {
                 let n = n.trim().trim_start_matches("*.").to_lowercase();
-                if n.ends_with(domain) && !n.is_empty() && !n.contains(' ') {
+                if (n == domain || n.ends_with(&format!(".{domain}")))
+                    && !n.is_empty()
+                    && !n.contains(' ')
+                {
                     set.insert(n);
                 }
             }
@@ -774,8 +777,21 @@ async fn http_posture(client: &reqwest::Client, url: &str) -> Option<HttpPosture
         .iter()
         .filter_map(|v| v.to_str().ok())
         .any(|c| {
-            let cl = c.to_lowercase();
-            url.starts_with("https://") && (!cl.contains("secure") || !cl.contains("httponly"))
+            if !url.starts_with("https://") {
+                return false;
+            }
+            // Test the cookie's attribute tokens specifically (skip the name=value pair),
+            // so a name/value containing "secure"/"httponly" cannot mask a missing attribute.
+            let mut has_secure = false;
+            let mut has_httponly = false;
+            for attr in c.split(';').skip(1) {
+                match attr.trim().to_lowercase().as_str() {
+                    "secure" => has_secure = true,
+                    "httponly" => has_httponly = true,
+                    _ => {}
+                }
+            }
+            !has_secure || !has_httponly
         });
 
     // Cloud attribution from response headers.
@@ -868,7 +884,9 @@ fn tls_probe_blocking(host: &str, port: u16, timeout_ms: u64) -> Option<TlsInfo>
     let now = openssl::asn1::Asn1Time::days_from_now(0).ok()?;
     let (days_to_expiry, expired) = match now.diff(cert.not_after()) {
         Ok(diff) => (diff.days, diff.days < 0),
-        Err(_) => (0, false),
+        // Expiry could not be computed: use a sentinel that is neither "expired" nor within
+        // the "expiring soon" (<=21d) window, so no bogus near-expiry finding is emitted.
+        Err(_) => (i32::MAX, false),
     };
     let san_count = cert
         .subject_alt_names()
@@ -2071,18 +2089,22 @@ pub async fn run_asm_result_ctx(
                     Err(_) => return EngineResult::error("store_down"),
                 };
                 let known = crate::discovery_knowledge::merge_unique(&[&stored, &custom_wordlist]);
-                let _ = crate::discovery_ai::generate_and_remember(
-                    Some(pool),
-                    crate::discovery_ai::SurfaceKind::SubdomainPrefix,
-                    &host,
-                    "",
-                    &known,
-                    &ctx.llm_base_url,
-                    &ctx.llm_model,
-                    ctx.tenant_id,
-                    Some(3),
-                )
-                .await;
+                let _ = clock
+                    .bounded(
+                        "discovery_ai_subdomains",
+                        crate::discovery_ai::generate_and_remember(
+                            Some(pool),
+                            crate::discovery_ai::SurfaceKind::SubdomainPrefix,
+                            &host,
+                            "",
+                            &known,
+                            &ctx.llm_base_url,
+                            &ctx.llm_model,
+                            ctx.tenant_id,
+                            Some(3),
+                        ),
+                    )
+                    .await;
             }
         }
         let want_brute =
@@ -2090,19 +2112,24 @@ pub async fn run_asm_result_ctx(
         if want_brute {
             let custom_extra: Vec<String> = custom_wordlist.clone();
             let wordlist = if live_ai {
-                match crate::discovery_ai::hydrate_subdomain_prefixes(
-                    ctx.discovery_knowledge_pool(),
-                    &host,
-                    "",
-                    &custom_extra,
-                    &ctx.llm_base_url,
-                    &ctx.llm_model,
-                    ctx.tenant_id,
-                )
-                .await
+                match clock
+                    .bounded(
+                        "discovery_ai_subdomains",
+                        crate::discovery_ai::hydrate_subdomain_prefixes(
+                            ctx.discovery_knowledge_pool(),
+                            &host,
+                            "",
+                            &custom_extra,
+                            &ctx.llm_base_url,
+                            &ctx.llm_model,
+                            ctx.tenant_id,
+                        ),
+                    )
+                    .await
                 {
-                    Ok(w) => w,
-                    Err(_) => return EngineResult::error("store_down"),
+                    Some(Ok(w)) => w,
+                    Some(Err(_)) => return EngineResult::error("store_down"),
+                    None => custom_extra.clone(),
                 }
             } else if custom_extra.is_empty() {
                 let mut wl = default_subdomain_wordlist();
@@ -2173,58 +2200,65 @@ pub async fn run_asm_result_ctx(
     }
 
     // ── 2. DNS intelligence + email posture (apex) ────────────────────────────
-    if do_dns && clock.check("dns_intelligence") {
+    if do_dns {
         if let Some(r) = resolver.as_ref() {
-            let prof = dns_profile(r, &host).await;
-            findings.push(asm_finding(
-                "dns",
-                "info",
-                &host,
-                format!("DNS profile for {host}"),
-                "T1590.002",
-                format!(
-                    "A={:?} AAAA={:?} CNAME={:?} MX={:?} NS={:?} TXT_records={}",
-                    prof.a,
-                    prof.aaaa,
-                    prof.cname,
-                    prof.mx,
-                    prof.ns,
-                    prof.txt.len()
-                ),
-                "Confirm every published record is intentional; remove stale entries.",
-            ));
-            let mail_host = {
-                let org = crate::live_truth::organizational_domain(&host);
-                if org.is_empty() {
-                    host.clone()
-                } else {
-                    org
-                }
-            };
-            let mail_prof = dns_profile(r, &mail_host).await;
-            analyse_email_posture(r, &mail_host, &mail_prof.txt, &mail_prof.mx, &mut findings)
-                .await;
-            if do_dkim {
-                findings.extend(probe_dkim_selectors(r, &mail_host).await);
-            }
-            if do_dns_hardening {
-                analyse_dns_hardening(r, &host, &mut findings, wildcard_dns).await;
-            }
-            if do_asn {
-                for ip in &prof.a {
-                    if let Some(asn_txt) = cymru_asn_for_ip(r, ip).await {
-                        findings.push(asm_finding(
-                            "asn",
-                            "info",
-                            ip.clone(),
-                            format!("ASN attribution for {ip}"),
-                            "T1590",
-                            format!("Team Cymru origin lookup: {asn_txt}"),
-                            "Confirm the hosting ASN matches your approved cloud/on-prem providers.",
-                        ));
+            // Bound the whole DNS-intel lookup group to the remaining budget so a slow or
+            // black-holed resolver cannot outlast the deadline by minutes (bounded() also
+            // performs the entry budget check).
+            let _ = clock
+                .bounded("dns_intelligence", async {
+                    let prof = dns_profile(r, &host).await;
+                    findings.push(asm_finding(
+                        "dns",
+                        "info",
+                        &host,
+                        format!("DNS profile for {host}"),
+                        "T1590.002",
+                        format!(
+                            "A={:?} AAAA={:?} CNAME={:?} MX={:?} NS={:?} TXT_records={}",
+                            prof.a,
+                            prof.aaaa,
+                            prof.cname,
+                            prof.mx,
+                            prof.ns,
+                            prof.txt.len()
+                        ),
+                        "Confirm every published record is intentional; remove stale entries.",
+                    ));
+                    let mail_host = {
+                        let org = crate::live_truth::organizational_domain(&host);
+                        if org.is_empty() {
+                            host.clone()
+                        } else {
+                            org
+                        }
+                    };
+                    let mail_prof = dns_profile(r, &mail_host).await;
+                    analyse_email_posture(r, &mail_host, &mail_prof.txt, &mail_prof.mx, &mut findings)
+                        .await;
+                    if do_dkim {
+                        findings.extend(probe_dkim_selectors(r, &mail_host).await);
                     }
-                }
-            }
+                    if do_dns_hardening {
+                        analyse_dns_hardening(r, &host, &mut findings, wildcard_dns).await;
+                    }
+                    if do_asn {
+                        for ip in &prof.a {
+                            if let Some(asn_txt) = cymru_asn_for_ip(r, ip).await {
+                                findings.push(asm_finding(
+                                    "asn",
+                                    "info",
+                                    ip.clone(),
+                                    format!("ASN attribution for {ip}"),
+                                    "T1590",
+                                    format!("Team Cymru origin lookup: {asn_txt}"),
+                                    "Confirm the hosting ASN matches your approved cloud/on-prem providers.",
+                                ));
+                            }
+                        }
+                    }
+                })
+                .await;
         }
     }
 
@@ -2308,19 +2342,24 @@ pub async fn run_asm_result_ctx(
     let discovery_pool = ctx.discovery_knowledge_pool();
     let extra_sensitive: Vec<String> = if do_sensitive {
         if live_ai {
-            match crate::discovery_ai::hydrate_paths(
-                discovery_pool,
-                &host,
-                "",
-                &[],
-                &ctx.llm_base_url,
-                &ctx.llm_model,
-                ctx.tenant_id,
-            )
-            .await
+            match clock
+                .bounded(
+                    "discovery_ai_paths",
+                    crate::discovery_ai::hydrate_paths(
+                        discovery_pool,
+                        &host,
+                        "",
+                        &[],
+                        &ctx.llm_base_url,
+                        &ctx.llm_model,
+                        ctx.tenant_id,
+                    ),
+                )
+                .await
             {
-                Ok(v) => v,
-                Err(_) => return EngineResult::error("store_down"),
+                Some(Ok(v)) => v,
+                Some(Err(_)) => return EngineResult::error("store_down"),
+                None => Vec::new(),
             }
         } else if let Some(pool) = discovery_pool {
             match crate::discovery_knowledge::load_learned_paths(pool).await {
