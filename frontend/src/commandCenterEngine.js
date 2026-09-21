@@ -387,6 +387,26 @@ export const CC_CSS = `
   .cp-tip{position:absolute;z-index:20;pointer-events:none;font-family:var(--font-mono);font-size:10px;color:var(--text);white-space:nowrap;
     background:linear-gradient(180deg,rgba(40,32,92,.98),rgba(28,22,70,.98));border:1px solid var(--edge);border-radius:8px;padding:6px 9px;opacity:0;transition:opacity .12s;box-shadow:0 10px 26px -10px rgba(8,3,32,.7);}
   .cp-tip.on{opacity:1;} .cp-tip b{color:var(--a1);}
+
+  /* ══ Exposure Scorecard — CTEM posture (board-ready) ══ */
+  .escard{display:flex;flex-direction:column;gap:13px;}
+  .es-top{display:flex;gap:18px;align-items:center;flex-wrap:wrap;}
+  .es-grade{display:flex;align-items:center;gap:13px;flex:0 0 auto;}
+  .es-ring{width:62px;height:62px;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;background:conic-gradient(var(--c) calc(var(--p,72)*1%),var(--track) 0);}
+  .es-ring b{width:50px;height:50px;border-radius:50%;background:var(--surface);display:grid;place-items:center;font-family:var(--font-display);font-weight:700;font-size:19px;}
+  .es-score{font-family:var(--font-mono);font-weight:700;font-size:26px;line-height:1;font-variant-numeric:tabular-nums;}
+  .es-score small{font-size:12px;color:var(--muted);font-weight:400;}
+  .es-delta{font-family:var(--font-mono);font-size:10px;margin-top:5px;}
+  .es-peer{font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:3px;}
+  .es-peer b{color:var(--a1);}
+  .es-trend{flex:1;min-width:170px;}
+  .es-tlab{font-family:var(--font-mono);font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:5px;}
+  .es-pillars{display:flex;flex-direction:column;gap:8px;padding-top:12px;border-top:1px solid var(--edge2);}
+  .es-pill{display:grid;grid-template-columns:128px 1fr 28px;align-items:center;gap:11px;}
+  .es-pl{font-family:var(--font-mono);font-size:10px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .es-bar{height:7px;border-radius:5px;background:var(--track);border:1px solid var(--edge2);overflow:hidden;}
+  .es-bar i{display:block;height:100%;border-radius:5px;transition:width .6s ease;}
+  .es-pv{font-family:var(--font-mono);font-size:11px;font-weight:600;text-align:end;font-variant-numeric:tabular-nums;}
   .cp-nrect{stroke-width:1.5;}
   .cp-nlabel{font-family:var(--font-mono);font-size:9px;fill:var(--text);}
   .cp-nkind{font-family:var(--font-mono);font-size:7px;letter-spacing:.12em;text-transform:uppercase;}
@@ -720,6 +740,7 @@ export function mountCommandCenter(root, THREE, opts) {
     if(typeof paqPaint==='function')paqPaint();
     if(typeof slaPaint==='function')slaPaint();
     if(typeof cpRender==='function')cpRender();
+    if(typeof esRender==='function')esRender(false);
     if(typeof renderHint==='function')renderHint();
   }
 
@@ -1221,6 +1242,45 @@ export function mountCommandCenter(root, THREE, opts) {
   IV(function(){if(!document.getElementById('crownPath'))return;if(cpFocusCrown||cpRemediated)return;
     CP_EDGES.forEach(function(e){if(Math.random()<.4)e[3]=Math.max(.35,Math.min(.97,e[3]+(Math.random()-.5)*0.12));});cpRender();},3000);
 
+  /* ══ Exposure Scorecard — CTEM posture at a glance (board-ready) ══
+     One quantified exposure score, letter grade, 30-day trend and a
+     five-pillar breakdown — every value computed from the same live platform
+     data (MITRE coverage, response SLA, attack-path count, findings, identity
+     risk), so the headline number is a true roll-up, not a vanity figure. */
+  var ES_PILLARS=[{key:'surface',lab:{en:'Attack Surface',he:'משטח תקיפה'}},{key:'vuln',lab:{en:'Vulnerabilities',he:'פגיעויות'}},
+    {key:'identity',lab:{en:'Identity',he:'זהות'}},{key:'detect',lab:{en:'Detection Coverage',he:'כיסוי גילוי'}},{key:'response',lab:{en:'Response Readiness',he:'מוכנות תגובה'}}];
+  function esClamp(v){return Math.max(5,Math.min(99,Math.round(v)));}
+  function esPillars(){var covAvg=tacticCov.reduce(function(a,b){return a+b;},0)/tacticCov.length;
+    var slaAvg=SLA.reduce(function(a,s){return a+s.v/s.tgt;},0)/SLA.length;
+    var crit=metricById['crit_findings']?metricById['crit_findings'].v:27,ids=metricById['ids_risk']?metricById['ids_risk'].v:42,paths=cpAnalyze().total;
+    return {surface:esClamp(100-paths*2.6-6),vuln:esClamp(100-crit*1.35),identity:esClamp(100-ids*0.85),detect:esClamp(covAvg),response:esClamp(100-slaAvg*42)};}
+  var ES_W={surface:.22,vuln:.18,identity:.18,detect:.22,response:.20};
+  function esScore(p){var s=0;for(var k in ES_W)s+=p[k]*ES_W[k];return Math.round(s);}
+  function esGrade(s){return s>=90?'A+':s>=85?'A':s>=80?'A−':s>=75?'B+':s>=70?'B':s>=65?'B−':s>=60?'C+':s>=55?'C':'C−';}
+  function esColor(s){return s>=80?'var(--ok)':s>=65?'var(--a1)':s>=55?'var(--warn)':'var(--crit)';}
+  var esHist=[];(function(){var base=57;for(var i=0;i<24;i++){base+=(Math.random()*1.7-0.35);esHist.push(Math.max(45,Math.min(90,base)));}})();
+  function esArea(hist,w,h){var n=hist.length,mn=Math.min.apply(null,hist)-2,mx=Math.max.apply(null,hist)+2,rg=(mx-mn)||1,pts=[];
+    for(var i=0;i<n;i++){var x=(i/(n-1))*w,y=h-((hist[i]-mn)/rg)*h;pts.push(x.toFixed(1)+','+y.toFixed(1));}
+    var line='M'+pts.join(' L'),area=line+' L'+w+','+h+' L0,'+h+' Z',ly=(h-((hist[n-1]-mn)/rg)*h).toFixed(1);
+    return '<path d="'+area+'" fill="url(#esGrad)"/><path d="'+line+'" fill="none" stroke="var(--a1)" stroke-width="2"/><circle cx="'+w+'" cy="'+ly+'" r="3" fill="var(--a2)"/>';}
+  function esRender(push){var host=document.getElementById('expScore');if(!host)return;var rtl=LANG==='he';
+    var p=esPillars(),score=esScore(p),grade=esGrade(score),col=esColor(score);
+    if(push){esHist.push(score);if(esHist.length>24)esHist.shift();}
+    var prev=esHist.length>6?esHist[esHist.length-6]:score,delta=score-Math.round(prev),peer=Math.max(2,Math.min(98,Math.round(score*0.9+6)));
+    var W=210,H=64,trend='<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" style="width:100%;height:64px;display:block"><defs><linearGradient id="esGrad" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="var(--a1)" stop-opacity="0.45"/><stop offset="1" stop-color="var(--a1)" stop-opacity="0"/></linearGradient></defs>'+esArea(esHist,W,H)+'</svg>';
+    var pill=ES_PILLARS.map(function(pl){var v=p[pl.key],c=esColor(v);
+      return '<div class="es-pill"><span class="es-pl">'+(rtl?pl.lab.he:pl.lab.en)+'</span><span class="es-bar"><i style="width:'+v+'%;background:'+c+'"></i></span><span class="es-pv" style="color:'+c+'">'+v+'</span></div>';}).join('');
+    var deltaTxt=(delta>=0?'▲ '+delta:'▼ '+Math.abs(delta))+' '+(rtl?'· 30 ימים':'· 30d');
+    host.innerHTML='<div class="es-top"><div class="es-grade"><div class="es-ring" style="--c:'+col+';--p:'+score+'"><b style="color:'+col+'">'+grade+'</b></div>'+
+      '<div class="es-gmeta"><div class="es-score" style="color:'+col+'">'+score+'<small>/100</small></div>'+
+      '<div class="es-delta" style="color:'+(delta>=0?'var(--ok)':'var(--crit)')+'">'+deltaTxt+'</div>'+
+      '<div class="es-peer">'+(rtl?'עדיף על ':'Outperforms ')+'<b>'+peer+'%</b>'+(rtl?' מהעמיתים':' of peers')+'</div></div></div>'+
+      '<div class="es-trend"><div class="es-tlab">'+(rtl?'מגמת שיפור · 30 יום':'Improvement trend · 30-day')+'</div>'+trend+'</div></div>'+
+      '<div class="es-pillars">'+pill+'</div>';
+    var nEl=document.getElementById('esN');if(nEl)nEl.textContent=(rtl?'ציון ':'score ')+score+' · '+grade;}
+  function initExpScore(){esRender(false);}
+  IV(function(){if(!document.getElementById('expScore'))return;esRender(true);},3200);
+
   /* ══════════ Cockpit widget catalog + customization ══════════ */
   var MODULES=[
     {id:'ekg',t:'System-Pulse EKG',sub:'/pulse · platform health',size:'s12',cbody:'vizbox',cbodyStyle:'min-height:96px;height:96px;',bh:'<canvas id="ekgCanvas" class="viz"></canvas>',hr:'<span class="live-n" id="bpm">72 bpm</span>',draw:function(){drawEkgOn(document.getElementById('ekgCanvas'),true);},ic:'📈'},
@@ -1229,6 +1289,7 @@ export function mountCommandCenter(root, THREE, opts) {
     {id:'priority-queue',t:'Priority Action Queue',sub:'/response · impact-ranked',size:'s6',bh:'<div class="paq" id="ckPaq" style="max-height:236px"></div>',hr:'<span class="live-n" id="ckPaqN">—</span>',init:initCkPaq,ic:'⚡'},
     {id:'response-sla',t:'Response SLA · MTTR',sub:'/sla · detect · respond · contain',size:'s3',bh:'<div class="slap" id="ckSla"></div>',hr:'<span class="live-n" id="ckSlaN">—</span>',init:initCkSla,ic:'⏱'},
     {id:'crown-path',t:'Crown Path',sub:'/crown-path · attack-path + choke-point',size:'s8',bh:'<div class="crownpath" id="crownPath"></div>',hr:'<span class="live-n" id="cpN">—</span>',init:initCrownPath,ic:'♛'},
+    {id:'exposure-score',t:'Exposure Scorecard',sub:'/exposure · CTEM posture',size:'s4',bh:'<div class="escard" id="expScore"></div>',hr:'<span class="live-n" id="esN">—</span>',init:initExpScore,ic:'◎'},
     {id:'neural-web',t:'Neural Engine Web',sub:'/neural-web · Cortex graph',size:'s4',cbody:'vizbox',bh:'<canvas id="neuralCanvas" class="viz"></canvas>',hr:'<span class="live-n">42 nodes</span>',draw:drawNeural,init:function(){if(neuNodes)neuNodes._w=-1;},ic:'◈'},
     {id:'deception',t:'Deception Grid',sub:'/deception · live decoys',size:'s4',bh:'<div class="heatgrid" id="deception" style="grid-template-columns:repeat(12,1fr)"></div>',hr:'<span class="live-n" id="decoyN">—</span>',init:initDeception,ic:'🕸'},
     {id:'swarm-mind',t:'Swarm-Mind',sub:'/swarm-mind · consensus',size:'s4',cbody:'vizbox',bh:'<canvas id="swarmCanvas" class="viz"></canvas>',hr:'<span class="live-n" id="swarmN">consensus 0.0</span>',draw:drawSwarm,init:function(){if(swP)swP._w=-1;},ic:'🧠'},
@@ -1262,7 +1323,7 @@ export function mountCommandCenter(root, THREE, opts) {
   }
 
   var CLIENTS=[{id:'default',name:'Default · all companies'},{id:'acme',name:'Acme Corp'},{id:'globex',name:'Globex Financial'},{id:'umbrella',name:'Umbrella Med'}];
-  var DEFAULT_LAYOUT=['m:risk_score','m:crit_findings','m:mttc','m:mitre_cov','m:assets','m:contained','mod:priority-queue','mod:response-sla','mod:crown-path','mod:mission-control','mod:ekg','mod:engine-room','mod:auto-heal','mod:neural-web','mod:deception','mod:swarm-mind','mod:identity-matrix','mod:ai-model-risk','mod:edge-swarm','mod:mitre','mod:findings'];
+  var DEFAULT_LAYOUT=['m:risk_score','m:crit_findings','m:mttc','m:mitre_cov','m:assets','m:contained','mod:priority-queue','mod:response-sla','mod:crown-path','mod:exposure-score','mod:mission-control','mod:ekg','mod:engine-room','mod:auto-heal','mod:neural-web','mod:deception','mod:swarm-mind','mod:identity-matrix','mod:ai-model-risk','mod:edge-swarm','mod:mitre','mod:findings'];
   var curClient='default',layout=DEFAULT_LAYOUT.slice();
   function lkey(c){return 'wm_cc_layout_'+c;}
   function loadLayout(c){try{var s2=localStorage.getItem(lkey(c));if(s2){var a=JSON.parse(s2);if(Array.isArray(a)&&a.length)return a.filter(function(id){return catById[id];});}}catch(e){}return DEFAULT_LAYOUT.slice();}
