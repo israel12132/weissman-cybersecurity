@@ -29,9 +29,9 @@ function loadColor(ratio) {
 
 function Stat({ label, value, sub }) {
   return (
-    <div className="rounded-lg border border-white/10 bg-bg-2 px-3 py-2.5">
+    <div className="rounded-lg border border-[var(--border-default)] bg-bg-2 px-3 py-2.5">
       <div className="text-[10px] uppercase tracking-wider text-text-muted">{label}</div>
-      <div className="text-xl font-semibold text-white tabular-nums font-mono">{value}</div>
+      <div className="text-xl font-semibold text-[var(--text-primary)] tabular-nums font-mono">{value}</div>
       {sub && <div className="text-[10px] text-text-muted mt-0.5">{sub}</div>}
     </div>
   )
@@ -44,7 +44,7 @@ function LoadBar({ inFlight, capacity }) {
   const ratio = Math.min(1, cur / cap)
   return (
     <div className="flex items-center gap-2">
-      <div className="h-2 flex-1 rounded-full bg-white/10 overflow-hidden">
+      <div className="h-2 flex-1 rounded-full bg-[var(--bg-2)] overflow-hidden">
         <div className={`h-full ${loadColor(ratio)} transition-all`} style={{ width: `${ratio * 100}%` }} />
       </div>
       <span className="text-[11px] font-mono text-text-secondary tabular-nums w-12 text-right">
@@ -164,7 +164,7 @@ export default function StealthOperations() {
     <div className="mx-auto max-w-6xl px-4 py-6 text-text-secondary">
       <header className="mb-5 flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-white flex items-center gap-2">
+          <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)] flex items-center gap-2">
             <span aria-hidden>🛡️</span> {t('stealthOps.title')}
           </h1>
           <p className="text-sm text-text-tertiary mt-1 max-w-2xl">{t('stealthOps.subtitle')}</p>
@@ -176,7 +176,7 @@ export default function StealthOperations() {
             className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
               live
                 ? 'border-emerald-500/40 bg-emerald-950/40 text-emerald-300'
-                : 'border-white/15 bg-bg-2 text-text-tertiary'
+                : 'border-[var(--border-strong)] bg-bg-2 text-text-tertiary'
             }`}
           >
             <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${live ? 'bg-emerald-400 animate-pulse' : 'bg-text-muted'}`} />
@@ -185,7 +185,7 @@ export default function StealthOperations() {
           <Button
             variant="unstyled"
             onClick={load}
-            className="rounded-lg border border-white/15 bg-bg-2 px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-bg-3"
+            className="rounded-lg border border-[var(--border-strong)] bg-bg-2 px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-bg-3"
           >
             {t('stealthOps.refresh')}
           </Button>
@@ -202,7 +202,7 @@ export default function StealthOperations() {
             onClick={exportPdf}
             disabled={!!error || !filteredHosts.length}
             title={t('common.export_pdf')}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-white/15 text-text-secondary hover:bg-white/10 disabled:opacity-40 transition-colors"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-[var(--border-strong)] text-text-secondary hover:bg-[var(--row-hover-bg)] disabled:opacity-40 transition-colors"
           >
             <FileText className="w-3.5 h-3.5" />
             {t('common.export_pdf')}
@@ -223,7 +223,7 @@ export default function StealthOperations() {
       )}
 
       {loading && !data && (
-        <div className="rounded-xl border border-dashed border-white/10 bg-bg-2 px-6 py-12 text-center text-sm text-text-muted">
+        <div className="rounded-xl border border-dashed border-[var(--border-default)] bg-bg-2 px-6 py-12 text-center text-sm text-text-muted">
           {t('stealthOps.loading')}
         </div>
       )}
@@ -265,7 +265,7 @@ export default function StealthOperations() {
 
           <div className="grid gap-5 md:grid-cols-2">
             {/* ── Config ── */}
-            <section className="rounded-xl border border-white/10 bg-bg-2 p-4">
+            <section className="rounded-xl border border-[var(--border-default)] bg-bg-2 p-4">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-text-tertiary mb-3">
                 {t('stealthOps.effectiveConfig')}
               </h2>
@@ -279,7 +279,7 @@ export default function StealthOperations() {
                   [t('stealthOps.perTarget'), cfg.per_target, cfg.env_keys.per_target],
                   [t('stealthOps.globalCeiling'), cfg.global_capacity, cfg.env_keys.global],
                 ].map(([k, v, env]) => (
-                  <div key={k} className="flex items-baseline justify-between gap-3 border-b border-white/5 pb-2 last:border-0">
+                  <div key={k} className="flex items-baseline justify-between gap-3 border-b border-[var(--border-subtle)] pb-2 last:border-0">
                     <div className="min-w-0">
                       <div className="text-sm text-text-secondary">{k}</div>
                       <div className="text-[10px] font-mono text-text-muted truncate">{env}</div>
@@ -313,7 +313,7 @@ export default function StealthOperations() {
                         aria-label={k}
                         value={pacing[key]}
                         onChange={setP(key)}
-                        className="w-28 rounded-md border border-white/10 bg-bg-1 px-2 py-1 text-right text-sm font-mono text-cyan-300 tabular-nums focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+                        className="w-28 rounded-md border border-[var(--border-default)] bg-bg-1 px-2 py-1 text-right text-sm font-mono text-cyan-300 tabular-nums focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
                       />
                     </label>
                   ))}
@@ -338,7 +338,7 @@ export default function StealthOperations() {
             </section>
 
             {/* ── Rotating identity ── */}
-            <section className="rounded-xl border border-white/10 bg-bg-2 p-4">
+            <section className="rounded-xl border border-[var(--border-default)] bg-bg-2 p-4">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-text-tertiary mb-3">
                 {t('stealthOps.rotatingIdentity')}
               </h2>
@@ -348,11 +348,11 @@ export default function StealthOperations() {
                 <Stat label={t('stealthOps.acceptLang')} value={id.accept_language_pool} />
                 <Stat label={t('stealthOps.platforms')} value={id.platform_pool} />
               </div>
-              <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2">
+              <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-2)] px-3 py-2">
                 <div className="text-[10px] uppercase tracking-wider text-text-muted">
                   {t('stealthOps.identitiesDispensed')}
                 </div>
-                <div className="text-lg font-mono font-semibold text-white tabular-nums">
+                <div className="text-lg font-mono font-semibold text-[var(--text-primary)] tabular-nums">
                   {id.identities_dispensed.toLocaleString()}
                 </div>
               </div>
@@ -360,7 +360,7 @@ export default function StealthOperations() {
           </div>
 
           {/* ── Active hosts ── */}
-          <section className="rounded-xl border border-white/10 bg-bg-2 p-4 mt-5">
+          <section className="rounded-xl border border-[var(--border-default)] bg-bg-2 p-4 mt-5">
             <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-text-tertiary">
                 {t('stealthOps.activeTargets')}
@@ -374,7 +374,7 @@ export default function StealthOperations() {
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder={t('common.search')}
                     aria-label={t('common.search')}
-                    className="w-40 pl-6 pr-2 py-1 rounded-md text-[11px] bg-bg-1 border border-white/10 text-text-secondary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+                    className="w-40 pl-6 pr-2 py-1 rounded-md text-[11px] bg-bg-1 border border-[var(--border-default)] text-text-secondary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
                   />
                 </div>
                 <span className="text-xs font-mono text-text-muted">

@@ -336,7 +336,7 @@ function Num({ label, value, onChange, min, max, step, hint }) {
         step={step}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-pink-400/40"
+        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-[var(--text-primary)] font-mono focus:outline-none focus:border-pink-400/40"
       />
       <Hint>{hint}</Hint>
     </label>
@@ -350,7 +350,7 @@ function Sel({ label, value, onChange, options, hint }) {
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white focus:outline-none focus:border-pink-400/40"
+        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-pink-400/40"
       >
         {options.map((o) => (
           <option key={o} value={o}>{o}</option>
@@ -369,7 +369,7 @@ function Txt({ label, value, onChange, placeholder, hint }) {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white font-mono placeholder-white/20 focus:outline-none focus:border-pink-400/40"
+        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-[var(--text-primary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-pink-400/40"
       />
       <Hint>{hint}</Hint>
     </label>
@@ -385,7 +385,7 @@ function Area({ label, value, onChange, placeholder, rows = 3, hint }) {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-xs text-white font-mono placeholder-white/20 focus:outline-none focus:border-pink-400/40 resize-y"
+        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-xs text-[var(--text-primary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-pink-400/40 resize-y"
       />
       <Hint>{hint}</Hint>
     </label>
@@ -524,7 +524,7 @@ function ExposureGauge({ score }) {
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-3xl font-bold text-white">{hasScore ? pct : '—'}</span>
+        <span className="text-3xl font-bold text-[var(--text-primary)]">{hasScore ? pct : '—'}</span>
         <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-widest">Exposure</span>
       </div>
     </div>
@@ -535,7 +535,7 @@ function MetricTile({ label, value, accent = '#f472b6' }) {
   return (
     <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] backdrop-blur-md p-4" style={{ boxShadow: `inset 0 1px 0 ${accent}20` }}>
       <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-1">{label}</p>
-      <p className="text-2xl font-bold text-white">{value ?? '—'}</p>
+      <p className="text-2xl font-bold text-[var(--text-primary)]">{value ?? '—'}</p>
     </div>
   )
 }
@@ -616,7 +616,7 @@ function SchemaTypeExplorer({ schemaGraph }) {
       {active && (
         <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-3)] p-3">
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-sm font-semibold text-white">{active.type}</span>
+            <span className="text-sm font-semibold text-[var(--text-primary)]">{active.type}</span>
             <span className="text-[9px] font-mono text-[var(--text-muted)]">{active.kind}</span>
             <span className="text-[9px] font-mono text-cyan-400/70">{active.field_count ?? (active.fields || []).length} fields</span>
           </div>
@@ -675,7 +675,7 @@ function ExecutiveSummaryStrip({ summary, onExportPdf, onExportJson }) {
         </div>
       </div>
       {summary.headline && (
-        <p className="text-sm font-semibold text-white leading-snug">{summary.headline}</p>
+        <p className="text-sm font-semibold text-[var(--text-primary)] leading-snug">{summary.headline}</p>
       )}
       {summary.recommended_first_action && (
         <p className="text-[11px] text-[var(--text-tertiary)] leading-relaxed border-t border-[var(--border-default)] pt-2">
@@ -743,7 +743,7 @@ function RemediationPanel({ items }) {
             <span className={`text-[10px] font-mono shrink-0 ${sevColor(item.severity)}`}>
               [{item.severity || 'info'}]
             </span>
-            <span className="text-xs font-semibold text-white">{item.title}</span>
+            <span className="text-xs font-semibold text-[var(--text-primary)]">{item.title}</span>
           </div>
           {item.remediation && (
             <p className="text-[10px] text-cyan-200/70 leading-snug pl-1">{item.remediation}</p>
@@ -1021,7 +1021,7 @@ export default function GraphqlSecurityCommandCenter() {
                   41 {t('graphqlSec.probe_components', 'probe components')}
                 </span>
               </div>
-              <h1 className="text-2xl font-bold text-white tracking-tight">
+              <h1 className="text-2xl font-bold text-[var(--text-primary)] tracking-tight">
                 {engine?.label || 'GraphQL & API Security'}
               </h1>
               <p className="text-sm text-[var(--text-tertiary)] mt-1 max-w-2xl leading-relaxed">
@@ -1048,7 +1048,7 @@ export default function GraphqlSecurityCommandCenter() {
             >
               <span className="text-lg">{p.icon}</span>
               <div>
-                <p className="text-xs font-semibold text-white">{p.label}</p>
+                <p className="text-xs font-semibold text-[var(--text-primary)]">{p.label}</p>
                 <p className="text-[10px] text-[var(--text-muted)] max-w-xs leading-snug">{p.desc}</p>
               </div>
             </Button>
@@ -1061,7 +1061,7 @@ export default function GraphqlSecurityCommandCenter() {
           <div className="xl:sticky xl:top-4 space-y-3 xl:max-h-[calc(100dvh-2rem)] xl:overflow-y-auto pr-1">
             <div className="rounded-2xl border border-pink-500/25 bg-gradient-to-b from-pink-950/30 to-black/50 p-3">
               <div className="flex items-center justify-between mb-2 px-1">
-                <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+                <h2 className="text-sm font-bold text-[var(--text-primary)] tracking-tight flex items-center gap-2">
                   <span>🎛️</span> {t('graphqlSec.control_column', 'API Security Control Column')}
                 </h2>
                 <Button variant="unstyled"
@@ -1080,7 +1080,7 @@ export default function GraphqlSecurityCommandCenter() {
                   <select
                     value={selectedClientId}
                     onChange={(e) => setSelectedClientId(e.target.value)}
-                    className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white focus:outline-none focus:border-pink-400/40"
+                    className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-pink-400/40"
                   >
                     <option value="">—</option>
                     {clients.map((c) => (
@@ -1239,13 +1239,13 @@ export default function GraphqlSecurityCommandCenter() {
                         value={h.name}
                         onChange={(e) => setHeader(i, 'name', e.target.value)}
                         placeholder="Header"
-                        className="w-2/5 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-2 py-1 text-[11px] text-white font-mono placeholder-white/20 focus:outline-none focus:border-pink-400/40"
+                        className="w-2/5 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-2 py-1 text-[11px] text-[var(--text-primary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-pink-400/40"
                       />
                       <input
                         value={h.value}
                         onChange={(e) => setHeader(i, 'value', e.target.value)}
                         placeholder="Value (e.g. Bearer …)"
-                        className="flex-1 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-2 py-1 text-[11px] text-white font-mono placeholder-white/20 focus:outline-none focus:border-pink-400/40"
+                        className="flex-1 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-2 py-1 text-[11px] text-[var(--text-primary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-pink-400/40"
                       />
                       <Button variant="unstyled" type="button" aria-label="Remove header" onClick={() => removeHeader(i)} className="text-[var(--text-disabled)] hover:text-rose-400 text-sm px-1">✕</Button>
                     </div>
@@ -1378,7 +1378,7 @@ export default function GraphqlSecurityCommandCenter() {
                     <div key={i} className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] p-3">
                       <div className="flex items-center gap-2 mb-1">
                         <span className={`text-[10px] font-mono ${sevColor(p.severity)}`}>[{p.severity}]</span>
-                        <span className="text-sm font-semibold text-white">{p.title}</span>
+                        <span className="text-sm font-semibold text-[var(--text-primary)]">{p.title}</span>
                       </div>
                       <div className="flex flex-wrap items-center gap-1.5 mt-2">
                         {(p.path_steps || []).map((step, j) => (

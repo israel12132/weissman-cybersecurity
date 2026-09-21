@@ -65,9 +65,9 @@ const LEVEL_COLOR = {
 
 function Level({ label, value }) {
   return (
-    <span className="text-[11px] uppercase tracking-wide text-white/40">
+    <span className="text-[11px] uppercase tracking-wide text-[var(--text-muted)]">
       {label}:{' '}
-      <span className={`font-semibold ${LEVEL_COLOR[value] || 'text-white/70'}`}>
+      <span className={`font-semibold ${LEVEL_COLOR[value] || 'text-[var(--text-secondary)]'}`}>
         {value || '—'}
       </span>
     </span>
@@ -76,13 +76,13 @@ function Level({ label, value }) {
 
 function StatCard({ icon, label, value, hint }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-      <div className="flex items-center gap-2 text-white/50 text-xs uppercase tracking-wide">
+    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
+      <div className="flex items-center gap-2 text-[var(--text-muted)] text-xs uppercase tracking-wide">
         {icon}
         {label}
       </div>
-      <div className="mt-1 text-2xl font-semibold text-white">{value}</div>
-      {hint && <div className="text-[11px] text-white/40 mt-0.5">{hint}</div>}
+      <div className="mt-1 text-2xl font-semibold text-[var(--text-primary)]">{value}</div>
+      {hint && <div className="text-[11px] text-[var(--text-muted)] mt-0.5">{hint}</div>}
     </div>
   )
 }
@@ -194,7 +194,7 @@ export default function SelfImprovementConsole() {
             variant="unstyled"
             onClick={runNow}
             disabled={busy}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-sm text-white/80 hover:bg-white/10 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border-strong)] bg-[var(--bg-2)] px-3 py-1.5 text-sm text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] disabled:opacity-50"
           >
             <Play className="w-4 h-4" /> Run now
           </Button>
@@ -205,7 +205,7 @@ export default function SelfImprovementConsole() {
             className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium disabled:opacity-50 ${
               enabled && !error
                 ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/40'
-                : 'bg-white/5 text-white/60 border border-white/15'
+                : 'bg-[var(--bg-2)] text-[var(--text-tertiary)] border border-[var(--border-strong)]'
             }`}
           >
             <Power className="w-4 h-4" />
@@ -215,7 +215,7 @@ export default function SelfImprovementConsole() {
             variant="unstyled"
             onClick={load}
             disabled={busy}
-            className="inline-flex items-center rounded-lg border border-white/15 bg-white/5 p-1.5 text-white/70 hover:bg-white/10 disabled:opacity-50"
+            className="inline-flex items-center rounded-lg border border-[var(--border-strong)] bg-[var(--bg-2)] p-1.5 text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] disabled:opacity-50"
             aria-label="Refresh"
           >
             <RefreshCw className={`w-4 h-4 ${busy ? 'animate-spin' : ''}`} />
@@ -233,7 +233,7 @@ export default function SelfImprovementConsole() {
             onClick={exportPdf}
             disabled={!filteredItems.length}
             title="Export PDF"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-sm text-white/70 hover:bg-white/10 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border-strong)] bg-[var(--bg-2)] px-3 py-1.5 text-sm text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] disabled:opacity-50"
           >
             <FileText className="w-4 h-4" /> PDF
           </Button>
@@ -302,8 +302,8 @@ export default function SelfImprovementConsole() {
                 aria-pressed={filter === s}
                 className={`rounded-full px-3 py-1 text-xs font-medium border ${
                   filter === s
-                    ? 'bg-white/15 text-white border-white/30'
-                    : 'bg-white/[0.03] text-white/50 border-white/10 hover:text-white/80'
+                    ? 'bg-[var(--bg-2)] text-[var(--text-primary)] border-[var(--border-strong)]'
+                    : 'bg-[var(--bg-2)] text-[var(--text-muted)] border-[var(--border-default)] hover:text-[var(--text-primary)]'
                 }`}
               >
                 {s.replace('_', ' ').toLowerCase()}
@@ -312,14 +312,14 @@ export default function SelfImprovementConsole() {
               )
             })}
             <div className="relative ml-auto">
-              <Search className="w-3.5 h-3.5 text-white/30 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <Search className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search title, category, source"
                 aria-label="Search proposals"
-                className="w-64 max-w-full pl-8 pr-3 py-1.5 rounded-lg text-xs bg-black/30 border border-white/10 text-white/80 placeholder-white/30 focus:outline-none focus:border-white/30"
+                className="w-64 max-w-full pl-8 pr-3 py-1.5 rounded-lg text-xs bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--border-strong)]"
               />
             </div>
           </div>
@@ -346,30 +346,30 @@ export default function SelfImprovementConsole() {
                       initial={{ opacity: 0, y: 6 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0 }}
-                      className="rounded-xl border border-white/10 bg-white/[0.03] p-4"
+                      className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4"
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span
                               className={`text-[11px] font-semibold rounded-md border px-2 py-0.5 ${
-                                CATEGORY_COLOR[it.category] || 'text-white/60 border-white/15'
+                                CATEGORY_COLOR[it.category] || 'text-[var(--text-tertiary)] border-[var(--border-strong)]'
                               }`}
                             >
                               {CATEGORY_LABEL[it.category] || it.category}
                             </span>
-                            <span className="text-[11px] text-white/30">
+                            <span className="text-[11px] text-[var(--text-muted)]">
                               {it.source} · #{it.id}
                             </span>
                           </div>
-                          <h3 className="mt-1.5 text-white font-medium">{it.title}</h3>
+                          <h3 className="mt-1.5 text-[var(--text-primary)] font-medium">{it.title}</h3>
                           {it.rationale && (
-                            <p className="mt-1 text-sm text-white/60 leading-relaxed">
+                            <p className="mt-1 text-sm text-[var(--text-tertiary)] leading-relaxed">
                               {it.rationale}
                             </p>
                           )}
                           {it.proposed_diff_summary && (
-                            <p className="mt-2 text-[13px] text-white/50 border-l-2 border-white/10 pl-3">
+                            <p className="mt-2 text-[13px] text-[var(--text-muted)] border-l-2 border-[var(--border-default)] pl-3">
                               {it.proposed_diff_summary}
                             </p>
                           )}
@@ -378,7 +378,7 @@ export default function SelfImprovementConsole() {
                               {files.map((f, i) => (
                                 <code
                                   key={i}
-                                  className="text-[11px] text-white/45 bg-black/30 rounded px-1.5 py-0.5"
+                                  className="text-[11px] text-[var(--text-muted)] bg-[var(--table-surface)] rounded px-1.5 py-0.5"
                                 >
                                   {f}
                                 </code>
@@ -405,14 +405,14 @@ export default function SelfImprovementConsole() {
                               variant="unstyled"
                               onClick={() => review(it.id, 'reject')}
                               disabled={busy}
-                              className="inline-flex items-center gap-1.5 rounded-lg bg-white/5 text-white/60 border border-white/15 px-3 py-1.5 text-sm hover:bg-white/10 disabled:opacity-50"
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--bg-2)] text-[var(--text-tertiary)] border border-[var(--border-strong)] px-3 py-1.5 text-sm hover:bg-[var(--row-hover-bg)] disabled:opacity-50"
                             >
                               <XCircle className="w-4 h-4" /> Reject
                             </Button>
                           </div>
                         )}
                         {it.status !== 'PENDING_APPROVAL' && (
-                          <span className="text-xs text-white/40 shrink-0">{it.status}</span>
+                          <span className="text-xs text-[var(--text-muted)] shrink-0">{it.status}</span>
                         )}
                       </div>
                       {it.pr_url && (
@@ -436,7 +436,7 @@ export default function SelfImprovementConsole() {
                     onChange={(e) => setNote(e.target.value)}
                     aria-label="Optional review note applied to your next approve or reject"
                     placeholder="Optional review note (applied to your next approve/reject)"
-                    className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white/80 placeholder-white/30"
+                    className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2 text-sm text-[var(--text-secondary)] placeholder-[var(--text-muted)]"
                   />
                 </div>
               )}

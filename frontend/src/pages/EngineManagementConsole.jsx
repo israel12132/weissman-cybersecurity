@@ -321,7 +321,7 @@ export default function EngineManagementConsole() {
               </span>
               <Cpu className="w-4 h-4 text-cyan-400" />
             </div>
-            <div className="text-2xl font-bold text-white">{stats.total}</div>
+            <div className="text-2xl font-bold text-[var(--text-primary)]">{stats.total}</div>
           </div>
 
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
@@ -351,7 +351,7 @@ export default function EngineManagementConsole() {
               </span>
               <Filter className="w-4 h-4 text-purple-400" />
             </div>
-            <div className="text-2xl font-bold text-white">{categories.length - 1}</div>
+            <div className="text-2xl font-bold text-[var(--text-primary)]">{categories.length - 1}</div>
           </div>
         </div>
 
@@ -365,7 +365,7 @@ export default function EngineManagementConsole() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder={t('pages.engineManagementConsole.search_placeholder')}
-              className="w-full pl-10 pr-4 py-2 bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-lg text-sm text-white placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full pl-10 pr-4 py-2 bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-lg text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             />
           </div>
 
@@ -373,7 +373,7 @@ export default function EngineManagementConsole() {
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
-            className="px-3 py-2 bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="px-3 py-2 bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           >
             {categories.map((cat) => (
               <option key={cat} value={cat}>
@@ -416,7 +416,7 @@ export default function EngineManagementConsole() {
           <div className="bg-gradient-to-r from-purple-500/10 to-blue-500/10 backdrop-blur-md border border-purple-500/30 rounded-xl p-4">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-semibold text-white mb-1">
+                <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1">
                   {t('pages.engineManagementConsole.bulk_actions', {
                     category: categoryFilter.toUpperCase(),
                   })}
@@ -450,7 +450,7 @@ export default function EngineManagementConsole() {
         {/* Engines List */}
         <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
           <div className="p-4 border-b border-[var(--border-default)] flex items-center justify-between gap-3">
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
               <Cpu className="w-4 h-4 text-cyan-400" />
               {t(`${NS}.engines_heading`, {
                 count: filteredEngines.length,
@@ -499,7 +499,7 @@ export default function EngineManagementConsole() {
                         </Button>
 
                         {/* Engine Name */}
-                        <h4 className="text-sm font-semibold text-white">
+                        <h4 className="text-sm font-semibold text-[var(--text-primary)]">
                           {engine.name}
                         </h4>
 
@@ -625,7 +625,7 @@ function EngineConfigModal({ engine, onClose, onSave }) {
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={`Configure ${engine.name}`} className="bg-[var(--bg-1)] border border-[var(--border-default)] rounded-xl max-w-lg w-full p-6">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h3 className="text-lg font-bold text-white">{engine.name}</h3>
+            <h3 className="text-lg font-bold text-[var(--text-primary)]">{engine.name}</h3>
             <p className="text-xs text-[var(--text-tertiary)]">
               {t('pages.engineManagementConsole.engine_config')}
             </p>
@@ -651,7 +651,7 @@ function EngineConfigModal({ engine, onClose, onSave }) {
               onChange={(e) =>
                 setConfig({ ...config, timeout: intField(e.target.value) })
               }
-              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             />
           </div>
 
@@ -666,7 +666,7 @@ function EngineConfigModal({ engine, onClose, onSave }) {
               onChange={(e) =>
                 setConfig({ ...config, concurrency: intField(e.target.value) })
               }
-              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             />
           </div>
 
@@ -681,7 +681,7 @@ function EngineConfigModal({ engine, onClose, onSave }) {
               onChange={(e) =>
                 setConfig({ ...config, max_retries: intField(e.target.value) })
               }
-              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             />
           </div>
 
@@ -699,7 +699,7 @@ function EngineConfigModal({ engine, onClose, onSave }) {
                   resource_limit_cpu: intField(e.target.value),
                 })
               }
-              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             />
           </div>
 
@@ -717,7 +717,7 @@ function EngineConfigModal({ engine, onClose, onSave }) {
                   resource_limit_memory: intField(e.target.value),
                 })
               }
-              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             />
           </div>
         </div>

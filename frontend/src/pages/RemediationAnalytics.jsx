@@ -190,7 +190,7 @@ export default function RemediationAnalytics() {
             onClick={exportPdf}
             disabled={!!error || !filteredHeals.length}
             title={t('common.export_pdf')}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/15 text-[11px] font-mono text-white/70 hover:bg-white/10 disabled:opacity-40 transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border-strong)] text-[11px] font-mono text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] disabled:opacity-40 transition-colors"
           >
             <FileText className="w-3.5 h-3.5" />
             {t('common.export_pdf')}
@@ -206,7 +206,7 @@ export default function RemediationAnalytics() {
         </EvidenceNotice>
 
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <p className="text-xs text-white/45 font-mono">
+          <p className="text-xs text-[var(--text-muted)] font-mono">
             {t('pages.remediationAnalytics.intro')}
           </p>
           <Link to="/remediation" className="text-xs text-cyan-300 hover:text-cyan-200">
@@ -260,19 +260,19 @@ export default function RemediationAnalytics() {
         {!error && (
         <section className="space-y-2">
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
               <GitPullRequest className="w-4 h-4 text-cyan-400" />
               {t('pages.remediationAnalytics.recent_heals')}
             </h3>
             <div className="relative">
-              <Search className="w-3 h-3 text-white/30 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <Search className="w-3 h-3 text-[var(--text-muted)] absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={t('common.search')}
                 aria-label={t('common.search')}
-                className="w-40 pl-6 pr-2 py-1 rounded-md text-[11px] bg-black/40 border border-white/10 text-white/80 placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+                className="w-40 pl-6 pr-2 py-1 rounded-md text-[11px] bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
               />
             </div>
           </div>
@@ -281,23 +281,23 @@ export default function RemediationAnalytics() {
           ) : heals == null ? (
             <p className="text-xs text-amber-300/80 font-mono">{t('pages.remediationAnalytics.unavailable_body')}</p>
           ) : filteredHeals.length === 0 ? (
-            <div className="text-xs text-white/30 font-mono">—</div>
+            <div className="text-xs text-[var(--text-muted)] font-mono">—</div>
           ) : (
-            <div className="divide-y divide-white/5 rounded-xl border border-white/10 overflow-hidden bg-black/40">
+            <div className="divide-y divide-[var(--border-subtle)] rounded-xl border border-[var(--border-default)] overflow-hidden bg-[var(--table-surface)]">
               {filteredHeals.map((h) => {
                 const vm = h.verdict ? VERDICT_META[h.verdict] : null
                 return (
                   <div
                     key={h.id || `${h.client_id}-${h.finding_id}-${h.created_at}`}
-                    className="flex items-center justify-between gap-3 px-4 py-2.5 text-xs hover:bg-white/[0.03]"
+                    className="flex items-center justify-between gap-3 px-4 py-2.5 text-xs hover:bg-[var(--bg-2)]"
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <span style={{ color: vm ? vm.color : 'rgba(255,255,255,0.3)' }}>●</span>
-                      <span className="text-white/70 font-mono truncate max-w-[220px]">{h.finding_id || '—'}</span>
-                      <span className="text-white/60 truncate">
+                      <span className="text-[var(--text-secondary)] font-mono truncate max-w-[220px]">{h.finding_id || '—'}</span>
+                      <span className="text-[var(--text-tertiary)] truncate">
                         {vm ? t(`pages.remediationHub.${vm.key}`, { defaultValue: h.verdict }) : (h.verification_status || h.status || '—')}
                       </span>
-                      {h.channel && <span className="text-[10px] text-white/35 font-mono">{h.channel}</span>}
+                      {h.channel && <span className="text-[10px] text-[var(--text-muted)] font-mono">{h.channel}</span>}
                       {h.attempts > 1 && <span className="text-[10px] text-amber-300/70 font-mono">×{h.attempts}</span>}
                       {h.attested && <span className="text-[10px] text-emerald-300/70">🔏</span>}
                     </div>
@@ -307,7 +307,7 @@ export default function RemediationAnalytics() {
                           <GitPullRequest className="w-3.5 h-3.5" />
                         </a>
                       )}
-                      <span className="text-[10px] text-white/30 font-mono whitespace-nowrap">{(h.created_at || '').slice(0, 10)}</span>
+                      <span className="text-[10px] text-[var(--text-muted)] font-mono whitespace-nowrap">{(h.created_at || '').slice(0, 10)}</span>
                     </div>
                   </div>
                 )
