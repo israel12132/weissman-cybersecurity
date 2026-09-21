@@ -156,20 +156,25 @@ export default function WeissmanFindingsPanel({
             />
           </div>
           <div className="flex gap-1 flex-wrap">
-            {SEV_FILTER_OPTIONS.map((s) => (
-              <Button variant="unstyled"
-                key={s}
-                type="button"
-                onClick={() => onSeverityChange?.(s)}
-                className={`text-[9px] font-mono px-2 py-0.5 rounded border uppercase ${
-                  severityFilter === s
-                    ? 'border-cyan-500/50 text-cyan-200 bg-cyan-500/10'
-                    : 'border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-tertiary)]'
-                }`}
-              >
-                {s === 'all' ? t('weissmanFindings.filter_all') : s}
-              </Button>
-            ))}
+            {SEV_FILTER_OPTIONS.map((s) => {
+              const n = s === 'all' ? displayTotal : (counts ? (counts[s] || 0) : null)
+              return (
+                <Button variant="unstyled"
+                  key={s}
+                  type="button"
+                  onClick={() => onSeverityChange?.(s)}
+                  aria-pressed={severityFilter === s}
+                  className={`text-[9px] font-mono px-2 py-0.5 rounded border uppercase ${
+                    severityFilter === s
+                      ? 'border-cyan-500/50 text-cyan-200 bg-cyan-500/10'
+                      : 'border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-tertiary)]'
+                  }`}
+                >
+                  {s === 'all' ? t('weissmanFindings.filter_all') : s}
+                  {n != null && <span className="ml-1 opacity-60 tabular-nums">{n}</span>}
+                </Button>
+              )
+            })}
           </div>
         </div>
       </div>
