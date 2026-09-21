@@ -359,13 +359,15 @@ export default function JobsDashboard() {
                     key={key}
                     type="button"
                     onClick={() => setStatusFilter(key)}
+                    aria-pressed={statusFilter === key}
                     className={`px-3 py-1.5 rounded-full text-[11px] font-mono border transition-all ${
                       statusFilter === key
                         ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40'
                         : 'bg-[var(--row-hover-bg)] text-[var(--text-tertiary)] border-[var(--border-default)] hover:border-[var(--border-strong)]'
                     }`}
                   >
-                    {t(`pages.jobsDashboard.filter_${key}`)}
+                    {t(`pages.jobsDashboard.filter_${key}`)}{' '}
+                    <span className="opacity-70 tabular-nums">{key === 'all' ? jobs.length : (statusCounts[key] || 0)}</span>
                   </Button>
                 ))}
               </div>
