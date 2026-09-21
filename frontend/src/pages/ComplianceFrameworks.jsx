@@ -776,20 +776,34 @@ export default function ComplianceFrameworks() {
                   />
                 </div>
                 <div className="flex items-center gap-2 bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-lg p-1">
-                  {FILTER_KEYS.map((f) => (
-                    <Button variant="unstyled"
-                      key={f}
-                      type="button"
-                      onClick={() => setFilter(f)}
-                      className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                        filter === f
-                          ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                          : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)]'
-                      }`}
-                    >
-                      {t(`pages.complianceFrameworks.filter_${f.replace('-', '_')}`)}
-                    </Button>
-                  ))}
+                  {FILTER_KEYS.map((f) => {
+                    const n = f === 'all'
+                      ? stats.total
+                      : f === 'compliant'
+                        ? stats.compliant
+                        : f === 'non-compliant'
+                          ? stats.nonCompliant
+                          : stats.partial
+                    const activeCls = f === 'non-compliant'
+                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                      : 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
+                    return (
+                      <Button variant="unstyled"
+                        key={f}
+                        type="button"
+                        onClick={() => setFilter(f)}
+                        aria-pressed={filter === f}
+                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                          filter === f
+                            ? activeCls
+                            : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)]'
+                        }`}
+                      >
+                        {t(`pages.complianceFrameworks.filter_${f.replace('-', '_')}`)}{' '}
+                        <span className="opacity-70 tabular-nums">{n}</span>
+                      </Button>
+                    )
+                  })}
                 </div>
               </div>
 
