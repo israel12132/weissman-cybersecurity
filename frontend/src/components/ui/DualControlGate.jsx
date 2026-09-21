@@ -20,7 +20,7 @@ export default function DualControlGate({
   const { t } = useTranslation()
   return (
     <div className={`rounded-xl border border-amber-500/25 bg-amber-950/20 p-4 space-y-3 ${className}`}>
-      <p className="text-[11px] font-mono uppercase tracking-wider text-amber-200/80">
+      <p className="text-[11px] font-mono uppercase tracking-wider text-[var(--severity-medium)]">
         {t('dual_control.title')}
       </p>
       <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">

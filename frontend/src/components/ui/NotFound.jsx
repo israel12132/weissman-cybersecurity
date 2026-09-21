@@ -29,7 +29,7 @@ export default function NotFound() {
             <Logo size={48} />
           </div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[10px] font-mono tracking-widest text-[var(--text-muted)] uppercase mb-4">
-            <Compass className="w-3 h-3 text-cyan-400/70" aria-hidden="true" />
+            <Compass className="w-3 h-3 text-[var(--text-accent)]" aria-hidden="true" />
             Route not found
           </div>
           <div className="text-[5.5rem] sm:text-7xl font-bold font-mono leading-none text-transparent bg-clip-text bg-gradient-to-b from-cyan-400/50 to-cyan-900/20 mb-3 select-none">
@@ -39,7 +39,7 @@ export default function NotFound() {
             {t('errors.unknown_route')}
           </h1>
           <p className="text-sm text-[var(--text-tertiary)] font-mono break-all">
-            <code className="text-cyan-300/75">{location.pathname}</code>
+            <code className="text-[var(--text-accent)]">{location.pathname}</code>
           </p>
         </div>
 
@@ -56,7 +56,7 @@ export default function NotFound() {
               style={{ transitionDuration: 'var(--duration-standard)' }}
             >
               <span className="flex items-center justify-center w-9 h-9 rounded-lg border border-[var(--border-default)] bg-[var(--row-hover-bg)] group-hover:border-cyan-500/25 group-hover:bg-cyan-500/10 transition-colors" style={{ transitionDuration: 'var(--duration-fast)' }}>
-                <Icon className="w-4 h-4 text-cyan-400/80" strokeWidth={2} aria-hidden="true" />
+                <Icon className="w-4 h-4 text-[var(--text-accent)]" strokeWidth={2} aria-hidden="true" />
               </span>
               <span className="flex-1 min-w-0 text-start">
                 <span className="block text-sm font-medium text-[var(--text-primary)] group-hover:text-cyan-100 transition-colors" style={{ transitionDuration: 'var(--duration-fast)' }}>
@@ -64,7 +64,7 @@ export default function NotFound() {
                 </span>
                 <span className="block text-[11px] text-[var(--text-muted)] mt-0.5">{desc}</span>
               </span>
-              <ArrowLeft className="w-4 h-4 text-[var(--text-disabled)] group-hover:text-cyan-400/60 rotate-180 transition-colors shrink-0" style={{ transitionDuration: 'var(--duration-fast)' }} aria-hidden="true" />
+              <ArrowLeft className="w-4 h-4 text-[var(--text-disabled)] group-hover:text-[var(--text-accent)] rotate-180 transition-colors shrink-0" style={{ transitionDuration: 'var(--duration-fast)' }} aria-hidden="true" />
             </Link>
           ))}
         </nav>

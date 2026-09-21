@@ -62,9 +62,9 @@ function SortIndicator({ sorted }) {
     return <ChevronsUpDown className="w-3 h-3 ml-1 opacity-30" aria-hidden="true" />
   }
   return sorted === 'asc' ? (
-    <ChevronUp className="w-3 h-3 ml-1 text-cyan-400/80" aria-hidden="true" />
+    <ChevronUp className="w-3 h-3 ml-1 text-[var(--text-accent)]" aria-hidden="true" />
   ) : (
-    <ChevronDown className="w-3 h-3 ml-1 text-cyan-400/80" aria-hidden="true" />
+    <ChevronDown className="w-3 h-3 ml-1 text-[var(--text-accent)]" aria-hidden="true" />
   )
 }
 
@@ -280,7 +280,7 @@ export default function DataTable({
             className="flex h-6 w-6 items-center justify-center rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)] transition-colors"
           >
             <ChevronRight
-              className={`h-4 w-4 transition-transform ${row.getIsExpanded() ? 'rotate-90 text-cyan-400' : ''}`}
+              className={`h-4 w-4 transition-transform ${row.getIsExpanded() ? 'rotate-90 text-[var(--text-accent)]' : ''}`}
               aria-hidden="true"
             />
           </Button>
@@ -504,7 +504,7 @@ export default function DataTable({
               type="button"
               onClick={handleExport}
               disabled={totalFiltered === 0}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/5 text-[11px] font-mono text-cyan-300 hover:bg-cyan-500/15 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/5 text-[11px] font-mono text-[var(--text-accent)] hover:bg-cyan-500/15 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Download className="w-3.5 h-3.5" aria-hidden />
               CSV

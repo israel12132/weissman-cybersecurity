@@ -11,8 +11,8 @@ function DeltaDisplay({ delta, trend }) {
   if (value == null && !trend) return null
 
   const colors = {
-    up: 'text-emerald-400',
-    down: 'text-rose-400',
+    up: 'text-[var(--severity-low)]',
+    down: 'text-[var(--severity-critical)]',
     neutral: 'text-[var(--text-muted)]',
   }
   const Icon = resolvedTrend === 'up' ? ArrowUp : resolvedTrend === 'down' ? ArrowDown : Minus
