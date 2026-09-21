@@ -582,6 +582,10 @@ struct ScanBodyFields {
     ai_endpoint: Option<Value>,
     repo_url: Option<String>,
     base_payload: String,
+    /// The Command Center scan contract's `timeout` (whole seconds). Reserved out of
+    /// `extras` and forwarded explicitly into the job params so engines that honour a
+    /// wall-clock budget (e.g. `asm`) actually receive it. `None` when absent/invalid.
+    timeout: Option<u64>,
     extras: std::collections::HashMap<String, Value>,
 }
 
@@ -604,6 +608,15 @@ fn extract_fields(body: &Value) -> ScanBodyFields {
         .and_then(Value::as_str)
         .unwrap_or("")
         .to_string();
+    // Accept a JSON number or a numeric string; keep only strictly-positive values.
+    let timeout = body
+        .get("timeout")
+        .and_then(|v| {
+            v.as_u64()
+                .or_else(|| v.as_i64().filter(|n| *n > 0).map(|n| n as u64))
+                .or_else(|| v.as_str().and_then(|s| s.trim().parse::<u64>().ok()))
+        })
+        .filter(|n| *n > 0);
     let reserved = [
         "target",
         "client_id",
@@ -627,6 +640,7 @@ fn extract_fields(body: &Value) -> ScanBodyFields {
         ai_endpoint,
         repo_url,
         base_payload,
+        timeout,
         extras,
     }
 }
@@ -884,6 +898,14 @@ fn build_payload(
                 let obj = obj_mut(&mut p)?;
                 for (k, v) in &ctx.extras {
                     obj.insert(k.clone(), v.clone());
+                }
+                // Forward the scan contract's `timeout` (seconds) into the job params.
+                // It is reserved out of `extras`, so without this an engine that reads
+                // `timeout` as its wall-clock budget (e.g. `asm`) never sees it and falls
+                // back to the module default (600 s) — long enough to outlast the live
+                // audit's per-job poll window. Inserted last so nothing shadows it.
+                if let Some(t) = ctx.timeout {
+                    obj.insert("timeout".into(), json!(t));
                 }
             }
             Ok(p)
@@ -1221,5 +1243,49 @@ mod tests {
         let sealed = seal_payload_for_queue(raw);
         assert!(sealed.get("github_token").is_none());
         assert_eq!(sealed.get("depth").and_then(Value::as_str), Some("1"));
+    }
+
+    #[test]
+    fn extract_fields_captures_timeout() {
+        let ctx = extract_fields(&json!({
+            "engine": "asm", "target": "https://example.com", "client_id": 4, "timeout": 45
+        }));
+        assert_eq!(ctx.timeout, Some(45));
+        // `timeout` is reserved: it must not leak into the free-form extras.
+        assert!(!ctx.extras.contains_key("timeout"));
+        // A numeric string is accepted too (some clients send it stringified).
+        assert_eq!(
+            extract_fields(&json!({"target": "x", "timeout": "90"})).timeout,
+            Some(90)
+        );
+        // Absent / zero / non-numeric collapse to None (engine keeps its own default).
+        assert_eq!(extract_fields(&json!({"target": "x"})).timeout, None);
+        assert_eq!(
+            extract_fields(&json!({"target": "x", "timeout": 0})).timeout,
+            None
+        );
+        assert_eq!(
+            extract_fields(&json!({"target": "x", "timeout": "soon"})).timeout,
+            None
+        );
+    }
+
+    #[test]
+    fn command_center_payload_forwards_timeout_to_engine_params() {
+        // With a timeout, the engine receives it in its job params (asm reads it as the
+        // wall-clock budget) instead of falling back to the module default (600 s).
+        let ctx = extract_fields(&json!({
+            "engine": "asm", "target": "https://example.com", "client_id": 4, "timeout": 45
+        }));
+        let p = build_payload(PayloadKind::CommandCenterDefault, &ctx, "asm").unwrap();
+        assert_eq!(p.get("timeout").and_then(Value::as_u64), Some(45));
+        assert_eq!(p.get("engine").and_then(Value::as_str), Some("asm"));
+
+        // Without a timeout, no phantom key is added to the payload.
+        let ctx_none = extract_fields(&json!({
+            "engine": "asm", "target": "https://example.com", "client_id": 4
+        }));
+        let p_none = build_payload(PayloadKind::CommandCenterDefault, &ctx_none, "asm").unwrap();
+        assert!(p_none.get("timeout").is_none());
     }
 }
