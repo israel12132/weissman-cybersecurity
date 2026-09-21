@@ -344,9 +344,11 @@ pub fn redact_config(config: &Value) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::secret_zeroize::vault_env_test_lock;
 
     #[test]
     fn roundtrip_when_key_available() {
+        let _env = vault_env_test_lock();
         std::env::set_var(
             "WEISSMAN_INTEGRATIONS_VAULT_KEY",
             "test-vault-key-for-integrations-32b-minimum!!",
@@ -380,6 +382,7 @@ mod tests {
 
     #[test]
     fn encrypt_config_hides_soar_provider_secrets() {
+        let _env = vault_env_test_lock();
         // Same key string as `roundtrip_when_key_available` so the process-wide
         // vault-key OnceLock stays consistent regardless of test order.
         std::env::set_var(
@@ -492,6 +495,11 @@ mod tests {
 
     #[test]
     fn scrub_unsets_integrations_vault_env() {
+        // Held for the whole set → prime → scrub → assert sequence: `prime_keys_from_env`
+        // latches `DEDICATED_AFTER_SCRUB` from whatever the environment holds at that
+        // instant, so a concurrent `remove_var` from a sibling test would latch `false`
+        // for the rest of the process.
+        let _env = vault_env_test_lock();
         std::env::set_var(
             "WEISSMAN_INTEGRATIONS_VAULT_KEY",
             "test-vault-key-for-integrations-32b-minimum!!",

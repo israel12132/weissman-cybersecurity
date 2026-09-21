@@ -103,7 +103,7 @@ export default function FirstSeenHitsPanel({ clientId }) {
             <p className="text-[9px] font-mono uppercase tracking-wider text-[var(--text-muted)]">
               {t(`${NS}.first_seen_listed`)}
             </p>
-            <p className="text-xl font-bold tabular-nums text-slate-300">
+            <p className="text-xl font-bold tabular-nums text-text-secondary">
               {payload?.listed_count ?? listed.length}
             </p>
           </div>
@@ -143,7 +143,7 @@ export default function FirstSeenHitsPanel({ clientId }) {
                     h.claimed_first_seen
                       ? 'border-amber-500/40 text-amber-200 bg-amber-500/10'
                       : h.nvd_status === 'listed'
-                        ? 'border-slate-500/40 text-slate-300 bg-slate-500/10'
+                        ? 'border-border-strong text-text-secondary bg-bg-3'
                         : 'border-cyan-500/40 text-cyan-200 bg-cyan-500/10'
                   }`}
                 >

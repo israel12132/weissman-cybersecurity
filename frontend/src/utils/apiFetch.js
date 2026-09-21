@@ -240,7 +240,6 @@ export async function apiFetch(url, options = {}) {
       // silently credited to the breaker as a success — route it through retryOrThrow
       // with an HTTP-shaped error so callers can classify it and retries can fire.
       const err = new Error('Malformed JSON response')
-      err.status = response.status
       err.cause = parseError
       err.response = response
       return retryOrThrow(err)

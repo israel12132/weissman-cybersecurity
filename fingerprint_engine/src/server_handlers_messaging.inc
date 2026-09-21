@@ -293,8 +293,9 @@ async fn api_messages_create(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return msg_unavailable();
     };
-    // Store-down honesty: a failed lookup must surface as 503, never be swallowed
-    // into an empty sender_email that then persists a fabricated-blank message.
+    // A datastore failure here must fail the request (503), not silently post the
+    // message with a fabricated empty sender; only a genuinely missing row (user
+    // deleted mid-session) degrades to an empty sender_email.
     let sender_email: String = match sqlx::query_scalar::<_, String>(
         "SELECT email FROM users WHERE id = $1 AND tenant_id = $2",
     )

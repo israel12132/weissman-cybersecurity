@@ -20,6 +20,7 @@ import EmptyState from '../components/ui/EmptyState'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
 import FilterPills from '../components/ui/FilterPills'
 import Button from '../components/ui/Button'
+import DataTable from '../components/ui/DataTable'
 import { useToast } from '../components/ui/Toaster'
 import { useClient } from '../context/ClientContext'
 import { apiFetch } from '../utils/apiFetch'
@@ -296,6 +297,52 @@ export default function DiscoveryLab() {
         .includes(q),
     )
   }, [packs, searchQuery])
+
+  // Runs grid. Accessors return the raw field so sorting works on real values
+  // (ISO timestamps, integer counts); cells keep the original presentation.
+  const runColumns = useMemo(
+    () => [
+      {
+        id: 'target',
+        accessorFn: (run) => run.target_host || run.target_url || '',
+        header: t(`${NS}.col_target`),
+        cell: ({ getValue }) => <span className="font-mono">{getValue()}</span>,
+      },
+      {
+        id: 'status',
+        accessorKey: 'status',
+        header: t(`${NS}.col_status`),
+        cell: ({ row }) => <StatusPill status={row.original.status} />,
+      },
+      {
+        id: 'intensity',
+        accessorKey: 'intensity',
+        header: t(`${NS}.col_intensity`),
+      },
+      {
+        id: 'candidates',
+        accessorKey: 'candidates_count',
+        header: t(`${NS}.col_candidates`),
+        cell: ({ row }) => (
+          <>
+            {row.original.candidates_count ?? 0}
+            {row.original.llm_used ? ` · ${t(`${NS}.llm_used`)}` : ''}
+          </>
+        ),
+      },
+      {
+        id: 'when',
+        accessorKey: 'created_at',
+        header: t(`${NS}.col_when`),
+        cell: ({ row }) => (
+          <span className="font-mono text-[var(--text-muted)]">
+            {row.original.created_at ? new Date(row.original.created_at).toLocaleString() : '—'}
+          </span>
+        ),
+      },
+    ],
+    [t],
+  )
 
   const startRun = async () => {
     if (!clientId || !String(target).trim()) {
@@ -582,45 +629,17 @@ export default function DiscoveryLab() {
 
         <section className="space-y-3">
           <h2 className="text-[10px] font-mono uppercase tracking-widest text-cyan-300/80">{t(`${NS}.runs_section`)}</h2>
-          {runs.length === 0 && !loading ? (
-            <EmptyState icon="radar" title={t(`${NS}.no_runs`)} description={t(`${NS}.no_runs_hint`)} compact />
-          ) : (
-            <div className="overflow-x-auto rounded-xl border border-[var(--border-default)]">
-              <table className="w-full text-xs">
-                <thead className="bg-[var(--table-surface)]">
-                  <tr>
-                    <th className="px-3 py-2 font-mono text-start">{t(`${NS}.col_target`)}</th>
-                    <th className="px-3 py-2 font-mono text-start">{t(`${NS}.col_status`)}</th>
-                    <th className="px-3 py-2 font-mono text-start">{t(`${NS}.col_intensity`)}</th>
-                    <th className="px-3 py-2 font-mono text-start">{t(`${NS}.col_candidates`)}</th>
-                    <th className="px-3 py-2 font-mono text-start">{t(`${NS}.col_when`)}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {runs.map((run) => (
-                    <tr
-                      key={run.id}
-                      className="border-t border-[var(--border-default)] cursor-pointer hover:bg-[var(--row-hover-bg)]"
-                      onClick={() => setActiveRunId(run.id)}
-                    >
-                      <td className="px-3 py-2 font-mono">{run.target_host || run.target_url}</td>
-                      <td className="px-3 py-2">
-                        <StatusPill status={run.status} />
-                      </td>
-                      <td className="px-3 py-2">{run.intensity}</td>
-                      <td className="px-3 py-2">
-                        {run.candidates_count ?? 0}
-                        {run.llm_used ? ` · ${t(`${NS}.llm_used`)}` : ''}
-                      </td>
-                      <td className="px-3 py-2 font-mono text-[var(--text-muted)]">
-                        {run.created_at ? new Date(run.created_at).toLocaleString() : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <DataTable
+            columns={runColumns}
+            data={runs}
+            loading={loading}
+            hidePagination
+            tableClassName="text-xs"
+            emptyState={
+              <EmptyState icon="radar" title={t(`${NS}.no_runs`)} description={t(`${NS}.no_runs_hint`)} compact />
+            }
+            onRowClick={(row) => setActiveRunId(row.original.id)}
+          />
         </section>
 
         <div className="relative max-w-md">
@@ -664,12 +683,12 @@ export default function DiscoveryLab() {
               className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] p-3 space-y-2"
             >
               <div className="flex flex-wrap items-start justify-between gap-2">
-                <button type="button" className="text-start" onClick={() => setSelectedCandidate(row)}>
+                <Button variant="unstyled" type="button" className="text-start" onClick={() => setSelectedCandidate(row)}>
                   <h3 className="text-sm font-semibold text-[var(--text-primary)]">{row.title}</h3>
                   <p className="text-[11px] font-mono text-[var(--text-muted)]">
                     {row.target_url} · {row.payload_class} · {row.anomaly_type || '—'}
                   </p>
-                </button>
+                </Button>
                 <StatusPill status={row.status} />
               </div>
               <p className="text-xs text-[var(--text-secondary)]">{row.technical_summary}</p>
@@ -850,12 +869,12 @@ export default function DiscoveryLab() {
                 className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] p-3 space-y-2"
               >
                 <div className="flex flex-wrap justify-between gap-2">
-                  <button type="button" className="text-start" onClick={() => setSelectedPack(pack)}>
+                  <Button variant="unstyled" type="button" className="text-start" onClick={() => setSelectedPack(pack)}>
                     <h3 className="text-sm font-semibold">{pack.title}</h3>
                     <p className="text-[11px] font-mono text-[var(--text-muted)]">
                       {pack.recipient_kind} · {pack.recipient || '—'}
                     </p>
-                  </button>
+                  </Button>
                   <StatusPill status={pack.status} />
                 </div>
                 <div className="flex flex-wrap gap-2">

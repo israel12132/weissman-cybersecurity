@@ -1334,14 +1334,6 @@ jobs:
         #   nginx possible-h2c-smuggling       — TLS-terminated edge; the websocket map
         #     (nginx-snippet-websocket-map.conf) now forwards an upgrade only for a real
         #     `Upgrade: websocket`, so H2C cannot be smuggled to the backend.
-        #   python dynamic-urllib              — two dev-only gate helpers
-        #     (scripts/weissman_gate/detonate.py, ztna_proxy.py) fetch a URL with urllib:
-        #     detonate.py is a local detonation sandbox gated to http(s) schemes;
-        #     ztna_proxy.py forwards only the request path to a fixed operator UPSTREAM.
-        #     Both are pre-existing and accepted in CodeQL's baseline; CodeQL's py/SSRF
-        #     query stays ACTIVE on them as the backstop. Excluded at the rule level (not
-        #     inline) so we don't edit those long-standing lines and mark them as
-        #     PR-introduced in CodeQL's diff.
         # Secret-detection rules stay ACTIVE everywhere; the engines' own test-fixture
         # tokens are suppressed inline (`// nosemgrep`) on their exact lines.
         run: |
@@ -1353,8 +1345,7 @@ jobs:
             --error \
             --exclude-rule generic.nginx.security.request-host-used.request-host-used \
             --exclude-rule generic.nginx.security.header-redefinition.header-redefinition \
-            --exclude-rule generic.nginx.security.possible-h2c-smuggling.possible-nginx-h2c-smuggling \
-            --exclude-rule python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
+            --exclude-rule generic.nginx.security.possible-h2c-smuggling.possible-nginx-h2c-smuggling
 
       # Project-specific rules (.semgrep/weissman-rules.yml) run SEPARATELY and NON-blocking
       # first, so we can judge signal-to-noise on the real tree before promoting any into the

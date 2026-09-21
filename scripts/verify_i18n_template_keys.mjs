@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 /**
  * Gate: every `t(`${NS}.key`)` template-literal reference must resolve to a real
- * key in en.json, where NS is a `const NS = 'a.b.c'` string in the same file.
+ * key in en.json, where NS is a `const NS = 'a.b.c'` string in the same file —
+ * and so must every literal `t('a.b.c')` reference. Both forms render the raw
+ * dotted key to the user when the key is missing; the literal form used to slip
+ * through this gate (LoginGate, HoneyRouting, SSO, SOAR, LLM guard... shipped
+ * whole namespaces that existed in neither locale).
  *
  * Catches the class of bug where a component's namespace prefix is wrong (e.g.
  * GlobalNexus pointed at components.cockpit.* instead of components.cockpitWidgets.*)
@@ -40,12 +44,17 @@ for (const file of walk(srcDir)) {
     const full = `${ns}.${m[2]}`
     if (!has(full)) missing.push(`${path.relative(root, file)}: t(\`\${${m[1]}}.${m[2]}\`) → ${full}`)
   }
+  // Literal form: t('pages.x.key') / t("components.x.key"). Dotted keys only, so a
+  // plain string argument that is not an i18n key (no dot) is never inspected.
+  for (const m of s.matchAll(/\bt\(\s*['"]((?:[a-zA-Z0-9_]+\.)+[a-zA-Z0-9_]+)['"]/g)) {
+    if (!has(m[1])) missing.push(`${path.relative(root, file)}: t('${m[1]}') → ${m[1]}`)
+  }
 }
 
 if (missing.length) {
-  console.error(`✖ ${missing.length} templated i18n key(s) do not resolve in en.json:`)
+  console.error(`✖ ${missing.length} i18n key reference(s) do not resolve in en.json:`)
   for (const m of missing) console.error(`    ${m}`)
   console.error('  Fix the NS prefix or add the key (and its he.json counterpart).')
   process.exit(1)
 }
-console.log('✓ All `${NS}.key` templated i18n references resolve in en.json.')
+console.log('✓ All `${NS}.key` templated and literal t(\'a.b.c\') i18n references resolve in en.json.')

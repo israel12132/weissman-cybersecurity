@@ -19,15 +19,9 @@ fi
 
 mkdir -p "$OUT_DIR"
 
-# Pin wasm-bindgen-cli to the Cargo.lock crate version (0.2.122); a mismatched CLI
-# breaks the build with a bindgen schema-version error. See build-ui-provenance-wasm.sh.
-WB_VER="0.2.122"
-if command -v wasm-bindgen >/dev/null 2>&1 && wasm-bindgen --version 2>/dev/null | grep -qF "${WB_VER}"; then
-  BINDGEN="$(command -v wasm-bindgen)"
-else
-  cargo install wasm-bindgen-cli --locked --version "${WB_VER}" --force
-  BINDGEN="$(command -v wasm-bindgen || true)"
-fi
+# Resolve a wasm-bindgen CLI that matches the crate version pinned in Cargo.lock.
+# shellcheck source=scripts/lib/ensure-wasm-bindgen.sh
+source "$ROOT/scripts/lib/ensure-wasm-bindgen.sh"
 
 "$BINDGEN" "$WASM_PATH" \
   --out-dir "$OUT_DIR" \

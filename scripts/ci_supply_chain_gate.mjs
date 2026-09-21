@@ -61,11 +61,14 @@ const SECRET_RULES = [
 // are advisory on the real tree so this gate never false-positives on a hardened-but-terse
 // manifest (e.g. a datastore that legitimately omits readOnlyRootFilesystem).
 const IAC_CRITICAL = [
-  { id: 'privileged', re: /privileged:\s*true/, desc: 'privileged: true container' },
-  { id: 'host-network', re: /hostNetwork:\s*true/, desc: 'hostNetwork: true' },
-  { id: 'host-pid', re: /hostPID:\s*true/, desc: 'hostPID: true' },
-  { id: 'host-ipc', re: /hostIPC:\s*true/, desc: 'hostIPC: true' },
-  { id: 'priv-escalation', re: /allowPrivilegeEscalation:\s*true/, desc: 'allowPrivilegeEscalation: true' },
+  // YAML 1.1 booleans (k8s parses manifests via sigs.k8s.io/yaml -> yaml.v2): `True`, `TRUE`, `yes`,
+  // `on`, `y` all deserialize to boolean true, so match those spellings case-insensitively — a bare
+  // lowercase `true` match silently misses `privileged: True` / `hostNetwork: yes`.
+  { id: 'privileged', re: /privileged:\s*(?:true|yes|on|y)\b/i, desc: 'privileged: true container' },
+  { id: 'host-network', re: /hostNetwork:\s*(?:true|yes|on|y)\b/i, desc: 'hostNetwork: true' },
+  { id: 'host-pid', re: /hostPID:\s*(?:true|yes|on|y)\b/i, desc: 'hostPID: true' },
+  { id: 'host-ipc', re: /hostIPC:\s*(?:true|yes|on|y)\b/i, desc: 'hostIPC: true' },
+  { id: 'priv-escalation', re: /allowPrivilegeEscalation:\s*(?:true|yes|on|y)\b/i, desc: 'allowPrivilegeEscalation: true' },
 ]
 const IAC_STRICT = [
   { id: 'no-runasnonroot', absent: /runAsNonRoot:\s*true/, desc: 'no runAsNonRoot: true' },
@@ -326,12 +329,12 @@ function selftest() {
         'spec:',
         '  template:',
         '    spec:',
-        '      hostNetwork: true',
+        '      hostNetwork: yes',
         '      containers:',
         '        - name: app',
         '          image: evil/app:latest',
         '          securityContext:',
-        '            privileged: true',
+        '            privileged: True',
         '            allowPrivilegeEscalation: true',
         '',
       ].join('\n'),

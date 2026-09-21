@@ -11,6 +11,7 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
+import { useJobPoll, resolveJobFindings } from '../lib/useJobPoll'
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
 import { useClientTargetPrefill } from '../hooks/useHubLocalScanParams'
@@ -18,6 +19,7 @@ import { apiFetch } from '../utils/apiFetch'
 import { downloadCsv } from '../lib/exportFindingsCsv'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import Button from '../components/ui/Button'
+import DataTable from '../components/ui/DataTable'
 
 const ENGINES = {
   injection: 'prompt_injection_brake',
@@ -128,6 +130,8 @@ export default function LlmUltraGuard() {
     loadLive()
   }, [loadLive])
 
+  useEffect(() => { setFindings([]) }, [engineId])
+
   useEffect(() => {
     refreshFromHistory().then((run) => {
       applyHistoryFindings(run, setFindings, { setLastUpdated, setJobId })
@@ -154,6 +158,22 @@ export default function LlmUltraGuard() {
     }
   }, [clientId, target, engineId, params, tab, t, postScan])
 
+  useJobPoll(jobId, {
+    enabled: Boolean(jobId) && runState.running,
+    onComplete: async (job) => {
+      const status = String(job.status || '').toLowerCase()
+      if (status === 'completed') {
+        const f = await resolveJobFindings(job, engineId, clientId)
+        setFindings(Array.isArray(f) ? f : [])
+        setLastUpdated(new Date().toISOString())
+        setRunState({ running: false, msg: '' })
+      } else {
+        setRunState({ running: false, msg: job.error || status })
+      }
+      setJobId('')
+    },
+  })
+
   const onInspect = async () => {
     const prompt = inspectText.trim()
     if (!prompt) return
@@ -173,13 +193,45 @@ export default function LlmUltraGuard() {
     }
   }
 
-  const events = status?.events || []
+  // Stable reference for the DataTable data prop (and the memo below) across
+  // unrelated re-renders; same fallback as before.
+  const events = useMemo(() => status?.events || [], [status])
   const metrics = status?.metrics || {}
   const filteredEvents = useMemo(() => {
     const q = eventQuery.trim().toLowerCase()
     if (!q) return events
     return events.filter((ev) => JSON.stringify(ev).toLowerCase().includes(q))
   }, [events, eventQuery])
+
+  const eventColumns = useMemo(() => [
+    {
+      id: 'verdict',
+      accessorKey: 'verdict',
+      header: t('pages.llmUltraGuard.col_verdict'),
+      cell: ({ getValue }) => <VerdictBadge verdict={getValue()} />,
+    },
+    { id: 'engine_id', accessorKey: 'engine_id', header: t('pages.llmUltraGuard.col_engine') },
+    {
+      id: 'score',
+      accessorKey: 'score',
+      header: t('pages.llmUltraGuard.col_score'),
+      cell: ({ getValue }) => Number(getValue()).toFixed(2),
+    },
+    {
+      id: 'latency_us',
+      accessorKey: 'latency_us',
+      header: t('pages.llmUltraGuard.col_latency'),
+      cell: ({ getValue }) => `${getValue() ?? ''}μs`,
+    },
+    {
+      id: 'excerpt',
+      accessorKey: 'excerpt',
+      header: t('pages.llmUltraGuard.col_excerpt'),
+      cell: ({ getValue }) => (
+        <span className="block max-w-[28rem] truncate text-[var(--text-tertiary)]">{getValue()}</span>
+      ),
+    },
+  ], [t])
 
   const exportEvents = () => {
     const header = ['id', 'engine_id', 'verdict', 'score', 'latency_us', 'fingerprint', 'excerpt', 'created_at']
@@ -372,37 +424,19 @@ export default function LlmUltraGuard() {
         <Button type="button" variant="ghost" onClick={exportEvents}>{t('pages.llmUltraGuard.export')}</Button>
       </div>
 
-      <div className="rounded-xl border border-[var(--border-default)] overflow-hidden mb-6">
-        <table className="w-full text-[11px] font-mono">
-          <thead className="bg-[var(--bg-2)] text-[var(--text-muted)] uppercase">
-            <tr>
-              <th className="text-left px-3 py-2">{t('pages.llmUltraGuard.col_verdict')}</th>
-              <th className="text-left px-3 py-2">{t('pages.llmUltraGuard.col_engine')}</th>
-              <th className="text-left px-3 py-2">{t('pages.llmUltraGuard.col_score')}</th>
-              <th className="text-left px-3 py-2">{t('pages.llmUltraGuard.col_latency')}</th>
-              <th className="text-left px-3 py-2">{t('pages.llmUltraGuard.col_excerpt')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredEvents.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-3 py-6 text-center text-[var(--text-muted)]">
-                  {t('pages.llmUltraGuard.empty_events')}
-                </td>
-              </tr>
-            )}
-            {filteredEvents.map((ev) => (
-              <tr key={ev.id} className="border-t border-[var(--border-default)]">
-                <td className="px-3 py-2"><VerdictBadge verdict={ev.verdict} /></td>
-                <td className="px-3 py-2">{ev.engine_id}</td>
-                <td className="px-3 py-2">{Number(ev.score).toFixed(2)}</td>
-                <td className="px-3 py-2">{ev.latency_us}μs</td>
-                <td className="px-3 py-2 text-[var(--text-tertiary)] truncate max-w-[28rem]">{ev.excerpt}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        columns={eventColumns}
+        data={filteredEvents}
+        getRowId={(ev) => ev.id}
+        animateRows={false}
+        className="mb-6"
+        tableClassName="text-[11px] font-mono"
+        emptyState={{
+          icon: eventQuery.trim() ? 'search-x' : 'inbox',
+          title: t('pages.llmUltraGuard.empty_events'),
+          compact: true,
+        }}
+      />
 
       <WeissmanFindingsPanel
         findings={findings}

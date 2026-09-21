@@ -176,6 +176,53 @@ describe('DiscoveryLab', () => {
     })
   })
 
+  it('renders runs in the runs grid and re-targets polling when a row is activated', async () => {
+    const queuedRun = {
+      id: 'run-9',
+      status: 'queued',
+      target_host: 'queued.acme.test',
+      target_url: 'https://queued.acme.test/',
+      intensity: 'light',
+      candidates_count: 3,
+      llm_used: true,
+      created_at: '2026-09-11T08:30:00Z',
+    }
+    apiFetch.mockImplementation((url, opts) => {
+      const method = (opts?.method || 'GET').toUpperCase()
+      if (url.startsWith('/api/discovery-lab/runs?') && method === 'GET') {
+        return Promise.resolve({ runs: [queuedRun] })
+      }
+      if (url === '/api/discovery-lab/runs/run-9') {
+        return Promise.resolve({ ...queuedRun, status: 'running' })
+      }
+      return Promise.resolve(jsonFor(url, opts))
+    })
+    render(
+      <MemoryRouter>
+        <DiscoveryLab />
+      </MemoryRouter>,
+    )
+
+    // Every column keeps its i18n header key and the row keeps every cell renderer.
+    const row = (await screen.findByText('queued.acme.test')).closest('tr')
+    expect(row).toHaveAttribute('data-row-id', 'run-9')
+    expect(row).toHaveTextContent('pages.discoveryLab.status_queued')
+    expect(row).toHaveTextContent('light')
+    expect(row).toHaveTextContent('3 · pages.discoveryLab.llm_used')
+    for (const col of ['col_target', 'col_status', 'col_intensity', 'col_candidates', 'col_when']) {
+      expect(screen.getByRole('columnheader', { name: `pages.discoveryLab.${col}` })).toBeInTheDocument()
+    }
+    // No run is active until a row is chosen, so nothing polls yet.
+    expect(apiFetch).not.toHaveBeenCalledWith('/api/discovery-lab/runs/run-9')
+
+    fireEvent.click(row)
+    await waitFor(() => {
+      expect(apiFetch).toHaveBeenCalledWith('/api/discovery-lab/runs/run-9')
+    })
+    // The polled snapshot replaces the row in place.
+    expect(await screen.findByText('pages.discoveryLab.status_running')).toBeInTheDocument()
+  })
+
   it('validates a candidate then opens a disclosure pack', async () => {
     render(
       <MemoryRouter>

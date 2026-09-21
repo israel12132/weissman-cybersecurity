@@ -136,14 +136,19 @@ test.describe('Command palette (⌘K)', () => {
     // Idle state shows quick-nav options.
     await expect(dialog.getByRole('option').first()).toBeVisible()
 
-    // Type to filter to a single route the mock (analyst) session can reach,
-    // then Enter navigates there. ("playbooks" uniquely matches /playbooks;
-    // /audit-log is portal-blocked for the analyst role, so it never appears.)
+    // Type to filter to a route, then Enter navigates. The mock session is an analyst,
+    // and since the owner-role / below-admin isolation change a below-admin human is a
+    // customer-portal session: /audit-log is portal-blocked, so the RBAC-filtered palette
+    // must NOT offer it (only the server content hit remains) — that is the security
+    // contract this test now pins. Keyboard navigation itself is exercised on a route the
+    // session can open.
     const input = dialog.getByRole('combobox')
-    await input.fill('playbooks')
-    await expect(dialog.getByRole('option')).toHaveCount(1)
+    await input.fill('audit')
+    await expect(dialog.getByRole('option', { name: /audit log/i })).toHaveCount(0)
+    await input.fill('engine catalog')
+    await expect(dialog.getByRole('option', { name: /engine catalog/i })).toHaveCount(1)
     await page.keyboard.press('Enter')
-    await expect(page).toHaveURL(/\/playbooks/, { timeout: 15_000 })
+    await expect(page).toHaveURL(/\/engine-catalog/, { timeout: 15_000 })
 
     await assertNoCrash(page)
     expect(errors).toEqual([])

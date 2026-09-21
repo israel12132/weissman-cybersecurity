@@ -33,6 +33,13 @@ SELECT w.entry_id, w.node_id, w.hops, w.path
 "#;
 
 /// Mark ASM/OSINT/public-HTTP assets as internet-exposed so Dijkstra has seeds.
+///
+/// `risk_graph_nodes.metadata` is `TEXT` (see migration 20260608130100), not `jsonb`, so the
+/// `->>` operator only exists after a cast. The cast is guarded with `pg_input_is_valid`
+/// (PostgreSQL 16+) because the column carries free-form text on some rows: an unguarded
+/// `::jsonb` would abort the whole attack-path recompute transaction on the first malformed
+/// row, exactly as the bare `metadata->>'public'` did on every row ("operator does not exist:
+/// text ->> unknown").
 pub const AUTO_TAG_INTERNET_EXPOSED_SQL: &str = r#"
 UPDATE risk_graph_nodes
    SET internet_exposed = TRUE
@@ -45,18 +52,10 @@ UPDATE risk_graph_nodes
      OR graph_key LIKE 'http:%'
      OR graph_key LIKE 'https:%'
      OR node_type IN ('asset', 'network')
+     AND pg_input_is_valid(metadata, 'jsonb')
      AND (
-          -- `metadata` is a TEXT column holding JSON text (default '{}'), not JSONB
-          -- (see migration 20260608130100_attack_path_flags.sql), so `->>` needs an
-          -- explicit ::jsonb cast — without it Postgres raises "operator does not
-          -- exist: text ->>". The cast is guarded by `IS JSON OBJECT` inside a CASE
-          -- (CASE guarantees the THEN branch is only evaluated when the guard holds,
-          -- unlike a bare `AND`): a row whose TEXT metadata is not a valid JSON object
-          -- is treated as no-match instead of raising "invalid input syntax for type
-          -- json", which would abort the whole auto-tag transaction — the very failure
-          -- this predicate must not reintroduce. Honors the caller's best-effort intent.
-          COALESCE(CASE WHEN metadata IS JSON OBJECT THEN metadata::jsonb->>'public' END, '') IN ('true', '1')
-       OR COALESCE(CASE WHEN metadata IS JSON OBJECT THEN metadata::jsonb->>'internet_exposed' END, '') IN ('true', '1')
+          COALESCE(metadata::jsonb->>'public', '') IN ('true', '1')
+       OR COALESCE(metadata::jsonb->>'internet_exposed', '') IN ('true', '1')
      )
    )
 "#;
