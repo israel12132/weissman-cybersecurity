@@ -177,8 +177,18 @@ pub fn stats() -> serde_json::Value {
 mod tests {
     use super::*;
 
+    /// The ring, `PUSHES` and `LAST_WIPE_CAPACITY` are process-wide, and `cargo test`
+    /// runs tests on parallel threads: without this lock one test's flood lands
+    /// between another's wipe and its "occupied_slots == 0" assertion.
+    fn ring_test_lock() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: Mutex<()> = Mutex::new(());
+        LOCK.lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
     #[test]
     fn round_trip_encrypts_and_wipe_clears() {
+        let _ring = ring_test_lock();
         fail_safe_wipe();
         push_json(&serde_json::json!({"k":"secret-token-should-not-linger"}));
         let s = stats();
@@ -196,6 +206,7 @@ mod tests {
 
     #[test]
     fn flood_then_wipe_releases_capacity() {
+        let _ring = ring_test_lock();
         fail_safe_wipe();
         for i in 0..400 {
             push_json(&serde_json::json!({"i": i, "pad": "x".repeat(1024)}));

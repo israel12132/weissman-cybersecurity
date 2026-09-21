@@ -21,6 +21,7 @@ import EmptyState from '../components/ui/EmptyState'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
 import DataTable from '../components/ui/DataTable'
+import Button from '../components/ui/Button'
 import CopyButton from '../components/ui/CopyButton'
 import FilterPills from '../components/ui/FilterPills'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
@@ -358,25 +359,24 @@ export default function ThreatFeeds() {
                         autoComplete="off"
                         className="flex-1 min-w-[180px] bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[12px] text-[var(--text-primary)] font-mono focus:outline-none focus:border-amber-500/40"
                       />
-                      <button
-                        type="button"
+                      <Button
+                        variant="primary"
+                        size="sm"
                         onClick={() => saveCred(c.key)}
                         disabled={credBusy === c.key || !(credDrafts[c.key] ?? '').trim()}
-                        className="inline-flex items-center gap-1.5 text-[12px] font-medium px-3 py-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-40"
+                        leftIcon={credSaved === c.key ? <Check /> : <Save />}
                       >
-                        {credSaved === c.key ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
                         {t(`${NS}.creds_save`)}
-                      </button>
+                      </Button>
                       {c.configured && c.source === 'db' && (
-                        <button
-                          type="button"
+                        <Button
+                          variant="danger"
+                          size="sm"
                           onClick={() => saveCred(c.key, true)}
                           disabled={credBusy === c.key}
                           aria-label={t(`${NS}.creds_clear`)}
-                          className="inline-flex items-center gap-1 text-[12px] px-2 py-1.5 rounded-lg border border-rose-500/30 text-rose-300/80 hover:bg-rose-950/30 disabled:opacity-40"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                          leftIcon={<Trash2 />}
+                        />
                       )}
                     </div>
                   ))}
@@ -388,15 +388,15 @@ export default function ThreatFeeds() {
             <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
               <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
                 <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t(`${NS}.feeds_title`)}</h3>
-                <button
-                  type="button"
+                <Button
+                  variant="primary"
+                  size="sm"
                   onClick={syncFeeds}
-                  disabled={syncing}
-                  className="inline-flex items-center gap-1.5 text-[12px] font-medium px-3 py-1.5 rounded-lg border border-violet-500/40 bg-violet-500/10 text-violet-200 hover:bg-violet-500/20 disabled:opacity-50"
+                  loading={syncing}
+                  leftIcon={<RefreshCw />}
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
                   {t(`${NS}.sync_feeds`)}
-                </button>
+                </Button>
               </div>
               {notice && <p className="text-[12px] text-cyan-300/80 font-mono mb-2">{notice}</p>}
               <div className="flex flex-wrap gap-2 mb-3">
@@ -445,10 +445,9 @@ export default function ThreatFeeds() {
                   placeholder={t(`${NS}.watch_placeholder`)}
                   className="flex-1 min-w-[200px] bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[12px] text-[var(--text-primary)] font-mono focus:outline-none focus:border-violet-500/40"
                 />
-                <button type="submit" className="inline-flex items-center gap-1.5 text-[12px] font-medium px-3 py-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 text-cyan-200 hover:bg-cyan-500/20">
-                  <Plus className="w-3.5 h-3.5" />
+                <Button type="submit" variant="primary" size="sm" leftIcon={<Plus />}>
                   {t(`${NS}.watch_add`)}
-                </button>
+                </Button>
               </form>
               {watchlist.length === 0 ? (
                 <p className="text-[11px] text-[var(--text-muted)]">{t(`${NS}.watch_empty`)}</p>
@@ -459,14 +458,14 @@ export default function ThreatFeeds() {
                       <span className="text-[10px] px-1.5 py-0.5 rounded border border-violet-500/25 text-violet-300/80 uppercase">{w.type}</span>
                       <code className="text-[var(--text-primary)] truncate max-w-[18rem]" title={w.value}>{w.value}</code>
                       {w.note && <span className="text-[var(--text-muted)] truncate max-w-[12rem]">{w.note}</span>}
-                      <button
-                        type="button"
+                      <Button
+                        variant="danger"
+                        size="xs"
                         onClick={() => removeWatch(w.id)}
                         aria-label={t(`${NS}.watch_remove`)}
-                        className="ml-auto text-rose-400/70 hover:text-rose-300"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                        leftIcon={<Trash2 />}
+                        className="ml-auto"
+                      />
                     </li>
                   ))}
                 </ul>

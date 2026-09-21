@@ -44,6 +44,13 @@ fn current_kek() -> Option<[u8; 32]> {
     KEK.read().ok().and_then(|g| *g)
 }
 
+/// Whether a vault KEK is installed, i.e. whether [`seal_job_payload`] will actually
+/// encrypt a payload at rest (vs. return it in cleartext). Never exposes the key.
+#[must_use]
+pub fn kek_installed() -> bool {
+    current_kek().is_some()
+}
+
 fn tenant_wrap_key(kek: &[u8; 32], tenant_id: i64) -> [u8; 32] {
     let mut domain = Vec::with_capacity(DOMAIN_PREFIX.len() + 8);
     domain.extend_from_slice(DOMAIN_PREFIX);

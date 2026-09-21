@@ -364,7 +364,7 @@ pub async fn api_verify(
 
     // RLS on `users` is forced — must set tenant GUC before INSERT so the WITH CHECK
     // policy `tenant_id = current_setting('app.current_tenant_id')::bigint` passes.
-    if let Err(e) = sqlx::query("SET LOCAL app.current_tenant_id = $1::text")
+    if let Err(e) = sqlx::query("SELECT set_config('app.current_tenant_id', $1, true)")
         .bind(tenant_id.to_string())
         .execute(&mut *tx)
         .await

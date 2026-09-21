@@ -21,6 +21,8 @@ const FILES = [
   'fingerprint_engine/src/findings_persist.rs', // builds + writes every vulnerabilities row
   'fingerprint_engine/src/findings_gate.rs', // the evidence gate every write passes through
   'fingerprint_engine/src/intel_epss.rs', // EPSS/KEV enrichment folded into effective_risk
+  'fingerprint_engine/src/intel_findings_backfill.rs', // live worker: UPDATEs vulnerabilities epss_score/kev_listed and re-ranks effective_risk
+  'fingerprint_engine/src/intel_kev.rs', // live KEV mirror: back-fills kev_listed onto vulnerabilities rows
 ];
 
 // Rust randomness tokens. Written to match real usage/import syntax, not prose — so a

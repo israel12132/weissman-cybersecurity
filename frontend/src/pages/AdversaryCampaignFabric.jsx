@@ -27,7 +27,7 @@ import ProofStatusBadge, { proofStatusOf } from '../components/findings/ProofSta
 const NS = 'pages.adversaryCampaign'
 
 const STATUS_TONE = {
-  draft: 'text-slate-300 border-slate-500/30 bg-slate-500/10',
+  draft: 'text-text-secondary border-border-strong bg-bg-3',
   running: 'text-cyan-300 border-cyan-500/40 bg-cyan-500/10',
   paused: 'text-amber-300 border-amber-500/40 bg-amber-500/10',
   completed: 'text-emerald-300 border-emerald-500/40 bg-emerald-500/10',
@@ -430,8 +430,9 @@ export default function AdversaryCampaignFabric() {
                 {t(`${NS}.list_heading`)}
               </h2>
               {visible.map((c) => (
-                <button
+                <Button
                   key={c.id}
+                  variant="unstyled"
                   type="button"
                   onClick={() => loadOne(c.id)}
                   className={`w-full text-start rounded-xl border p-3 transition-colors ${
@@ -453,7 +454,7 @@ export default function AdversaryCampaignFabric() {
                   <div className="text-[11px] font-mono text-[var(--text-muted)]">
                     {c.asset_key || t(`${NS}.no_asset`)}
                   </div>
-                </button>
+                </Button>
               ))}
             </div>
 

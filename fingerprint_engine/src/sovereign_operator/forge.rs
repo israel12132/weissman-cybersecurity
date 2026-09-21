@@ -570,10 +570,16 @@ struct IsolatedWorktree {
 
 impl IsolatedWorktree {
     fn create() -> Result<Self, String> {
-        std::fs::create_dir_all(FORGE_ROOT).map_err(|e| e.to_string())?;
+        Self::create_in(Path::new(FORGE_ROOT))
+    }
+
+    /// Create an exclusive UUID directory under `root` (tests use a private root so
+    /// they never share `FORGE_ROOT` with the janitor or with each other).
+    fn create_in(root: &Path) -> Result<Self, String> {
+        std::fs::create_dir_all(root).map_err(|e| e.to_string())?;
         for _ in 0..8 {
             let id = Uuid::new_v4();
-            let dir = PathBuf::from(FORGE_ROOT).join(id.to_string());
+            let dir = root.join(id.to_string());
             match std::fs::create_dir(&dir) {
                 Ok(()) => return Ok(Self { id, dir }),
                 Err(e) if e.kind() == ErrorKind::AlreadyExists => continue,
@@ -604,12 +610,21 @@ pub struct PurgeStats {
 /// Delete UUID dirs under `FORGE_ROOT` whose mtime is older than `max_age`.
 /// Ignores non-UUID names and symlinks so a planted link cannot escape `/tmp`.
 pub fn purge_stale_worktrees(max_age: std::time::Duration) -> PurgeStats {
+    purge_stale_worktrees_in(Path::new(FORGE_ROOT), max_age)
+}
+
+/// [`purge_stale_worktrees`] over an explicit root.
+///
+/// Staleness is decided per entry against a clock read *after* the entry's mtime,
+/// and only a readable mtime that is genuinely `max_age` in the past counts as
+/// stale. A worktree created between the sweep starting and its entry being
+/// visited therefore reads as fresh (age zero), never as "unreadable, so wipe",
+/// which is what used to delete a live worktree out from under a running rustc.
+pub fn purge_stale_worktrees_in(root: &Path, max_age: std::time::Duration) -> PurgeStats {
     let mut stats = PurgeStats::default();
-    let root = Path::new(FORGE_ROOT);
     let Ok(entries) = std::fs::read_dir(root) else {
         return stats;
     };
-    let now = std::time::SystemTime::now();
     for ent in entries.flatten() {
         let name = ent.file_name();
         let Some(name) = name.to_str() else {
@@ -630,13 +645,15 @@ pub fn purge_stale_worktrees(max_age: std::time::Duration) -> PurgeStats {
             continue;
         }
         stats.scanned += 1;
-        let stale = meta
-            .modified()
-            .ok()
-            .and_then(|t| now.duration_since(t).ok())
-            .map(|d| d >= max_age)
-            .unwrap_or(true);
-        if !stale {
+        let Ok(modified) = meta.modified() else {
+            // No mtime to judge by: leave it for a later sweep rather than risk a live tree.
+            stats.skipped += 1;
+            continue;
+        };
+        let age = std::time::SystemTime::now()
+            .duration_since(modified)
+            .unwrap_or_default();
+        if age < max_age {
             continue;
         }
         match std::fs::remove_dir_all(&path) {
@@ -874,12 +891,31 @@ mod tests {
         assert!(FORGE_ROOT.contains("sovereign-forge"));
     }
 
+    /// A private forge root per test: tests run in parallel threads, so sharing
+    /// `FORGE_ROOT` would let one test's janitor sweep race another test's worktree.
+    struct TestRoot(PathBuf);
+
+    impl TestRoot {
+        fn new() -> Self {
+            let dir = std::env::temp_dir().join(format!("weissman-forge-test-{}", Uuid::new_v4()));
+            std::fs::create_dir_all(&dir).expect("test root");
+            Self(dir)
+        }
+    }
+
+    impl Drop for TestRoot {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
     #[test]
     fn exclusive_worktrees_are_unique_and_wiped() {
-        let a = IsolatedWorktree::create().expect("a");
-        let b = IsolatedWorktree::create().expect("b");
+        let root = TestRoot::new();
+        let a = IsolatedWorktree::create_in(&root.0).expect("a");
+        let b = IsolatedWorktree::create_in(&root.0).expect("b");
         assert_ne!(a.dir, b.dir);
-        assert!(a.dir.starts_with(FORGE_ROOT));
+        assert!(a.dir.starts_with(&root.0));
         assert!(a.dir.exists());
         let path = a.dir.clone();
         drop(a);
@@ -888,8 +924,16 @@ mod tests {
     }
 
     #[test]
+    fn production_worktree_lives_under_forge_root() {
+        let w = IsolatedWorktree::create().expect("worktree");
+        assert!(w.dir.starts_with(FORGE_ROOT));
+        assert!(Uuid::parse_str(&w.id.to_string()).is_ok());
+    }
+
+    #[test]
     fn rustc_compiles_standalone_probe() {
-        let worktree = IsolatedWorktree::create().expect("worktree");
+        let root = TestRoot::new();
+        let worktree = IsolatedWorktree::create_in(&root.0).expect("worktree");
         let src = worktree.dir.join("lib.rs");
         std::fs::write(
             &src,
@@ -904,29 +948,75 @@ mod tests {
         );
     }
 
+    fn set_dir_mtime(dir: &Path, when: std::time::SystemTime) {
+        let times = std::fs::FileTimes::new().set_modified(when);
+        let f = std::fs::File::open(dir).expect("open dir");
+        f.set_times(times).expect("set dir mtime");
+    }
+
     #[test]
     fn janitor_removes_stale_uuid_dirs_only() {
-        let _ = std::fs::create_dir_all(FORGE_ROOT);
-        let stale = PathBuf::from(FORGE_ROOT).join(Uuid::new_v4().to_string());
-        let fresh = PathBuf::from(FORGE_ROOT).join(Uuid::new_v4().to_string());
-        let stray = PathBuf::from(FORGE_ROOT).join("not-a-uuid-keep");
+        let root = TestRoot::new();
+        let stale = root.0.join(Uuid::new_v4().to_string());
+        let fresh = root.0.join(Uuid::new_v4().to_string());
+        let stray = root.0.join("not-a-uuid-keep");
         std::fs::create_dir(&stale).expect("stale dir");
         std::fs::create_dir(&fresh).expect("fresh dir");
-        let _ = std::fs::create_dir(&stray);
-        let past =
-            std::time::SystemTime::now() - std::time::Duration::from_secs(STALE_WORKTREE_SECS + 30);
-        let times = std::fs::FileTimes::new().set_modified(past);
-        let f = std::fs::File::open(&stale).expect("open stale");
-        f.set_times(times).expect("backdate stale mtime");
-        let stats = purge_stale_worktrees(std::time::Duration::from_secs(STALE_WORKTREE_SECS));
+        std::fs::create_dir(&stray).expect("stray dir");
+        let max_age = std::time::Duration::from_secs(STALE_WORKTREE_SECS);
+        set_dir_mtime(
+            &stale,
+            std::time::SystemTime::now() - max_age - std::time::Duration::from_secs(30),
+        );
+        let stats = purge_stale_worktrees_in(&root.0, max_age);
         assert!(!stale.exists(), "stale UUID worktree must be removed");
         assert!(fresh.exists(), "fresh UUID worktree must survive");
-        assert!(
-            stray.exists() || stats.skipped > 0,
-            "non-uuid names must not be swept"
+        assert!(stray.exists(), "non-uuid names must not be swept");
+        assert_eq!(stats.removed, 1);
+        assert_eq!(stats.scanned, 2);
+        assert!(stats.skipped >= 1);
+    }
+
+    #[test]
+    fn janitor_keeps_worktrees_with_future_mtime() {
+        // A worktree created after the sweep began has an mtime later than any clock
+        // the sweep read earlier; that must read as age zero, never as stale.
+        let root = TestRoot::new();
+        let ahead = root.0.join(Uuid::new_v4().to_string());
+        std::fs::create_dir(&ahead).expect("ahead dir");
+        set_dir_mtime(
+            &ahead,
+            std::time::SystemTime::now() + std::time::Duration::from_secs(3600),
         );
-        let _ = std::fs::remove_dir_all(&fresh);
-        let _ = std::fs::remove_dir_all(&stray);
-        assert!(stats.removed >= 1);
+        let stats = purge_stale_worktrees_in(&root.0, std::time::Duration::from_secs(1));
+        assert!(
+            ahead.exists(),
+            "future-dated worktree must survive the sweep"
+        );
+        assert_eq!(stats.removed, 0);
+        assert_eq!(stats.scanned, 1);
+    }
+
+    #[test]
+    fn janitor_ignores_symlinked_uuid_entries() {
+        let root = TestRoot::new();
+        let victim = TestRoot::new();
+        let link = root.0.join(Uuid::new_v4().to_string());
+        std::os::unix::fs::symlink(&victim.0, &link).expect("symlink");
+        set_dir_mtime(
+            &victim.0,
+            std::time::SystemTime::now() - std::time::Duration::from_secs(7200),
+        );
+        let stats = purge_stale_worktrees_in(&root.0, std::time::Duration::from_secs(1));
+        assert!(
+            victim.0.exists(),
+            "a planted symlink must not delete its target"
+        );
+        assert!(
+            link.symlink_metadata().is_ok(),
+            "the link itself is left alone"
+        );
+        assert_eq!(stats.removed, 0);
+        assert_eq!(stats.skipped, 1);
     }
 }

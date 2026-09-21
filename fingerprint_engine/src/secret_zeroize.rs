@@ -132,6 +132,22 @@ pub fn scrub_env_var(name: &str) {
     std::env::remove_var(name);
 }
 
+/// Serialises every test that sets, reads through a `OnceLock`, or removes a vault-key
+/// environment variable (`WEISSMAN_VAULT_KEY*`, `WEISSMAN_INTEGRATIONS_VAULT_KEY*`).
+///
+/// The process environment is one shared map and `cargo test` runs tests on parallel
+/// threads, so without this a test that `set_var`s a key and immediately asserts on it
+/// can observe another test's `remove_var` in between. Every module whose tests touch
+/// those names takes this one lock (not a per-module one) because the names are read
+/// across modules: `soar::integrations_vault` also honours `WEISSMAN_VAULT_KEY`.
+/// A poisoned lock is recovered so one failing test does not cascade.
+#[cfg(test)]
+pub(crate) fn vault_env_test_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 /// Pin secret pages (mlock / VirtualLock + MADV_DONTDUMP).
 ///
 /// The crate denies `unsafe_code` at the crate root; this module is a documented

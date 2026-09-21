@@ -129,7 +129,10 @@ pub async fn project_event(pool: &PgPool, event: &JobEventRecord) -> Result<(), 
             // Exponential backoff by attempt (5s, 10s, 20s … capped at 1h), matching the
             // legacy `fail_job` path. A fixed 5s retry in the zero-trust path caused a retry
             // storm for a persistently failing job. Status guard prevents a late retry event
-            // from resurrecting an already-completed/dead job.
+            // from resurrecting an already-completed/dead job, and the worker_id fence
+            // (mirroring JobCompleted/JobFailed/JobOrphaned) prevents a retry from a SUPERSEDED
+            // worker from requeueing a job the current owner is still running.
+            let worker_id = event_worker_id(event);
             sqlx::query(
                 r#"UPDATE weissman_async_jobs
                    SET status = 'pending', last_error = $2,
@@ -138,10 +141,12 @@ pub async fn project_event(pool: &PgPool, event: &JobEventRecord) -> Result<(), 
                            + (LEAST(3600, 5 * POWER(2, LEAST(GREATEST(attempt_count, 0), 10)))::int
                               * interval '1 second'),
                        updated_at = now()
-                   WHERE id = $1 AND status = 'running'"#,
+                   WHERE id = $1 AND status = 'running'
+                     AND ($3::text IS NULL OR worker_id = $3)"#,
             )
             .bind(event.job_id)
             .bind(err)
+            .bind(worker_id)
             .execute(&mut *tx)
             .await?;
         }

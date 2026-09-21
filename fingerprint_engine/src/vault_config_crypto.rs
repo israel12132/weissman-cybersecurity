@@ -267,7 +267,6 @@ impl SovereignVault {
         config: &HashMap<String, String>,
         key_env: &str,
     ) -> Result<([u8; GCM_NONCE_LEN], Vec<u8>), VaultCryptoError> {
-        let mut json = serde_json::to_vec(config).map_err(|_| VaultCryptoError::Serialize)?;
         let mut key = VaultKey::load_hex_from_env(key_env).or_else(|_| {
             if key_env == INTEGRATIONS_VAULT_KEY_ENV {
                 VaultKey::load_integrations_key()
@@ -277,6 +276,7 @@ impl SovereignVault {
                 })
             }
         })?;
+        let mut json = serde_json::to_vec(config).map_err(|_| VaultCryptoError::Serialize)?;
         let out = encrypt_aes256_gcm(&key, &json);
         json.zeroize();
         key.zeroize();
@@ -374,9 +374,7 @@ impl std::error::Error for VaultCryptoError {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
-
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
+    use crate::secret_zeroize::vault_env_test_lock;
 
     fn unique_hex_key(seed: u8) -> String {
         let bytes = [seed; 32];
@@ -394,7 +392,7 @@ mod tests {
 
     #[test]
     fn load_hex_from_env_fails_closed_when_unset() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = vault_env_test_lock();
         let var = "WEISSMAN_VAULT_KEY_UNIT_MISSING";
         std::env::remove_var(var);
         match VaultKey::load_hex_from_env(var) {
@@ -405,7 +403,7 @@ mod tests {
 
     #[test]
     fn load_hex_from_env_rejects_wrong_length() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = vault_env_test_lock();
         let var = "WEISSMAN_VAULT_KEY_UNIT_SHORT";
         std::env::set_var(var, "aabbccdd");
         match VaultKey::load_hex_from_env(var) {
@@ -417,7 +415,7 @@ mod tests {
 
     #[test]
     fn sovereign_vault_roundtrip_and_wipes_working_buffers() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = vault_env_test_lock();
         let hex = unique_hex_key(0x5A);
         std::env::set_var(VAULT_KEY_ENV, &hex);
 
@@ -453,7 +451,7 @@ mod tests {
 
     #[test]
     fn wrong_key_fails_decrypt() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = vault_env_test_lock();
         std::env::set_var(VAULT_KEY_ENV, unique_hex_key(1));
         let mut cfg = HashMap::new();
         cfg.insert("api_key".into(), "secret".into());
@@ -466,7 +464,7 @@ mod tests {
 
     #[test]
     fn integrations_passphrase_is_derived_not_hex() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = vault_env_test_lock();
         let phrase = "test-vault-key-for-integrations-32b-minimum!!";
         std::env::set_var(INTEGRATIONS_VAULT_KEY_ENV, phrase);
         let key = VaultKey::load_integrations_key().expect("load");
@@ -477,7 +475,7 @@ mod tests {
 
     #[test]
     fn integrations_64_hex_is_used_raw() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = vault_env_test_lock();
         let hex = unique_hex_key(0x11);
         std::env::set_var(INTEGRATIONS_VAULT_KEY_ENV, &hex);
         let key = VaultKey::load_integrations_key().expect("load");
@@ -498,7 +496,7 @@ mod tests {
 
     #[test]
     fn no_jwt_fallback_on_sovereign_loader() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = vault_env_test_lock();
         std::env::remove_var(VAULT_KEY_ENV);
         std::env::set_var(
             "WEISSMAN_JWT_SECRET",

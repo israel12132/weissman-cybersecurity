@@ -66,7 +66,7 @@ describe('ScimProvisioning', () => {
             {
               id: 4,
               name: 'okta-prod',
-              token_prefix: 'wsm_scim_abcd1234',
+              token_prefix: 'wsm_scim_test0001',
               last_used_at: null,
               revoked_at: null,
               created_at: '2026-09-11T00:00:00Z',
