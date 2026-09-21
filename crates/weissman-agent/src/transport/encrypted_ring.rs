@@ -177,8 +177,20 @@ pub fn stats() -> serde_json::Value {
 mod tests {
     use super::*;
 
+    // Both tests in this module mutate the process-global `RING` / `PUSHES` /
+    // `LAST_WIPE_CAPACITY` statics. The default test harness runs them in
+    // parallel, so without serialization `flood_then_wipe_releases_capacity`'s
+    // `push_json` can land between this test's `fail_safe_wipe()` and its
+    // `stats()` read, re-arming the ring and making `occupied_slots` == 1 (a
+    // real, timing-dependent CI flake). Hold a shared guard for each whole test
+    // body so they can never overlap. Recover from a poisoned lock so a panic
+    // in one test surfaces that test's own failure rather than masking the
+    // other with a poison error.
+    static TEST_GUARD: Mutex<()> = Mutex::new(());
+
     #[test]
     fn round_trip_encrypts_and_wipe_clears() {
+        let _serialize = TEST_GUARD.lock().unwrap_or_else(|e| e.into_inner());
         fail_safe_wipe();
         push_json(&serde_json::json!({"k":"secret-token-should-not-linger"}));
         let s = stats();
@@ -196,6 +208,7 @@ mod tests {
 
     #[test]
     fn flood_then_wipe_releases_capacity() {
+        let _serialize = TEST_GUARD.lock().unwrap_or_else(|e| e.into_inner());
         fail_safe_wipe();
         for i in 0..400 {
             push_json(&serde_json::json!({"i": i, "pad": "x".repeat(1024)}));
