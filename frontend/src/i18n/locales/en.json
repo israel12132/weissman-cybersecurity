@@ -1924,7 +1924,10 @@
       "col_z": "Modified Z",
       "median": "median",
       "peers_empty_title": "No peer outliers",
-      "peers_empty_body": "Hosts deviating from their cohort baseline appear here once baselines are learned."
+      "peers_empty_body": "Hosts deviating from their cohort baseline appear here once baselines are learned.",
+      "search_placeholder": "Search entity id or type…",
+      "no_match_title": "No entities match",
+      "no_match_body": "No entities match the current severity or search filter."
     },
     "findingSuppressions": {
       "title": "Finding Suppressions",

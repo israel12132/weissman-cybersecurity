@@ -17,9 +17,9 @@ import { downloadCsv } from '../lib/exportFindingsCsv'
 
 function getStatusColor(status) {
   switch (status) {
-    case 'critical': return 'text-red-400 bg-red-500/10 border-red-500/30';
-    case 'warning': return 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30';
-    case 'secure': return 'text-green-400 bg-green-500/10 border-green-500/30';
+    case 'critical': return 'text-[var(--severity-critical)] bg-red-500/10 border-red-500/30';
+    case 'warning': return 'text-[var(--severity-medium)] bg-yellow-500/10 border-yellow-500/30';
+    case 'secure': return 'text-[var(--severity-low)] bg-green-500/10 border-green-500/30';
     default: return 'text-[var(--text-tertiary)] bg-[var(--border-strong)]/10 border-[var(--border-strong)]/30';
   }
 }
@@ -34,6 +34,7 @@ export default function NetworkProtocols() {
   const [error, setError] = useState(null);
   const [dataSource, setDataSource] = useState('findings');
   const [protocolSearch, setProtocolSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
 
   useEffect(() => {
     apiFetch('/api/clients')
@@ -71,9 +72,12 @@ export default function NetworkProtocols() {
 
   const filteredProtocols = useMemo(() => {
     const q = protocolSearch.trim().toLowerCase();
-    if (!q) return protocols;
-    return protocols.filter((p) => `${p.name} ${p.status}`.toLowerCase().includes(q));
-  }, [protocols, protocolSearch]);
+    return protocols.filter((p) => {
+      if (statusFilter !== 'all' && p.status !== statusFilter) return false;
+      if (!q) return true;
+      return `${p.name} ${p.status}`.toLowerCase().includes(q);
+    });
+  }, [protocols, protocolSearch, statusFilter]);
 
   const statusLabel = useCallback((status) => {
     if (status === 'critical') return t('pages.networkProtocols.status_critical');
@@ -165,37 +169,31 @@ export default function NetworkProtocols() {
         ) : (
         <>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-[var(--text-tertiary)]">{t('pages.networkProtocols.protocols_scanned')}</span>
-              <Network className="w-4 h-4 text-cyan-400" />
-            </div>
-            <div className="text-2xl font-bold text-[var(--text-primary)]">{stats.scanned}</div>
-          </div>
-
-          <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-[var(--text-tertiary)]">{t('pages.networkProtocols.critical_issues')}</span>
-              <AlertTriangle className="w-4 h-4 text-red-400" />
-            </div>
-            <div className="text-2xl font-bold text-[var(--text-primary)]">{stats.critical}</div>
-          </div>
-
-          <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-[var(--text-tertiary)]">{t('pages.networkProtocols.warnings')}</span>
-              <Activity className="w-4 h-4 text-yellow-400" />
-            </div>
-            <div className="text-2xl font-bold text-[var(--text-primary)]">{stats.warning}</div>
-          </div>
-
-          <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-[var(--text-tertiary)]">{t('pages.networkProtocols.secure')}</span>
-              <Shield className="w-4 h-4 text-green-400" />
-            </div>
-            <div className="text-2xl font-bold text-[var(--text-primary)]">{stats.secure}</div>
-          </div>
+          {[
+            { id: 'all', label: t('pages.networkProtocols.protocols_scanned'), value: stats.scanned, Icon: Network, color: '#22d3ee' },
+            { id: 'critical', label: t('pages.networkProtocols.critical_issues'), value: stats.critical, Icon: AlertTriangle, color: 'var(--severity-critical)' },
+            { id: 'warning', label: t('pages.networkProtocols.warnings'), value: stats.warning, Icon: Activity, color: 'var(--severity-medium)' },
+            { id: 'secure', label: t('pages.networkProtocols.secure'), value: stats.secure, Icon: Shield, color: 'var(--severity-low)' },
+          ].map(({ id, label, value, Icon, color }) => {
+            const active = statusFilter === id;
+            return (
+              <Button
+                variant="unstyled"
+                key={id}
+                type="button"
+                onClick={() => setStatusFilter(id)}
+                aria-pressed={active}
+                className="bg-[var(--bg-2)] backdrop-blur-md border rounded-xl p-4 text-left transition-all hover:border-[var(--border-strong)]"
+                style={{ borderColor: active ? color : 'var(--border-default)', boxShadow: active ? `0 0 0 1px ${color} inset` : 'none' }}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-[var(--text-tertiary)]">{label}</span>
+                  <Icon className="w-4 h-4" style={{ color }} />
+                </div>
+                <div className="text-2xl font-bold text-[var(--text-primary)] tabular-nums">{value}</div>
+              </Button>
+            );
+          })}
         </div>
 
         <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
