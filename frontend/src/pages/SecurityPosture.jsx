@@ -177,22 +177,32 @@ export default function SecurityPosture() {
                   />
                 </div>
                 <div className="flex items-center gap-1 shrink-0" role="group" aria-label={t(`${NS}.filter_status`)}>
-                  {['all', 'failed', 'passed'].map((f) => (
-                    <Button variant="unstyled"
-                      key={f}
-                      type="button"
-                      onClick={() => setStatusFilter(f)}
-                      aria-pressed={statusFilter === f}
-                      className={[
-                        'px-2.5 py-1.5 rounded-lg text-[10px] font-mono uppercase tracking-wider border transition-colors',
-                        statusFilter === f
-                          ? 'bg-cyan-500/15 text-cyan-200 border-cyan-500/30'
-                          : 'text-[var(--text-muted)] border-[var(--border-default)] hover:text-[var(--text-secondary)]',
-                      ].join(' ')}
-                    >
-                      {t(`${NS}.filter_${f}`)}
-                    </Button>
-                  ))}
+                  {['all', 'failed', 'passed'].map((f) => {
+                    const n = f === 'all'
+                      ? summary.total
+                      : f === 'failed'
+                        ? summary.total - summary.passed
+                        : summary.passed
+                    const activeColor = f === 'failed'
+                      ? 'bg-rose-500/15 text-rose-200 border-rose-500/30'
+                      : 'bg-cyan-500/15 text-cyan-200 border-cyan-500/30'
+                    return (
+                      <Button variant="unstyled"
+                        key={f}
+                        type="button"
+                        onClick={() => setStatusFilter(f)}
+                        aria-pressed={statusFilter === f}
+                        className={[
+                          'px-2.5 py-1.5 rounded-lg text-[10px] font-mono uppercase tracking-wider border transition-colors',
+                          statusFilter === f
+                            ? activeColor
+                            : 'text-[var(--text-muted)] border-[var(--border-default)] hover:text-[var(--text-secondary)]',
+                        ].join(' ')}
+                      >
+                        {t(`${NS}.filter_${f}`)} <span className="opacity-70 tabular-nums">{n}</span>
+                      </Button>
+                    )
+                  })}
                 </div>
               </div>
               <div className="text-[10px] font-mono text-[var(--text-muted)] mb-2" aria-live="polite">
