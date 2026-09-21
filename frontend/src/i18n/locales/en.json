@@ -589,7 +589,9 @@
     "evidence_notice": "Client roster from GET /api/clients. FAIR blast-radius from GET /api/financial-risk/:clientId (recompute via ?recompute=1). Baseline scans queue via POST /api/clients/:id/scan/run-all — tenant-scoped live records only.",
     "fleet_attack_none": "No fleet attack techniques observed.",
     "portfolio_worst_none": "No matching clients.",
-    "scan_action": "Launch Scan"
+    "scan_action": "Launch Scan",
+    "portfolio_grade_filter": "Filter to grade {{grade}}",
+    "portfolio_clear_grade": "Clear grade filter"
   },
   "auth": {
     "tenant_slug": "Tenant slug",

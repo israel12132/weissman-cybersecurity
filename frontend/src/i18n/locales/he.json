@@ -579,7 +579,9 @@
     "evidence_notice": "רoster לקוחות מ-GET /api/clients. blast-radius FAIR מ-GET /api/financial-risk/:clientId (חישוב מחדש: ?recompute=1). סריקות baseline נשלחות לתור ב-POST /api/clients/:id/scan/run-all — רק רשומות חיות מוגבלות ל-tenant.",
     "fleet_attack_none": "לא נצפו טכניקות תקיפה בצי.",
     "portfolio_worst_none": "אין לקוחות תואמים.",
-    "scan_action": "הפעל סריקה"
+    "scan_action": "הפעל סריקה",
+    "portfolio_grade_filter": "סינון לציון {{grade}}",
+    "portfolio_clear_grade": "ניקוי סינון ציון"
   },
   "auth": {
     "tenant_slug": "מזהה ארגון",

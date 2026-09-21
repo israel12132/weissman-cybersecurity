@@ -51,6 +51,7 @@ export default function PortfolioPosturePanel() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [gradeFilter, setGradeFilter] = useState('all')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -74,10 +75,13 @@ export default function PortfolioPosturePanel() {
     [data],
   )
 
-  // Client-side filter over the already-loaded worst list, matching on client name + grade.
+  // Client-side filter over the already-loaded worst list, matching on client name + grade,
+  // plus an optional grade filter driven by clicking the distribution bars.
   const filteredWorst = useMemo(
-    () => worst.filter((c) => rowMatchesQuery(searchQuery, [c?.name, c?.grade])),
-    [worst, searchQuery],
+    () => worst.filter((c) =>
+      (gradeFilter === 'all' || String(c?.grade || '').toUpperCase() === gradeFilter)
+      && rowMatchesQuery(searchQuery, [c?.name, c?.grade])),
+    [worst, searchQuery, gradeFilter],
   )
 
   const handleRefresh = useCallback(() => load(), [load])
@@ -95,7 +99,7 @@ export default function PortfolioPosturePanel() {
   if (error) {
     return (
       <div className="bg-[var(--table-surface)] backdrop-blur-md border border-rose-500/30 rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap">
-        <span className="text-[11px] font-mono text-rose-400">{t('errors.loading_failed', { detail: error })}</span>
+        <span className="text-[11px] font-mono text-[var(--severity-critical)]">{t('errors.loading_failed', { detail: error })}</span>
         <Button
           variant="unstyled"
           type="button"
@@ -124,7 +128,7 @@ export default function PortfolioPosturePanel() {
       </div>
       <div className="p-4 border-b border-[var(--border-default)] flex items-center justify-between gap-3 flex-wrap">
         <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
-          <Building2 className="w-4 h-4 text-violet-400" />
+          <Building2 className="w-4 h-4 text-[var(--text-accent-violet)]" />
           {t('clients_page.portfolio_heading')}
         </h3>
         <div className="flex items-center gap-4 text-[11px] font-mono">
@@ -132,7 +136,7 @@ export default function PortfolioPosturePanel() {
             {t('clients_page.portfolio_avg', { score: Number(data.average_score).toFixed(0) })}
           </span>
           {Number(data.clients_at_risk) > 0 && (
-            <span className="inline-flex items-center gap-1 text-rose-300">
+            <span className="inline-flex items-center gap-1 text-[var(--severity-critical)]">
               <AlertTriangle className="w-3.5 h-3.5" />
               {t('clients_page.portfolio_at_risk', { count: data.clients_at_risk })}
             </span>
@@ -164,17 +168,36 @@ export default function PortfolioPosturePanel() {
           <div className="space-y-1.5">
             {GRADES.map((g) => {
               const n = Number(dist[g]) || 0
+              const active = gradeFilter === g
               return (
-                <div key={g} className="flex items-center gap-2">
+                <Button
+                  variant="unstyled"
+                  key={g}
+                  type="button"
+                  onClick={() => setGradeFilter((prev) => (prev === g ? 'all' : g))}
+                  aria-pressed={active}
+                  disabled={n === 0}
+                  title={t('clients_page.portfolio_grade_filter', { grade: g, defaultValue: `Filter to grade ${g}` })}
+                  className={`w-full flex items-center gap-2 rounded-md px-1 py-0.5 text-left transition-colors ${active ? 'bg-[var(--row-hover-bg)]' : 'hover:bg-[var(--row-hover-bg)]'} disabled:opacity-40 disabled:cursor-default`}
+                >
                   <span className="w-4 text-xs font-bold" style={{ color: gradeColor(g) }}>{g}</span>
                   <div className="flex-1 h-2 rounded-full bg-[var(--bg-2)] overflow-hidden">
-                    <div className="h-full rounded-full" style={{ width: `${(n / total) * 100}%`, background: gradeColor(g) }} />
+                    <div className="h-full rounded-full" style={{ width: `${(n / total) * 100}%`, background: gradeColor(g), outline: active ? `1px solid ${gradeColor(g)}` : 'none' }} />
                   </div>
                   <span className="w-6 text-right text-[11px] font-mono tabular-nums text-[var(--text-tertiary)]">{n}</span>
-                </div>
+                </Button>
               )
             })}
           </div>
+          {gradeFilter !== 'all' && (
+            <button
+              type="button"
+              onClick={() => setGradeFilter('all')}
+              className="mt-2 text-[10px] font-mono text-[var(--text-accent)] hover:underline"
+            >
+              {t('clients_page.portfolio_clear_grade', { defaultValue: 'Clear grade filter' })}
+            </button>
+          )}
           <div className="mt-3 text-[10px] font-mono text-[var(--text-muted)]">
             {t('clients_page.portfolio_fleet', {
               findings: Number(fleet.total_findings) || 0,
@@ -208,7 +231,7 @@ export default function PortfolioPosturePanel() {
                 <span className="text-sm font-black w-5 shrink-0" style={{ color: gradeColor(c.grade) }}>{c.grade}</span>
                 <span className="flex-1 min-w-0 text-[12px] text-[var(--text-secondary)] truncate" title={c.name}>{c.name || `#${c.client_id}`}</span>
                 {Number(c.kev_actions) > 0 && (
-                  <span className="text-[10px] font-mono text-orange-300">{t('clients_page.portfolio_kev', { count: c.kev_actions })}</span>
+                  <span className="text-[10px] font-mono text-[var(--severity-high)]">{t('clients_page.portfolio_kev', { count: c.kev_actions })}</span>
                 )}
                 <span className="text-[12px] font-bold tabular-nums w-8 text-right" style={{ color: gradeColor(c.grade) }}>{Number(c.score).toFixed(0)}</span>
               </div>
