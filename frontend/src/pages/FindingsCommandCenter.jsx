@@ -787,7 +787,7 @@ export default function FindingsCommandCenter() {
                   }}
                   className={[
                     'inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-[11px] font-mono border transition-colors',
-                    active ? 'text-white' : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]',
+                    active ? 'text-[var(--text-primary)]' : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]',
                   ].join(' ')}
                   style={{
                     borderColor: active ? meta.color : 'var(--border-default)',
@@ -872,7 +872,7 @@ export default function FindingsCommandCenter() {
                     setPagination((p) => ({ ...p, pageIndex: 0 }))
                   }}
                   placeholder={t('findings.search_findings')}
-                  className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl pl-8 pr-8 py-2.5 text-xs text-[var(--text-secondary)] font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40 transition-colors"
+                  className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl pl-8 pr-8 py-2.5 text-xs text-[var(--text-secondary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40 transition-colors"
                 />
                 {globalFilter && (
                   <Button variant="unstyled"

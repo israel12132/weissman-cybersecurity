@@ -33,7 +33,7 @@ function ProbeCard({ probeId, active, onRun, disabled }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <h3 className="text-sm font-semibold text-white">{t(`pages.oastDashboard.probes.${probeId}.label`)}</h3>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t(`pages.oastDashboard.probes.${probeId}.label`)}</h3>
             {active && (
               <span className="relative flex w-2 h-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
@@ -365,7 +365,7 @@ export default function OastDashboard() {
               placeholder={t('pages.oastDashboard.target_placeholder')}
               value={mintTarget}
               onChange={(e) => setMintTarget(e.target.value)}
-              className="rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
+              className="rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
             />
             <select
               value={mintProbeType}
@@ -380,7 +380,7 @@ export default function OastDashboard() {
               placeholder={t('pages.oastDashboard.label_optional')}
               value={mintLabel}
               onChange={(e) => setMintLabel(e.target.value)}
-              className="rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
+              className="rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
             />
             <Button variant="unstyled"
               type="button"

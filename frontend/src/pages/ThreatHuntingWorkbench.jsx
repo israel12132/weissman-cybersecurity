@@ -183,7 +183,7 @@ function CampaignDetail({ campaign, t }) {
             {statusLabel}
           </span>
         </div>
-        <h3 className="text-sm font-bold text-white mb-2">{campaign.title}</h3>
+        <h3 className="text-sm font-bold text-[var(--text-primary)] mb-2">{campaign.title}</h3>
         <p className="text-xs text-[var(--text-tertiary)] leading-relaxed italic">&quot;{campaign.hypothesis}&quot;</p>
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -227,7 +227,7 @@ function QueryCard({ query, t }) {
       <Button variant="unstyled"
         type="button"
         onClick={() => setExpanded((p) => !p)}
-        className="w-full text-left p-4 flex items-start justify-between gap-3 hover:bg-white/3 transition-colors"
+        className="w-full text-left p-4 flex items-start justify-between gap-3 hover:bg-[var(--row-hover-bg)] transition-colors"
       >
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -303,7 +303,7 @@ function IocTable({ iocs, t, onExport }) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: i * 0.03 }}
-            className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-x-4 px-4 py-2.5 border-b border-[var(--border-subtle)] hover:bg-white/2 transition-colors items-center"
+            className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-x-4 px-4 py-2.5 border-b border-[var(--border-subtle)] hover:bg-[var(--row-hover-bg)] transition-colors items-center"
           >
             <span className="text-sm">{IOC_TYPE_ICON[ioc.type] ?? '?'}</span>
             <div className="min-w-0">

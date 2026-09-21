@@ -79,14 +79,14 @@ export default function PortfolioAttackPanel() {
 
   if (error) {
     return (
-      <div className="bg-black/40 backdrop-blur-md border border-rose-500/30 rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap">
+      <div className="bg-[var(--table-surface)] backdrop-blur-md border border-rose-500/30 rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap">
         <span className="text-[11px] font-mono text-rose-400">{t('errors.loading_failed', { detail: error })}</span>
         <Button
           variant="unstyled"
           type="button"
           onClick={handleRefresh}
           disabled={loading}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-white/15 text-white/70 hover:bg-white/10 disabled:opacity-40 transition-colors"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:bg-[var(--row-hover-bg)] disabled:opacity-40 transition-colors"
         >
           {t('common.retry')}
         </Button>
@@ -99,34 +99,34 @@ export default function PortfolioAttackPanel() {
   const barMax = maxFindingCount(techniques)
 
   return (
-    <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
+    <div className="bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
       <div className="px-4 pt-4">
         <EvidenceNotice>
           Live fleet exposure from GET /api/portfolio/attack-exposure — tenant-wide ATT&amp;CK
           techniques aggregated across all clients. No fabricated exposure telemetry.
         </EvidenceNotice>
       </div>
-      <div className="p-4 border-b border-white/10 flex items-center justify-between gap-3 flex-wrap">
-        <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+      <div className="p-4 border-b border-[var(--border-default)] flex items-center justify-between gap-3 flex-wrap">
+        <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
           <Crosshair className="w-4 h-4 text-rose-400" />
           {t('clients_page.fleet_attack_heading')}
         </h3>
         <div className="flex items-center gap-3">
-          <span className="text-[10px] font-mono text-white/40">
+          <span className="text-[10px] font-mono text-[var(--text-muted)]">
             {t('clients_page.fleet_attack_summary', {
               techniques: Number(data.unique_techniques) || techniques.length,
               clients: Number(data.exposed_clients) || 0,
             })}
           </span>
           <div className="relative">
-            <Search className="w-3 h-3 text-white/30 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Search className="w-3 h-3 text-[var(--text-muted)] absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={t('common.search')}
               aria-label={t('common.search')}
-              className="w-32 pl-6 pr-2 py-1 rounded-md text-[11px] bg-black/40 border border-white/10 text-white/80 placeholder-white/30 focus:outline-none focus:border-rose-500/40"
+              className="w-32 pl-6 pr-2 py-1 rounded-md text-[11px] bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-rose-500/40"
             />
           </div>
           <ShellScanActions
@@ -141,7 +141,7 @@ export default function PortfolioAttackPanel() {
             onClick={exportPdf}
             disabled={!filteredTechniques.length}
             title={t('common.export_pdf')}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-white/15 text-white/70 hover:bg-white/10 disabled:opacity-40 transition-colors"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:bg-[var(--row-hover-bg)] disabled:opacity-40 transition-colors"
           >
             <FileText className="w-3.5 h-3.5" />
             {t('common.export_pdf')}
@@ -151,18 +151,18 @@ export default function PortfolioAttackPanel() {
 
       <div className="p-4 space-y-2">
         {top.length === 0 ? (
-          <div className="text-[11px] text-white/35">{t('clients_page.fleet_attack_none')}</div>
+          <div className="text-[11px] text-[var(--text-muted)]">{t('clients_page.fleet_attack_none')}</div>
         ) : (
           top.map((tech) => (
             <div key={tech.technique} className="flex items-center gap-2">
               <span className="w-20 shrink-0 text-[11px] font-mono text-rose-300">{tech.technique}</span>
-              <span className="hidden sm:block w-44 shrink-0 text-[11px] text-white/60 truncate" title={tech.name || tech.tactic}>
+              <span className="hidden sm:block w-44 shrink-0 text-[11px] text-[var(--text-tertiary)] truncate" title={tech.name || tech.tactic}>
                 {tech.name || tech.tactic}
               </span>
-              <div className="flex-1 h-2 rounded-full bg-white/5 overflow-hidden">
+              <div className="flex-1 h-2 rounded-full bg-[var(--bg-2)] overflow-hidden">
                 <div className="h-full rounded-full bg-gradient-to-r from-rose-500/70 to-amber-400/70" style={{ width: `${((Number(tech.finding_count) || 0) / barMax) * 100}%` }} />
               </div>
-              <span className="w-10 shrink-0 text-right text-xs font-bold tabular-nums text-white">{tech.finding_count}</span>
+              <span className="w-10 shrink-0 text-right text-xs font-bold tabular-nums text-[var(--text-primary)]">{tech.finding_count}</span>
               <span className="w-16 shrink-0 text-right text-[10px] font-mono text-violet-300" title={t('clients_page.fleet_attack_clients_hint')}>
                 {t('clients_page.fleet_attack_clients', { count: tech.client_count })}
               </span>

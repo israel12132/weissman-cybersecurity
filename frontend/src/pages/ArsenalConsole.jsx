@@ -158,15 +158,15 @@ export default function ArsenalConsole({ clientId }) {
   const coverage = Number(data?.coverage_pct)
 
   return (
-    <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
+    <div className="bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
       <div className="px-4 pt-4">
         <EvidenceNotice>
           Live recommendation from GET /api/arsenal/recommendation/:client_id — ATT&amp;CK exposure
           crossed against the tenant-scoped engine arsenal. No fabricated engine telemetry.
         </EvidenceNotice>
       </div>
-      <div className="p-4 border-b border-white/10 flex items-center justify-between gap-3 flex-wrap">
-        <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+      <div className="p-4 border-b border-[var(--border-default)] flex items-center justify-between gap-3 flex-wrap">
+        <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
           <Swords className="w-4 h-4 text-cyan-400" />
           {t('pages.threatAnalysis.arsenal_heading')}
         </h3>
@@ -174,7 +174,7 @@ export default function ArsenalConsole({ clientId }) {
           <span className="text-[11px] font-mono" style={{ color: coverageTone(coverage) }}>
             {t('pages.threatAnalysis.arsenal_coverage', { pct: Number.isFinite(coverage) ? coverage.toFixed(0) : '—' })}
           </span>
-          <span className="text-[10px] font-mono text-white/35">
+          <span className="text-[10px] font-mono text-[var(--text-muted)]">
             {t('pages.threatAnalysis.arsenal_inventory', { engines: data?.arsenal_engine_count ?? 0 })}
           </span>
           <ShellScanActions
@@ -189,7 +189,7 @@ export default function ArsenalConsole({ clientId }) {
             onClick={exportPdf}
             disabled={!filteredRecommended.length}
             title={t('common.export_pdf')}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-white/15 text-white/70 hover:bg-white/10 disabled:opacity-40 transition-colors"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:bg-[var(--row-hover-bg)] disabled:opacity-40 transition-colors"
           >
             <FileText className="w-3.5 h-3.5" />
             {t('common.export_pdf')}
@@ -211,23 +211,23 @@ export default function ArsenalConsole({ clientId }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-0">
         {/* Recommended engines (the one-click plan) */}
-        <div className="p-4 border-b lg:border-b-0 lg:border-r border-white/5">
+        <div className="p-4 border-b lg:border-b-0 lg:border-r border-[var(--border-subtle)]">
           <div className="flex items-center justify-between gap-2 mb-3">
-            <div className="text-[10px] uppercase tracking-wider text-white/40">{t('pages.threatAnalysis.arsenal_recommended')}</div>
+            <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">{t('pages.threatAnalysis.arsenal_recommended')}</div>
             <div className="relative">
-              <Search className="w-3 h-3 text-white/30 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <Search className="w-3 h-3 text-[var(--text-muted)] absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={t('common.search')}
                 aria-label={t('common.search')}
-                className="w-32 pl-6 pr-2 py-1 rounded-md text-[11px] bg-black/40 border border-white/10 text-white/80 placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+                className="w-32 pl-6 pr-2 py-1 rounded-md text-[11px] bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
               />
             </div>
           </div>
           {filteredRecommended.length === 0 ? (
-            <div className="text-[11px] text-white/35">{t('pages.threatAnalysis.arsenal_none')}</div>
+            <div className="text-[11px] text-[var(--text-muted)]">{t('pages.threatAnalysis.arsenal_none')}</div>
           ) : (
             <div className="space-y-2">
               {filteredRecommended.slice(0, 12).map((e) => {
@@ -237,7 +237,7 @@ export default function ArsenalConsole({ clientId }) {
                   <div key={e.engine_id} className="flex items-center gap-2">
                     <span className="flex-1 min-w-0 text-[12px] font-mono text-cyan-200 truncate">{e.engine_id}</span>
                     {Icon && <Icon className={`w-3.5 h-3.5 shrink-0 ${STATUS_TONE[st]} ${st === 'running' ? 'animate-spin' : ''}`} />}
-                    <span className="text-[10px] font-mono text-white/40 shrink-0">
+                    <span className="text-[10px] font-mono text-[var(--text-muted)] shrink-0">
                       {t('pages.threatAnalysis.arsenal_addressable', { count: e.addressable_findings })}
                     </span>
                   </div>
@@ -249,7 +249,7 @@ export default function ArsenalConsole({ clientId }) {
 
         {/* Capability gaps (what arsenal we still need) */}
         <div className="p-4">
-          <div className="text-[10px] uppercase tracking-wider text-white/40 mb-3 flex items-center gap-1.5">
+          <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-3 flex items-center gap-1.5">
             <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
             {t('pages.threatAnalysis.arsenal_gaps')}
           </div>

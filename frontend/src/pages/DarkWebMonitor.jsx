@@ -155,22 +155,22 @@ export function UndergroundWarRoom({
         </Button>
       </div>
       <div className="flex flex-wrap gap-4 mb-3">
-        <div className="rounded-lg border border-white/[0.07] bg-black/30 px-3 py-2">
+        <div className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2">
           <p className="text-[9px] font-mono uppercase tracking-wider text-[var(--text-muted)]">
             {t('pages.darkWebMonitor.war_current')}
           </p>
           <span className="text-xl font-bold tabular-nums text-cyan-300">{parsed.current_count}</span>
         </div>
-        <div className="rounded-lg border border-white/[0.07] bg-black/30 px-3 py-2">
+        <div className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2">
           <p className="text-[9px] font-mono uppercase tracking-wider text-[var(--text-muted)]">
             {t('pages.darkWebMonitor.war_previous')}
           </p>
-          <span className="text-xl font-bold tabular-nums text-white/70">{parsed.previous_count}</span>
+          <span className="text-xl font-bold tabular-nums text-[var(--text-tertiary)]">{parsed.previous_count}</span>
         </div>
       </div>
       <ul className="flex flex-wrap gap-2 mb-3">
         {sources.map((id) => (
-          <li key={id} className="text-[10px] font-mono px-2 py-1 rounded-lg border border-white/[0.08] bg-black/30">
+          <li key={id} className="text-[10px] font-mono px-2 py-1 rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)]">
             {String(id).toUpperCase()} <span>{chipLabel(sourceChipState(id, parsed))}</span>
           </li>
         ))}
@@ -424,7 +424,7 @@ export default function DarkWebMonitor() {
               onChange={(e) => setSearch(e.target.value)}
               aria-label={t('pages.darkWebMonitor.search_placeholder')}
               placeholder={t('pages.darkWebMonitor.search_placeholder')}
-              className="w-full pl-10 pr-4 py-2 rounded-xl bg-[var(--bg-2)] border border-[var(--border-default)] text-sm text-white placeholder-white/25 focus:outline-none focus:border-rose-500/40"
+              className="w-full pl-10 pr-4 py-2 rounded-xl bg-[var(--bg-2)] border border-[var(--border-default)] text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-rose-500/40"
             />
           </div>
           <div className="flex items-center gap-1 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg p-1 flex-wrap">
@@ -449,7 +449,7 @@ export default function DarkWebMonitor() {
             <select
               value={sourceFilter}
               onChange={(e) => setSourceFilter(e.target.value)}
-              className="px-3 py-2 rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] text-xs text-white font-mono"
+              className="px-3 py-2 rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] text-xs text-[var(--text-primary)] font-mono"
             >
               <option value="all">{t('pages.darkWebMonitor.all_sources')}</option>
               {sources.map((s) => (
@@ -461,7 +461,7 @@ export default function DarkWebMonitor() {
 
         <section className="bg-[var(--bg-2)] border border-[var(--border-default)] rounded-xl overflow-hidden">
           <div className="flex items-center justify-between p-4 border-b border-[var(--border-default)]">
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
               <Filter className="w-4 h-4 text-rose-400" />
               {t('pages.darkWebMonitor.findings_heading')}
               {!error && (
@@ -531,7 +531,7 @@ function KpiCard({ label, value, accent }) {
   return (
     <div className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-4">
       <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{label}</div>
-      <div className={`text-3xl font-bold mt-1 ${accent || 'text-white'}`}>{value}</div>
+      <div className={`text-3xl font-bold mt-1 ${accent || 'text-[var(--text-primary)]'}`}>{value}</div>
     </div>
   )
 }

@@ -601,7 +601,7 @@ export default function KillChainOrchestrator() {
                     }`}
                   >
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-semibold text-white truncate pr-2">{chain.name}</span>
+                      <span className="text-sm font-semibold text-[var(--text-primary)] truncate pr-2">{chain.name}</span>
                       <span
                         className="text-[10px] font-mono px-2 py-0.5 rounded border flex-shrink-0"
                         style={{ color: sm.color, borderColor: `${sm.color}40`, backgroundColor: `${sm.color}10` }}
@@ -632,7 +632,7 @@ export default function KillChainOrchestrator() {
                 <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-5 mb-2">
                   <div className="flex items-start justify-between gap-4 mb-3">
                     <div>
-                      <h2 className="text-base font-bold text-white">{activeChain.name}</h2>
+                      <h2 className="text-base font-bold text-[var(--text-primary)]">{activeChain.name}</h2>
                       <div className="text-[11px] text-[var(--text-muted)] mt-1">
                         {t('pages.killChainOrchestrator.target_label')}: <span className="text-[#22d3ee]/80">{activeChain.target}</span>
                         {activeChain.discoveredAt && (
@@ -682,7 +682,7 @@ export default function KillChainOrchestrator() {
                         key={phase.id}
                         layout
                         className={`rounded-2xl border transition-all ${
-                          isExpanded ? 'border-[var(--border-strong)] bg-white/8' :
+                          isExpanded ? 'border-[var(--border-strong)] bg-[var(--bg-2)]' :
                           isCompleted ? 'border-[var(--border-default)] bg-[var(--row-hover-bg)]' :
                           isActive ? 'bg-[var(--row-hover-bg)]' :
                           'border-[var(--border-subtle)] bg-[var(--bg-1)] opacity-50'
@@ -705,7 +705,7 @@ export default function KillChainOrchestrator() {
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-semibold text-white">{phase.label}</span>
+                              <span className="text-sm font-semibold text-[var(--text-primary)]">{phase.label}</span>
                               <span className="text-[10px] font-mono text-[var(--text-disabled)]">{phase.mitre}</span>
                               {isActive && (
                                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#f59e0b]/20 text-[#f59e0b] border border-[#f59e0b]/30 animate-pulse">

@@ -158,7 +158,7 @@ function Num({ label, value, onChange, min, max, hint }) {
     <label className="block space-y-1">
       <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
       <input type="number" min={min} max={max} value={value} onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-lime-400/40" />
+        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-[var(--text-primary)] font-mono focus:outline-none focus:border-lime-400/40" />
       <Hint>{hint}</Hint>
     </label>
   )
@@ -169,7 +169,7 @@ function Sel({ label, value, onChange, options, hint }) {
     <label className="block space-y-1">
       <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
       <select value={value} onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white focus:outline-none focus:border-lime-400/40">
+        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-lime-400/40">
         {options.map((o) => <option key={o} value={o}>{o}</option>)}
       </select>
       <Hint>{hint}</Hint>
@@ -182,7 +182,7 @@ function Txt({ label, value, onChange, placeholder, hint, type = 'text' }) {
     <label className="block space-y-1">
       <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
       <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white font-mono placeholder-white/20 focus:outline-none focus:border-lime-400/40" />
+        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-[var(--text-primary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-lime-400/40" />
       <Hint>{hint}</Hint>
     </label>
   )
@@ -193,7 +193,7 @@ function Area({ label, value, onChange, placeholder, rows = 3, hint }) {
     <label className="block space-y-1">
       <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
       <textarea rows={rows} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-xs text-white font-mono placeholder-white/20 focus:outline-none focus:border-lime-400/40 resize-y" />
+        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-xs text-[var(--text-primary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-lime-400/40 resize-y" />
       <Hint>{hint}</Hint>
     </label>
   )
@@ -310,7 +310,7 @@ function PostureGauge({ score, grade }) {
           strokeDasharray={hasScore ? `${pct * 2.64} 264` : '0 264'} strokeLinecap="round" style={hasScore ? { filter: `drop-shadow(0 0 8px ${color}80)` } : undefined} />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-3xl font-bold text-white">{hasScore ? pct : '—'}</span>
+        <span className="text-3xl font-bold text-[var(--text-primary)]">{hasScore ? pct : '—'}</span>
         {grade && <span className="text-lg font-mono text-lime-300/80">{grade}</span>}
         <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-widest">Exposure</span>
       </div>
@@ -322,7 +322,7 @@ function MetricTile({ label, value, accent = '#84cc16' }) {
   return (
     <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] backdrop-blur-md p-4" style={{ boxShadow: `inset 0 1px 0 ${accent}20` }}>
       <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-1">{label}</p>
-      <p className="text-2xl font-bold text-white">{value ?? '—'}</p>
+      <p className="text-2xl font-bold text-[var(--text-primary)]">{value ?? '—'}</p>
     </div>
   )
 }
@@ -595,7 +595,7 @@ export default function CicdPipelineSecurityCommandCenter() {
                 </span>
                 <span className="text-[10px] font-mono text-[var(--text-disabled)]">MITRE T1195.002 · NIST SA-12</span>
               </div>
-              <h1 className="text-2xl font-bold text-white tracking-tight">{engine?.label || 'CI/CD Pipeline Security'}</h1>
+              <h1 className="text-2xl font-bold text-[var(--text-primary)] tracking-tight">{engine?.label || 'CI/CD Pipeline Security'}</h1>
               <p className="text-sm text-[var(--text-tertiary)] mt-1 max-w-2xl leading-relaxed">
                 {t('cicdSec.hero_desc', 'Evidence-only: every finding requires a live HTTP/API signal or fetched pipeline artifact. No fabricated results.')}
               </p>
@@ -615,7 +615,7 @@ export default function CicdPipelineSecurityCommandCenter() {
           <div className="xl:sticky xl:top-4 space-y-3 xl:max-h-[calc(100dvh-2rem)] xl:overflow-y-auto pr-1">
             <div className="rounded-2xl border border-lime-500/25 bg-gradient-to-b from-lime-950/30 to-black/50 p-3">
               <div className="flex items-center justify-between mb-2 px-1">
-                <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+                <h2 className="text-sm font-bold text-[var(--text-primary)] tracking-tight flex items-center gap-2">
                   <span>🎛️</span> {t('cicdSec.control_column', 'DevSecOps Control Column')}
                 </h2>
                 <Button variant="unstyled" type="button" onClick={resetParams}
@@ -628,7 +628,7 @@ export default function CicdPipelineSecurityCommandCenter() {
                 <label className="block space-y-1">
                   <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{t('common.client', 'Client')}</span>
                   <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)}
-                    className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white focus:outline-none focus:border-lime-400/40">
+                    className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-lime-400/40">
                     <option value="">—</option>
                     {clients.map((c) => <option key={c.id} value={c.id}>{c.name || c.id}</option>)}
                   </select>
@@ -821,7 +821,7 @@ export default function CicdPipelineSecurityCommandCenter() {
                     <div key={i} className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] p-3">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-[10px] font-mono" style={sevColor(p.severity)}>[{p.severity}]</span>
-                        <span className="text-sm font-semibold text-white">{p.title}</span>
+                        <span className="text-sm font-semibold text-[var(--text-primary)]">{p.title}</span>
                       </div>
                       {p.description && <p className="text-[10px] text-[var(--text-muted)] leading-snug">{p.description}</p>}
                       {Array.isArray(p.path_steps) && p.path_steps.length > 0 && (

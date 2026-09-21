@@ -104,7 +104,7 @@ function ProviderCard({ prov, onClick }) {
       <div className="flex items-center gap-3">
         <span className="text-2xl">{prov.logo}</span>
         <div>
-          <p className="font-semibold text-white text-sm">{t(`pages.ssoDashboard.providers.${prov.id}.label`)}</p>
+          <p className="font-semibold text-[var(--text-primary)] text-sm">{t(`pages.ssoDashboard.providers.${prov.id}.label`)}</p>
           <p className="text-[10px] font-mono text-[var(--text-disabled)] uppercase">{prov.protocol}</p>
         </div>
       </div>
@@ -152,7 +152,7 @@ function ConfigForm({ prov, initial, onSave, onCancel, saving }) {
       <div className="flex items-center gap-3">
         <span className="text-xl">{prov.logo}</span>
         <div>
-          <h3 className="text-sm font-bold text-white">{t('pages.ssoDashboard.configure_sso', { label: t(`pages.ssoDashboard.providers.${prov.id}.label`) })}</h3>
+          <h3 className="text-sm font-bold text-[var(--text-primary)]">{t('pages.ssoDashboard.configure_sso', { label: t(`pages.ssoDashboard.providers.${prov.id}.label`) })}</h3>
           <p className="text-[10px] font-mono text-[var(--text-disabled)] uppercase">{prov.protocol} · {t(`pages.ssoDashboard.providers.${prov.id}.description`)}</p>
         </div>
         <Button variant="unstyled" type="button" aria-label="Close" onClick={onCancel} className="ml-auto text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] text-lg transition-colors">✕</Button>
@@ -174,7 +174,7 @@ function ConfigForm({ prov, initial, onSave, onCancel, saving }) {
                   placeholder={placeholder}
                   value={form[key] ?? ''}
                   onChange={e => set(key, e.target.value)}
-                  className="w-full rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-2 text-[12px] font-mono text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-cyan-500/40 resize-none"
+                  className="w-full rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-2 text-[12px] font-mono text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40 resize-none"
                 />
               </div>
             )
@@ -189,7 +189,7 @@ function ConfigForm({ prov, initial, onSave, onCancel, saving }) {
                   value={form[key] ?? ''}
                   onChange={e => set(key, e.target.value)}
                   required={meta.required && (!initial || !form[key])}
-                  className="w-full rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
+                  className="w-full rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
                 />
                 {note && <p className="text-[10px] text-[var(--text-disabled)]">{note}</p>}
               </div>
@@ -231,7 +231,7 @@ function IdpRow({ idp, onEdit, onDelete, onToggle, onTest, testing }) {
       <div className="flex items-center gap-3 flex-1 min-w-0">
         <span className="text-xl shrink-0">{prov.logo}</span>
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-white truncate">{idp.name}</p>
+          <p className="text-sm font-semibold text-[var(--text-primary)] truncate">{idp.name}</p>
           <p className="text-[10px] font-mono text-[var(--text-disabled)] truncate">{idp.issuer_url || idp.saml_idp_sso_url || '—'}</p>
           {idp.last_test_at && (
             <p className="text-[10px] text-[var(--text-disabled)] mt-0.5">
@@ -362,7 +362,7 @@ function ScimKillSwitchPanel({ showToast }) {
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
           <p className="text-[10px] font-mono uppercase tracking-widest text-cyan-400/80">{t('pages.ssoDashboard.scim_badge')}</p>
-          <h3 className="text-sm font-bold text-white mt-1">{t('pages.ssoDashboard.scim_title')}</h3>
+          <h3 className="text-sm font-bold text-[var(--text-primary)] mt-1">{t('pages.ssoDashboard.scim_title')}</h3>
           <p className="text-[12px] text-[var(--text-muted)] mt-1">{t('pages.ssoDashboard.scim_detail')}</p>
         </div>
         <div className="flex gap-2 text-[10px] font-mono uppercase">
@@ -393,7 +393,7 @@ function ScimKillSwitchPanel({ showToast }) {
         {tokens.map((tok) => (
           <div key={tok.id} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border-default)] px-3 py-2">
             <div>
-              <p className="text-[12px] font-mono text-white">{tok.token_prefix}…</p>
+              <p className="text-[12px] font-mono text-[var(--text-primary)]">{tok.token_prefix}…</p>
               <p className="text-[10px] text-[var(--text-disabled)]">{tok.label} · {tok.revoked_at ? t('pages.ssoDashboard.status_inactive') : t('pages.ssoDashboard.status_active')}</p>
             </div>
             {!tok.revoked_at && (
@@ -449,7 +449,7 @@ function ScimKillSwitchPanel({ showToast }) {
         {events.slice(0, 12).map((ev) => (
           <div key={ev.id} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border-subtle)] px-3 py-2">
             <div>
-              <p className="text-[12px] text-white font-mono">{ev.action} · {ev.user_email}</p>
+              <p className="text-[12px] text-[var(--text-primary)] font-mono">{ev.action} · {ev.user_email}</p>
               <p className="text-[10px] text-[var(--text-disabled)]">{ev.sessions_revoked ? t('pages.ssoDashboard.scim_sessions_revoked', { count: ev.sessions_revoked }) : ev.role || ''}</p>
             </div>
             <span className="text-[10px] font-mono text-[var(--text-disabled)]">{ev.created_at ? String(ev.created_at).slice(0, 19) : ''}</span>
@@ -612,7 +612,7 @@ export default function SsoDashboard() {
 
         {/* Header */}
         <div className="space-y-1">
-          <h2 className="text-lg font-bold text-white">{t('pages.ssoDashboard.title')}</h2>
+          <h2 className="text-lg font-bold text-[var(--text-primary)]">{t('pages.ssoDashboard.title')}</h2>
           <p className="text-[12px] text-[var(--text-muted)]">
             {t('pages.ssoDashboard.header_detail')}
           </p>

@@ -115,7 +115,7 @@ export default function CompetitiveDelta() {
       }),
       columnHelper.accessor('title', {
         header: () => t(`${NS}.col_lane`),
-        cell: (ctx) => <span className="text-white">{ctx.getValue()}</span>,
+        cell: (ctx) => <span className="text-[var(--text-primary)]">{ctx.getValue()}</span>,
       }),
       columnHelper.accessor('live_engine_count', {
         header: () => t(`${NS}.col_engines`),
@@ -241,7 +241,7 @@ export default function CompetitiveDelta() {
               />
             </div>
 
-            <section data-testid="revision-facts" className="rounded-xl border border-white/10 bg-black/20 p-4 space-y-2">
+            <section data-testid="revision-facts" className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] p-4 space-y-2">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-cyan-200">
                 {t(`${NS}.revision_title`)}
               </h2>
@@ -266,7 +266,7 @@ export default function CompetitiveDelta() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={t(`${NS}.search_placeholder`)}
-                  className="w-full rounded-lg border border-white/10 bg-black/30 pl-9 pr-3 py-2 text-sm text-white placeholder:text-[var(--text-muted)]"
+                  className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] pl-9 pr-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
                 />
               </label>
               <Button type="button" variant="ghost" size="xs" onClick={() => doExport('json')}>
@@ -291,15 +291,15 @@ export default function CompetitiveDelta() {
             />
 
             {clusters.length > 0 && (
-              <section data-testid="market-research" className="rounded-xl border border-white/10 bg-black/20 p-4 space-y-3">
+              <section data-testid="market-research" className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] p-4 space-y-3">
                 <h2 className="text-sm font-semibold uppercase tracking-wider text-violet-200">
                   {t(`${NS}.research_title`)}
                 </h2>
                 <p className="text-xs text-[var(--text-muted)]">{t(`${NS}.research_notice`)}</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {clusters.map((c) => (
-                    <article key={c.cluster} className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 space-y-1">
-                      <h3 className="text-xs text-white font-medium">{c.cluster}</h3>
+                    <article key={c.cluster} className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2 space-y-1">
+                      <h3 className="text-xs text-[var(--text-primary)] font-medium">{c.cluster}</h3>
                       <p className="text-[10px] text-cyan-200/80 font-mono">
                         {(Array.isArray(c.vendors) ? c.vendors : []).join(' · ')}
                       </p>

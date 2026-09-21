@@ -196,7 +196,7 @@ export default function PortfolioPosturePanel() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={t('common.search')}
                 aria-label={t('common.search')}
-                className="w-32 pl-6 pr-2 py-1 rounded-md text-[11px] bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-secondary)] placeholder-white/30 focus:outline-none focus:border-violet-500/40"
+                className="w-32 pl-6 pr-2 py-1 rounded-md text-[11px] bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-violet-500/40"
               />
             </div>
           </div>

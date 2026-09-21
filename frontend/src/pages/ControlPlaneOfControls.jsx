@@ -104,14 +104,14 @@ export default function ControlPlaneOfControls() {
             <ExecutiveWidget label={t(`${NS}.kpi_engines`)} value={findings.length ? liveEngineCount : '—'} />
           </div>
           <div className="relative max-w-sm">
-            <Search className="w-3.5 h-3.5 text-white/30 absolute left-2.5 top-1/2 -translate-y-1/2" />
+            <Search className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-2.5 top-1/2 -translate-y-1/2" />
             <input
               type="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={t(`${NS}.search_placeholder`)}
               aria-label={t(`${NS}.search_placeholder`)}
-              className="w-full pl-8 pr-3 py-2 rounded-lg text-sm bg-black/40 border border-white/10 text-white"
+              className="w-full pl-8 pr-3 py-2 rounded-lg text-sm bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-primary)]"
             />
           </div>
           {!filtered.length ? (
@@ -122,12 +122,12 @@ export default function ControlPlaneOfControls() {
                 const s = (f.severity || 'info').toLowerCase()
                 const c = SEV_COLOR[s] || SEV_COLOR.info
                 return (
-                  <li key={f.id || f.finding_id} className="rounded-lg border border-white/10 p-3">
+                  <li key={f.id || f.finding_id} className="rounded-lg border border-[var(--border-default)] p-3">
                     <div className="flex gap-2 items-center">
                       <span className="text-[10px] font-mono uppercase" style={{ color: c }}>{s}</span>
-                      <span className="text-xs text-white/50 font-mono">{f.source || f.type}</span>
+                      <span className="text-xs text-[var(--text-muted)] font-mono">{f.source || f.type}</span>
                     </div>
-                    <div className="text-sm text-white mt-1">{f.title}</div>
+                    <div className="text-sm text-[var(--text-primary)] mt-1">{f.title}</div>
                   </li>
                 )
               })}

@@ -227,14 +227,14 @@ function saveRun(engineId, { target, status, findingsCount, jobId }) {
 function StatCard({ label, value, sub, accent = '#22d3ee', icon }) {
   return (
     <div
-      className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-br from-white/[0.06] to-black/50 backdrop-blur-xl p-4 transition-all duration-300 hover:border-[var(--border-strong)]"
+      className="relative overflow-hidden rounded-2xl border border-[var(--border-default)] bg-gradient-to-br from-white/[0.06] to-black/50 backdrop-blur-xl p-4 transition-all duration-300 hover:border-[var(--border-strong)]"
       style={{ boxShadow: `inset 0 1px 0 ${accent}15` }}
     >
       <div className="absolute top-0 inset-x-0 h-px opacity-60" style={{ background: `linear-gradient(90deg, transparent, ${accent}50, transparent)` }} />
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-[var(--text-muted)] mb-1.5">{label}</p>
-          <p className="text-xl font-bold text-white tracking-tight truncate">{value}</p>
+          <p className="text-xl font-bold text-[var(--text-primary)] tracking-tight truncate">{value}</p>
           {sub && <p className="text-[10px] font-mono text-[var(--text-muted)] mt-1 truncate">{sub}</p>}
         </div>
         {icon && <span className="text-lg opacity-60 shrink-0">{icon}</span>}
@@ -681,7 +681,7 @@ export default function EngineDetail() {
       className="min-h-[100dvh] text-[var(--text-primary)]"
       style={{ background: 'radial-gradient(ellipse 120% 80% at 50% -5%, #1e293b 0%, #0f172a 40%, #020617 70%, #000 100%)' }}
     >
-      <header className="sticky top-0 z-20 border-b border-white/[0.08] bg-[var(--bg-3)] backdrop-blur-xl">
+      <header className="sticky top-0 z-20 border-b border-[var(--border-default)] bg-[var(--bg-3)] backdrop-blur-xl">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3 flex-wrap min-w-0">
           <Link to="/engines" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-xs font-mono transition-colors">
@@ -771,7 +771,7 @@ export default function EngineDetail() {
         <motion.section
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
-          className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-gradient-to-br from-white/[0.07] via-black/45 to-black/70 backdrop-blur-xl p-6 md:p-8"
+          className="relative overflow-hidden rounded-3xl border border-[var(--border-default)] bg-gradient-to-br from-white/[0.07] via-black/45 to-black/70 backdrop-blur-xl p-6 md:p-8"
         >
           <div
             className="absolute inset-x-0 top-0 h-px"
@@ -780,8 +780,8 @@ export default function EngineDetail() {
           <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
             <div className="space-y-4 min-w-0 flex-1">
               <div className="flex items-center gap-3 flex-wrap">
-                <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight">{engine.label}</h1>
-                <code className="text-[11px] font-mono text-[var(--text-muted)] bg-[var(--bg-2)] px-2 py-0.5 rounded-md border border-white/[0.08]">{engine.id}</code>
+                <h1 className="text-3xl md:text-4xl font-bold text-[var(--text-primary)] tracking-tight">{engine.label}</h1>
+                <code className="text-[11px] font-mono text-[var(--text-muted)] bg-[var(--bg-2)] px-2 py-0.5 rounded-md border border-[var(--border-default)]">{engine.id}</code>
                 {running && (
                   <span className="inline-flex items-center gap-1 text-[10px] font-mono px-2.5 py-1 rounded-md bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 animate-pulse">
                     ⟳ {t('engines.running')}
@@ -876,7 +876,7 @@ export default function EngineDetail() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
-          className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-white/[0.08] p-6 space-y-5"
+          className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-6 space-y-5"
         >
           <h2 className="text-xs font-mono text-[var(--text-tertiary)] uppercase tracking-widest">{t('engines.detail_run_config')}</h2>
 
@@ -918,7 +918,7 @@ export default function EngineDetail() {
             <input type="text" value={target} onChange={(e) => setTarget(e.target.value)}
               placeholder={engine.requiresTarget ? 'https://target.com' : 'Optional — uses client scope'}
               disabled={running}
-              className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40 disabled:opacity-50" />
+              className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40 disabled:opacity-50" />
           </div>
 
           {/* Timeout */}

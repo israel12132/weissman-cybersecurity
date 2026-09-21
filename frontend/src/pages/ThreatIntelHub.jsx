@@ -587,7 +587,7 @@ function CoveragePanel({ t }) {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t('pages.threatIntelHub.search_placeholder')}
-                className="w-full bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg pl-9 pr-8 py-2 text-xs text-[var(--text-secondary)] placeholder-white/25 font-mono focus:outline-none focus:border-cyan-500/40"
+                className="w-full bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg pl-9 pr-8 py-2 text-xs text-[var(--text-secondary)] placeholder-[var(--text-muted)] font-mono focus:outline-none focus:border-cyan-500/40"
               />
               {search && (
                 <Button variant="unstyled"

@@ -135,7 +135,7 @@ function Toggle({ label, hint, checked, onChange }) {
         <span className="block text-[11px] font-mono text-[var(--text-primary)]">{label}</span>
         {hint && <span className="block text-[9px] font-mono text-[var(--text-disabled)]">{hint}</span>}
       </span>
-      <span className={`shrink-0 w-8 h-4 rounded-full relative transition-colors ${checked ? 'bg-pink-500/60' : 'bg-white/15'}`}>
+      <span className={`shrink-0 w-8 h-4 rounded-full relative transition-colors ${checked ? 'bg-pink-500/60' : 'bg-[var(--bg-2)]'}`}>
         <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${checked ? 'left-[18px]' : 'left-0.5'}`} />
       </span>
     </Button>
@@ -147,7 +147,7 @@ function Txt({ label, value, onChange, placeholder, hint }) {
     <label className="block space-y-1">
       <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
       <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white font-mono placeholder-white/20 focus:outline-none focus:border-pink-400/40" />
+        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-[var(--text-primary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-pink-400/40" />
       {hint && <span className="text-[9px] font-mono text-[var(--text-disabled)]">{hint}</span>}
     </label>
   )
@@ -158,7 +158,7 @@ function Area({ label, value, onChange, placeholder, rows = 3, hint }) {
     <label className="block space-y-1">
       <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
       <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={rows} placeholder={placeholder}
-        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-xs text-white font-mono placeholder-white/20 focus:outline-none focus:border-pink-400/40 resize-y" />
+        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-xs text-[var(--text-primary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-pink-400/40 resize-y" />
       {hint && <span className="text-[9px] font-mono text-[var(--text-disabled)]">{hint}</span>}
     </label>
   )
@@ -387,7 +387,7 @@ export default function ServerlessSecurityCommandCenter() {
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-emerald-400/30 text-emerald-300 bg-emerald-500/10 uppercase tracking-widest">{paramCount} live parameters</span>
                 <span className="text-[10px] font-mono text-[var(--text-disabled)]">MITRE T1059 · T1190</span>
               </div>
-              <h1 className="text-2xl font-bold text-white tracking-tight">{engine?.label || 'Serverless Attack'}</h1>
+              <h1 className="text-2xl font-bold text-[var(--text-primary)] tracking-tight">{engine?.label || 'Serverless Attack'}</h1>
               <p className="text-sm text-[var(--text-tertiary)] mt-1 max-w-2xl leading-relaxed">
                 {t('serverlessSec.hero_desc', 'Evidence-only remote assessment: platform fingerprinting, env leaks, CORS, IaC exposure, event injection — every finding backed by a real HTTP signal.')}
               </p>
@@ -400,14 +400,14 @@ export default function ServerlessSecurityCommandCenter() {
           <div className="xl:sticky xl:top-4 space-y-3 xl:max-h-[calc(100dvh-2rem)] xl:overflow-y-auto pr-1">
             <div className="rounded-2xl border border-pink-500/25 bg-gradient-to-b from-pink-950/30 to-black/50 p-3">
               <div className="flex items-center justify-between mb-2 px-1">
-                <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-2"><span>🎛️</span> {t('serverlessSec.control', 'Serverless Control Column')}</h2>
+                <h2 className="text-sm font-bold text-[var(--text-primary)] tracking-tight flex items-center gap-2"><span>🎛️</span> {t('serverlessSec.control', 'Serverless Control Column')}</h2>
                 <Button variant="unstyled" type="button" onClick={resetParams} className="text-[9px] font-mono uppercase tracking-wide px-2 py-1 rounded-md border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors">{t('common.reset', 'Reset')}</Button>
               </div>
 
               <Section title={t('common.target', 'Target Binding')} icon="🎯" accent="#22d3ee">
                 <label className="block space-y-1">
                   <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t('common.client', 'Client')}</span>
-                  <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white focus:outline-none focus:border-pink-400/40">
+                  <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-pink-400/40">
                     <option value="">—</option>
                     {clients.map((c) => <option key={c.id} value={c.id}>{c.name || c.id}</option>)}
                   </select>
@@ -454,10 +454,10 @@ export default function ServerlessSecurityCommandCenter() {
                     <div key={i} className="flex items-center gap-1.5">
                       <input value={h.name} onChange={(e) => setHeader(i, 'name', e.target.value)} placeholder={t('serverlessSec.header_name', 'Header')}
                         aria-label={t('serverlessSec.header_name', 'Header')}
-                        className="flex-1 min-w-0 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-2 py-1 text-[11px] text-white font-mono placeholder-white/20 focus:outline-none focus:border-pink-400/40" />
+                        className="flex-1 min-w-0 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-2 py-1 text-[11px] text-[var(--text-primary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-pink-400/40" />
                       <input value={h.value} onChange={(e) => setHeader(i, 'value', e.target.value)} placeholder={t('serverlessSec.header_value', 'Value')}
                         aria-label={t('serverlessSec.header_value', 'Value')}
-                        className="flex-1 min-w-0 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-2 py-1 text-[11px] text-white font-mono placeholder-white/20 focus:outline-none focus:border-pink-400/40" />
+                        className="flex-1 min-w-0 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-2 py-1 text-[11px] text-[var(--text-primary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-pink-400/40" />
                       <Button variant="unstyled" type="button" onClick={() => removeHeader(i)} aria-label={t('serverlessSec.remove_header', 'Remove header')}
                         className="shrink-0 w-6 h-6 rounded border border-[var(--border-default)] text-[var(--text-muted)] hover:text-rose-300 hover:border-rose-500/40 transition-colors">×</Button>
                     </div>
@@ -492,7 +492,7 @@ export default function ServerlessSecurityCommandCenter() {
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="rounded-2xl border border-pink-500/30 bg-[var(--bg-2)] p-4">
                 <h3 className="text-sm font-mono text-pink-300 uppercase tracking-widest mb-3">Posture Score</h3>
                 <div className="flex items-end gap-4">
-                  <span className="text-5xl font-bold text-white">{liveMetrics.score}<span className="text-2xl text-[var(--text-muted)]">/100</span></span>
+                  <span className="text-5xl font-bold text-[var(--text-primary)]">{liveMetrics.score}<span className="text-2xl text-[var(--text-muted)]">/100</span></span>
                   <span className="text-3xl font-mono text-pink-400 mb-1">Grade {liveMetrics.grade}</span>
                 </div>
                 <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] font-mono">

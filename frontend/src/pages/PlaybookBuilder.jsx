@@ -100,8 +100,8 @@ function JsonEditor({ value, onChange, error, label, invalidLabel }) {
   const lineCount = Math.max(lines.length, 1)
 
   return (
-    <div className="overflow-hidden rounded-xl ring-1 ring-white/[0.08] bg-[#0c0c0e]">
-      <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-2">
+    <div className="overflow-hidden rounded-xl ring-1 ring-[var(--border-default)] bg-[#0c0c0e]">
+      <div className="flex items-center justify-between border-b border-[var(--border-subtle)] px-3 py-2">
         <span className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
           <FileJson className="h-3.5 w-3.5" />
           {label}
@@ -155,10 +155,10 @@ function ActionCard({ action, index, total, label, onMoveUp, onMoveDown, onRemov
       layout
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      className="group relative rounded-xl bg-[var(--bg-1)]/60 ring-1 ring-white/[0.08] transition-shadow hover:ring-white/[0.12] hover:shadow-lg hover:shadow-black/20"
+      className="group relative rounded-xl bg-[var(--bg-1)]/60 ring-1 ring-[var(--border-default)] transition-shadow hover:ring-[var(--border-default)] hover:shadow-lg hover:shadow-black/20"
     >
       <div className="flex items-stretch">
-        <div className="flex w-8 shrink-0 cursor-grab flex-col items-center justify-center border-e border-white/[0.06] text-[var(--text-disabled)] transition-colors group-hover:text-[var(--text-muted)]">
+        <div className="flex w-8 shrink-0 cursor-grab flex-col items-center justify-center border-e border-[var(--border-subtle)] text-[var(--text-disabled)] transition-colors group-hover:text-[var(--text-muted)]">
           <GripVertical className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1 p-3">
@@ -182,7 +182,7 @@ function ActionCard({ action, index, total, label, onMoveUp, onMoveDown, onRemov
               </Button>
             </div>
           </div>
-          <div className={`rounded-lg ring-1 ${jsonError ? 'ring-rose-500/40' : 'ring-white/[0.06]'} bg-[var(--bg-2)]`}>
+          <div className={`rounded-lg ring-1 ${jsonError ? 'ring-rose-500/40' : 'ring-[var(--border-subtle)]'} bg-[var(--bg-2)]`}>
             <textarea
               value={paramsText}
               onChange={(e) => { setParamsText(e.target.value); setJsonError(false) }}
@@ -481,7 +481,7 @@ export default function PlaybookBuilder() {
   return (
     <div id="main-content" tabIndex={-1} className="playbook-builder-root min-h-[100dvh] bg-[var(--bg-0)] text-[var(--text-secondary)] outline-none">
       {/* Header */}
-      <header className="border-b border-white/[0.06] bg-[#09090b]/80 px-5 py-5 backdrop-blur-xl lg:px-8">
+      <header className="border-b border-[var(--border-subtle)] bg-[#09090b]/80 px-5 py-5 backdrop-blur-xl lg:px-8">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
@@ -513,7 +513,7 @@ export default function PlaybookBuilder() {
             <Button variant="unstyled"
               type="button"
               onClick={insertExample}
-              className="rounded-lg px-3 py-2 text-[12px] text-[var(--text-tertiary)] ring-1 ring-white/[0.1] transition-all hover:bg-[var(--row-hover-bg)] hover:text-[var(--text-primary)]"
+              className="rounded-lg px-3 py-2 text-[12px] text-[var(--text-tertiary)] ring-1 ring-[var(--border-default)] transition-all hover:bg-[var(--row-hover-bg)] hover:text-[var(--text-primary)]"
             >
               {t('playbooks.insert_example')}
             </Button>
@@ -536,7 +536,7 @@ export default function PlaybookBuilder() {
       {/* Three-panel layout */}
       <div className="grid min-h-[calc(100dvh-88px)] grid-cols-1 xl:grid-cols-[280px_1fr_300px]">
         {/* Left — Library */}
-        <aside className="border-b border-white/[0.06] bg-[#0a0a0c]/60 xl:border-b-0 xl:border-e">
+        <aside className="border-b border-[var(--border-subtle)] bg-[#0a0a0c]/60 xl:border-b-0 xl:border-e">
           <div className="sticky top-0 p-4">
             <h2 className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-[var(--text-muted)]">
               <FileJson className="h-3.5 w-3.5" />
@@ -550,7 +550,7 @@ export default function PlaybookBuilder() {
                 onChange={(e) => setLibrarySearch(e.target.value)}
                 aria-label={t('playbooks.library_search')}
                 placeholder={t('playbooks.library_search')}
-                className="w-full rounded-lg bg-[var(--bg-2)] ps-8 pe-3 py-2 text-[11px] text-[var(--text-secondary)] ring-1 ring-white/[0.08] placeholder:text-[var(--text-disabled)] focus:outline-none focus:ring-cyan-400/30"
+                className="w-full rounded-lg bg-[var(--bg-2)] ps-8 pe-3 py-2 text-[11px] text-[var(--text-secondary)] ring-1 ring-[var(--border-default)] placeholder:text-[var(--text-disabled)] focus:outline-none focus:ring-cyan-400/30"
               />
             </div>
             {loadError && (
@@ -577,7 +577,7 @@ export default function PlaybookBuilder() {
                         className={`block w-full rounded-xl px-3 py-3 text-left transition-all ${
                           isActive
                             ? 'bg-gradient-to-r from-violet-500/15 to-cyan-500/10 ring-1 ring-violet-400/30 shadow-lg shadow-violet-500/5'
-                            : 'hover:bg-[var(--row-hover-bg)] ring-1 ring-transparent hover:ring-white/[0.06]'
+                            : 'hover:bg-[var(--row-hover-bg)] ring-1 ring-transparent hover:ring-[var(--border-subtle)]'
                         }`}
                       >
                         <div className="flex items-start justify-between gap-2">
@@ -585,7 +585,7 @@ export default function PlaybookBuilder() {
                           <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider ${
                             pb.enabled
                               ? 'bg-emerald-500/12 text-emerald-300 ring-1 ring-emerald-500/30'
-                              : 'bg-[var(--row-hover-bg)] text-[var(--text-muted)] ring-1 ring-white/[0.08]'
+                              : 'bg-[var(--row-hover-bg)] text-[var(--text-muted)] ring-1 ring-[var(--border-default)]'
                           }`}>
                             {pb.enabled ? t('common.on') : t('common.off')}
                           </span>
@@ -607,7 +607,7 @@ export default function PlaybookBuilder() {
         <main className="overflow-y-auto custom-scroll p-5 lg:p-6">
           {!draft ? (
             <div className="flex h-full min-h-[320px] flex-col items-center justify-center text-center">
-              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--row-hover-bg)] ring-1 ring-white/[0.08]">
+              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--row-hover-bg)] ring-1 ring-[var(--border-default)]">
                 <Zap className="h-7 w-7 text-[var(--text-disabled)]" />
               </div>
               <p className="max-w-sm text-[14px] text-[var(--text-muted)]">{t('playbooks.pick_playbook')}</p>
@@ -621,16 +621,16 @@ export default function PlaybookBuilder() {
                   value={draft.name}
                   onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
                   placeholder={t('playbooks.name_placeholder')}
-                  className="w-full rounded-xl bg-[var(--bg-1)]/60 px-4 py-3 text-[16px] font-semibold text-[var(--text-primary)] ring-1 ring-white/[0.08] placeholder:text-[var(--text-disabled)] focus:outline-none focus:ring-violet-400/35"
+                  className="w-full rounded-xl bg-[var(--bg-1)]/60 px-4 py-3 text-[16px] font-semibold text-[var(--text-primary)] ring-1 ring-[var(--border-default)] placeholder:text-[var(--text-disabled)] focus:outline-none focus:ring-violet-400/35"
                 />
                 <textarea
                   value={draft.description}
                   onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
                   placeholder={t('playbooks.description_placeholder')}
                   rows={2}
-                  className="w-full resize-none rounded-xl bg-[var(--bg-1)]/40 px-4 py-3 text-[13px] text-[var(--text-secondary)] ring-1 ring-white/[0.06] placeholder:text-[var(--text-disabled)] focus:outline-none focus:ring-violet-400/25"
+                  className="w-full resize-none rounded-xl bg-[var(--bg-1)]/40 px-4 py-3 text-[13px] text-[var(--text-secondary)] ring-1 ring-[var(--border-subtle)] placeholder:text-[var(--text-disabled)] focus:outline-none focus:ring-violet-400/25"
                 />
-                <label className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-[var(--row-hover-bg)] px-3 py-1.5 ring-1 ring-white/[0.08]">
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-[var(--row-hover-bg)] px-3 py-1.5 ring-1 ring-[var(--border-default)]">
                   <input
                     type="checkbox"
                     checked={!!draft.enabled}
@@ -662,7 +662,7 @@ export default function PlaybookBuilder() {
                 </TabPanel>
 
                 <TabPanel value="list" className="!p-0 space-y-6">
-                  <section className="rounded-2xl bg-[var(--bg-1)]/40 p-5 ring-1 ring-white/[0.07]">
+                  <section className="rounded-2xl bg-[var(--bg-1)]/40 p-5 ring-1 ring-[var(--border-default)]">
                     <h3 className="mb-4 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-violet-300/80">
                       <Zap className="h-3.5 w-3.5" />
                       {t('playbooks.when_conditions')}
@@ -674,7 +674,7 @@ export default function PlaybookBuilder() {
                     />
                   </section>
 
-                  <section className="rounded-2xl bg-[var(--bg-1)]/40 p-5 ring-1 ring-white/[0.07]">
+                  <section className="rounded-2xl bg-[var(--bg-1)]/40 p-5 ring-1 ring-[var(--border-default)]">
                     <h3 className="mb-4 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-300/80">
                       <Play className="h-3.5 w-3.5" />
                       {t('playbooks.do_actions')}
@@ -685,7 +685,7 @@ export default function PlaybookBuilder() {
                           type="button"
                           key={a.kind}
                           onClick={() => addAction(a.kind)}
-                          className="rounded-lg bg-[var(--row-hover-bg)] px-2.5 py-1 text-[10px] font-medium text-[var(--text-tertiary)] ring-1 ring-white/[0.08] transition-all hover:bg-cyan-500/10 hover:text-cyan-200 hover:ring-cyan-400/25"
+                          className="rounded-lg bg-[var(--row-hover-bg)] px-2.5 py-1 text-[10px] font-medium text-[var(--text-tertiary)] ring-1 ring-[var(--border-default)] transition-all hover:bg-cyan-500/10 hover:text-cyan-200 hover:ring-cyan-400/25"
                         >
                           + {t(`playbooks.action.${a.kind}`)}
                         </Button>
@@ -729,7 +729,7 @@ export default function PlaybookBuilder() {
               </Tabs>
 
               {/* Toolbar */}
-              <div className="flex flex-wrap items-center gap-2 border-t border-white/[0.06] pt-4">
+              <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border-subtle)] pt-4">
                 <Button variant="unstyled"
                   type="button"
                   onClick={save}
@@ -801,7 +801,7 @@ export default function PlaybookBuilder() {
                       {fireResult.loading ? (
                         <p className="text-[13px] text-[var(--text-tertiary)]">{t('playbooks.firing')}</p>
                       ) : (
-                        <pre className="max-h-64 overflow-auto custom-scroll rounded-lg bg-[var(--bg-2)] p-4 font-mono text-[11px] leading-relaxed text-[var(--text-secondary)] ring-1 ring-white/[0.06]">
+                        <pre className="max-h-64 overflow-auto custom-scroll rounded-lg bg-[var(--bg-2)] p-4 font-mono text-[11px] leading-relaxed text-[var(--text-secondary)] ring-1 ring-[var(--border-subtle)]">
                           {JSON.stringify(fireResult.results ?? fireResult, null, 2)}
                         </pre>
                       )}
@@ -814,7 +814,7 @@ export default function PlaybookBuilder() {
         </main>
 
         {/* Right — History timeline */}
-        <aside className="border-t border-white/[0.06] bg-[#0a0a0c]/60 xl:border-t-0 xl:border-s">
+        <aside className="border-t border-[var(--border-subtle)] bg-[#0a0a0c]/60 xl:border-t-0 xl:border-s">
           <div className="sticky top-0 p-4">
             <h2 className="mb-4 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-[var(--text-muted)]">
               <History className="h-3.5 w-3.5" />
@@ -834,7 +834,7 @@ export default function PlaybookBuilder() {
                     <span className="absolute start-0 top-1.5 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-[var(--bg-3)] ring-2 ring-[#0a0a0c]">
                       <Clock className="h-2.5 w-2.5 text-[var(--text-muted)]" />
                     </span>
-                    <div className="rounded-xl bg-[var(--bg-1)]/50 p-3 ring-1 ring-white/[0.06] transition-colors hover:ring-white/[0.1]">
+                    <div className="rounded-xl bg-[var(--bg-1)]/50 p-3 ring-1 ring-[var(--border-subtle)] transition-colors hover:ring-[var(--border-default)]">
                       <div className="flex items-center justify-between gap-2">
                         <time className="text-[10px] font-medium text-[var(--text-muted)]">
                           {r.triggered_at ? new Date(r.triggered_at).toLocaleString() : '—'}

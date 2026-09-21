@@ -87,7 +87,7 @@ export default function StrategicEngineProgram() {
         return (
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <Link to={`/engines/${row.original.id}`} className="text-white font-medium hover:text-cyan-300 transition-colors">
+              <Link to={`/engines/${row.original.id}`} className="text-[var(--text-primary)] font-medium hover:text-cyan-300 transition-colors">
                 {getValue()}
               </Link>
               <span className={`px-2 py-0.5 rounded border text-[10px] font-mono uppercase tracking-wider ${
@@ -181,7 +181,7 @@ export default function StrategicEngineProgram() {
         <section className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
             <div className="text-[11px] text-[var(--text-tertiary)]">{t('pages.strategicEngineProgram.prioritized_label')}</div>
-            <div className="text-2xl font-semibold text-white">{rows.length}</div>
+            <div className="text-2xl font-semibold text-[var(--text-primary)]">{rows.length}</div>
             <p className="text-xs text-[var(--text-tertiary)]">{t('pages.strategicEngineProgram.prioritized_count', { count: rows.length })}</p>
           </article>
           <article className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
@@ -218,7 +218,7 @@ export default function StrategicEngineProgram() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t('pages.strategicEngineProgram.search_placeholder')}
-              className="w-full pl-10 pr-4 py-2 rounded-xl bg-[var(--bg-2)] border border-[var(--border-default)] text-sm text-white placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
+              className="w-full pl-10 pr-4 py-2 rounded-xl bg-[var(--bg-2)] border border-[var(--border-default)] text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
             />
           </div>
           <div className="flex items-center gap-1 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg p-1">
@@ -242,7 +242,7 @@ export default function StrategicEngineProgram() {
         <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] p-5">
           <div className="flex items-center gap-2 mb-4">
             <Layers className="w-4 h-4 text-[var(--text-muted)]" />
-            <h2 className="text-sm font-semibold text-white">{t('pages.strategicEngineProgram.priority_matrix')}</h2>
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">{t('pages.strategicEngineProgram.priority_matrix')}</h2>
             <span className="text-[10px] font-mono text-[var(--text-muted)] ml-auto">
               {t('pages.strategicEngineProgram.showing_count', { count: filteredRows.length, total: rows.length })}
             </span>
@@ -260,7 +260,7 @@ export default function StrategicEngineProgram() {
 
         <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
           <div className="text-[11px] text-[var(--text-tertiary)]">{t('pages.strategicEngineProgram.execution_rule')}</div>
-          <div className="text-sm font-semibold text-white mt-1">{t('pages.strategicEngineProgram.execution_title')}</div>
+          <div className="text-sm font-semibold text-[var(--text-primary)] mt-1">{t('pages.strategicEngineProgram.execution_title')}</div>
           <p className="text-xs text-[var(--text-tertiary)] mt-1">{t('pages.strategicEngineProgram.execution_desc')}</p>
         </section>
       </div>

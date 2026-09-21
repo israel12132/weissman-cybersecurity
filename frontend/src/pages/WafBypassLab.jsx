@@ -75,7 +75,7 @@ function Toggle({ label, hint, checked, onChange }) {
         <span className="block text-[12px] font-mono text-[var(--text-primary)] truncate">{label}</span>
         {hint && <span className="block text-[10px] font-mono text-[var(--text-muted)] truncate">{hint}</span>}
       </span>
-      <span className={`shrink-0 w-9 h-5 rounded-full relative transition-colors ${checked ? 'bg-orange-500/70' : 'bg-white/15'}`}>
+      <span className={`shrink-0 w-9 h-5 rounded-full relative transition-colors ${checked ? 'bg-orange-500/70' : 'bg-[var(--bg-2)]'}`}>
         <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${checked ? 'left-[18px]' : 'left-0.5'}`} />
       </span>
     </Button>

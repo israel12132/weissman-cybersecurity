@@ -80,14 +80,14 @@ export default function SlaForecastStrip() {
   if (clientId == null || loading) return null
   if (error) {
     return (
-      <div className="bg-black/40 backdrop-blur-md border border-rose-500/30 rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap">
+      <div className="bg-[var(--table-surface)] backdrop-blur-md border border-rose-500/30 rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap">
         <span className="text-[11px] font-mono text-rose-400">{t('errors.loading_failed', { detail: error })}</span>
         <Button
           variant="unstyled"
           type="button"
           onClick={handleRefresh}
           disabled={loading}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-white/15 text-white/70 hover:bg-white/10 disabled:opacity-40 transition-colors"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:bg-[var(--row-hover-bg)] disabled:opacity-40 transition-colors"
         >
           {t('common.retry')}
         </Button>
@@ -97,15 +97,15 @@ export default function SlaForecastStrip() {
   if (forecast.length === 0 || forecast.every((b) => (Number(b.breached) || 0) === 0)) return null
 
   return (
-    <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
+    <div className="bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
       <div className="px-4 pt-4">
         <EvidenceNotice>
           Live forecast from GET /api/remediation/sla-forecast/:clientId — cumulative SLA-breach
           counts by horizon (KEV subset called out) for the selected tenant. No fabricated telemetry.
         </EvidenceNotice>
       </div>
-      <div className="p-4 border-b border-white/10 flex items-center justify-between gap-3 flex-wrap">
-        <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+      <div className="p-4 border-b border-[var(--border-default)] flex items-center justify-between gap-3 flex-wrap">
+        <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
           <CalendarClock className="w-4 h-4 text-amber-400" />
           {t('pages.remediationHub.forecast_heading')}
         </h3>
@@ -128,7 +128,7 @@ export default function SlaForecastStrip() {
             onClick={exportPdf}
             disabled={!forecast.length}
             title={t('common.export_pdf')}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-white/15 text-white/70 hover:bg-white/10 disabled:opacity-40 transition-colors"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:bg-[var(--row-hover-bg)] disabled:opacity-40 transition-colors"
           >
             <FileText className="w-3.5 h-3.5" />
             {t('common.export_pdf')}
@@ -142,7 +142,7 @@ export default function SlaForecastStrip() {
           const kev = Number(b.kev_breached) || 0
           return (
             <div key={b.within_days} className="flex flex-col items-center gap-1.5">
-              <div className="text-lg font-bold tabular-nums text-white">{breached}</div>
+              <div className="text-lg font-bold tabular-nums text-[var(--text-primary)]">{breached}</div>
               {kev > 0 && (
                 <div className="text-[10px] font-mono text-orange-300">{t('pages.remediationHub.forecast_kev', { count: kev })}</div>
               )}
@@ -152,7 +152,7 @@ export default function SlaForecastStrip() {
                   style={{ height: `${(breached / barMax) * 100}%` }}
                 />
               </div>
-              <div className="text-[10px] text-white/40 font-mono">
+              <div className="text-[10px] text-[var(--text-muted)] font-mono">
                 {t('pages.remediationHub.forecast_within', { days: b.within_days })}
               </div>
             </div>

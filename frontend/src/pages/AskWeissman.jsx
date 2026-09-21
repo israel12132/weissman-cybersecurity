@@ -404,7 +404,7 @@ export default function AskWeissman() {
                             {turn.rows.slice(0, 50).map((row, ri) => (
                               <tr key={ri} className="text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)]">
                                 {Object.values(row).map((v, ci) => (
-                                  <td key={ci} className="px-2 py-1 border-b border-white/[0.04] whitespace-nowrap number-cell">
+                                  <td key={ci} className="px-2 py-1 border-b border-[var(--border-subtle)] whitespace-nowrap number-cell">
                                     {fmtCell(v)}
                                   </td>
                                 ))}

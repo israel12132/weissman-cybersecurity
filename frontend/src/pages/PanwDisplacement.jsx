@@ -149,7 +149,7 @@ function PrismaCloudHonestyCard({ honesty, t }) {
             data-testid={`prisma-plane-${p.id}`}
             data-cnapp={p.cnapp ? 'yes' : 'no'}
             data-live={p.live ? 'on' : 'off'}
-            className="rounded-xl border border-[var(--border-default)] bg-black/25 px-3 py-3"
+            className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-3"
           >
             <div className="text-[10px] font-mono uppercase tracking-[0.12em] text-amber-200/80">{p.label}</div>
             <div className={`text-[12px] font-semibold mt-1 ${p.live ? 'text-emerald-300' : 'text-slate-400'}`}>

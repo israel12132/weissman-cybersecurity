@@ -203,7 +203,7 @@ function EngineMatrixCard({
       role="button"
       tabIndex={0}
       aria-label={`Open ${engine.name || engine.id} engine`}
-      className="group relative rounded-2xl bg-gradient-to-br from-white/[0.07] via-black/40 to-black/60 backdrop-blur-xl border border-white/[0.08] p-4 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-400/25 focus-visible:outline-none focus-visible:border-cyan-400/60 focus-visible:ring-1 focus-visible:ring-cyan-400/50"
+      className="group relative rounded-2xl bg-gradient-to-br from-white/[0.07] via-black/40 to-black/60 backdrop-blur-xl border border-[var(--border-default)] p-4 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-400/25 focus-visible:outline-none focus-visible:border-cyan-400/60 focus-visible:ring-1 focus-visible:ring-cyan-400/50"
       style={enabled ? { boxShadow: `inset 0 1px 0 ${groupColor}18` } : {}}
       onClick={(e) => {
         if (e.target.closest('button')) return
@@ -275,7 +275,7 @@ function EngineMatrixCard({
         {engine.description}
       </p>
 
-      <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-white/[0.06]">
+      <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-[var(--border-subtle)]">
         <span className="text-[10px] font-mono text-[var(--text-disabled)]">
           {((historyKnown && lastRun) || lastRun === 'just now')
             ? t('engines.last_run_label', { time: lastRun })
@@ -331,7 +331,7 @@ function GroupSection({
           >
             {GROUP_ICONS[groupDef.id] ?? '◆'} {groupDef.label}
           </h2>
-          <span className="text-[10px] font-mono text-[var(--text-muted)] px-2 py-0.5 rounded-md bg-[var(--row-hover-bg)] border border-white/[0.06]">
+          <span className="text-[10px] font-mono text-[var(--text-muted)] px-2 py-0.5 rounded-md bg-[var(--row-hover-bg)] border border-[var(--border-subtle)]">
             {configKnown ? `${enabledCount}/${engines.length}` : '—'}
             {runningCount > 0 && ` · ${runningCount} ${t('engines.status_running').toLowerCase()}`}
           </span>
@@ -742,7 +742,7 @@ export default function EngineMatrix() {
       className="min-h-[100dvh] text-[var(--text-secondary)]"
       style={{ background: 'var(--shell-bg)' }}
     >
-      <header className="sticky top-0 z-20 border-b border-white/[0.08] bg-[var(--scrim)] backdrop-blur-xl">
+      <header className="sticky top-0 z-20 border-b border-[var(--border-default)] bg-[var(--scrim)] backdrop-blur-xl">
         <div className="max-w-screen-2xl mx-auto px-4 py-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="space-y-1">
@@ -758,7 +758,7 @@ export default function EngineMatrix() {
                 </Link>
               </div>
               <div className="flex items-center gap-3 flex-wrap">
-                <h1 className="text-lg font-bold tracking-tight text-white">{t('engines.matrix_title')}</h1>
+                <h1 className="text-lg font-bold tracking-tight text-[var(--text-primary)]">{t('engines.matrix_title')}</h1>
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-md border border-cyan-500/25 text-cyan-300/80 bg-cyan-500/[0.06]">
                   {t('engines.live_engines', { count: liveCount })}
                 </span>
@@ -858,7 +858,7 @@ export default function EngineMatrix() {
           ].map((s) => (
             <div
               key={s.label}
-              className="rounded-2xl border border-white/[0.08] bg-[var(--table-surface)] backdrop-blur-md px-4 py-3"
+              className="rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] backdrop-blur-md px-4 py-3"
             >
               <div className="text-[9px] font-mono uppercase tracking-[0.16em] text-[var(--text-muted)]">{s.label}</div>
               <div className="mt-1 text-2xl font-bold font-mono tabular-nums" style={{ color: s.color }}>{s.value}</div>
@@ -874,7 +874,7 @@ export default function EngineMatrix() {
               onChange={(e) => setSearch(e.target.value)}
               aria-label={t('engines.search_placeholder')}
               placeholder={t('engines.search_placeholder')}
-              className="w-full bg-[var(--bg-2)] border border-white/[0.08] rounded-xl px-4 py-2.5 text-sm font-mono text-[var(--text-primary)] placeholder-white/25 focus:outline-none focus:border-cyan-500/35 focus:ring-1 focus:ring-cyan-500/15 transition-all"
+              className="w-full bg-[var(--bg-2)] border border-[var(--border-default)] rounded-xl px-4 py-2.5 text-sm font-mono text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/35 focus:ring-1 focus:ring-cyan-500/15 transition-all"
             />
             {search && (
               <Button variant="unstyled"
@@ -894,8 +894,8 @@ export default function EngineMatrix() {
                 onClick={() => setTierFilter(tier)}
                 className={`px-3 py-1.5 rounded-xl text-[10px] font-mono uppercase tracking-wider transition-all border ${
                   tierFilter === tier
-                    ? 'bg-white/12 text-white border-[var(--border-strong)] shadow-[0_0_12px_rgba(255,255,255,0.04)]'
-                    : 'text-[var(--text-muted)] border-white/[0.08] hover:border-[var(--border-strong)] hover:text-[var(--text-tertiary)]'
+                    ? 'bg-[var(--bg-2)] text-[var(--text-primary)] border-[var(--border-strong)] shadow-[0_0_12px_rgba(255,255,255,0.04)]'
+                    : 'text-[var(--text-muted)] border-[var(--border-default)] hover:border-[var(--border-strong)] hover:text-[var(--text-tertiary)]'
                 }`}
               >
                 {t(`engines.tier_${tier}`)} ({tierCounts[tier] ?? 0})
@@ -910,8 +910,8 @@ export default function EngineMatrix() {
             onClick={() => setActiveGroup('all')}
             className={`px-3 py-1.5 rounded-xl text-[11px] font-mono transition-all ${
               activeGroup === 'all'
-                ? 'bg-white/12 text-white border border-[var(--border-strong)]'
-                : 'text-[var(--text-tertiary)] border border-white/[0.08] hover:border-[var(--border-strong)] hover:text-[var(--text-secondary)]'
+                ? 'bg-[var(--bg-2)] text-[var(--text-primary)] border border-[var(--border-strong)]'
+                : 'text-[var(--text-tertiary)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:text-[var(--text-secondary)]'
             }`}
           >
             {t('engines.all_engines', { count: filteredEngines.length })}
@@ -926,8 +926,8 @@ export default function EngineMatrix() {
                 onClick={() => setActiveGroup(g.id)}
                 className={`px-3 py-1.5 rounded-xl text-[11px] font-mono transition-all border ${
                   activeGroup === g.id
-                    ? 'text-white'
-                    : 'text-[var(--text-tertiary)] border-white/[0.08] hover:border-[var(--border-strong)] hover:text-[var(--text-secondary)]'
+                    ? 'text-[var(--text-primary)]'
+                    : 'text-[var(--text-tertiary)] border-[var(--border-default)] hover:border-[var(--border-strong)] hover:text-[var(--text-secondary)]'
                 }`}
                 style={
                   activeGroup === g.id
@@ -955,7 +955,7 @@ export default function EngineMatrix() {
             </div>
           </div>
         ) : filteredEngines.length === 0 ? (
-          <div className="rounded-2xl border border-white/[0.08] bg-[var(--table-surface)] px-6 py-16 text-center">
+          <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] px-6 py-16 text-center">
             <p className="text-sm font-mono text-[var(--text-muted)]">{t('engines.no_results')}</p>
           </div>
         ) : (

@@ -283,9 +283,9 @@ export default function AdversaryDominance() {
           <>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               {['total', ...SEV_KEYS].map((k) => (
-                <div key={k} className="rounded-xl border border-white/10 bg-black/30 px-3 py-2">
-                  <div className="text-[10px] font-mono uppercase tracking-wider text-white/40">{t(`${NS}.${k === 'total' ? 'total_hits' : k}`)}</div>
-                  <div className="text-lg font-semibold text-white">{k === 'total' ? stats.total : stats[k]}</div>
+                <div key={k} className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2">
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t(`${NS}.${k === 'total' ? 'total_hits' : k}`)}</div>
+                  <div className="text-lg font-semibold text-[var(--text-primary)]">{k === 'total' ? stats.total : stats[k]}</div>
                 </div>
               ))}
             </div>
@@ -306,11 +306,11 @@ export default function AdversaryDominance() {
                     className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono border ${
                       f.hit
                         ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-100'
-                        : 'border-white/10 bg-black/40 text-white/45'
+                        : 'border-[var(--border-default)] bg-[var(--table-surface)] text-[var(--text-muted)]'
                     }`}
                   >
                     <span
-                      className={`h-1.5 w-1.5 rounded-full ${f.hit ? 'bg-emerald-400 animate-pulse' : f.keyOn ? 'bg-amber-400' : 'bg-white/25'}`}
+                      className={`h-1.5 w-1.5 rounded-full ${f.hit ? 'bg-emerald-400 animate-pulse' : f.keyOn ? 'bg-amber-400' : 'bg-[var(--bg-2)]'}`}
                       aria-hidden
                     />
                     {t(`${NS}.feed_${f.id}`)}
@@ -322,19 +322,19 @@ export default function AdversaryDominance() {
             </div>
             <div className="flex flex-wrap gap-2 items-center">
               <div className="relative flex-1 min-w-[200px]">
-                <Search className="absolute left-2 top-2.5 w-4 h-4 text-white/30" />
+                <Search className="absolute left-2 top-2.5 w-4 h-4 text-[var(--text-muted)]" />
                 <input
                   type="search"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder={t(`${NS}.search_placeholder`)}
-                  className="w-full pl-8 pr-3 py-2 rounded-xl bg-black/40 border border-white/10 text-sm text-white"
+                  className="w-full pl-8 pr-3 py-2 rounded-xl bg-[var(--table-surface)] border border-[var(--border-default)] text-sm text-[var(--text-primary)]"
                 />
               </div>
               <select
                 value={severityFilter}
                 onChange={(e) => setSeverityFilter(e.target.value)}
-                className="px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-sm text-white"
+                className="px-3 py-2 rounded-xl bg-[var(--table-surface)] border border-[var(--border-default)] text-sm text-[var(--text-primary)]"
               >
                 <option value="all">{t(`${NS}.filter_all`)} ({stats.total})</option>
                 {SEV_KEYS.map((k) => (
@@ -368,7 +368,7 @@ export default function AdversaryDominance() {
               />
             )}
             {lastRefresh && (
-              <p className="text-[10px] font-mono text-white/30">
+              <p className="text-[10px] font-mono text-[var(--text-muted)]">
                 {t(`${NS}.last_updated`, { time: lastRefresh.toLocaleString() })}
               </p>
             )}

@@ -85,7 +85,7 @@ function SubScoreBar({ label, value }) {
         <span className="text-[10px] font-mono text-[var(--text-tertiary)]">{label}</span>
         <span className="text-[10px] font-mono" style={{ color }}>{hasScore ? v : '—'}</span>
       </div>
-      <div className="h-1.5 rounded-full bg-white/8 overflow-hidden">
+      <div className="h-1.5 rounded-full bg-[var(--bg-2)] overflow-hidden">
         <div className="h-full rounded-full transition-all duration-500" style={{ width: hasScore ? `${v}%` : '0%', backgroundColor: color }} />
       </div>
     </div>
@@ -217,7 +217,7 @@ function ScenarioCard({ scenarioId, result, onRun, running, disabled, t }) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <h3 className="text-sm font-semibold text-white">{label}</h3>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">{label}</h3>
             <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase tracking-widest"
               style={{ color: riskColor, borderColor: `${riskColor}40`, backgroundColor: `${riskColor}10` }}>
               {riskLabel}
@@ -666,7 +666,7 @@ export default function DigitalTwinSimulator() {
               <>
                 <div>
                   <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest mb-1">{t('pages.digitalTwinSimulator.client_heading')}</p>
-                  <p className="text-sm font-semibold text-white">{envProfile.name}</p>
+                  <p className="text-sm font-semibold text-[var(--text-primary)]">{envProfile.name}</p>
                 </div>
                 {envProfile.domains.length > 0 && (
                   <div>

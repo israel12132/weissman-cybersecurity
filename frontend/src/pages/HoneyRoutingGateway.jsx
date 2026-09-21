@@ -264,7 +264,7 @@ export default function HoneyRoutingGateway() {
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
         <div className="xl:col-span-4 space-y-4">
           <div className="rounded-2xl border border-[var(--border-default)] bg-gradient-to-b from-amber-950/20 to-black/40 p-4 space-y-4">
-            <h3 className="text-sm font-semibold text-white">{t('pages.honeyRouting.controls')}</h3>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('pages.honeyRouting.controls')}</h3>
             <label className="flex items-center gap-2 text-[11px] text-[var(--text-secondary)] cursor-pointer">
               <input type="checkbox" checked={autoRun} onChange={(e) => setAutoRun(e.target.checked)} />
               {t('pages.honeyRouting.auto_run_label')}
@@ -272,7 +272,7 @@ export default function HoneyRoutingGateway() {
             <div>
               <label className="text-[10px] font-mono uppercase text-[var(--text-muted)]">{t('pages.honeyRouting.client')}</label>
               <select
-                className="w-full mt-1 bg-black/40 border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm"
+                className="w-full mt-1 bg-[var(--table-surface)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm"
                 value={clientId}
                 onChange={(e) => setClientId(e.target.value)}
               >
@@ -285,7 +285,7 @@ export default function HoneyRoutingGateway() {
             <div>
               <label className="text-[10px] font-mono uppercase text-[var(--text-muted)]">{t('pages.honeyRouting.target')}</label>
               <input
-                className="w-full mt-1 bg-black/40 border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm font-mono"
+                className="w-full mt-1 bg-[var(--table-surface)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm font-mono"
                 value={target}
                 onChange={(e) => setTarget(e.target.value)}
                 placeholder="https://gateway.example"
@@ -311,15 +311,15 @@ export default function HoneyRoutingGateway() {
         </div>
 
         <div className="xl:col-span-8 space-y-4">
-          <div className="rounded-2xl border border-[var(--border-default)] bg-black/30 p-4">
+          <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] p-4">
             <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-              <h3 className="text-sm font-semibold text-white">{t('pages.honeyRouting.live_sessions')}</h3>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('pages.honeyRouting.live_sessions')}</h3>
               <input
                 type="search"
                 value={sessionSearch}
                 onChange={(e) => setSessionSearch(e.target.value)}
                 placeholder={t('pages.honeyRouting.search_sessions')}
-                className="bg-black/40 border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs font-mono w-56"
+                className="bg-[var(--table-surface)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs font-mono w-56"
               />
             </div>
             {filteredSessions.length === 0 ? (
@@ -340,7 +340,7 @@ export default function HoneyRoutingGateway() {
                     {filteredSessions.map((s) => (
                       <tr
                         key={s.id}
-                        className={`border-t border-white/5 cursor-pointer hover:bg-amber-950/20 ${selectedSession?.id === s.id ? 'bg-amber-950/30' : ''}`}
+                        className={`border-t border-[var(--border-subtle)] cursor-pointer hover:bg-amber-950/20 ${selectedSession?.id === s.id ? 'bg-amber-950/30' : ''}`}
                         onClick={() => openSession(s)}
                       >
                         <td className="py-1.5 text-amber-200">{s.source_ip}</td>
@@ -360,13 +360,13 @@ export default function HoneyRoutingGateway() {
 
           {selectedSession && (
             <div className="rounded-2xl border border-rose-500/20 bg-rose-950/10 p-4">
-              <h3 className="text-sm font-semibold text-white mb-2">{t('pages.honeyRouting.payloads_for', { ip: selectedSession.source_ip })}</h3>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2">{t('pages.honeyRouting.payloads_for', { ip: selectedSession.source_ip })}</h3>
               {payloads.length === 0 ? (
                 <p className="text-[12px] text-[var(--text-muted)]">{t('pages.honeyRouting.no_payloads')}</p>
               ) : (
                 <ul className="space-y-2 max-h-56 overflow-y-auto">
                   {payloads.map((p) => (
-                    <li key={p.id} className="text-[11px] font-mono border border-white/10 rounded-lg px-3 py-2">
+                    <li key={p.id} className="text-[11px] font-mono border border-[var(--border-default)] rounded-lg px-3 py-2">
                       <span className="text-cyan-300">{p.method}</span> {p.path}
                       {p.shell_command && <div className="text-amber-200 mt-1">$ {p.shell_command}</div>}
                       {p.body_excerpt && <div className="text-[var(--text-muted)] mt-1 truncate">{p.body_excerpt}</div>}

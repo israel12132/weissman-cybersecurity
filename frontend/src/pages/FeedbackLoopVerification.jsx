@@ -189,7 +189,7 @@ export default function FeedbackLoopVerification() {
             value={targetUrl}
             onChange={(e) => setTargetUrl(e.target.value)}
             placeholder={t('pages.feedbackLoopVerification.target_placeholder')}
-            className="w-full rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-violet-500/40"
+            className="w-full rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-violet-500/40"
           />
 
           <div className="flex items-center gap-3 flex-wrap">
@@ -289,7 +289,7 @@ export default function FeedbackLoopVerification() {
               <div className="grid grid-cols-3 gap-3">
                 <div className="rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-3 text-center">
                   <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t('pages.feedbackLoopVerification.steps_total')}</div>
-                  <div className="text-xl font-semibold text-white">{stepCount}</div>
+                  <div className="text-xl font-semibold text-[var(--text-primary)]">{stepCount}</div>
                 </div>
                 <div className="rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-3 text-center">
                   <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t('pages.feedbackLoopVerification.steps_passed')}</div>

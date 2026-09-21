@@ -386,7 +386,7 @@ export default function ComplianceFrameworks() {
                 <FileCheck className="w-5 h-5" />
               </div>
               <div className="min-w-0">
-                <h3 className="text-sm font-semibold text-white">{t('pages.complianceFrameworks.pack_title')}</h3>
+                <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('pages.complianceFrameworks.pack_title')}</h3>
                 <p className="text-xs text-[var(--text-tertiary)] mt-0.5 max-w-xl">{t('pages.complianceFrameworks.pack_subtitle')}</p>
               </div>
             </div>
@@ -437,7 +437,7 @@ export default function ComplianceFrameworks() {
                   <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-1">
                     {t('pages.complianceFrameworks.pack_findings')}
                   </div>
-                  <div className="text-xl font-bold text-white tabular-nums">{pack.findings_total ?? 0}</div>
+                  <div className="text-xl font-bold text-[var(--text-primary)] tabular-nums">{pack.findings_total ?? 0}</div>
                 </div>
                 <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] p-3">
                   <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-1">
@@ -598,7 +598,7 @@ export default function ComplianceFrameworks() {
             aria-expanded={mappingsOpen}
             className="w-full flex items-center justify-between gap-2 text-left"
           >
-            <span className="text-sm font-semibold text-white flex items-center gap-2">
+            <span className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
               <FileText className="w-4 h-4 text-cyan-400" />
               {t('pages.complianceFrameworks.mappings_title')}
               {Array.isArray(mappings) && !mappingsUnavailable && (
@@ -634,7 +634,7 @@ export default function ComplianceFrameworks() {
                       onChange={(e) => setMappingsSearch(e.target.value)}
                       aria-label={t('pages.complianceFrameworks.mappings_search')}
                       placeholder={t('pages.complianceFrameworks.mappings_search')}
-                      className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg pl-10 pr-3 py-2 text-sm text-white placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
+                      className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg pl-10 pr-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
                     />
                   </div>
                   <DataTable
@@ -714,7 +714,7 @@ export default function ComplianceFrameworks() {
                       <span className="text-sm text-[var(--text-tertiary)]">{t('pages.complianceFrameworks.total_controls')}</span>
                       <FileText className="w-4 h-4 text-cyan-400" />
                     </div>
-                    <div className="text-2xl font-bold text-white">{stats.total}</div>
+                    <div className="text-2xl font-bold text-[var(--text-primary)]">{stats.total}</div>
                   </div>
                   <div className="bg-green-500/10 backdrop-blur-md border border-green-500/30 rounded-xl p-4">
                     <div className="flex items-center justify-between mb-2">
@@ -772,7 +772,7 @@ export default function ComplianceFrameworks() {
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder={t('pages.complianceFrameworks.search_placeholder')}
-                    className="pl-10 pr-4 py-2 rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] text-sm text-white placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
+                    className="pl-10 pr-4 py-2 rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
                   />
                 </div>
                 <div className="flex items-center gap-2 bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-lg p-1">
@@ -820,7 +820,7 @@ export default function ComplianceFrameworks() {
 
             <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
               <div className="p-4 border-b border-[var(--border-default)]">
-                <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
                   <FileText className="w-4 h-4 text-cyan-400" />
                   {t('pages.complianceFrameworks.controls_heading')} — {selectedFramework.name}
                   {' '}
@@ -862,7 +862,7 @@ export default function ComplianceFrameworks() {
                         </span>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-3 flex-wrap">
-                            <h4 className="text-sm font-semibold text-white">
+                            <h4 className="text-sm font-semibold text-[var(--text-primary)]">
                               {control.title}
                             </h4>
                             <span
@@ -886,7 +886,7 @@ export default function ComplianceFrameworks() {
           <div className="bg-red-500/10 backdrop-blur-md border border-red-500/30 rounded-xl p-6">
             <div className="flex items-center gap-2 mb-4">
               <AlertTriangle className="w-5 h-5 text-red-400" />
-              <h3 className="text-sm font-semibold text-white">{t('pages.complianceFrameworks.gap_title')}</h3>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('pages.complianceFrameworks.gap_title')}</h3>
             </div>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
               {t('pages.complianceFrameworks.gap_body', {

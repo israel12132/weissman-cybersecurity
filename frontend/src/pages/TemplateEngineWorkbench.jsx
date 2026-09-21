@@ -221,7 +221,7 @@ function TemplateEngineWorkbenchBody() {
               value={targetUrl}
               onChange={(e) => setTargetUrl(e.target.value)}
               placeholder={t(`${NS}.target_placeholder`)}
-              className="w-full rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-blue-500/40"
+              className="w-full rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500/40"
             />
             <div className="flex items-center gap-3 flex-wrap">
               <select
@@ -327,7 +327,7 @@ function TemplateEngineWorkbenchBody() {
                   </div>
                   <div className="rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-3 text-center">
                     <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t(`${NS}.result_steps`)}</div>
-                    <div className="text-lg font-semibold text-white mt-1">{stepCount}</div>
+                    <div className="text-lg font-semibold text-[var(--text-primary)] mt-1">{stepCount}</div>
                     <div className="text-[10px] font-mono text-[var(--text-muted)]">
                       {t(`${NS}.steps_matched`, { matched: matchedSteps, total: stepCount })}
                     </div>

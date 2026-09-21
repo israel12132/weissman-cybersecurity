@@ -107,7 +107,7 @@ function HitlItem({ item, onApprove, onReject, loading }) {
               {severityLabel}
             </span>
           </div>
-          <p className="text-sm font-medium text-white truncate max-w-lg">{item.target_brief}</p>
+          <p className="text-sm font-medium text-[var(--text-primary)] truncate max-w-lg">{item.target_brief}</p>
           <p className="text-[10px] font-mono text-[var(--text-disabled)]">
             {item.proposed_at ? new Date(item.proposed_at).toLocaleString() : ''}
             {item.client_id ? t('pages.councilHitlQueue.client_suffix', { id: item.client_id }) : ''}
@@ -173,7 +173,7 @@ function HitlItem({ item, onApprove, onReject, loading }) {
             placeholder={t('pages.councilHitlQueue.operator_note')}
             value={note}
             onChange={e => setNote(e.target.value)}
-            className="flex-1 rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-1.5 text-[12px] text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
+            className="flex-1 rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-1.5 text-[12px] text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
           />
           <Button variant="unstyled"
             type="button"
@@ -359,7 +359,7 @@ export default function CouncilHitlQueue() {
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t('pages.councilHitlQueue.search_placeholder')}
             aria-label={t('pages.councilHitlQueue.search_placeholder')}
-            className="w-full rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] ps-10 pe-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
+            className="w-full rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] ps-10 pe-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
           />
         </div>
 

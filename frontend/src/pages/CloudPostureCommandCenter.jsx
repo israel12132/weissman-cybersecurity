@@ -153,7 +153,7 @@ function SubScoreBar({ label, value }) {
         <span className="text-[10px] font-mono text-[var(--text-tertiary)]">{label}</span>
         <span className="text-[10px] font-mono" style={{ color }}>{hasScore ? v : '—'}</span>
       </div>
-      <div className="h-1.5 rounded-full bg-white/8 overflow-hidden">
+      <div className="h-1.5 rounded-full bg-[var(--bg-2)] overflow-hidden">
         <div className="h-full rounded-full transition-all duration-500" style={{ width: hasScore ? `${v}%` : '0%', backgroundColor: color }} />
       </div>
     </div>
@@ -221,7 +221,7 @@ function Scorecard({ summary }) {
           </div>
           <div>
             <div className="text-[10px] font-mono uppercase tracking-widest text-orange-400/80 mb-1">{t('pages.cloudPostureCommandCenter.scorecard_eyebrow')}</div>
-            <h3 className="text-lg font-bold text-white">{t('pages.cloudPostureCommandCenter.scorecard_title')}</h3>
+            <h3 className="text-lg font-bold text-[var(--text-primary)]">{t('pages.cloudPostureCommandCenter.scorecard_title')}</h3>
             {summary.account_id && (
               <p className="text-[11px] font-mono text-[var(--text-muted)] mt-1">{t('pages.cloudPostureCommandCenter.scorecard_account', { accountId: summary.account_id })}</p>
             )}

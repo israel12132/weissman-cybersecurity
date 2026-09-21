@@ -121,7 +121,7 @@ export default function EliteHardeningCommandCenter() {
       }),
       columnHelper.accessor('title', {
         header: () => t(`${NS}.col_control`),
-        cell: (ctx) => <span className="text-white">{ctx.getValue()}</span>,
+        cell: (ctx) => <span className="text-[var(--text-primary)]">{ctx.getValue()}</span>,
       }),
       columnHelper.accessor('enforced', {
         header: () => t(`${NS}.col_status`),
@@ -241,10 +241,10 @@ export default function EliteHardeningCommandCenter() {
                     <article
                       key={lane.id}
                       data-testid="moat-lane"
-                      className="rounded-lg border border-white/10 bg-black/30 px-3 py-2"
+                      className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2"
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <h3 className="text-xs text-white font-medium leading-snug">{lane.title}</h3>
+                        <h3 className="text-xs text-[var(--text-primary)] font-medium leading-snug">{lane.title}</h3>
                         <span className="font-mono text-cyan-300 text-sm tabular-nums">
                           {lane.live_engine_count}
                         </span>
@@ -271,7 +271,7 @@ export default function EliteHardeningCommandCenter() {
                 </div>
                 <p className="text-xs text-[var(--text-muted)]">{t(`${NS}.palo_notice`)}</p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <article className="rounded-lg border border-white/10 bg-black/30 px-3 py-2">
+                  <article className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2">
                     <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
                       {t(`${NS}.palo_catalog_ids`)}
                     </div>
@@ -279,7 +279,7 @@ export default function EliteHardeningCommandCenter() {
                       {data.moat.palo_alto.catalog?.total_ids ?? data.catalog?.total_ids ?? '—'}
                     </div>
                   </article>
-                  <article className="rounded-lg border border-white/10 bg-black/30 px-3 py-2">
+                  <article className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2">
                     <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
                       {t(`${NS}.palo_catalog_distinct`)}
                     </div>
@@ -287,7 +287,7 @@ export default function EliteHardeningCommandCenter() {
                       {data.moat.palo_alto.catalog?.distinct_canonical ?? '—'}
                     </div>
                   </article>
-                  <article className="rounded-lg border border-white/10 bg-black/30 px-3 py-2">
+                  <article className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2">
                     <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
                       {t(`${NS}.palo_catalog_aliases`)}
                     </div>
@@ -295,11 +295,11 @@ export default function EliteHardeningCommandCenter() {
                       {data.moat.palo_alto.catalog?.alias_ids ?? '—'}
                     </div>
                   </article>
-                  <article className="rounded-lg border border-white/10 bg-black/30 px-3 py-2">
+                  <article className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2">
                     <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
                       {t(`${NS}.palo_find_vs_block`)}
                     </div>
-                    <div className="font-mono text-sm text-white">
+                    <div className="font-mono text-sm text-[var(--text-primary)]">
                       {data.moat.palo_alto.find_vs_block?.find
                         ? t(`${NS}.palo_finds`)
                         : '—'}
@@ -316,10 +316,10 @@ export default function EliteHardeningCommandCenter() {
                       <article
                         key={loop.id}
                         data-testid="palo-loop"
-                        className="rounded-lg border border-white/10 bg-black/30 px-3 py-2"
+                        className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2"
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <h3 className="text-xs text-white font-mono">{loop.id}</h3>
+                          <h3 className="text-xs text-[var(--text-primary)] font-mono">{loop.id}</h3>
                           <span
                             className={`text-[10px] uppercase tracking-wider ${
                               loop.present ? 'text-emerald-300' : 'text-rose-300'
@@ -339,9 +339,9 @@ export default function EliteHardeningCommandCenter() {
                       <article
                         key={sku.sku}
                         data-testid="palo-sku"
-                        className="rounded-lg border border-white/10 bg-black/30 px-3 py-2"
+                        className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2"
                       >
-                        <h3 className="text-xs text-white font-medium">{sku.sku}</h3>
+                        <h3 className="text-xs text-[var(--text-primary)] font-medium">{sku.sku}</h3>
                         <p className="font-mono text-[10px] text-amber-300/90">{sku.maturity}</p>
                         <p className="mt-1 text-[10px] font-mono text-[var(--text-muted)]">
                           {(sku.ids || []).join(', ') || t(`${NS}.palo_no_ids`)}
@@ -366,7 +366,7 @@ export default function EliteHardeningCommandCenter() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={t(`${NS}.search_placeholder`)}
-                  className="w-full rounded-lg border border-white/10 bg-black/30 pl-9 pr-3 py-2 text-sm text-white placeholder:text-[var(--text-muted)]"
+                  className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] pl-9 pr-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
                 />
               </label>
               <Button type="button" variant="ghost" size="xs" onClick={() => doExport('pdf')}>

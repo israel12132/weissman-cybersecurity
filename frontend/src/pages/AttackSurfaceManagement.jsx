@@ -146,12 +146,12 @@ function metricOrDash(value) {
 
 function MetricCard({ label, value, sub, accent = '#22d3ee', icon }) {
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-br from-white/[0.06] to-black/50 p-4">
+    <div className="relative overflow-hidden rounded-2xl border border-[var(--border-default)] bg-gradient-to-br from-white/[0.06] to-black/50 p-4">
       <div className="absolute top-0 inset-x-0 h-px opacity-60" style={{ background: `linear-gradient(90deg, transparent, ${accent}60, transparent)` }} />
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-[var(--text-muted)] mb-1.5">{label}</p>
-          <p className="text-2xl font-bold text-white tracking-tight truncate">{value}</p>
+          <p className="text-2xl font-bold text-[var(--text-primary)] tracking-tight truncate">{value}</p>
           {sub && <p className="text-[10px] font-mono text-[var(--text-muted)] mt-1 truncate">{sub}</p>}
         </div>
         {icon && <span className="text-lg opacity-70 shrink-0">{icon}</span>}
@@ -254,7 +254,7 @@ function SubdomainInventory({ hosts }) {
   const { t } = useTranslation()
   if (!hosts?.length) return null
   return (
-    <div className="rounded-2xl border border-white/[0.08] bg-[var(--bg-2)] p-5">
+    <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-5">
       <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-3">🗂 {t('pages.attackSurfaceManagement.header_subdomain_inventory')} ({hosts.length})</p>
       <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
         {hosts.map((h) => (
@@ -440,7 +440,7 @@ export function FirstMoverDeltaPanel({
           nerveChips.map(([label, value, color]) => (
             <span
               key={label}
-              className="text-[10px] font-mono px-2 py-1 rounded-lg border border-white/[0.08] bg-black/30"
+              className="text-[10px] font-mono px-2 py-1 rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)]"
               style={{ color }}
             >
               {label}: {value}
@@ -471,7 +471,7 @@ export function FirstMoverDeltaPanel({
           [t('pages.attackSurfaceManagement.first_mover_removed'), removed.length, '#94a3b8'],
           [t('pages.attackSurfaceManagement.first_mover_assets'), metricOrDash(diff?.current_count), '#34d399', 'first-mover-asset-count'],
         ].map(([label, value, color, testId]) => (
-          <div key={label} className="rounded-lg border border-white/[0.07] bg-black/30 px-3 py-2">
+          <div key={label} className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2">
             <p className="text-[9px] font-mono uppercase tracking-wider text-[var(--text-muted)] truncate">{label}</p>
             <p className="text-xl font-bold tabular-nums" style={{ color }} data-testid={testId}>{value}</p>
           </div>
@@ -491,10 +491,10 @@ export function FirstMoverDeltaPanel({
         <p className="text-[12px] font-mono text-[var(--text-tertiary)]">{t('pages.attackSurfaceManagement.first_mover_empty')}</p>
       )}
       {rows.length > 0 && (
-        <div className="overflow-x-auto rounded-xl border border-white/[0.06]">
+        <div className="overflow-x-auto rounded-xl border border-[var(--border-subtle)]">
           <table className="w-full text-start text-[12px] font-mono">
             <thead>
-              <tr className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] border-b border-white/[0.06]">
+              <tr className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] border-b border-[var(--border-subtle)]">
                 <th className="px-3 py-2 font-medium">{t('pages.attackSurfaceManagement.first_mover_col_host')}</th>
                 <th className="px-3 py-2 font-medium">{t('pages.attackSurfaceManagement.first_mover_col_change')}</th>
                 <th className="px-3 py-2 font-medium">{t('pages.attackSurfaceManagement.first_mover_col_evidence')}</th>
@@ -502,7 +502,7 @@ export function FirstMoverDeltaPanel({
             </thead>
             <tbody>
               {rows.slice(0, 24).map((r) => (
-                <tr key={`${r.kind}-${r.fqdn}`} className="border-t border-white/[0.04]">
+                <tr key={`${r.kind}-${r.fqdn}`} className="border-t border-[var(--border-subtle)]">
                   <td className="px-3 py-2 text-cyan-100">{r.fqdn}</td>
                   <td className="px-3 py-2">
                     <span style={{ color: kindColor[r.kind] }}>{t(kindKey[r.kind])}</span>
@@ -550,7 +550,7 @@ function FindingCard({ f }) {
         </p>
       )}
       <div className="flex flex-wrap items-center gap-2 pt-0.5">
-        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[var(--row-hover-bg)] text-[var(--text-muted)] border border-white/[0.06]">{assetLabel}</span>
+        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[var(--row-hover-bg)] text-[var(--text-muted)] border border-[var(--border-subtle)]">{assetLabel}</span>
         {f.mitre_attack && (
           <a
             href={`https://attack.mitre.org/techniques/${String(f.mitre_attack).replace('.', '/')}`}
@@ -977,7 +977,7 @@ export default function AttackSurfaceManagement() {
           {t('pages.attackSurfaceManagement.clients_unavailable')}
         </p>
       )}
-      <div className="rounded-2xl border border-white/[0.08] bg-[var(--bg-2)] p-4 mb-5">
+      <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 mb-5">
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.attackSurfaceManagement.label_client')}</label>
@@ -996,7 +996,7 @@ export default function AttackSurfaceManagement() {
             <input
               type="text" value={target} onChange={(e) => setTarget(e.target.value)}
               placeholder="example.com"
-              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
             />
           </div>
           <Button variant="unstyled"
@@ -1040,9 +1040,9 @@ export default function AttackSurfaceManagement() {
                 [t('pages.attackSurfaceManagement.corpus_llm'), corpus.llm_learned],
                 [t('pages.attackSurfaceManagement.corpus_confirmed'), corpus.confirmed_hits],
               ].map(([label, value]) => (
-                <div key={label} className="rounded-lg border border-white/[0.06] bg-black/30 px-2.5 py-2">
+                <div key={label} className="rounded-lg border border-[var(--border-subtle)] bg-[var(--table-surface)] px-2.5 py-2">
                   <p className="text-[9px] font-mono uppercase tracking-wider text-[var(--text-muted)] truncate">{label}</p>
-                  <p className="text-lg font-bold text-white tabular-nums">{metricOrDash(value)}</p>
+                  <p className="text-lg font-bold text-[var(--text-primary)] tabular-nums">{metricOrDash(value)}</p>
                 </div>
               ))}
             </div>
@@ -1056,7 +1056,7 @@ export default function AttackSurfaceManagement() {
               initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
               className="overflow-hidden"
             >
-              <div className="mt-4 pt-4 border-t border-white/[0.06] grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-3 max-h-[520px] overflow-y-auto pr-1">
+              <div className="mt-4 pt-4 border-t border-[var(--border-subtle)] grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-3 max-h-[520px] overflow-y-auto pr-1">
                 <div className="space-y-2.5">
                   <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{t('pages.attackSurfaceManagement.header_modules')}</p>
                   {TOGGLES.map((tg) => (
@@ -1158,12 +1158,12 @@ export default function AttackSurfaceManagement() {
             </Button>
           </div>
           {/* Hero */}
-          <div className="rounded-2xl border border-white/[0.08] bg-gradient-to-br from-white/[0.06] via-black/40 to-black/60 p-6">
+          <div className="rounded-2xl border border-[var(--border-default)] bg-gradient-to-br from-white/[0.06] via-black/40 to-black/60 p-6">
             <div className="flex flex-col md:flex-row items-center gap-6">
               <ScoreRing score={score} grade={grade} />
               <div className="flex-1 w-full space-y-3">
                 <div>
-                  <h2 className="text-lg font-bold text-white">{t('pages.attackSurfaceManagement.hero_score_title')} — {report.host}</h2>
+                  <h2 className="text-lg font-bold text-[var(--text-primary)]">{t('pages.attackSurfaceManagement.hero_score_title')} — {report.host}</h2>
                   <p className="text-[12px] text-[var(--text-tertiary)] font-mono">{report.description}</p>
                 </div>
                 <SeverityBar counts={severityCounts} />
@@ -1187,7 +1187,7 @@ export default function AttackSurfaceManagement() {
 
           {/* Exposure by asset */}
           {Object.keys(exposureByAsset).length > 0 && (
-            <div className="rounded-2xl border border-white/[0.08] bg-[var(--bg-2)] p-5">
+            <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-5">
               <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-3">{t('pages.attackSurfaceManagement.header_exposure_by_category')}</p>
               <div className="space-y-2">
                 {Object.entries(exposureByAsset).sort((a, b) => b[1] - a[1]).map(([asset, n]) => {
@@ -1214,7 +1214,7 @@ export default function AttackSurfaceManagement() {
               {assetTypes.map((a) => (
                 <Button variant="unstyled" key={a} type="button" onClick={() => setAssetFilter(a)}
                   className={`px-2.5 py-1 rounded-lg text-[10px] font-mono border transition-all ${
-                    assetFilter === a ? 'text-cyan-200 border-cyan-500/40 bg-cyan-500/10' : 'text-[var(--text-muted)] border-white/[0.08] hover:text-[var(--text-secondary)]'
+                    assetFilter === a ? 'text-cyan-200 border-cyan-500/40 bg-cyan-500/10' : 'text-[var(--text-muted)] border-[var(--border-default)] hover:text-[var(--text-secondary)]'
                   }`}
                 >
                   {a === 'all' ? t('pages.attackSurfaceManagement.filter_all_categories') : `${ASSET_META[a]?.icon ?? '◆'} ${ASSET_META[a] ? t(ASSET_META[a].labelKey) : a}`}
@@ -1254,7 +1254,7 @@ export default function AttackSurfaceManagement() {
         </p>
       )}
       {!report && status !== 'running' && !historyUnavailable && (
-        <div className="rounded-2xl border border-white/[0.08] bg-[var(--table-surface)] px-6 py-16 text-center">
+        <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] px-6 py-16 text-center">
           <p className="text-4xl mb-3">🛰️</p>
           <p className="text-sm font-mono text-[var(--text-tertiary)]">{t('pages.attackSurfaceManagement.empty_ready_title')}</p>
           <p className="text-[11px] font-mono text-[var(--text-disabled)] mt-1">{t('pages.attackSurfaceManagement.empty_bottom_body')}</p>
@@ -1264,7 +1264,7 @@ export default function AttackSurfaceManagement() {
   )
 }
 
-const inputCls = 'w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-[12px] text-[var(--text-primary)] font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40'
+const inputCls = 'w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-[12px] text-[var(--text-primary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40'
 
 function Field({ label, children }) {
   return (
