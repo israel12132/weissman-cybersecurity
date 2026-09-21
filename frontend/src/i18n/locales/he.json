@@ -922,6 +922,8 @@
     "medium": "בינוני",
     "low": "נמוך",
     "distinct_cves": "CVEs ייחודיים",
+    "kev": "KEV — מנוצלים",
+    "kev_hint": "ברשימת ה-KEV של CISA — לתקן ראשון",
     "kev_only": "CISA KEV בלבד",
     "all_severities": "כל רמות החומרה",
     "all_statuses": "כל הסטטוסים",

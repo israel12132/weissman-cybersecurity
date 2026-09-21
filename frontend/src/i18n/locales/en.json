@@ -994,6 +994,8 @@
     "medium": "Medium",
     "low": "Low",
     "distinct_cves": "Distinct CVEs",
+    "kev": "KEV — exploited",
+    "kev_hint": "On CISA's Known Exploited list — patch first",
     "kev_only": "CISA KEV only",
     "all_severities": "All severities",
     "all_statuses": "All statuses",

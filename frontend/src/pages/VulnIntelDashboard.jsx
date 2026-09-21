@@ -268,7 +268,13 @@ export default function VulnIntelDashboard() {
         </PremiumPageHeader>
 
         {!error && (
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+          <ExecutiveWidget
+            label={t('vuln_intel.kev')}
+            value={loading || error ? '—' : kevCount.toLocaleString()}
+            hint={t('vuln_intel.kev_hint')}
+            accent="#fb7185"
+          />
           <ExecutiveWidget
             label={t('vuln_intel.critical')}
             value={loading || error ? '—' : summary.by.critical.toLocaleString()}
