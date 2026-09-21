@@ -255,6 +255,12 @@ impl SwarmCoordinator {
         tx.commit().await?;
 
         let mut seen_workers: std::collections::HashSet<String> = std::collections::HashSet::new();
+        // Per-worker miss count, computed at most ONCE per tick. A worker holding many running
+        // rows must still be observed dead across several consecutive ticks to be orphaned —
+        // without this, the persistent counter runs up once per row and crosses the threshold
+        // inside a single tick, orphaning a live worker's in-flight jobs on one blip.
+        let mut misses_this_tick: std::collections::HashMap<String, u32> =
+            std::collections::HashMap::new();
         for row in rows {
             // Handle each row independently: a failure on one job must not skip the rest of the pass
             // (head-of-line blocking would keep the same failing row wedging the tail every tick).
@@ -286,12 +292,22 @@ impl SwarmCoordinator {
                 continue;
             }
             // Require several consecutive misses. One missed observation is not evidence of
-            // death — see the `missed` field.
-            let misses = {
-                let mut m = self.missed.lock().await;
-                let e = m.entry(worker_id.clone()).or_insert(0);
-                *e = e.saturating_add(1);
-                *e
+            // death — see the `missed` field. Bump the persistent counter at most once per
+            // worker per tick: a worker's many running rows share one per-tick observation, so
+            // rows 3..N of a multi-job worker cannot cross MISSES_BEFORE_ORPHAN inside a single
+            // tick.
+            let misses = match misses_this_tick.get(&worker_id) {
+                Some(&m) => m,
+                None => {
+                    let m = {
+                        let mut guard = self.missed.lock().await;
+                        let e = guard.entry(worker_id.clone()).or_insert(0);
+                        *e = e.saturating_add(1);
+                        *e
+                    };
+                    misses_this_tick.insert(worker_id.clone(), m);
+                    m
+                }
             };
             if misses < Self::MISSES_BEFORE_ORPHAN {
                 tracing::debug!(
