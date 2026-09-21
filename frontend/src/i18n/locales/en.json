@@ -1747,7 +1747,8 @@
       "col_evidence": "Evidence",
       "col_proven": "Proven",
       "col_unverified": "Unverified C/H",
-      "col_mitre": "MITRE"
+      "col_mitre": "MITRE",
+      "no_gaps_for_filter": "No coverage gaps at this severity."
     },
     "securityPosture": {
       "title": "Platform Security Posture",

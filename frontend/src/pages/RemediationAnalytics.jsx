@@ -6,6 +6,7 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import EmptyState from '../components/ui/EmptyState'
+import FilterPills from '../components/ui/FilterPills'
 import { SkeletonTable } from '../components/ui/Skeleton'
 import Button from '../components/ui/Button'
 import { apiFetch } from '../utils/apiFetch'
@@ -57,6 +58,7 @@ export default function RemediationAnalytics() {
   const [partial, setPartial] = useState(false)
   const [error, setError] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [verdictFilter, setVerdictFilter] = useState('all')
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
@@ -153,9 +155,36 @@ export default function RemediationAnalytics() {
 
   // Client-side filter over the already-loaded heals feed (a bounded, tenant-scoped
   // rollup — no server round-trip needed to search it).
+  const verdictCounts = useMemo(() => {
+    const c = { all: (heals ?? []).length }
+    for (const k of Object.keys(VERDICT_META)) c[k] = 0
+    for (const h of heals ?? []) {
+      if (h?.verdict && c[h.verdict] != null) c[h.verdict] += 1
+    }
+    return c
+  }, [heals])
+
   const filteredHeals = useMemo(
-    () => (heals ?? []).filter((h) => rowMatchesQuery(searchQuery, [h?.finding_id, h?.verdict, h?.channel])),
-    [heals, searchQuery],
+    () => (heals ?? []).filter((h) =>
+      (verdictFilter === 'all' || h?.verdict === verdictFilter)
+      && rowMatchesQuery(searchQuery, [h?.finding_id, h?.verdict, h?.channel])),
+    [heals, searchQuery, verdictFilter],
+  )
+
+  const verdictPills = useMemo(
+    () =>
+      [
+        { id: 'all', label: t('common.all'), count: verdictCounts.all, color: '#22d3ee' },
+        ...Object.entries(VERDICT_META)
+          .filter(([k]) => verdictCounts[k] > 0)
+          .map(([k, meta]) => ({
+            id: k,
+            label: t(`pages.remediationHub.${meta.key}`, { defaultValue: k }),
+            count: verdictCounts[k],
+            color: meta.color,
+          })),
+      ].map((p) => ({ ...p, active: verdictFilter === p.id, onClick: () => setVerdictFilter(p.id) })),
+    [verdictCounts, verdictFilter, t],
   )
 
   const handleRefresh = useCallback(() => load(), [load])
@@ -209,7 +238,7 @@ export default function RemediationAnalytics() {
           <p className="text-xs text-[var(--text-muted)] font-mono">
             {t('pages.remediationAnalytics.intro')}
           </p>
-          <Link to="/remediation" className="text-xs text-cyan-300 hover:text-cyan-200">
+          <Link to="/remediation" className="text-xs text-[var(--text-accent)] hover:text-[var(--text-accent)]">
             {t('pages.remediationAnalytics.open_hub')}
           </Link>
         </div>
@@ -221,14 +250,14 @@ export default function RemediationAnalytics() {
         </div>
 
         {error && (
-          <div className="p-4 rounded-xl border border-red-500/30 bg-red-900/20 text-red-300 text-sm flex items-center gap-2">
+          <div className="p-4 rounded-xl border border-red-500/30 bg-red-900/20 text-[var(--severity-critical)] text-sm flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 shrink-0" />
             {t('pages.remediationHub.load_error', { error })}
           </div>
         )}
 
         {bounded && !error && !loading && !statsLoading && healStats && (
-          <div className="text-[11px] text-amber-300/70 font-mono flex items-center gap-2">
+          <div className="text-[11px] text-[var(--severity-medium)] font-mono flex items-center gap-2">
             <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
             {t('pages.remediationAnalytics.bounded')}
           </div>
@@ -261,7 +290,7 @@ export default function RemediationAnalytics() {
         <section className="space-y-2">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
-              <GitPullRequest className="w-4 h-4 text-cyan-400" />
+              <GitPullRequest className="w-4 h-4 text-[var(--text-accent)]" />
               {t('pages.remediationAnalytics.recent_heals')}
             </h3>
             <div className="relative">
@@ -276,10 +305,14 @@ export default function RemediationAnalytics() {
               />
             </div>
           </div>
+          {!loading && heals != null && heals.length > 0 && verdictCounts.all > 0
+            && Object.keys(VERDICT_META).some((k) => verdictCounts[k] > 0) && (
+            <FilterPills pills={verdictPills} />
+          )}
           {loading ? (
             <SkeletonTable rows={5} cols={4} />
           ) : heals == null ? (
-            <p className="text-xs text-amber-300/80 font-mono">{t('pages.remediationAnalytics.unavailable_body')}</p>
+            <p className="text-xs text-[var(--severity-medium)] font-mono">{t('pages.remediationAnalytics.unavailable_body')}</p>
           ) : filteredHeals.length === 0 ? (
             <div className="text-xs text-[var(--text-muted)] font-mono">—</div>
           ) : (
@@ -298,12 +331,12 @@ export default function RemediationAnalytics() {
                         {vm ? t(`pages.remediationHub.${vm.key}`, { defaultValue: h.verdict }) : (h.verification_status || h.status || '—')}
                       </span>
                       {h.channel && <span className="text-[10px] text-[var(--text-muted)] font-mono">{h.channel}</span>}
-                      {h.attempts > 1 && <span className="text-[10px] text-amber-300/70 font-mono">×{h.attempts}</span>}
-                      {h.attested && <span className="text-[10px] text-emerald-300/70">🔏</span>}
+                      {h.attempts > 1 && <span className="text-[10px] text-[var(--severity-medium)] font-mono">×{h.attempts}</span>}
+                      {h.attested && <span className="text-[10px] text-[var(--severity-low)]">🔏</span>}
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
                       {h.pr_url && (
-                        <a href={h.pr_url} target="_blank" rel="noreferrer" className="text-cyan-300/80 hover:text-cyan-200">
+                        <a href={h.pr_url} target="_blank" rel="noreferrer" className="text-[var(--text-accent)] hover:text-[var(--text-accent)]">
                           <GitPullRequest className="w-3.5 h-3.5" />
                         </a>
                       )}

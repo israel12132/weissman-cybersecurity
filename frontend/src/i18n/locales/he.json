@@ -1747,7 +1747,8 @@
       "col_evidence": "ראיות",
       "col_proven": "מוכח",
       "col_unverified": "קריטי/גבוה לא מאומת",
-      "col_mitre": "MITRE"
+      "col_mitre": "MITRE",
+      "no_gaps_for_filter": "אין פערי כיסוי בחומרה זו."
     },
     "securityPosture": {
       "title": "מצב אבטחת הפלטפורמה",
