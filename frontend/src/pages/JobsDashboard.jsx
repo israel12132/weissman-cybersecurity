@@ -208,7 +208,7 @@ export default function JobsDashboard() {
         id: 'kind',
         header: t('pages.jobsDashboard.col_kind'),
         cell: (ctx) => (
-          <span className="text-sm text-white font-medium">{ctx.getValue()}</span>
+          <span className="text-sm text-[var(--text-primary)] font-medium">{ctx.getValue()}</span>
         ),
       }),
       columnHelper.accessor((j) => j.target || '', {
@@ -405,7 +405,7 @@ export default function JobsDashboard() {
                 />
 
                 <aside className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-5 space-y-4 h-fit sticky top-4">
-                  <h3 className="text-sm font-semibold text-white">
+                  <h3 className="text-sm font-semibold text-[var(--text-primary)]">
                     {selectedJob ? t('pages.jobsDashboard.detail_title') : t('pages.jobsDashboard.detail_empty')}
                   </h3>
                   {selectedJob ? (

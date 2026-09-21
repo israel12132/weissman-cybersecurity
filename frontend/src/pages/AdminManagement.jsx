@@ -231,7 +231,7 @@ export default function AdminManagement() {
     columnHelper.accessor('email', {
       header: 'Email',
       cell: (ctx) => (
-        <span className="text-white font-mono">{ctx.getValue()}</span>
+        <span className="text-[var(--text-primary)] font-mono">{ctx.getValue()}</span>
       ),
     }),
     columnHelper.accessor((u) => u.role || 'viewer', {
@@ -396,7 +396,7 @@ export default function AdminManagement() {
 
         {/* Create New User Section */}
         <section className="bg-[var(--table-surface)] border border-[var(--border-default)] rounded-2xl p-6 backdrop-blur-md">
-          <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+          <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
             <span className="text-cyan-400">+</span> Create New User
           </h2>
           <form onSubmit={handleCreateUser} className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -414,7 +414,7 @@ export default function AdminManagement() {
                 onChange={(e) => setNewEmail(e.target.value)}
                 placeholder="user@example.com"
                 required
-                className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-white placeholder:text-[var(--text-muted)] focus:border-cyan-500/50 focus:outline-none text-sm"
+                className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-cyan-500/50 focus:outline-none text-sm"
               />
             </div>
             <div>
@@ -431,7 +431,7 @@ export default function AdminManagement() {
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="••••••••"
                 required
-                className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-white placeholder:text-[var(--text-muted)] focus:border-cyan-500/50 focus:outline-none text-sm"
+                className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-cyan-500/50 focus:outline-none text-sm"
               />
             </div>
             <div>
@@ -445,7 +445,7 @@ export default function AdminManagement() {
                 id="adminmgmt-new-role"
                 value={newRole}
                 onChange={(e) => setNewRole(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-white focus:border-cyan-500/50 focus:outline-none text-sm"
+                className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-[var(--text-primary)] focus:border-cyan-500/50 focus:outline-none text-sm"
               >
                 <option value="viewer">Viewer</option>
                 <option value="analyst">Analyst</option>
@@ -468,7 +468,7 @@ export default function AdminManagement() {
                 value={newAssignedClientId}
                 onChange={(e) => setNewAssignedClientId(e.target.value)}
                 required
-                className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-white focus:border-cyan-500/50 focus:outline-none text-sm"
+                className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-[var(--text-primary)] focus:border-cyan-500/50 focus:outline-none text-sm"
               >
                 <option value="">{t('pages.adminManagement.assigned_client_placeholder')}</option>
                 {clients.map((c) => (
@@ -507,7 +507,7 @@ export default function AdminManagement() {
         {/* Users List Section */}
         <section className="bg-[var(--table-surface)] border border-[var(--border-default)] rounded-2xl p-6 backdrop-blur-md">
           <div className="flex flex-col gap-4 mb-4">
-            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
               <span className="text-violet-400">◎</span> System Users
             </h2>
             <WeissmanListToolbar
@@ -562,7 +562,7 @@ export default function AdminManagement() {
               aria-label={`Edit user ${editingUser.email}`}
               className="bg-[var(--bg-1)] border border-[var(--border-default)] rounded-2xl p-6 w-full max-w-md"
             >
-              <h3 className="text-lg font-semibold text-white mb-4">
+              <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">
                 Edit User: {editingUser.email}
               </h3>
               <div className="space-y-4">
@@ -577,7 +577,7 @@ export default function AdminManagement() {
                     id="adminmgmt-edit-role"
                     value={editRole}
                     onChange={(e) => setEditRole(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-white focus:border-cyan-500/50 focus:outline-none text-sm"
+                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-[var(--text-primary)] focus:border-cyan-500/50 focus:outline-none text-sm"
                   >
                     <option value="viewer">Viewer</option>
                     <option value="analyst">Analyst</option>
@@ -599,7 +599,7 @@ export default function AdminManagement() {
                     id="adminmgmt-edit-client"
                     value={editAssignedClientId}
                     onChange={(e) => setEditAssignedClientId(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-white focus:border-cyan-500/50 focus:outline-none text-sm"
+                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-[var(--text-primary)] focus:border-cyan-500/50 focus:outline-none text-sm"
                   >
                     <option value="">{t('pages.adminManagement.assigned_client_placeholder')}</option>
                     {clients.map((c) => (
@@ -646,7 +646,7 @@ export default function AdminManagement() {
 
         {/* Quick Admin Actions */}
         <section className="bg-[var(--table-surface)] border border-[var(--border-default)] rounded-2xl p-6 backdrop-blur-md">
-          <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+          <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
             <span className="text-emerald-400">⚡</span> Quick Actions
           </h2>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

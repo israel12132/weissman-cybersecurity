@@ -343,7 +343,7 @@ export default function TopTierEngineProfile() {
             </>
           )}
           <span className="text-[var(--text-disabled)] text-xs">|</span>
-          <h1 className="text-sm font-bold tracking-tight text-white">{t('pages.topTierEngineProfile.strategic_page', { label: profile.label })}</h1>
+          <h1 className="text-sm font-bold tracking-tight text-[var(--text-primary)]">{t('pages.topTierEngineProfile.strategic_page', { label: profile.label })}</h1>
           <div className="ms-auto">
             <ShellScanActions
               onRefresh={reloadAll}
@@ -368,13 +368,13 @@ export default function TopTierEngineProfile() {
             <span className="px-2 py-0.5 rounded border border-cyan-500/30 text-[11px] font-mono text-cyan-300">MITRE {profile.mitre || 'N/A'}</span>
             <span className="px-2 py-0.5 rounded border border-amber-500/30 text-[11px] font-mono text-amber-300">{t('pages.topTierEngineProfile.top_tier_badge')}</span>
           </div>
-          <p className="text-lg font-semibold text-white">{profile.mission}</p>
+          <p className="text-lg font-semibold text-[var(--text-primary)]">{profile.mission}</p>
           <p className="text-sm text-[var(--text-tertiary)]">{profile.description}</p>
         </section>
 
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 lg:col-span-2">
-            <h2 className="text-sm font-semibold text-white mb-2">{t('pages.topTierEngineProfile.deep_profile')}</h2>
+            <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-2">{t('pages.topTierEngineProfile.deep_profile')}</h2>
             <p className="text-sm text-[var(--text-tertiary)] mb-3"><span className="text-[var(--text-secondary)]">{t('pages.topTierEngineProfile.focus')}</span> {profile.intelligenceFocus}</p>
             <div className="space-y-2">
               {profile.expectedOutputs.map((item) => (
@@ -383,7 +383,7 @@ export default function TopTierEngineProfile() {
             </div>
           </article>
           <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
-            <h2 className="text-sm font-semibold text-white mb-2">{t('pages.topTierEngineProfile.reality_status')}</h2>
+            <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-2">{t('pages.topTierEngineProfile.reality_status')}</h2>
             <div className="space-y-2 text-[12px] font-mono text-[var(--text-tertiary)]">
               <div>{t('pages.topTierEngineProfile.catalog', { value: auditUnavailable ? '—' : (audit?.known_in_catalog ? t('pages.topTierEngineProfile.connected') : t('pages.topTierEngineProfile.missing')) })}</div>
               <div>{t('pages.topTierEngineProfile.canonical', { value: auditUnavailable ? '—' : (audit?.canonical_engine || '-') })}</div>
@@ -396,7 +396,7 @@ export default function TopTierEngineProfile() {
         </section>
 
         <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 space-y-3">
-          <h2 className="text-sm font-semibold text-white">{t('pages.topTierEngineProfile.run_live')}</h2>
+          <h2 className="text-sm font-semibold text-[var(--text-primary)]">{t('pages.topTierEngineProfile.run_live')}</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <select
               value={clientId}
@@ -490,7 +490,7 @@ export default function TopTierEngineProfile() {
         {!historyUnavailable && (
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 h-[280px]">
-            <h2 className="text-sm font-semibold text-white mb-2">{t('pages.topTierEngineProfile.job_status_chart')}</h2>
+            <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-2">{t('pages.topTierEngineProfile.job_status_chart')}</h2>
             <ResponsiveContainer width="100%" height="90%">
               <BarChart accessibilityLayer data={statusChartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
@@ -502,7 +502,7 @@ export default function TopTierEngineProfile() {
             </ResponsiveContainer>
           </article>
           <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 h-[280px]">
-            <h2 className="text-sm font-semibold text-white mb-2">{t('pages.topTierEngineProfile.findings_trend')}</h2>
+            <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-2">{t('pages.topTierEngineProfile.findings_trend')}</h2>
             <ResponsiveContainer width="100%" height="90%">
               <LineChart accessibilityLayer data={findingsTrendData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
@@ -518,11 +518,11 @@ export default function TopTierEngineProfile() {
 
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
-            <h2 className="text-sm font-semibold text-white mb-2">{t('pages.topTierEngineProfile.sample_payload')}</h2>
+            <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-2">{t('pages.topTierEngineProfile.sample_payload')}</h2>
             <JsonBlock value={effectivePayload} />
           </article>
           <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
-            <h2 className="text-sm font-semibold text-white mb-2">{t('pages.topTierEngineProfile.operator_notes')}</h2>
+            <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-2">{t('pages.topTierEngineProfile.operator_notes')}</h2>
             <div className="space-y-2 text-sm text-[var(--text-tertiary)]">
               <div>{t('pages.topTierEngineProfile.note_tactical')}</div>
               <div>{t('pages.topTierEngineProfile.note_catalog')}</div>
@@ -533,7 +533,7 @@ export default function TopTierEngineProfile() {
         </section>
 
         <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 space-y-3">
-          <h2 className="text-sm font-semibold text-white">{t('pages.topTierEngineProfile.recent_jobs')}</h2>
+          <h2 className="text-sm font-semibold text-[var(--text-primary)]">{t('pages.topTierEngineProfile.recent_jobs')}</h2>
           {!historyUnavailable && jobs.length > 0 && (
             <WeissmanListToolbar
               searchQuery={searchQuery}

@@ -40,7 +40,7 @@ function CloudTab({ tab, active, onClick }) {
       onClick={() => onClick(tab.id)}
       className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-mono transition-all border ${
         active
-          ? 'text-white border'
+          ? 'text-[var(--text-primary)] border'
           : 'text-[var(--text-muted)] border-[var(--border-default)] hover:border-[var(--border-strong)] hover:text-[var(--text-tertiary)]'
       }`}
       style={active ? { color: tab.color, borderColor: `${tab.color}50`, backgroundColor: `${tab.color}15` } : {}}
@@ -108,7 +108,7 @@ function CloudEnginePanel({ tab, clientId, target, showToast, t, onFindingsUpdat
             <div className="flex items-center gap-3 mb-2">
               <span className="text-3xl" style={{ color: tab.color }}>{tab.icon}</span>
               <div>
-                <h2 className="text-lg font-bold text-white">{t('pages.cloudControlTower.attack_surface', { label: tab.label })}</h2>
+                <h2 className="text-lg font-bold text-[var(--text-primary)]">{t('pages.cloudControlTower.attack_surface', { label: tab.label })}</h2>
                 <span className="text-[10px] font-mono text-[var(--text-disabled)] uppercase tracking-widest">{tab.engine}</span>
               </div>
             </div>

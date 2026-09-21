@@ -734,7 +734,7 @@ export default function PlaybookBuilder() {
                   type="button"
                   onClick={save}
                   disabled={saving}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600/80 px-4 py-2 text-[12px] font-medium text-white transition-all hover:bg-emerald-500/90 disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600/80 px-4 py-2 text-[12px] font-medium text-[var(--text-primary)] transition-all hover:bg-emerald-500/90 disabled:opacity-50"
                 >
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   {saving ? t('playbooks.saving') : selected ? t('playbooks.save_changes') : t('playbooks.create_playbook')}

@@ -676,7 +676,7 @@ export default function IdentitySecurityCenter() {
           <div className="flex items-center gap-3">
             <span className="text-3xl">🔐</span>
             <div>
-              <h2 className="text-lg font-bold text-white">{ENGINE_ID}</h2>
+              <h2 className="text-lg font-bold text-[var(--text-primary)]">{ENGINE_ID}</h2>
               <span className="text-[10px] font-mono text-[var(--text-disabled)] uppercase tracking-widest">RFC 9700 · OWASP · MITRE T1550 / T1606</span>
             </div>
           </div>

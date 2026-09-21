@@ -71,7 +71,7 @@ export default function ClientNew() {
           onChange={(e) => setSearchQuery(e.target.value)}
           aria-label={t('pages.clientNew.search_placeholder')}
           placeholder={t('pages.clientNew.search_placeholder')}
-          className="w-full max-w-md px-3 py-2 rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] text-sm text-white placeholder-[var(--text-muted)]"
+          className="w-full max-w-md px-3 py-2 rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)]"
         />
         <EvidenceNotice>{t('pages.clientOnboarding.evidence_notice')}</EvidenceNotice>
         <ClientOnboardingWizard onSubmit={handleSubmit} submitting={submitting} error={error} filterQuery={searchQuery} />

@@ -389,7 +389,7 @@ export default function AuditLog() {
         <div className="rounded-2xl border border-emerald-500/20 bg-emerald-950/10 p-4">
           <div className="flex items-center gap-2 mb-2">
             <BadgeCheck className="w-4 h-4 text-emerald-400" />
-            <h3 className="text-sm font-semibold text-white">{t('audit.verify_title')}</h3>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('audit.verify_title')}</h3>
           </div>
           <p className="text-xs text-[var(--text-tertiary)] mb-3 max-w-2xl">{t('audit.verify_subtitle')}</p>
           <form

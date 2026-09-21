@@ -172,7 +172,7 @@ export default function ContainmentRulesBuilder() {
               <span className="text-sm text-[var(--text-tertiary)]">{t('pages.containmentRulesBuilder.total_rules')}</span>
               <Shield className="w-4 h-4 text-cyan-400" />
             </div>
-            <div className="text-2xl font-bold text-white">{stats.total}</div>
+            <div className="text-2xl font-bold text-[var(--text-primary)]">{stats.total}</div>
           </div>
 
           <div className="bg-green-500/10 backdrop-blur-md border border-green-500/30 rounded-xl p-4">
@@ -212,7 +212,7 @@ export default function ContainmentRulesBuilder() {
 
         <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
           <div className="p-4 border-b border-[var(--border-default)] space-y-3">
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
               <Shield className="w-4 h-4 text-cyan-400" />
               {t('pages.containmentRulesBuilder.rules_heading')}
             </h3>
@@ -257,7 +257,7 @@ export default function ContainmentRulesBuilder() {
 
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
-                          <h4 className="text-sm font-semibold text-white">{rule.name}</h4>
+                          <h4 className="text-sm font-semibold text-[var(--text-primary)]">{rule.name}</h4>
                           <span
                             className={`px-2 py-1 rounded text-xs font-medium border ${getActionColor(
                               rule.action
@@ -330,7 +330,7 @@ export default function ContainmentRulesBuilder() {
         <div className="bg-gradient-to-r from-red-500/10 to-orange-500/10 backdrop-blur-md border border-red-500/30 rounded-xl p-6">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-semibold text-white mb-1 flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1 flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-red-400" />
                 {t('pages.containmentRulesBuilder.emergency_title')}
               </h3>
@@ -407,7 +407,7 @@ function RuleModal({ rule, clientId, onClose, onSave }) {
     >
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={rule ? t('pages.containmentRulesBuilder.edit_rule') : t('pages.containmentRulesBuilder.create_containment_rule')} className="bg-[var(--bg-1)] border border-[var(--border-default)] rounded-xl max-w-lg w-full p-6">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-bold text-white">
+          <h3 className="text-lg font-bold text-[var(--text-primary)]">
             {rule ? t('pages.containmentRulesBuilder.edit_rule') : t('pages.containmentRulesBuilder.create_containment_rule')}
           </h3>
           <Button variant="unstyled" onClick={onClose} className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)]">
@@ -422,7 +422,7 @@ function RuleModal({ rule, clientId, onClose, onSave }) {
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               placeholder={t('pages.containmentRulesBuilder.rule_name_placeholder')}
             />
           </div>
@@ -432,7 +432,7 @@ function RuleModal({ rule, clientId, onClose, onSave }) {
             <select
               value={formData.action}
               onChange={(e) => setFormData({ ...formData, action: e.target.value })}
-              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             >
               <option value="isolate">{t('pages.containmentRulesBuilder.action_isolate')}</option>
               <option value="quarantine">{t('pages.containmentRulesBuilder.action_quarantine')}</option>

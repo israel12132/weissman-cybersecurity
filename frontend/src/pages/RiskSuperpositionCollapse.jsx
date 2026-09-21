@@ -144,7 +144,7 @@ function CollapseChainCard({ finding }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[11px] font-mono text-violet-300/80 uppercase tracking-wider">STRIPS collapse</p>
-          <h4 className="text-sm font-semibold text-white mt-1">{finding.title}</h4>
+          <h4 className="text-sm font-semibold text-[var(--text-primary)] mt-1">{finding.title}</h4>
         </div>
         <span className="text-xs font-mono px-2 py-1 rounded-md bg-violet-500/20 text-violet-200 border border-violet-500/30">
           {Math.round((finding.confidence || 0) * 100)}%
@@ -501,7 +501,7 @@ export default function RiskSuperpositionCollapse() {
               <select
                 value={clientId}
                 onChange={(e) => setClientId(e.target.value)}
-                className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-white"
+                className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-[var(--text-primary)]"
               >
                 <option value="">{t('pages.superpositionCollapse.select_client')}</option>
                 {clients.map((c) => (
@@ -519,7 +519,7 @@ export default function RiskSuperpositionCollapse() {
                 type="url"
                 value={target}
                 onChange={(e) => setTarget(e.target.value)}
-                className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-white font-mono"
+                className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-[var(--text-primary)] font-mono"
                 placeholder="https://"
               />
             </Field>
@@ -684,7 +684,7 @@ export default function RiskSuperpositionCollapse() {
 
           <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] p-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-white">{t('pages.superpositionCollapse.cluster_feed')}</h3>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('pages.superpositionCollapse.cluster_feed')}</h3>
               <Button variant="unstyled" type="button" onClick={loadClusters} disabled={clustersLoading}
                 className="text-[10px] font-mono text-cyan-400 hover:underline disabled:opacity-50">
                 {clustersLoading ? '…' : t('pages.superpositionCollapse.refresh_clusters')}

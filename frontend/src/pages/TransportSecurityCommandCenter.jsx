@@ -197,7 +197,7 @@ function Scorecard({ score, grade, dimensions, t }) {
       <div className="flex flex-wrap items-center gap-8 mb-4">
         <div>
           <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.transportSecurity.score', 'Transport posture')}</div>
-          <div className="text-4xl font-mono font-bold text-white mt-1">{score}<span className="text-lg text-[var(--text-muted)]">/100</span></div>
+          <div className="text-4xl font-mono font-bold text-[var(--text-primary)] mt-1">{score}<span className="text-lg text-[var(--text-muted)]">/100</span></div>
         </div>
         {grade && (
           <div>

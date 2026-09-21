@@ -386,7 +386,7 @@ export default function SovereignDefenseMatrix() {
               <select
                 value={clientId}
                 onChange={(e) => setClientId(e.target.value)}
-                className="mt-1 w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-white"
+                className="mt-1 w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-[var(--text-primary)]"
               >
                 <option value="">{t('pages.sovereignDefense.select_client')}</option>
                 {clients.map((c) => (
@@ -406,7 +406,7 @@ export default function SovereignDefenseMatrix() {
                 type="url"
                 value={target}
                 onChange={(e) => setTarget(e.target.value)}
-                className="mt-1 w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm font-mono text-white"
+                className="mt-1 w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm font-mono text-[var(--text-primary)]"
               />
             </label>
 
@@ -421,13 +421,13 @@ export default function SovereignDefenseMatrix() {
                     {t('pages.sovereignDefense.chronos_sample_interval')}
                     <input type="number" value={params.chronos.sample_interval_ms}
                       onChange={(e) => setP('chronos', 'sample_interval_ms', e.target.value)}
-                      className="mt-1 w-full rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] px-2 py-1.5 text-xs text-white" />
+                      className="mt-1 w-full rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] px-2 py-1.5 text-xs text-[var(--text-primary)]" />
                   </label>
                   <label className="block text-[11px] text-[var(--text-tertiary)]">
                     {t('pages.sovereignDefense.chronos_observation_window')}
                     <input type="number" value={params.chronos.observation_window_ms}
                       onChange={(e) => setP('chronos', 'observation_window_ms', e.target.value)}
-                      className="mt-1 w-full rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] px-2 py-1.5 text-xs text-white" />
+                      className="mt-1 w-full rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] px-2 py-1.5 text-xs text-[var(--text-primary)]" />
                   </label>
                   <div className="rounded-xl border border-violet-500/20 bg-violet-950/15 p-3 space-y-2">
                     <div className="text-[10px] font-mono uppercase text-violet-300/80">

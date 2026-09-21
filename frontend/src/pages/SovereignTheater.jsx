@@ -306,7 +306,7 @@ export default function SovereignTheater() {
       <header className="border-b border-[var(--border-default)] bg-[var(--table-surface)] backdrop-blur-md sticky top-0 z-10">
         <div className="max-w-[1600px] mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-lg font-bold tracking-tight text-white">{t(`${NS}.title`)}</h1>
+            <h1 className="text-lg font-bold tracking-tight text-[var(--text-primary)]">{t(`${NS}.title`)}</h1>
             <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest mt-1">
               {t(`${NS}.subtitle`)}
             </p>

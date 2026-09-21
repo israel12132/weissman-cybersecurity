@@ -329,7 +329,7 @@ export default function AgentManagement() {
             <select
               value={tokenClient}
               onChange={(e) => setTokenClient(e.target.value)}
-              className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm font-mono text-white"
+              className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm font-mono text-[var(--text-primary)]"
             >
               <option value="">{t('agents.select_client')}</option>
               {clients.map((c) => (
@@ -342,7 +342,7 @@ export default function AgentManagement() {
               max={1440}
               value={tokenValidity}
               onChange={(e) => setTokenValidity(e.target.value)}
-              className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm font-mono text-white"
+              className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm font-mono text-[var(--text-primary)]"
               placeholder={t('agents.validity_minutes')}
             />
             <Button variant="unstyled"
@@ -451,7 +451,7 @@ export default function AgentManagement() {
             ) : (
               <div className="space-y-4 text-sm">
                 <div>
-                  <div className="text-lg font-bold text-white">{selectedAgent.hostname}</div>
+                  <div className="text-lg font-bold text-[var(--text-primary)]">{selectedAgent.hostname}</div>
                   <StatusBadge online={selectedAgent.online} last_seen_at={selectedAgent.last_seen_at} t={t} />
                 </div>
                 <DetailRow label={t('agents.col_client')} value={clientName(selectedAgent.client_id)} />

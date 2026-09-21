@@ -207,7 +207,7 @@ export default function SBOMBrowser() {
                   <span className="text-sm text-[var(--text-tertiary)]">{t('pages.sbomBrowser.total_components')}</span>
                   <Package className="w-4 h-4 text-cyan-400" />
                 </div>
-                <div className="text-2xl font-bold text-white">{stats.total}</div>
+                <div className="text-2xl font-bold text-[var(--text-primary)]">{stats.total}</div>
                 <div className="text-xs text-[var(--text-muted)] mt-1">
                   {t('pages.sbomBrowser.direct_transitive', { direct: stats.direct, transitive: stats.transitive })}
                 </div>
@@ -275,7 +275,7 @@ export default function SBOMBrowser() {
                 <select
                   value={ecosystemFilter}
                   onChange={(e) => setEcosystemFilter(e.target.value)}
-                  className="px-3 py-2 bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                  className="px-3 py-2 bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
                 >
                   <option value="all">{t('pages.sbomBrowser.all_ecosystems')}</option>
                   {ecosystems.map((eco) => (
@@ -311,7 +311,7 @@ export default function SBOMBrowser() {
         {!showClientEmpty && (
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
             <div className="p-4 border-b border-[var(--border-default)]">
-              <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
                 <Package className="w-4 h-4 text-cyan-400" />
                 {t('pages.sbomBrowser.components_heading', { count: visibleComponents.length })}
               </h3>
@@ -350,7 +350,7 @@ export default function SBOMBrowser() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="text-sm font-semibold text-white font-mono">
+                            <h4 className="text-sm font-semibold text-[var(--text-primary)] font-mono">
                               {component.name || component.package_name}
                             </h4>
                             <span className="text-xs text-[var(--text-tertiary)] font-mono">
@@ -453,7 +453,7 @@ export default function SBOMBrowser() {
           <div className="bg-red-500/10 backdrop-blur-md border border-red-500/30 rounded-xl p-6">
             <div className="flex items-center gap-2 mb-3">
               <AlertTriangle className="w-5 h-5 text-red-400" />
-              <h3 className="text-sm font-semibold text-white">{t('pages.sbomBrowser.alert_title')}</h3>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('pages.sbomBrowser.alert_title')}</h3>
             </div>
             <p className="text-sm text-[var(--text-secondary)]">
               {t('pages.sbomBrowser.alert_body', { count: stats.vulnerable })}

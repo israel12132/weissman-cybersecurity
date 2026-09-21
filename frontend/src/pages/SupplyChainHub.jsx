@@ -117,7 +117,7 @@ function EngineRunPanel({ engineId, clientId, showToast, onFindingsUpdate, isFoc
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-white">{label}</h3>
+          <h3 className="text-sm font-semibold text-[var(--text-primary)]">{label}</h3>
           <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{description}</p>
           {engineId === 'cicd_pipeline' && (
             <Link to="/cicd-security" className="inline-block mt-2 text-[10px] font-mono text-lime-400/80 hover:text-lime-300 border border-lime-500/25 rounded-lg px-2 py-1 transition-colors">

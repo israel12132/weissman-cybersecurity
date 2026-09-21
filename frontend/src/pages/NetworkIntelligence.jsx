@@ -467,7 +467,7 @@ function BgpDnsFlagship({ clientId, target, showToast, t, tt, onShellReady, isFo
         <div>
           <div className="flex items-center gap-2">
             <span className="text-2xl">🛰</span>
-            <h2 className="text-base font-bold text-white">{tt('flagship_title', 'DNS & BGP Hijack-Resistance')}</h2>
+            <h2 className="text-base font-bold text-[var(--text-primary)]">{tt('flagship_title', 'DNS & BGP Hijack-Resistance')}</h2>
           </div>
           <p className="text-[11px] text-[var(--text-muted)] mt-1 max-w-2xl leading-relaxed">
             {tt('flagship_desc', 'Live multi-resolver consensus, DNSSEC chain validation, RPKI ROA validation, BGP origin-AS / MOAS analysis, NS diversity, CAA & subdomain-takeover — fully read-only.')}
@@ -679,7 +679,7 @@ function NetworkEngineCard({ engine, clientId, target, showToast, isFocused, onF
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <h3 className="text-sm font-semibold text-white">{engine.label}</h3>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">{engine.label}</h3>
             <StatusBadge status={status} t={t} />
           </div>
           <span className="text-[9px] font-mono text-[var(--text-disabled)] bg-[var(--row-hover-bg)] px-1.5 py-0.5 rounded border border-[var(--border-default)]">{engine.mitre}</span>

@@ -141,7 +141,7 @@ export default function ScimProvisioning() {
         )}
 
         <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--table-surface)] p-4 space-y-3">
-          <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
             <Shield className="w-4 h-4 text-violet-300" aria-hidden />
             {t(`${NS}.mint_heading`)}
           </h2>
@@ -194,7 +194,7 @@ export default function ScimProvisioning() {
                 className="flex items-center justify-between gap-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--table-surface)] px-3 py-2"
               >
                 <div className="min-w-0">
-                  <div className="text-sm text-white truncate">{tok.name}</div>
+                  <div className="text-sm text-[var(--text-primary)] truncate">{tok.name}</div>
                   <div className="text-[10px] font-mono text-[var(--text-muted)]">
                     {tok.token_prefix}… · {tok.revoked_at ? t(`${NS}.revoked`) : t(`${NS}.active`)}
                   </div>

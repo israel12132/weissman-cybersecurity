@@ -546,7 +546,7 @@ export default function PqcRadar() {
                   <ScoreGauge score={score} label={tt('score_label', 'READINESS')} />
                   <div className="flex-1 min-w-[240px] space-y-3">
                     <div>
-                      <h3 className="text-sm font-bold text-white">{tt('readiness_score', 'Quantum-Readiness Score')}</h3>
+                      <h3 className="text-sm font-bold text-[var(--text-primary)]">{tt('readiness_score', 'Quantum-Readiness Score')}</h3>
                       <p className="text-[11px] font-mono text-[var(--text-muted)] leading-relaxed mt-1">{summary.description}</p>
                     </div>
                     <div className="grid grid-cols-2 gap-2">

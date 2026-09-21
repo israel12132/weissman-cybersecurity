@@ -296,7 +296,7 @@ function SupremeNerveCenterInner() {
 
         <header className="mb-6 mt-4 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl font-semibold text-white">{sectionLabel(section)}</h1>
+            <h1 className="text-xl font-semibold text-[var(--text-primary)]">{sectionLabel(section)}</h1>
           </div>
           <ShellScanActions
             onRefresh={load}
