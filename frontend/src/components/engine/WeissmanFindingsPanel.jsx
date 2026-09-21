@@ -100,7 +100,7 @@ export default function WeissmanFindingsPanel({
       </div>
       {f.description && <p className="text-[10px] font-mono text-[var(--text-muted)] leading-relaxed">{f.description}</p>}
       {(f.confidence_multiplier != null || f.effective_risk_confidence != null) && (
-        <p className="text-[9px] font-mono text-cyan-400/80">
+        <p className="text-[9px] font-mono text-[var(--text-accent)]">
           {t('weissmanFindings.confidence', {
             value: (f.effective_risk_confidence ?? f.confidence_multiplier ?? 1).toFixed?.(2)
               ?? f.effective_risk_confidence ?? f.confidence_multiplier,
@@ -166,7 +166,7 @@ export default function WeissmanFindingsPanel({
                   aria-pressed={severityFilter === s}
                   className={`text-[9px] font-mono px-2 py-0.5 rounded border uppercase ${
                     severityFilter === s
-                      ? 'border-cyan-500/50 text-cyan-200 bg-cyan-500/10'
+                      ? 'border-cyan-500/50 text-[var(--text-accent)] bg-cyan-500/10'
                       : 'border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-tertiary)]'
                   }`}
                 >
