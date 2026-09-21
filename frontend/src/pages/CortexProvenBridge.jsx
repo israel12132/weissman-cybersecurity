@@ -62,7 +62,7 @@ export default function CortexProvenBridge() {
 
   useEffect(() => { load(false) }, [load])
 
-  const items = Array.isArray(data?.items) ? data.items : []
+  const items = useMemo(() => (Array.isArray(data?.items) ? data.items : []), [data])
   const counts = data?.counts || {}
 
   const filtered = useMemo(() => {
@@ -77,6 +77,13 @@ export default function CortexProvenBridge() {
         .includes(q)
     })
   }, [items, searchQuery, filter])
+
+  const filterCounts = useMemo(() => ({
+    all: items.length,
+    proven: items.filter((f) => f.eligible).length,
+    blind: items.filter((f) => f.xdr_had_matching_alert === false && f.eligible).length,
+    pushed: items.filter((f) => f.cortex_status === 'pushed').length,
+  }), [items])
 
   const exportCsv = useCallback(() => {
     downloadCsv(
@@ -236,13 +243,14 @@ export default function CortexProvenBridge() {
                 variant="unstyled"
                 type="button"
                 onClick={() => setFilter(id)}
+                aria-pressed={filter === id}
                 className={`px-2.5 py-1 rounded-md text-[10px] font-mono border ${
                   filter === id
                     ? 'border-orange-400/60 text-orange-100 bg-orange-500/15'
                     : 'border-white/10 text-white/50 hover:border-white/25'
                 }`}
               >
-                {t(`${NS}.filter_${id}`)}
+                {t(`${NS}.filter_${id}`)} <span className="opacity-60 tabular-nums">{filterCounts[id]}</span>
               </Button>
             ))}
           </div>

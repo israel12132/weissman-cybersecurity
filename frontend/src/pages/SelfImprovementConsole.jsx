@@ -292,11 +292,14 @@ export default function SelfImprovementConsole() {
           </div>
 
           <div className="flex items-center gap-2 mb-4 flex-wrap">
-            {['PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'APPLIED'].map((s) => (
+            {['PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'APPLIED'].map((s) => {
+              const n = counts[{ PENDING_APPROVAL: 'pending', APPROVED: 'approved', REJECTED: 'rejected', APPLIED: 'applied' }[s]]
+              return (
               <Button
                 variant="unstyled"
                 key={s}
                 onClick={() => setFilter(s)}
+                aria-pressed={filter === s}
                 className={`rounded-full px-3 py-1 text-xs font-medium border ${
                   filter === s
                     ? 'bg-white/15 text-white border-white/30'
@@ -304,8 +307,10 @@ export default function SelfImprovementConsole() {
                 }`}
               >
                 {s.replace('_', ' ').toLowerCase()}
+                {n != null && <span className="ml-1 opacity-60 tabular-nums">{n}</span>}
               </Button>
-            ))}
+              )
+            })}
             <div className="relative ml-auto">
               <Search className="w-3.5 h-3.5 text-white/30 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
