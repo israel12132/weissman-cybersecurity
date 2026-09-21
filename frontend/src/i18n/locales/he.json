@@ -496,6 +496,13 @@
       "short_description": "תיאור קצר"
     }
   },
+  "severity": {
+    "critical": "קריטי",
+    "high": "גבוה",
+    "medium": "בינוני",
+    "low": "נמוך",
+    "info": "מידע"
+  },
   "clients_page": {
     "title": "ניהול לקוחות",
     "subtitle": "ניהול ארגוני לקוחות וסקופ סריקה מורשה",

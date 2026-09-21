@@ -506,6 +506,13 @@
       "short_description": "Short description"
     }
   },
+  "severity": {
+    "critical": "Critical",
+    "high": "High",
+    "medium": "Medium",
+    "low": "Low",
+    "info": "Info"
+  },
   "clients_page": {
     "title": "Client Management",
     "subtitle": "Manage customer organizations and authorized scanning scope",

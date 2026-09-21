@@ -765,13 +765,51 @@ export default function FindingsCommandCenter() {
           </Button>
         </PremiumPageHeader>
 
+        {!error && tableData.length > 0 && (
+          <div
+            className="flex flex-wrap items-center gap-2"
+            role="group"
+            aria-label={t('findings.filter_severity')}
+          >
+            {Object.entries(SEVERITY_META).map(([key, meta]) => {
+              const count = countsBySeverity[key] || 0
+              if (key === 'info' && count === 0) return null
+              const active = severityFilter === key
+              return (
+                <Button
+                  key={`sev-strip-${key}`}
+                  variant="unstyled"
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => {
+                    setSeverityFilter(active ? '' : key)
+                    setPagination((p) => ({ ...p, pageIndex: 0 }))
+                  }}
+                  className={[
+                    'inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-[11px] font-mono border transition-colors',
+                    active ? 'text-white' : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]',
+                  ].join(' ')}
+                  style={{
+                    borderColor: active ? meta.color : 'var(--border-default)',
+                    background: active ? `color-mix(in srgb, ${meta.color} 16%, transparent)` : 'var(--row-hover-bg)',
+                  }}
+                >
+                  <span className="w-2 h-2 rounded-full" style={{ background: meta.color }} aria-hidden="true" />
+                  {t(`severity.${key}`, meta.label)}
+                  <span className="tabular-nums font-semibold" style={{ color: meta.color }}>{count}</span>
+                </Button>
+              )
+            })}
+          </div>
+        )}
+
         {filtersExpanded && !error && (
           <div className="glass-panel rounded-2xl p-4 sm:p-5 space-y-4">
             <FilterPills
               label={t('findings.filter_severity')}
               pills={Object.entries(SEVERITY_META).map(([key, meta]) => ({
                 id: `findings-filter-severity-${key}`,
-                label: meta.label,
+                label: t(`severity.${key}`, meta.label),
                 count: countsBySeverity[key] || 0,
                 active: severityFilter === key,
                 color: meta.color,
