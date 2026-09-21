@@ -114,7 +114,7 @@ export default function HoneyRoutingGateway() {
     if (!clientId) return
     try {
       const dash = await apiFetch(`/api/honey-routing/${clientId}/dashboard`)
-      if (dash) {
+      if (dash && dash.ok !== false && !dash.unavailable) {
         setDashboard(dash)
         setLastUpdated(new Date().toISOString())
       }

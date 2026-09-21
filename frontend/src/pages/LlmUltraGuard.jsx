@@ -11,6 +11,7 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
+import { useJobPoll, resolveJobFindings } from '../lib/useJobPoll'
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
 import { useClientTargetPrefill } from '../hooks/useHubLocalScanParams'
@@ -129,6 +130,8 @@ export default function LlmUltraGuard() {
     loadLive()
   }, [loadLive])
 
+  useEffect(() => { setFindings([]) }, [engineId])
+
   useEffect(() => {
     refreshFromHistory().then((run) => {
       applyHistoryFindings(run, setFindings, { setLastUpdated, setJobId })
@@ -154,6 +157,22 @@ export default function LlmUltraGuard() {
       setRunState({ running: false, msg: e?.message || t('pages.llmUltraGuard.network_error') })
     }
   }, [clientId, target, engineId, params, tab, t, postScan])
+
+  useJobPoll(jobId, {
+    enabled: Boolean(jobId) && runState.running,
+    onComplete: async (job) => {
+      const status = String(job.status || '').toLowerCase()
+      if (status === 'completed') {
+        const f = await resolveJobFindings(job, engineId, clientId)
+        setFindings(Array.isArray(f) ? f : [])
+        setLastUpdated(new Date().toISOString())
+        setRunState({ running: false, msg: '' })
+      } else {
+        setRunState({ running: false, msg: job.error || status })
+      }
+      setJobId('')
+    },
+  })
 
   const onInspect = async () => {
     const prompt = inspectText.trim()
