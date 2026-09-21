@@ -267,7 +267,6 @@ impl SovereignVault {
         config: &HashMap<String, String>,
         key_env: &str,
     ) -> Result<([u8; GCM_NONCE_LEN], Vec<u8>), VaultCryptoError> {
-        let mut json = serde_json::to_vec(config).map_err(|_| VaultCryptoError::Serialize)?;
         let mut key = VaultKey::load_hex_from_env(key_env).or_else(|_| {
             if key_env == INTEGRATIONS_VAULT_KEY_ENV {
                 VaultKey::load_integrations_key()
@@ -277,6 +276,7 @@ impl SovereignVault {
                 })
             }
         })?;
+        let mut json = serde_json::to_vec(config).map_err(|_| VaultCryptoError::Serialize)?;
         let out = encrypt_aes256_gcm(&key, &json);
         json.zeroize();
         key.zeroize();

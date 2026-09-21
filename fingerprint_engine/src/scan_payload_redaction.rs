@@ -23,6 +23,12 @@ const EXPLICIT_SECRET_KEYS: &[&str] = &[
     "access_token",
     "refresh_token",
     "ebpf_ssh_key_pem",
+    "auth_header",
+    "basic_auth",
+    "auth_cookie",
+    "aws_secret_access_key",
+    "aws_access_key_id",
+    "azure_devops_pat",
 ];
 
 #[must_use]
