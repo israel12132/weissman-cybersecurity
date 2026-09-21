@@ -242,12 +242,13 @@ export const CC_CSS = `
   /* ══ Menu drawer ══ */
   #scrim{position:fixed;inset:0;z-index:70;background:rgba(20,10,50,.55);backdrop-filter:blur(3px);opacity:0;pointer-events:none;transition:.25s;}
   #scrim.on{opacity:1;pointer-events:auto;}
-  #menu{position:fixed;top:0;bottom:0;left:0;z-index:80;width:min(340px,86vw);transform:translateX(-104%);
+  #menu{position:fixed;top:0;bottom:0;left:0;z-index:80;width:min(384px,90vw);transform:translateX(-104%);
     transition:transform .3s cubic-bezier(.2,.8,.2,1);background:linear-gradient(180deg,rgba(30,24,74,.96),rgba(22,17,58,.98));
     backdrop-filter:blur(26px);border-right:1px solid var(--edge);overflow-y:auto;padding:16px 14px calc(24px + env(safe-area-inset-bottom,0px));
     padding-top:calc(16px + env(safe-area-inset-top,0px));box-shadow:30px 0 80px -20px rgba(10,4,40,.7);}
   #deck[dir="rtl"] #menu{left:auto;right:0;transform:translateX(104%);border-right:none;border-left:1px solid var(--edge);}
   #menu.on{transform:translateX(0);}
+  #deck[dir="rtl"] #menu.on{transform:translateX(0);}
   .menu-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px;}
   .menu-head .mt{font-family:var(--font-display);font-weight:600;font-size:15px;letter-spacing:.1em;color:#fff;}
   .menu-x{width:32px;height:32px;border-radius:9px;border:1px solid var(--edge2);background:var(--track);color:#fff;cursor:pointer;font-size:16px;}
@@ -260,13 +261,31 @@ export const CC_CSS = `
   .launch button.on{background:linear-gradient(120deg,var(--a1),var(--a2));color:#08122a;}
   .launch button .li{font-size:19px;}
   .launch button small{font-family:var(--font-mono);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;opacity:.8;font-weight:400;}
-  .menu-group{margin-bottom:6px;}
-  .menu-group>.gt{font-family:var(--font-mono);font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--a2);padding:9px 8px 5px;}
-  .menu-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;color:#e7e3ff;font-family:var(--font-body);font-size:13px;cursor:pointer;transition:.12s;}
+  .menu-count{font-family:var(--font-mono);font-size:9px;color:var(--muted);margin-inline-start:auto;margin-inline-end:10px;letter-spacing:.06em;white-space:nowrap;}
+  .menu-search{display:flex;align-items:center;gap:8px;background:var(--track);border:1px solid var(--edge2);border-radius:12px;padding:9px 12px;margin-bottom:13px;color:var(--muted);}
+  .menu-search span{font-family:var(--font-mono);font-size:13px;}
+  .menu-search input{flex:1;min-width:0;border:none;background:transparent;color:#fff;font-family:var(--font-mono);font-size:12px;outline:none;}
+  .menu-search input::placeholder{color:var(--muted);} .menu-search input::-webkit-search-cancel-button{filter:invert(.5);}
+  .menu-kbd{font-family:var(--font-mono);font-size:8px;color:var(--muted);border:1px solid var(--edge2);border-radius:6px;padding:2px 5px;letter-spacing:.05em;flex:0 0 auto;}
+  .menu-sec{font-family:var(--font-mono);font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--a2);padding:12px 8px 5px;display:flex;align-items:center;gap:7px;}
+  .menu-sec .sec-n{color:var(--muted);letter-spacing:0;}
+  .menu-grp{width:100%;display:flex;align-items:center;gap:8px;background:transparent;border:none;cursor:pointer;text-align:inherit;
+    font-family:var(--font-mono);font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--a2);padding:12px 8px 6px;}
+  .menu-grp .chev{transition:transform .18s;font-size:9px;color:var(--muted);display:inline-block;}
+  .menu-grp.collapsed .chev{transform:rotate(-90deg);}
+  #deck[dir="rtl"] .menu-grp.collapsed .chev{transform:rotate(90deg);}
+  .menu-grp .g-n{color:var(--muted);font-size:8.5px;letter-spacing:0;margin-inline-start:auto;}
+  .menu-grp-items{display:flex;flex-direction:column;gap:1px;}
+  .menu-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;color:#e7e3ff;font-family:var(--font-body);font-size:13px;cursor:pointer;transition:.12s;border:1px solid transparent;}
   .menu-item:hover{background:rgba(165,180,252,.14);color:#fff;}
-  .menu-item .mi-ic{width:20px;text-align:center;opacity:.85;}
-  .menu-item .mi-r{margin-left:auto;font-family:var(--font-mono);font-size:8.5px;color:var(--muted);}
-  #deck[dir="rtl"] .menu-item .mi-r{margin-left:0;margin-right:auto;}
+  .menu-item.active{background:color-mix(in srgb,var(--a1) 15%,transparent);border-color:color-mix(in srgb,var(--a1) 32%,transparent);color:#fff;}
+  .menu-item .mi-ic{width:20px;text-align:center;opacity:.85;flex:0 0 auto;}
+  .menu-item .mi-lab{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .menu-item .mi-r{font-family:var(--font-mono);font-size:8px;color:var(--muted);opacity:0;transition:.12s;max-width:38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .menu-item:hover .mi-r,.menu-item.active .mi-r{opacity:.65;}
+  .menu-star{flex:0 0 auto;width:22px;height:22px;border-radius:6px;border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:12px;line-height:1;opacity:.45;transition:.12s;}
+  .menu-item:hover .menu-star{opacity:.85;} .menu-star.on{color:var(--warn);opacity:1;} .menu-star:hover{color:var(--warn);background:var(--track);}
+  .menu-empty{font-family:var(--font-mono);font-size:11px;color:var(--muted);text-align:center;padding:26px 8px;}
 
   /* ══ WAR ROOM ══ */
   .wr-top{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:8px 0 14px;
@@ -524,7 +543,8 @@ export const CC_HTML = `<div id="deck" data-dir="nebula" dir="ltr">
 
   <div id="scrim"></div>
   <nav id="menu" aria-label="Main menu">
-    <div class="menu-head"><span class="mt" data-t="menuTitle">MENU</span><button class="menu-x" id="menuClose" aria-label="Close">✕</button></div>
+    <div class="menu-head"><span class="mt" data-t="menuTitle">MENU</span><span class="menu-count" id="menuCount"></span><button class="menu-x" id="menuClose" aria-label="Close">✕</button></div>
+    <div class="menu-search"><span aria-hidden="true">⌕</span><input id="menuSearch" type="search" data-tph="menuSearchPh" aria-label="Search navigation" autocomplete="off" spellcheck="false" /><kbd class="menu-kbd">⌘K</kbd></div>
     <div class="launch">
       <button data-go="cockpit" class="on"><span class="li">◈</span><span data-t="cockpit">Cockpit</span><small data-t="mLaunchC">command deck</small></button>
       <button data-go="warroom"><span class="li">⚔</span><span data-t="warroom">War Room</span><small data-t="mLaunchW">live operations</small></button>
@@ -687,12 +707,15 @@ export function mountCommandCenter(root, THREE, opts) {
   var R=matchMedia('(prefers-reduced-motion: reduce)').matches;
   var rnd=function(n){return (Math.random()*n)|0;}, pick=function(a){return a[rnd(a.length)];};
   var deck=document.getElementById('deck');
+  /* Host options: the generated engine passes `opts` (nav, navigation, lang); the
+     standalone prototype has none, so alias to a safe empty object either way. */
+  var CCOPTS = (typeof opts !== 'undefined' && opts) ? opts : {};
 
   /* ─── i18n ─── */
   var LANG='en';
   var T={
     tag:['Command Center','מרכז שליטה'], menu:['Menu','תפריט'], back:['Back','חזור'],
-    menuTitle:['MENU','תפריט'], cortex:['Cortex online','Cortex מחובר'],
+    menuTitle:['MENU','תפריט'], menuSearchPh:['Search every screen…','חיפוש בכל המסכים…'], cortex:['Cortex online','Cortex מחובר'],
     incident:['Live incident','אירוע חי'], search:['Search targets, engines, findings…','חיפוש יעדים, מנועים, ממצאים…'],
     cockpit:['Cockpit','קוקפיט'], warroom:['War Room','חדר מלחמה'],
     mLaunchC:['command deck','לוח פיקוד'], mLaunchW:['live operations','מבצעים חיים'],
@@ -1379,31 +1402,73 @@ export function mountCommandCenter(root, THREE, opts) {
   layout=loadLayout('default');renderCockpit();
 
   /* ══ menu / nav / views ══ */
-  var NAVGROUPS=[
-    ['Command','◈',[['Findings','/findings'],['Live Feed','/live-feed'],['Jobs','/jobs'],['Pulse','/pulse']]],
-    ['Intelligence','🎯',[['Threat Intel','/threat-intel'],['Threat Hunting','/threat-hunting'],['Dark Web','/dark-web'],['Neural Web','/neural-web'],['Identity Matrix','/identity-matrix']]],
-    ['Operations','⚔',[['Campaigns','/campaigns'],['Kill-Chain','/kill-chain'],['Deception','/deception'],['Auto-Heal','/auto-heal'],['Swarm-Mind','/swarm-mind'],['Edge Swarm','/edge-swarm']]],
-    ['Engines','⬡',[['Engine Room','/engines'],['PQC Radar','/pqc-radar'],['ITDR','/itdr'],['Cloud Posture','/cloud-posture'],['Supply-Chain','/supply-chain']]],
-    ['Governance','🛡',[['Security Posture','/security-posture'],['Compliance','/compliance'],['AI-Model-Risk','/ai-model-risk'],['Risk Graph','/risk-graph']]],
-    ['Administration','👑',[['Mission Control','/mission-control'],['CEO Vault','/ceo-vault'],['Audit Log','/audit-log'],['Board Pack','/board-pack']]]
-  ];
-  var GROUP_HE={Command:'פיקוד',Intelligence:'מודיעין',Operations:'מבצעים',Engines:'מנועים',Governance:'ממשל',Administration:'ניהול'};
-  function buildMenuNav(){var host=document.getElementById('menuNav');if(!host)return;host.innerHTML='';
-    NAVGROUPS.forEach(function(g){var gd=document.createElement('div');gd.className='menu-group';var title=LANG==='he'?(GROUP_HE[g[0]]||g[0]):g[0];
-      var inner='<div class="gt">'+title+'</div>';g[2].forEach(function(it){inner+='<div class="menu-item"><span class="mi-ic">'+g[1]+'</span><span>'+it[0]+'</span><span class="mi-r">'+it[1]+'</span></div>';});gd.innerHTML=inner;host.appendChild(gd);});}
+  var NAVMODEL=[{"id":"primary","e":"Workspace","h":"סביבת עבודה","items":[{"t":"/clients","e":"Clients","h":"לקוחות","i":"🏢"},{"t":"/vuln-intel","e":"Vuln Intel","h":"מודיעין חולשות","i":"🔬"},{"t":"/engines","e":"Engines","h":"חדר המנועים","i":"⬡"},{"t":"/billing","e":"Billing & Usage","h":"חיוב ושימוש","i":"💳"},{"t":"/playbooks","e":"Playbooks","h":"מדריכי SOAR","i":"⚡"},{"t":"/soar-hitl","e":"SOAR HITL","h":"SOAR HITL","i":"🛡"},{"t":"/ask","e":"Ask Weissman","h":"שאל את Weissman","i":"💬"},{"t":"/dominion","e":"Dominion Pack","h":"חבילת דומיניון","i":"👑"}]},{"id":"modules","e":"Cockpit Modules","h":"מודולי קוקפיט","items":[{"t":"/engine-room","e":"Engine Room","h":"חדר מנועים","i":"⬡"},{"t":"/auto-heal","e":"Auto-Heal","h":"ריפוי אוטומטי","i":"🩺"},{"t":"/deception","e":"Deception Grid","h":"רשת הונאה","i":"🕸"},{"t":"/swarm-mind","e":"Swarm-Mind","h":"תודעת נחיל","i":"🧠"},{"t":"/ai-model-risk","e":"AI-Model-Risk","h":"סיכון מודל AI","i":"⚠"},{"t":"/edge-swarm","e":"Global Edge Swarm","h":"נחיל קצה גלובלי","i":"🌐"},{"t":"/neural-web","e":"Neural Engine Web","h":"רשת עצבית","i":"◈"},{"t":"/identity-matrix","e":"Identity Matrix","h":"מטריצת זהויות","i":"🔑"},{"t":"/pulse","e":"System Pulse","h":"דופק מערכת","i":"📈"}]},{"id":"command","e":"Command","h":"פיקוד","items":[{"t":"/","e":"Cockpit","h":"תא הפיקוד","i":"◈"},{"t":"/war-room","e":"War Room","h":"חדר מלחמה","i":"⚔"},{"t":"/overview","e":"Executive Overview","h":"סקירת מנהלים","i":"▤"},{"t":"/live-feed","e":"Live Feed","h":"הזנה חיה","i":"📡"},{"t":"/findings","e":"Findings","h":"ממצאים","i":"◉"},{"t":"/finding-clusters","e":"Finding Clusters","h":"אשכולות ממצאים","i":"▦"},{"t":"/scan-finding-spine","e":"Scan-Finding Spine","h":"עמוד שדרה סריקה-ממצאים","i":"⌁"},{"t":"/jobs","e":"Jobs","h":"משימות","i":"⏱"}]},{"id":"intelligence","e":"Intelligence","h":"מודיעין","items":[{"t":"/target-intel","e":"Target Intelligence","h":"מודיעין מטרה","i":"◎"},{"t":"/threat-intel","e":"Threat Intel","h":"מודיעין איומים","i":"🎯"},{"t":"/threat-hunting","e":"Threat Hunting","h":"ציד איומים","i":"🔭"},{"t":"/iocs","e":"IOC Feed","h":"הזנת IOC","i":"🎯"},{"t":"/threat-feeds","e":"Threat Feeds","h":"הזנות איום","i":"📡"},{"t":"/ueba","e":"UEBA Anomalies","h":"אנומליות UEBA","i":"📈"},{"t":"/entity-risk","e":"Entity Risk","h":"סיכון ישויות","i":"⚡"},{"t":"/threat-analysis","e":"Threat Analysis","h":"ניתוח איומים מאוחד","i":"🧩"},{"t":"/dark-web","e":"Dark Web Monitor","h":"Dark Web Monitor","i":"🕸"},{"t":"/intel-map","e":"Global Intel Map","h":"Global Intel Map","i":"🌐"},{"t":"/incident-response","e":"Incident Response","h":"תגובה לאירועים","i":"🚨"}]},{"id":"operations","e":"Operations","h":"תפעול","items":[{"t":"/threat-emulation","e":"APT Emulation","h":"APT Emulation","i":"◈"},{"t":"/campaigns","e":"Adversary Campaigns","h":"קמפייני יריב","i":"⚔"},{"t":"/discovery-lab","e":"Discovery Lab","h":"מעבדת Discovery","i":"🧪"},{"t":"/honey-routing","e":"Honey-Routing","h":"Honey-Routing","i":"🕷"},{"t":"/llm-ultra-guard","e":"LLM Ultra Guard","h":"LLM Ultra Guard","i":"🛡"},{"t":"/c2-covert-exfil","e":"C2 & Covert Exfil","h":"C2 וערוץ סמוי","i":"📡"},{"t":"/stealthy-persistence","e":"Stealth Persistence","h":"התמדה סמויה","i":"👻"},{"t":"/kill-chain","e":"Kill Chain","h":"שרשרת הריג","i":"⛓"},{"t":"/cem-dago","e":"CEM-DAGO Mesh","h":"רשת CEM-DAGO","i":"🧠"},{"t":"/attack-paths","e":"Attack Paths","h":"נתיבי תקיפה","i":"🕸"},{"t":"/cortex-bridge","e":"Cortex Proven Bridge","h":"גשר Cortex לממצאים מוכחים","i":"🔥"},{"t":"/supreme-brain","e":"Supreme Brain","h":"מוח עליון","i":"◈"},{"t":"/ai-analysis","e":"AI Analysis","h":"ניתוח AI","i":"🧠"},{"t":"/exploit-lab","e":"Exploit Lab","h":"מעבדת exploit","i":"🧪"},{"t":"/council-queue","e":"Council Queue","h":"Council Queue","i":"⚖"},{"t":"/self-improve","e":"Self-Improvement","h":"שיפור עצמי","i":"🧠"},{"t":"/roe-approvals","e":"RoE Approvals","h":"RoE Approvals","i":"📜"},{"t":"/remediation","e":"Remediation Hub","h":"Remediation Hub","i":"🔧"},{"t":"/remediation-analytics","e":"Remediation Analytics","h":"אנליטיקת תיקון","i":"📊"},{"t":"/agents","e":"Endpoint Agents","h":"סוכני קצה","i":"📡"},{"t":"/endpoint-edr","e":"Endpoint EDR","h":"EDR בקצה","i":"🛡"},{"t":"/stealth-ops","e":"Stealth Operations","h":"תפעול חמקני","i":"🕶"},{"t":"/elite-hardening","e":"Elite Hardening","h":"הקשחה עליונה","i":"🛡"},{"t":"/nexus-swarm","e":"Nexus Sovereign Swarm","h":"Nexus Sovereign Swarm","i":"⚡"},{"t":"/superposition-collapse","e":"Superposition Collapse","h":"קריסת סופרפוזיציית סיכון","i":"◈"},{"t":"/sovereign-defense-matrix","e":"Sovereign Defense Matrix","h":"מטריצת הגנה ריבונית","i":"⬡"}]},{"id":"engines","e":"Engine Labs","h":"מעבדות מנועים","items":[{"t":"/cloud","e":"Cloud Control Tower","h":"Cloud Control Tower","i":"☁"},{"t":"/cloud-posture","e":"Cloud Posture (CSPM)","h":"Cloud Posture (CSPM)","i":"◈"},{"t":"/iac-security","e":"IaC Security","h":"אבטחת תשתית כקוד (IaC)","i":"📐"},{"t":"/attack-surface","e":"Attack Surface (EASM)","h":"משטח תקיפה חיצוני (EASM)","i":"🌐"},{"t":"/graphql-security","e":"GraphQL & API Security","h":"אבטחת GraphQL ו-API","i":"◈"},{"t":"/cicd-security","e":"CI/CD Security","h":"אבטחת CI/CD","i":"⛓"},{"t":"/serverless-security","e":"Serverless Security","h":"אבטחת Serverless","i":"λ"},{"t":"/dns-posture","e":"DNS & Domain Posture","h":"מצב אבטחת DNS ודומיין","i":"🛰"},{"t":"/cache-posture","e":"Web Cache Posture","h":"מצב אבטחת Cache","i":"🗄"},{"t":"/http-smuggling","e":"HTTP Smuggling & Desync","h":"HTTP Smuggling & Desync","i":"⇄"},{"t":"/detection-surface","e":"Detection Surface","h":"משטח זיהוי והתחמקות","i":"🛡"},{"t":"/waf-bypass","e":"WAF Bypass Lab","h":"מעבדת WAF Bypass","i":"⚔"},{"t":"/websocket-security","e":"WebSocket Security","h":"אבטחת WebSocket","i":"⟁"},{"t":"/transport-security","e":"Transport Security Command Center","h":"מרכז פיקוד אבטחת Transport","i":"🛡"},{"t":"/tls-posture","e":"TLS Posture","h":"TLS Posture","i":"🔒"},{"t":"/email-posture","e":"Email & Domain Trust","h":"אמון דואר ודומיין","i":"✉"},{"t":"/control-plane","e":"Control Plane of Controls","h":"מרחב בקרה של בקרות","i":"🛡"},{"t":"/itdr","e":"ITDR","h":"ITDR","i":"🪪"},{"t":"/casb-dlp","e":"CASB / DLP / CNAPP","h":"CASB / DLP / CNAPP","i":"☁"},{"t":"/ngfw-gate","e":"Weissman Gate","h":"שער וייסמן","i":"🧱"},{"t":"/identity-security","e":"Identity & SSO Security","h":"אבטחת זהות ו-SSO","i":"🔐"},{"t":"/privilege-escalation","e":"Privilege Escalation","h":"הסלמת הרשאות","i":"⛨"},{"t":"/kerberos-security","e":"AD & Kerberos Security","h":"AD ו-Kerberos","i":"🏰"},{"t":"/smb-netbios","e":"SMB / NetBIOS Security","h":"אבטחת SMB / NetBIOS","i":"🖧"},{"t":"/password-spray","e":"Password Spray Posture","h":"תנוחת Password Spray","i":"🎯"},{"t":"/saml-security","e":"SAML & SSO Federation","h":"SAML ו-SSO Federation","i":"🔏"},{"t":"/supply-chain","e":"Supply Chain","h":"Supply Chain","i":"⛓"},{"t":"/network","e":"Network Intelligence","h":"Network Intelligence","i":"⛢"},{"t":"/pqc-radar","e":"PQC Radar","h":"PQC Radar","i":"🔐"},{"t":"/jwt-lab","e":"JWT Attack Lab","h":"מעבדת תקיפת JWT","i":"🔑"},{"t":"/file-upload-lab","e":"File Upload Security Lab","h":"מעבדת אבטחת העלאת קבצים","i":"📎"},{"t":"/oast","e":"OAST / OOB","h":"OAST / OOB","i":"⊂"},{"t":"/verification/oob","e":"OOB Verification","h":"OOB Verification","i":"◎"},{"t":"/digital-twin","e":"Digital Twin","h":"Digital Twin","i":"⟐"},{"t":"/domain-discovery","e":"Domain Discovery","h":"Domain Discovery","i":"🔍"},{"t":"/zero-day-radar","e":"Zero-Day Radar","h":"Zero-Day Radar","i":"☢"},{"t":"/template-engine","e":"Template Engine","h":"Template Engine","i":"⟡"},{"t":"/ast-fuzzing","e":"AST Fuzzing","h":"AST Fuzzing","i":"⧉"},{"t":"/feedback-loop","e":"Feedback Loop","h":"Feedback Loop","i":"⟲"},{"t":"/engine-catalog","e":"Engine Catalog","h":"קטalog מנועים","i":"📋"},{"t":"/engine-reliability","e":"Engine Reliability","h":"אמינות מנועים","i":"📡"}]},{"id":"governance","e":"Governance","h":"ממשל","items":[{"t":"/security-posture","e":"Platform Posture","h":"מצב אבטחת הפלטפורמה","i":"🛡"},{"t":"/crypto-posture","e":"Crypto Posture","h":"מצב הצפנה","i":"🔑"},{"t":"/financial-risk","e":"Financial Risk","h":"סיכון פיננסי","i":"💵"},{"t":"/attack-coverage","e":"ATT&CK Coverage","h":"כיסוי ATT&CK","i":"▦"},{"t":"/compliance","e":"Compliance","h":"רגולציה","i":"🛡"},{"t":"/sbom","e":"SBOM Browser","h":"SBOM Browser","i":"📦"},{"t":"/risk-graph","e":"Risk Graph","h":"Risk Graph","i":"🕸"},{"t":"/baseline-drift","e":"Baseline & Drift","h":"Baseline & Drift","i":"📊"},{"t":"/rate-limits","e":"Rate Limit Analytics","h":"Rate Limit Analytics","i":"⏱"},{"t":"/mobile-security","e":"Mobile Security","h":"אבטחת מובייל","i":"📱"},{"t":"/ot-ics","e":"OT / ICS Security","h":"OT/ICS","i":"🏭"},{"t":"/network-protocols","e":"Network Protocols","h":"פרוטוקולי רשת","i":"🔌"},{"t":"/social-engineering","e":"Social Engineering","h":"הנדסה חברתית","i":"👥"},{"t":"/alert-rules","e":"Alert Rules","h":"כללי התראה","i":"🔔"},{"t":"/containment-rules","e":"Containment Rules","h":"Containment Rules","i":"🚧"},{"t":"/suppressions","e":"Suppressions","h":"השתקות","i":"🙈"},{"t":"/scan-scheduler","e":"Scan Scheduler","h":"מתזמן סריקות","i":"📅"}]},{"id":"administration","e":"Administration","h":"ניהול מערכת","items":[{"t":"/settings/integrations","e":"Integrations","h":"אינטגרציות","i":"🔗"},{"t":"/mssp-portal","e":"MSSP Partner Portal","h":"פורטל שותפים MSSP","i":"🏢"},{"t":"/white-label","e":"White-label","h":"מיתוג לבן","i":"🎨"},{"t":"/identity-context","e":"Identity Context","h":"Identity Context","i":"👤"},{"t":"/sso-config","e":"SSO Configuration","h":"SSO Configuration","i":"🔑"},{"t":"/engine-management","e":"Engine Management","h":"Engine Management","i":"⚙"},{"t":"/system-config","e":"System Config","h":"הגדרות מערכת","i":"⚙"},{"t":"/metrics","e":"Metrics Dashboard","h":"מדדים","i":"📈"},{"t":"/admin","e":"Admin","h":"ניהול","i":"👑"},{"t":"/ceo","e":"CEO Command","h":"פיקוד מנכ״ל","i":"👔"},{"t":"/supreme-nerve-center","e":"Supreme Nerve Center","h":"מרכז עצבים עליון","i":"🧠"},{"t":"/sovereign","e":"Sovereign Theater","h":"תיאטרון ריבוני","i":"♔"},{"t":"/ceo-vault","e":"CEO Vault","h":"CEO Vault","i":"🔒"},{"t":"/reports","e":"Report History","h":"היסטוריית דוחות","i":"🧾"},{"t":"/board-pack","e":"Board Evidence Pack","h":"חבילת ראיות לדירקטוריון","i":"📊"},{"t":"/audit-log","e":"Audit Log","h":"יומן ביקורת","i":"📋"}]}];
+  function navModel(){return (CCOPTS.getNav&&CCOPTS.getNav())||NAVMODEL;}
+  function navItemLabel(it){return LANG==='he'?it.h:it.e;}
+  function navGroupLabel(g){return LANG==='he'?g.h:g.e;}
+  function navEsc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  var mFavs=[],mRecents=[],mGrpCollapsed={};
+  try{mFavs=JSON.parse(localStorage.getItem('wm_cc_favs')||'[]')||[];}catch(e){}
+  try{mRecents=JSON.parse(localStorage.getItem('wm_cc_recents')||'[]')||[];}catch(e){}
+  function saveFavs(){try{localStorage.setItem('wm_cc_favs',JSON.stringify(mFavs));}catch(e){}}
+  function saveRecents(){try{localStorage.setItem('wm_cc_recents',JSON.stringify(mRecents.slice(0,6)));}catch(e){}}
+  function navAllItems(){var out=[];navModel().forEach(function(g){g.items.forEach(function(it){out.push(it);});});return out;}
+  function navItemByRoute(t){var a=navAllItems();for(var i=0;i<a.length;i++)if(a[i].t===t)return a[i];return null;}
+  function navIsFav(t){return mFavs.indexOf(t)>=0;}
+  function navCur(){return CCOPTS.currentPath||'/';}
+  function navRow(it,active){
+    return '<div class="menu-item'+(active?' active':'')+'" data-nav="'+navEsc(it.t)+'" tabindex="0" role="link" aria-label="'+navEsc(navItemLabel(it))+'">'+
+      '<span class="mi-ic" aria-hidden="true">'+(it.i||'•')+'</span>'+
+      '<span class="mi-lab">'+navEsc(navItemLabel(it))+'</span>'+
+      '<span class="mi-r" aria-hidden="true">'+navEsc(it.t)+'</span>'+
+      '<button class="menu-star'+(navIsFav(it.t)?' on':'')+'" data-fav="'+navEsc(it.t)+'" aria-label="'+(LANG==='he'?'הוסף למועדפים':'Toggle favorite')+'" aria-pressed="'+(navIsFav(it.t)?'true':'false')+'">'+(navIsFav(it.t)?'★':'☆')+'</button>'+
+    '</div>';
+  }
+  function buildMenuNav(){
+    var host=document.getElementById('menuNav');if(!host)return;
+    var model=navModel(),total=0;model.forEach(function(g){total+=g.items.length;});
+    var cnt=document.getElementById('menuCount');if(cnt)cnt.textContent=total+' '+(LANG==='he'?'מסכים':'screens');
+    var q=((document.getElementById('menuSearch')||{}).value||'').trim().toLowerCase(),cur=navCur();
+    if(q){var hits=navAllItems().filter(function(it){return navItemLabel(it).toLowerCase().indexOf(q)>=0||it.t.toLowerCase().indexOf(q)>=0;});
+      host.innerHTML='<div class="menu-sec">'+(LANG==='he'?'תוצאות':'Results')+' <span class="sec-n">'+hits.length+'</span></div>'+
+        (hits.length?hits.map(function(it){return navRow(it,cur===it.t);}).join(''):'<div class="menu-empty">'+(LANG==='he'?'אין תוצאות תואמות':'No matching screens')+'</div>');
+      return;}
+    var html='';
+    var favItems=mFavs.map(navItemByRoute).filter(Boolean);
+    if(favItems.length)html+='<div class="menu-sec">★ '+(LANG==='he'?'מועדפים':'Favorites')+'</div>'+favItems.map(function(it){return navRow(it,cur===it.t);}).join('');
+    var recItems=mRecents.map(navItemByRoute).filter(Boolean).filter(function(it){return mFavs.indexOf(it.t)<0;}).slice(0,5);
+    if(recItems.length)html+='<div class="menu-sec">'+(LANG==='he'?'אחרונים':'Recent')+'</div>'+recItems.map(function(it){return navRow(it,cur===it.t);}).join('');
+    model.forEach(function(g){var collapsed=!!mGrpCollapsed[g.id];
+      html+='<button class="menu-grp'+(collapsed?' collapsed':'')+'" data-grp="'+navEsc(g.id)+'" aria-expanded="'+(!collapsed)+'"><span class="chev" aria-hidden="true">▾</span>'+navEsc(navGroupLabel(g))+'<span class="g-n">'+g.items.length+'</span></button>';
+      if(!collapsed)html+='<div class="menu-grp-items">'+g.items.map(function(it){return navRow(it,cur===it.t);}).join('')+'</div>';});
+    host.innerHTML=html;
+  }
+  function navGo(route){mRecents=[route].concat(mRecents.filter(function(r){return r!==route;})).slice(0,6);saveRecents();
+    if(CCOPTS.onNavigate){try{CCOPTS.onNavigate(route);}catch(e){}}
+    closeMenu();}
+  (function(){var mroot=document.getElementById('menu');if(!mroot)return;
+    mroot.addEventListener('click',function(e){
+      var star=e.target.closest('.menu-star');if(star){e.stopPropagation();var r=star.getAttribute('data-fav');if(navIsFav(r))mFavs=mFavs.filter(function(x){return x!==r;});else mFavs=mFavs.concat([r]);saveFavs();buildMenuNav();return;}
+      var grp=e.target.closest('.menu-grp');if(grp){var id=grp.getAttribute('data-grp');mGrpCollapsed[id]=!mGrpCollapsed[id];buildMenuNav();return;}
+      var it=e.target.closest('.menu-item');if(it){navGo(it.getAttribute('data-nav'));return;}});
+    mroot.addEventListener('keydown',function(e){if(e.key!=='Enter'&&e.key!==' ')return;var it=e.target.closest&&e.target.closest('.menu-item');if(it){e.preventDefault();navGo(it.getAttribute('data-nav'));}});
+    var ms=document.getElementById('menuSearch');if(ms)ms.addEventListener('input',buildMenuNav);})();
   buildMenuNav();
 
   var scrim=document.getElementById('scrim'),menu=document.getElementById('menu'),menuOpen=false;
   menu.setAttribute('aria-hidden','true');
   function openMenu(){menuOpen=true;menu.classList.add('on');scrim.classList.add('on');menu.setAttribute('aria-hidden','false');
-    var f=menu.querySelector('.launch button');if(f)try{f.focus();}catch(e){}}
+    var s=document.getElementById('menuSearch');if(s)s.value='';if(typeof buildMenuNav==='function')buildMenuNav();
+    if(s)try{s.focus();}catch(e){}}
   function closeMenu(){menuOpen=false;menu.classList.remove('on');scrim.classList.remove('on');menu.setAttribute('aria-hidden','true');
     try{document.getElementById('menuBtn').focus();}catch(e){}}
   document.getElementById('menuBtn').addEventListener('click',openMenu);
   document.getElementById('menuClose').addEventListener('click',closeMenu);
   scrim.addEventListener('click',closeMenu);
-  /* Global keyboard: Escape closes the modal first, then the menu */
-  addWin('keydown',function(e){if(e.key!=='Escape')return;
+  /* Global keyboard: ⌘K / Ctrl-K opens the command menu + search; Escape closes modal then menu */
+  addWin('keydown',function(e){
+    if((e.metaKey||e.ctrlKey)&&(e.key==='k'||e.key==='K')){e.preventDefault();if(!menuOpen)openMenu();else{var s=document.getElementById('menuSearch');if(s)try{s.focus();}catch(_){}}return;}
+    if(e.key!=='Escape')return;
     var wm=document.getElementById('widgetModal');
     if(wm&&wm.classList.contains('on')){closeWidgetModal();}
     else if(menuOpen){closeMenu();}});

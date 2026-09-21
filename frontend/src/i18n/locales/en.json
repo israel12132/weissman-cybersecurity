@@ -7619,6 +7619,7 @@
       "vuln_intel": "Vuln Intel",
       "dark_web": "Dark Web",
       "threat_hunt": "Threat Hunt",
+      "soar_hitl": "SOAR HITL",
       "council": "Council",
       "sso": "SSO",
       "admin": "Admin",
