@@ -4992,7 +4992,10 @@
       "showing_count": "{{count}} מתוך {{total}} מנועים",
       "no_search_results": "אין מנועים התואמים לחיפוש.",
       "audit_unavailable": "API ביקורת Top-Tier אינו זמין — 0 מחוברים אינו צי מנותק.",
-      "clients_unavailable": "API הלקוחות אינו זמין — בורר חסר אינו tenant חסר."
+      "clients_unavailable": "API הלקוחות אינו זמין — בורר חסר אינו tenant חסר.",
+      "probe_pass": "עבר",
+      "probe_fail": "נכשל",
+      "probe_pending": "ממתין"
     },
     "clientSaasIdpDiscovery": {
       "title": "גילוי SaaS / IdP",

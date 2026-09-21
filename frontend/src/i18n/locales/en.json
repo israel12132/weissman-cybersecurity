@@ -4992,7 +4992,10 @@
       "showing_count": "{{count}} of {{total}} engines",
       "no_search_results": "No engines match your search.",
       "audit_unavailable": "Top-tier audit API unavailable — 0 connected is not a disconnected fleet.",
-      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant."
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
+      "probe_pass": "Pass",
+      "probe_fail": "Fail",
+      "probe_pending": "Pending"
     },
     "clientSaasIdpDiscovery": {
       "title": "SaaS / IdP Discovery",
