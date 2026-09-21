@@ -1045,7 +1045,9 @@
     "attack_surface": "Attack Surface",
     "attack_surface_desc": "View ASM graph",
     "integrations": "Integrations",
-    "sector": "Sector"
+    "sector": "Sector",
+    "download_pdf": "Download PDF",
+    "download_xlsx": "Download Excel"
   },
   "clients": {
     "title": "Clients",

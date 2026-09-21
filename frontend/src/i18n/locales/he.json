@@ -973,7 +973,9 @@
     "attack_surface": "משטח התקפה",
     "attack_surface_desc": "צפה בגרף ASM",
     "integrations": "אינטגרציות",
-    "sector": "ענף"
+    "sector": "ענף",
+    "download_pdf": "הורדת PDF",
+    "download_xlsx": "הורדת Excel"
   },
   "clients": {
     "title": "לקוחות",
