@@ -160,11 +160,14 @@ async fn count_ai_heavy_jobs_today_utc(pool: &PgPool, tenant_id: i64) -> Result<
            WHERE tenant_id = $1 AND created_at >= $2 AND {}"#,
         AI_QUOTA_COUNT_SQL
     );
-    sqlx::query_scalar(&q)
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
+    let count = sqlx::query_scalar(&q)
         .bind(tenant_id)
         .bind(day_start)
-        .fetch_one(pool)
-        .await
+        .fetch_one(&mut *tx)
+        .await?;
+    let _ = tx.commit().await;
+    Ok(count)
 }
 
 async fn try_audit_entitlement_denial(pool: &PgPool, tenant_id: i64, action: &str, details: &str) {
