@@ -82,17 +82,27 @@ export default function EliteHardeningCommandCenter() {
   const total = Number(data?.controls_total) || controls.length
   const gaps = Math.max(0, total - enforced)
 
+  const bySection = useMemo(() => {
+    const m = {}
+    for (const c of controls) {
+      const s = c.section_title || ''
+      if (s) m[s] = (m[s] || 0) + 1
+    }
+    return m
+  }, [controls])
+
   const pills = useMemo(
     () => [
-      { id: 'all', label: t(`${NS}.all_sections`), active: sectionFilter === 'all', onClick: () => setSectionFilter('all') },
+      { id: 'all', label: t(`${NS}.all_sections`), count: controls.length, active: sectionFilter === 'all', onClick: () => setSectionFilter('all') },
       ...sections.map((s) => ({
         id: s,
         label: s,
+        count: bySection[s] || 0,
         active: sectionFilter === s,
         onClick: () => setSectionFilter(s),
       })),
     ],
-    [sectionFilter, sections, t],
+    [sectionFilter, sections, t, controls.length, bySection],
   )
 
   const columns = useMemo(

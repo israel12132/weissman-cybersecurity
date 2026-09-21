@@ -98,14 +98,14 @@ export default function CompetitiveDelta() {
     })
   }, [lanes, searchQuery, coverageFilter])
 
-  const pills = useMemo(
-    () => [
-      { id: 'all', label: t(`${NS}.all_lanes`), active: coverageFilter === 'all', onClick: () => setCoverageFilter('all') },
-      { id: 'live', label: t(`${NS}.live`), active: coverageFilter === 'live', onClick: () => setCoverageFilter('live') },
-      { id: 'gap', label: t(`${NS}.gap`), active: coverageFilter === 'gap', onClick: () => setCoverageFilter('gap') },
-    ],
-    [coverageFilter, t],
-  )
+  const pills = useMemo(() => {
+    const live = lanes.filter((l) => l.covered).length
+    return [
+      { id: 'all', label: t(`${NS}.all_lanes`), count: lanes.length, active: coverageFilter === 'all', onClick: () => setCoverageFilter('all') },
+      { id: 'live', label: t(`${NS}.live`), count: live, active: coverageFilter === 'live', onClick: () => setCoverageFilter('live') },
+      { id: 'gap', label: t(`${NS}.gap`), count: lanes.length - live, active: coverageFilter === 'gap', onClick: () => setCoverageFilter('gap') },
+    ]
+  }, [coverageFilter, t, lanes])
 
   const columns = useMemo(
     () => [
