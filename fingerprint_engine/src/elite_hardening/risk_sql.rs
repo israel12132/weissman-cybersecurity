@@ -46,8 +46,12 @@ UPDATE risk_graph_nodes
      OR graph_key LIKE 'https:%'
      OR node_type IN ('asset', 'network')
      AND (
-          COALESCE(metadata->>'public', '') IN ('true', '1')
-       OR COALESCE(metadata->>'internet_exposed', '') IN ('true', '1')
+          -- `metadata` is a TEXT column holding JSON text (default '{}'), not JSONB,
+          -- so `->>` needs an explicit ::jsonb cast; without it Postgres raises
+          -- "operator does not exist: text ->>", which aborts the whole auto-tag
+          -- transaction and fails the risk-graph build on every scan.
+          COALESCE(metadata::jsonb->>'public', '') IN ('true', '1')
+       OR COALESCE(metadata::jsonb->>'internet_exposed', '') IN ('true', '1')
      )
    )
 "#;
