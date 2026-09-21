@@ -1482,7 +1482,10 @@
       "empty_title": "לא הופקו דוחות",
       "empty_body": "ריצות דוחות מופיעות כאן לאחר הפקת דוחות ממשטחי הציות או המנהלים.",
       "no_match_title": "אין התאמות",
-      "no_match_body": "אף ריצה לא תואמת לסינון."
+      "no_match_body": "אף ריצה לא תואמת לסינון.",
+      "filter_all": "כל ההרצות",
+      "filter_with": "עם קובץ",
+      "filter_without": "ללא קובץ"
     },
     "boardPack": {
       "title": "חבילת דירקטוריון מודעת-איום",
@@ -1707,7 +1710,9 @@
       "kpi_agent_required": "מנועים שדורשים סוכן",
       "kpi_agent_required_hint": "גודל קטלוג מארח",
       "planner_wired": "מתכנן STRIPS מחובר",
-      "thin_tactic": "{{tactic}}: {{count}} טכניקות מקורסות"
+      "thin_tactic": "{{tactic}}: {{count}} טכניקות מקורסות",
+      "filter_all": "כל הטקטיקות",
+      "filter_gaps": "פערי כיסוי"
     },
     "scanFindingSpine": {
       "title": "עמוד שדרה חי: סריקה → ממצא",
@@ -6591,7 +6596,10 @@
       "pull_unconfigured": "ל-{{provider}} אין טוקן שמור — שמרו מחברים קודם.",
       "none_armed": "אין",
       "empty_unconfigured_title": "אין מחברי IdP חמושים",
-      "empty_unconfigured_body": "שמרו טוקני Entra/Okta/Google בהגדרות מערכת → מחברי ITDR, ואז משכו. בקטלוג שלושה ספקים; אף אחד לא חי עד שנשמר טוקן."
+      "empty_unconfigured_body": "שמרו טוקני Entra/Okta/Google בהגדרות מערכת → מחברי ITDR, ואז משכו. בקטלוג שלושה ספקים; אף אחד לא חי עד שנשמר טוקן.",
+      "filter_failed": "נכשלו",
+      "filter_success": "הצליחו",
+      "filter_mfa": "נדרש MFA"
     },
     "casbDlpCenter": {
       "title": "CASB / DLP / CNAPP",
@@ -6651,7 +6659,12 @@
       "status": "סטטוס",
       "search_placeholder": "סינון סוכנים וממצאים…",
       "empty_title": "אין סוכנים או ממצאי מארח",
-      "empty_body": "התקינו את הסוכן (חבילת Linux/macOS/Windows) ורשמו אותו. בידוד דורש CAP_NET_ADMIN / מנהל על המארח."
+      "empty_body": "התקינו את הסוכן (חבילת Linux/macOS/Windows) ורשמו אותו. בידוד דורש CAP_NET_ADMIN / מנהל על המארח.",
+      "filter_all": "הכול",
+      "filter_agents": "סוכנים",
+      "filter_findings": "ממצאים",
+      "kind_agent": "סוכן",
+      "kind_finding": "ממצא"
     },
     "adversaryMirror": {
       "title": "מראת יריב",
@@ -6724,7 +6737,10 @@
       "empty_scan": "פתח מטריצת מנועים",
       "all_clients": "כל הלקוחות",
       "scoped_to": "מסונן ל-{{name}}",
-      "grid_capped": "הטבלה מציגה את {{shown}} הממצאים האחרונים בהיקף זה. מדדי ה-KPI וחוברת Excel כוללים את כל {{total}} (עד {{exportCap}}). החיפוש חל על התצוגה המקדימה בלבד — השתמשו במרכז הממצאים או בחוברת לשאר."
+      "grid_capped": "הטבלה מציגה את {{shown}} הממצאים האחרונים בהיקף זה. מדדי ה-KPI וחוברת Excel כוללים את כל {{total}} (עד {{exportCap}}). החיפוש חל על התצוגה המקדימה בלבד — השתמשו במרכז הממצאים או בחוברת לשאר.",
+      "filter_severity": "סינון התצוגה לפי חומרה",
+      "no_match": "אין שורות בתצוגה שתואמות את הסינון. חוברת ה-Excel וסיכומי ה-KPI עדיין כוללים את כל {{total}} השורות.",
+      "clear_filters": "ניקוי סינונים"
     },
     "cortexProvenBridge": {
       "title": "גשר ממצאים מוכחים ל-Cortex",

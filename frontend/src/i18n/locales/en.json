@@ -1482,7 +1482,10 @@
       "empty_title": "No reports generated",
       "empty_body": "Report runs appear here once reports are generated from the compliance or executive surfaces.",
       "no_match_title": "No matches",
-      "no_match_body": "No run matches your filter."
+      "no_match_body": "No run matches your filter.",
+      "filter_all": "All runs",
+      "filter_with": "With artifact",
+      "filter_without": "No artifact"
     },
     "boardPack": {
       "title": "Threat-Informed Board Pack",
@@ -1707,7 +1710,9 @@
       "kpi_agent_required": "Agent-required engines",
       "kpi_agent_required_hint": "Host-resident catalog size",
       "planner_wired": "STRIPS planner wired",
-      "thin_tactic": "{{tactic}}: {{count}} curated techniques"
+      "thin_tactic": "{{tactic}}: {{count}} curated techniques",
+      "filter_all": "All tactics",
+      "filter_gaps": "Coverage gaps"
     },
     "scanFindingSpine": {
       "title": "Scan-Finding Truth Spine",
@@ -6591,7 +6596,10 @@
       "pull_unconfigured": "{{provider}} has no stored token — save connectors first.",
       "none_armed": "none",
       "empty_unconfigured_title": "No IdP connectors armed",
-      "empty_unconfigured_body": "Save Entra/Okta/Google tokens under System Config → ITDR connectors, then Pull. The catalog has three providers; none are live until a token is stored."
+      "empty_unconfigured_body": "Save Entra/Okta/Google tokens under System Config → ITDR connectors, then Pull. The catalog has three providers; none are live until a token is stored.",
+      "filter_failed": "Failed",
+      "filter_success": "Success",
+      "filter_mfa": "MFA-prompted"
     },
     "casbDlpCenter": {
       "title": "CASB / DLP / CNAPP",
@@ -6651,7 +6659,12 @@
       "status": "Status",
       "search_placeholder": "Filter agents and findings…",
       "empty_title": "No agents or host findings",
-      "empty_body": "Install the agent (Linux/macOS/Windows package) and enroll it. Isolation requires CAP_NET_ADMIN / admin on the host."
+      "empty_body": "Install the agent (Linux/macOS/Windows package) and enroll it. Isolation requires CAP_NET_ADMIN / admin on the host.",
+      "filter_all": "All",
+      "filter_agents": "Agents",
+      "filter_findings": "Findings",
+      "kind_agent": "Agent",
+      "kind_finding": "Finding"
     },
     "adversaryMirror": {
       "title": "Adversary Gap Mirror",
@@ -6724,7 +6737,10 @@
       "empty_scan": "Open engine matrix",
       "all_clients": "All clients",
       "scoped_to": "Scoped to {{name}}",
-      "grid_capped": "Table shows the {{shown}} most recent findings in this scope. KPIs and the Excel workbook include all {{total}} (capped at {{exportCap}}). Search covers the preview only — use Findings C2 or the workbook for the rest."
+      "grid_capped": "Table shows the {{shown}} most recent findings in this scope. KPIs and the Excel workbook include all {{total}} (capped at {{exportCap}}). Search covers the preview only — use Findings C2 or the workbook for the rest.",
+      "filter_severity": "Filter preview by severity",
+      "no_match": "No preview rows match this filter. The workbook and KPI totals still include all {{total}} rows.",
+      "clear_filters": "Clear filters"
     },
     "cortexProvenBridge": {
       "title": "Cortex proven-finding bridge",

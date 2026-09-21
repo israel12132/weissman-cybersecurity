@@ -122,15 +122,15 @@ export default function NgfwGate() {
             <ExecutiveWidget label={t(`${NS}.kpi_farm`)} value={status?.detonation?.ok ? t(`${NS}.up`) : t(`${NS}.down`)} />
           </div>
           <p className="text-sm text-amber-200/90">{status?.note}</p>
-          <pre className="text-[10px] font-mono whitespace-pre-wrap bg-black/40 border border-white/10 rounded-lg p-3 max-h-40 overflow-auto">
+          <pre className="text-[10px] font-mono whitespace-pre-wrap bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg p-3 max-h-40 overflow-auto text-[var(--text-secondary)]">
             {status?.nft_preview || ''}
           </pre>
-          <label className="block text-xs text-white/50">{t(`${NS}.policy_label`)}
+          <label className="block text-xs text-[var(--text-muted)]">{t(`${NS}.policy_label`)}
             <textarea
               value={policyText}
               onChange={(e) => setPolicyText(e.target.value)}
               rows={8}
-              className="mt-1 w-full font-mono text-xs bg-black/40 border border-white/10 rounded-lg p-2 text-white"
+              className="mt-1 w-full font-mono text-xs bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg p-2 text-[var(--text-primary)]"
             />
           </label>
           <div className="flex flex-wrap gap-2">
@@ -145,16 +145,16 @@ export default function NgfwGate() {
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t(`${NS}.search_placeholder`)}
             aria-label={t(`${NS}.search_placeholder`)}
-            className="w-full max-w-sm px-3 py-2 rounded-lg text-sm bg-black/40 border border-white/10 text-white"
+            className="w-full max-w-sm px-3 py-2 rounded-lg text-sm bg-[var(--bg-3)] border border-[var(--border-default)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
           />
           {!filtered.length ? (
             <EmptyState title={t(`${NS}.empty_title`)} body={t(`${NS}.empty_body`)} />
           ) : (
             <ul className="space-y-2 text-sm">
               {filtered.map((x, i) => (
-                <li key={x.id || x.finding_id || i} className="border border-white/10 rounded-lg p-3">
-                  <span className="text-xs font-mono text-white/40">{x.source}</span>
-                  <div>{x.title}</div>
+                <li key={x.id || x.finding_id || i} className="border border-[var(--border-default)] bg-[var(--table-surface)] rounded-lg p-3">
+                  <span className="text-xs font-mono text-[var(--text-muted)]">{x.source}</span>
+                  <div className="text-[var(--text-primary)]">{x.title}</div>
                 </li>
               ))}
             </ul>

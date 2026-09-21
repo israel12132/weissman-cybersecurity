@@ -3,11 +3,12 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Laptop, Search } from 'lucide-react'
+import { Laptop } from 'lucide-react'
 import PageShell from './PageShell'
 import EmptyState from '../components/ui/EmptyState'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
+import FilterPills from '../components/ui/FilterPills'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import Button from '../components/ui/Button'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
@@ -27,6 +28,7 @@ export default function EndpointEdr() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [kindFilter, setKindFilter] = useState('all')
   const [busy, setBusy] = useState('')
 
   const load = useCallback(async () => {
@@ -50,15 +52,32 @@ export default function EndpointEdr() {
 
   useEffect(() => { load() }, [load])
 
-  const filtered = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase()
-    const rows = [
+  const allRows = useMemo(
+    () => [
       ...agents.map((ag) => ({ kind: 'agent', title: ag.hostname || ag.agent_id, id: ag.agent_id || ag.id })),
       ...findings.map((f) => ({ kind: 'finding', title: f.title, id: f.id })),
-    ]
-    if (!q) return rows
-    return rows.filter((r) => `${r.kind} ${r.title}`.toLowerCase().includes(q))
-  }, [agents, findings, searchQuery])
+    ],
+    [agents, findings],
+  )
+
+  const filtered = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    return allRows.filter((r) => {
+      if (kindFilter !== 'all' && r.kind !== kindFilter) return false
+      if (!q) return true
+      return `${r.kind} ${r.title}`.toLowerCase().includes(q)
+    })
+  }, [allRows, searchQuery, kindFilter])
+
+  const kindPills = useMemo(
+    () =>
+      [
+        { id: 'all', label: t(`${NS}.filter_all`), count: allRows.length, color: '#22d3ee' },
+        { id: 'agent', label: t(`${NS}.filter_agents`), count: agents.length, color: '#4ade80' },
+        { id: 'finding', label: t(`${NS}.filter_findings`), count: findings.length, color: '#fb923c' },
+      ].map((p) => ({ ...p, active: kindFilter === p.id, onClick: () => setKindFilter(p.id) })),
+    [allRows.length, agents.length, findings.length, kindFilter, t],
+  )
 
   const exportCsv = useCallback(() => {
     if (error) return
@@ -117,22 +136,37 @@ export default function EndpointEdr() {
               </Button>
             ))}
           </div>
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={t(`${NS}.search_placeholder`)}
-            aria-label={t(`${NS}.search_placeholder`)}
-            className="w-full max-w-sm px-3 py-2 rounded-lg text-sm bg-black/40 border border-white/10 text-white"
-          />
+          <div className="flex flex-wrap items-end gap-4">
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t(`${NS}.search_placeholder`)}
+              aria-label={t(`${NS}.search_placeholder`)}
+              className="w-full max-w-sm px-3 py-2 rounded-lg text-sm bg-[var(--bg-3)] border border-[var(--border-default)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
+            />
+            {allRows.length > 0 && <FilterPills pills={kindPills} />}
+          </div>
           {!filtered.length ? (
             <EmptyState title={t(`${NS}.empty_title`)} body={t(`${NS}.empty_body`)} />
           ) : (
             <ul className="space-y-1.5 text-sm">
               {filtered.map((r) => (
-                <li key={`${r.kind}-${r.id}`} className="border border-white/10 rounded px-3 py-2 flex justify-between">
-                  <span>{r.title}</span>
-                  <span className="text-xs font-mono text-white/40">{r.kind}</span>
+                <li
+                  key={`${r.kind}-${r.id}`}
+                  className="border border-[var(--border-default)] bg-[var(--table-surface)] rounded-lg px-3 py-2 flex items-center justify-between gap-3"
+                >
+                  <span className="text-[var(--text-primary)] truncate" title={r.title}>{r.title || '—'}</span>
+                  <span
+                    className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border shrink-0"
+                    style={
+                      r.kind === 'agent'
+                        ? { color: '#4ade80', borderColor: '#4ade8055' }
+                        : { color: '#fb923c', borderColor: '#fb923c55' }
+                    }
+                  >
+                    {t(`${NS}.kind_${r.kind}`)}
+                  </span>
                 </li>
               ))}
             </ul>

@@ -14,6 +14,7 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import EmptyState from '../components/ui/EmptyState'
 import DataTable from '../components/ui/DataTable'
+import FilterPills from '../components/ui/FilterPills'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
 import { SkeletonTable, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import Button from '../components/ui/Button'
@@ -33,6 +34,8 @@ const ADVERSARY_SOURCES = new Set([
   'threat_intel_fusion',
 ])
 
+const SEV_ORDER = ['critical', 'high', 'medium', 'low', 'info']
+
 function sevColor(sev) {
   const s = (sev || '').toLowerCase()
   if (s === 'critical') return '#f43f5e'
@@ -40,6 +43,11 @@ function sevColor(sev) {
   if (s === 'medium') return '#fbbf24'
   if (s === 'low') return '#38bdf8'
   return '#94a3b8'
+}
+
+function sevKey(sev) {
+  const s = (sev || '').toLowerCase()
+  return SEV_ORDER.includes(s) ? s : 'info'
 }
 
 export default function BoardEvidencePack() {
@@ -50,6 +58,7 @@ export default function BoardEvidencePack() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
+  const [sevFilter, setSevFilter] = useState('all')
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [busy, setBusy] = useState('')
   const loadGen = useRef(0)
@@ -90,13 +99,37 @@ export default function BoardEvidencePack() {
   const exportTotal = Number(totals.findings) || findings.length
   const truncated = Boolean(scope.truncated) || exportTotal > findings.length
 
+  // Counts over the live grid preview only (KPI tiles above carry the full
+  // export totals). The severity strip narrows the same preview the search does.
+  const sevCounts = useMemo(() => {
+    const c = { all: findings.length, critical: 0, high: 0, medium: 0, low: 0, info: 0 }
+    for (const f of findings) c[sevKey(f.severity)] += 1
+    return c
+  }, [findings])
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return findings
-    return findings.filter((f) =>
-      `${f.title || ''} ${f.source || f.engine || ''} ${f.severity || ''} ${f.mitre || ''}`.toLowerCase().includes(q),
-    )
-  }, [findings, search])
+    return findings.filter((f) => {
+      if (sevFilter !== 'all' && sevKey(f.severity) !== sevFilter) return false
+      if (!q) return true
+      return `${f.title || ''} ${f.source || f.engine || ''} ${f.severity || ''} ${f.mitre || ''}`
+        .toLowerCase()
+        .includes(q)
+    })
+  }, [findings, search, sevFilter])
+
+  const sevPills = useMemo(
+    () => [
+      { id: 'all', label: t('common.all'), count: sevCounts.all, color: '#22d3ee' },
+      ...SEV_ORDER.filter((s) => sevCounts[s] > 0).map((s) => ({
+        id: s,
+        label: t(`severity.${s}`),
+        count: sevCounts[s],
+        color: sevColor(s),
+      })),
+    ].map((p) => ({ ...p, active: sevFilter === p.id, onClick: () => setSevFilter(p.id) })),
+    [sevCounts, sevFilter, t],
+  )
 
   const xlsxPath = pack?.exports?.xlsx || (selectedClientId
     ? `/api/clients/${selectedClientId}/export/xlsx`
@@ -269,6 +302,10 @@ export default function BoardEvidencePack() {
           <Link to="/reports" className="text-[var(--text-tertiary)] hover:underline">{t(`${NS}.link_reports`)}</Link>
         </div>
 
+        {!loading && findings.length > 0 && (
+          <FilterPills label={t(`${NS}.filter_severity`)} pills={sevPills} />
+        )}
+
         <div className="relative">
           <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
           <input
@@ -282,13 +319,28 @@ export default function BoardEvidencePack() {
 
         {loading ? (
           <SkeletonTable />
-        ) : filtered.length === 0 ? (
+        ) : filtered.length === 0 && findings.length === 0 ? (
           <EmptyState
             icon="file"
             title={t(`${NS}.empty_title`)}
             body={t(`${NS}.empty_body`)}
             secondary={{ label: t(`${NS}.empty_scan`), href: '/engines' }}
           />
+        ) : filtered.length === 0 ? (
+          <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-3)]/40 px-4 py-6 text-center">
+            <p className="text-sm text-[var(--text-tertiary)]">{t(`${NS}.no_match`, { total: findings.length })}</p>
+            <Button
+              variant="unstyled"
+              type="button"
+              onClick={() => {
+                setSevFilter('all')
+                setSearch('')
+              }}
+              className="mt-3 inline-flex items-center px-3 py-1.5 rounded-lg border border-cyan-500/35 text-[11px] font-mono text-cyan-300 hover:bg-cyan-500/10"
+            >
+              {t(`${NS}.clear_filters`)}
+            </Button>
+          </div>
         ) : (
           <DataTable data={filtered} columns={columns} />
         )}
