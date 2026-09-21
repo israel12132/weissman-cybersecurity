@@ -34,10 +34,10 @@ export default function EngineAccountingBanner() {
   const ratioPct = Math.round((Number(a.distinct_ratio) || 0) * 100)
   const cells = [
     { label: t('engineAccounting.advertisedIds'), value: a.total_ids, tone: 'text-text-secondary' },
-    { label: t('engineAccounting.distinctReal'), value: a.distinct_canonical, tone: 'text-emerald-300' },
-    { label: t('engineAccounting.aliases'), value: a.alias_ids, tone: 'text-amber-300' },
-    { label: t('engineAccounting.agentRequired'), value: a.agent_required, tone: 'text-sky-300' },
-    { label: t('engineAccounting.remotelyDetecting'), value: a.remotely_detecting, tone: 'text-cyan-300' },
+    { label: t('engineAccounting.distinctReal'), value: a.distinct_canonical, tone: 'text-[var(--severity-low)]' },
+    { label: t('engineAccounting.aliases'), value: a.alias_ids, tone: 'text-[var(--severity-medium)]' },
+    { label: t('engineAccounting.agentRequired'), value: a.agent_required, tone: 'text-[var(--text-accent)]' },
+    { label: t('engineAccounting.remotelyDetecting'), value: a.remotely_detecting, tone: 'text-[var(--text-accent)]' },
   ]
 
   return (

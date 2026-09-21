@@ -41,9 +41,9 @@ export default function AgentRequiredEmptyState({
       <EmptyState
         icon={
           unavailable ? (
-            <Unplug className="w-7 h-7 text-amber-400/90" strokeWidth={1.5} />
+            <Unplug className="w-7 h-7 text-[var(--severity-medium)]" strokeWidth={1.5} />
           ) : (
-            <MonitorDown className="w-7 h-7 text-amber-400/90" strokeWidth={1.5} />
+            <MonitorDown className="w-7 h-7 text-[var(--severity-medium)]" strokeWidth={1.5} />
           )
         }
         title={t(unavailable ? 'agentRequired.unavailable_title' : 'agentRequired.empty_title')}

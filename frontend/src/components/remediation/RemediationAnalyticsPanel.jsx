@@ -78,10 +78,10 @@ export default function RemediationAnalyticsPanel({ stats }) {
     <div className="p-4 rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] space-y-5">
       {/* KPI row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Kpi icon={<CheckCircle className="w-4 h-4 text-green-400" />} label={t('pages.remediationHub.heal_fix_rate')} value={`${successPct}%`} color="#22c55e" />
-        <Kpi icon={<Repeat className="w-4 h-4 text-amber-400" />} label={t('pages.remediationHub.heal_avg_attempts')} value={avgAttempts} />
-        <Kpi icon={<ShieldCheck className="w-4 h-4 text-emerald-400" />} label={t('pages.remediationHub.heal_attested')} value={stats?.attested || 0} color="#34d399" />
-        <Kpi icon={<AlertTriangle className="w-4 h-4 text-rose-400" />} label={t('pages.remediationHub.verdict_broke_app')} value={stats?.broke_app || 0} color="#f43f5e" />
+        <Kpi icon={<CheckCircle className="w-4 h-4 text-[var(--severity-low)]" />} label={t('pages.remediationHub.heal_fix_rate')} value={`${successPct}%`} color="#22c55e" />
+        <Kpi icon={<Repeat className="w-4 h-4 text-[var(--severity-medium)]" />} label={t('pages.remediationHub.heal_avg_attempts')} value={avgAttempts} />
+        <Kpi icon={<ShieldCheck className="w-4 h-4 text-[var(--severity-low)]" />} label={t('pages.remediationHub.heal_attested')} value={stats?.attested || 0} color="#34d399" />
+        <Kpi icon={<AlertTriangle className="w-4 h-4 text-[var(--severity-critical)]" />} label={t('pages.remediationHub.verdict_broke_app')} value={stats?.broke_app || 0} color="#f43f5e" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -102,7 +102,7 @@ export default function RemediationAnalyticsPanel({ stats }) {
         {/* Channel bars */}
         <div className="space-y-2">
           <div className="text-xs font-semibold text-[var(--text-tertiary)] flex items-center gap-1.5">
-            <GitPullRequest className="w-3.5 h-3.5 text-cyan-400" /> {t('pages.remediationHub.channel_label')}
+            <GitPullRequest className="w-3.5 h-3.5 text-[var(--text-accent)]" /> {t('pages.remediationHub.channel_label')}
           </div>
           {channels.length === 0 ? (
             <div className="text-xs text-[var(--text-muted)]">—</div>

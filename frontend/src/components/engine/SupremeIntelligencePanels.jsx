@@ -73,7 +73,7 @@ export function ToxicBanner({ finding, title = 'Toxic combination detected' }) {
   if (!finding) return null
   return (
     <div className="rounded-2xl border-2 border-rose-500/50 bg-gradient-to-r from-rose-950/50 via-red-950/30 to-black/40 p-4 mb-4">
-      <p className="text-[10px] font-mono uppercase tracking-widest text-rose-300 mb-1">{title}</p>
+      <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--severity-critical)] mb-1">{title}</p>
       <h3 className="text-sm font-bold text-rose-100 leading-snug">{finding.title}</h3>
       {finding.description && (
         <p className="text-xs text-[var(--text-tertiary)] mt-2 leading-relaxed">{finding.description}</p>
@@ -87,13 +87,13 @@ export function RoadmapCard({ finding, title = 'Prioritized remediation roadmap'
   if (!Array.isArray(steps) || steps.length === 0) return null
   return (
     <div className="rounded-xl border border-emerald-500/25 bg-emerald-950/15 p-4 mb-4">
-      <p className="text-[10px] font-mono uppercase tracking-widest text-emerald-300/70 mb-3">{title}</p>
+      <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--severity-low)] mb-3">{title}</p>
       <ol className="space-y-2">
         {steps.map((s, i) => (
           <li key={i} className="flex gap-2 text-xs font-mono">
-            <span className="shrink-0 text-emerald-400 font-bold">{s.priority ?? i + 1}.</span>
+            <span className="shrink-0 text-[var(--severity-low)] font-bold">{s.priority ?? i + 1}.</span>
             <span className="text-[var(--text-secondary)]">
-              <b className="text-emerald-200">{s.action}</b>
+              <b className="text-[var(--severity-low)]">{s.action}</b>
               {s.detail ? ` — ${s.detail}` : ''}
               {s.tier && <span className="text-[var(--text-muted)]"> ({s.tier})</span>}
             </span>
@@ -109,11 +109,11 @@ export function AgentGapPanel({ findings, title = 'Agent-required capabilities' 
   if (!gaps.length) return null
   return (
     <div className="rounded-xl border border-violet-500/25 bg-violet-950/15 p-4 mb-4">
-      <p className="text-[10px] font-mono uppercase tracking-widest text-violet-300/70 mb-3">{title}</p>
+      <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-accent-violet)] mb-3">{title}</p>
       <ul className="space-y-2">
         {gaps.map((f, i) => (
           <li key={i} className="text-xs font-mono text-[var(--text-secondary)] leading-relaxed">
-            <span className="text-violet-300">○</span> {f.title}
+            <span className="text-[var(--text-accent-violet)]">○</span> {f.title}
             {f.description && <span className="block text-[var(--text-muted)] mt-0.5 pl-4">{f.description}</span>}
           </li>
         ))}
@@ -127,7 +127,7 @@ export function AttackPathsPanel({ paths, title = 'Attack paths' }) {
   if (!list.length) return null
   return (
     <div className="rounded-xl border border-amber-500/25 bg-amber-950/10 p-4 mb-4">
-      <p className="text-[10px] font-mono uppercase tracking-widest text-amber-300/70 mb-3">
+      <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--severity-medium)] mb-3">
         {title} ({list.length})
       </p>
       <div className="space-y-2 max-h-48 overflow-auto">

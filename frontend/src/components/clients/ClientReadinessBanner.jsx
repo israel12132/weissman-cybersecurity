@@ -35,7 +35,7 @@ export default function ClientReadinessBanner({ clientId }) {
     return (
       <div
         data-testid="client-readiness-unavailable"
-        className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-4 py-3 text-sm text-rose-300"
+        className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-4 py-3 text-sm text-[var(--severity-critical)]"
       >
         {t('pages.clientOnboarding.readiness_unavailable')}
       </div>
@@ -57,9 +57,9 @@ export default function ClientReadinessBanner({ clientId }) {
     >
       <div className="flex items-center gap-2">
         {ready ? (
-          <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+          <CheckCircle2 className="w-5 h-5 text-[var(--severity-low)]" />
         ) : (
-          <AlertTriangle className="w-5 h-5 text-amber-400" />
+          <AlertTriangle className="w-5 h-5 text-[var(--severity-medium)]" />
         )}
         <div>
           <div className="text-sm font-medium text-[var(--text-primary)]">
@@ -75,7 +75,7 @@ export default function ClientReadinessBanner({ clientId }) {
       {!ready && (
         <Link
           to={`/clients/${clientId}/integrations`}
-          className="text-xs font-medium text-amber-200/90 hover:text-amber-100 underline-offset-2 hover:underline"
+          className="text-xs font-medium text-[var(--severity-medium)] hover:text-amber-100 underline-offset-2 hover:underline"
         >
           {t('pages.clientOnboarding.fix_in_settings')}
         </Link>

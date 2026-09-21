@@ -71,7 +71,7 @@ export default function BatchHealPanel({ findings, onClose }) {
   return (
     <div className="mt-2 p-3 rounded-lg border border-cyan-500/25 bg-cyan-500/[0.04] space-y-2.5">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold text-cyan-200 flex items-center gap-1.5">
+        <span className="text-xs font-semibold text-[var(--text-accent)] flex items-center gap-1.5">
           <Wrench className="w-3.5 h-3.5" />
           {t('pages.remediationHub.batch_heal_title', { n: healable.length })}
         </span>
@@ -79,7 +79,7 @@ export default function BatchHealPanel({ findings, onClose }) {
       </div>
 
       {result ? (
-        <div className="text-xs text-emerald-300 flex items-center gap-2">
+        <div className="text-xs text-[var(--severity-low)] flex items-center gap-2">
           <CheckCircle className="w-4 h-4" />
           {t('pages.remediationHub.batch_result', { enqueued: result.enqueued, skipped: result.skipped })}
         </div>
@@ -105,10 +105,10 @@ export default function BatchHealPanel({ findings, onClose }) {
             </div>
           </details>
           {error && (
-            <div className="text-xs text-rose-300 flex items-center gap-2"><AlertTriangle className="w-3.5 h-3.5" /> {error}</div>
+            <div className="text-xs text-[var(--severity-critical)] flex items-center gap-2"><AlertTriangle className="w-3.5 h-3.5" /> {error}</div>
           )}
           <Button variant="unstyled" type="button" onClick={submit} disabled={submitting || healable.length === 0}
-            className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-cyan-500/20 border border-cyan-500/40 text-cyan-200 text-xs font-medium hover:bg-cyan-500/30 disabled:opacity-50">
+            className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-cyan-500/20 border border-cyan-500/40 text-[var(--text-accent)] text-xs font-medium hover:bg-cyan-500/30 disabled:opacity-50">
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wrench className="w-4 h-4" />}
             {t('pages.remediationHub.batch_heal_go', { n: healable.length })}
           </Button>

@@ -32,7 +32,7 @@ function Field({ label, required, hint, children }) {
     <div>
       <label htmlFor={fieldId} className="block text-sm font-medium text-[var(--text-tertiary)] mb-2">
         {label}
-        {required && <span className="text-red-400 ms-1">*</span>}
+        {required && <span className="text-[var(--severity-critical)] ms-1">*</span>}
       </label>
       {isValidElement(children) ? cloneElement(children, { id: fieldId }) : children}
       {hint && <p className="mt-1 text-xs text-[var(--text-muted)]">{hint}</p>}
@@ -172,14 +172,14 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {(externalError || localError || loadError) && (
-        <div className="p-4 bg-red-900/20 border border-red-500/30 rounded-lg text-red-400 text-sm">
+        <div className="p-4 bg-red-900/20 border border-red-500/30 rounded-lg text-[var(--severity-critical)] text-sm">
           {externalError || localError || loadError}
         </div>
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-cyan-500/20 bg-cyan-950/20 px-4 py-3">
         <div>
-          <div className="text-[10px] font-mono uppercase tracking-wider text-cyan-400/80">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-accent)]">
             {t('pages.clientOnboarding.readiness')}
           </div>
           <div className="text-lg font-semibold text-[var(--text-primary)]">{catalogUnavailable ? '—' : `${readiness.percent}%`}</div>
@@ -215,7 +215,7 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
             onClick={() => setStep(i)}
             className={`px-3 py-1.5 rounded-lg text-[11px] font-mono border transition-colors ${
               i === step
-                ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-200'
+                ? 'border-cyan-500/50 bg-cyan-500/10 text-[var(--text-accent)]'
                 : 'border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
             }`}
           >
@@ -227,11 +227,11 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
 
       <div className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] p-6 space-y-5">
         <h3 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
-          {step === 0 && <FileCheck className="w-5 h-5 text-cyan-400" />}
-          {step === 2 && <Globe className="w-5 h-5 text-cyan-400" />}
-          {step === 3 && <Cpu className="w-5 h-5 text-cyan-400" />}
-          {step === 4 && <Cloud className="w-5 h-5 text-cyan-400" />}
-          {step === 5 && <Shield className="w-5 h-5 text-cyan-400" />}
+          {step === 0 && <FileCheck className="w-5 h-5 text-[var(--text-accent)]" />}
+          {step === 2 && <Globe className="w-5 h-5 text-[var(--text-accent)]" />}
+          {step === 3 && <Cpu className="w-5 h-5 text-[var(--text-accent)]" />}
+          {step === 4 && <Cloud className="w-5 h-5 text-[var(--text-accent)]" />}
+          {step === 5 && <Shield className="w-5 h-5 text-[var(--text-accent)]" />}
           {stepTitle}
         </h3>
 
@@ -409,7 +409,7 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
                       onClick={() => togglePlatform(p)}
                       className={`px-3 py-2 rounded-lg text-xs font-mono border ${
                         form.agent_platforms.includes(p)
-                          ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-200'
+                          ? 'border-emerald-500/50 bg-emerald-500/10 text-[var(--severity-low)]'
                           : 'border-[var(--border-default)] text-[var(--text-muted)]'
                       }`}
                     >
@@ -455,7 +455,7 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
                 <StatusRow ok={tenantStatus.llm_configured} label={label(catalog?.requirements?.tenant_llm)} />
                 <StatusRow ok={tenantStatus.oast_configured} label={label(catalog?.requirements?.tenant_oast)} />
                 <StatusRow ok={tenantStatus.ai_heavy_entitled === true} label={label(catalog?.requirements?.tenant_ai_entitlement)} />
-                <Link to="/system-core" className="text-xs text-cyan-400 hover:text-cyan-300 mt-2 inline-block">
+                <Link to="/system-core" className="text-xs text-[var(--text-accent)] hover:text-[var(--text-accent)] mt-2 inline-block">
                   {t('pages.clientOnboarding.configure_tenant')}
                 </Link>
               </div>
@@ -475,11 +475,11 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
               {readiness.items.filter((i) => i.hard).map((item) => (
                 <div key={item.id} className="flex items-center gap-2 text-sm">
                   {item.satisfied ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <CheckCircle2 className="w-4 h-4 text-[var(--severity-low)] shrink-0" />
                   ) : (
-                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                    <AlertTriangle className="w-4 h-4 text-[var(--severity-medium)] shrink-0" />
                   )}
-                  <span className={item.satisfied ? 'text-[var(--text-tertiary)]' : 'text-amber-200/90'}>
+                  <span className={item.satisfied ? 'text-[var(--text-tertiary)]' : 'text-[var(--severity-medium)]'}>
                     {label(item.def)}
                     {item.scope === 'tenant' && (
                       <span className="ms-1 text-[10px] font-mono text-[var(--text-muted)]">(tenant)</span>
@@ -489,7 +489,7 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
               ))}
             </div>
             {!readiness.ready && (
-              <p className="text-amber-300/90 text-sm flex items-center gap-2 mt-4">
+              <p className="text-[var(--severity-medium)] text-sm flex items-center gap-2 mt-4">
                 <Server className="w-4 h-4" />
                 {t('pages.clientOnboarding.complete_missing')}
               </p>
@@ -535,8 +535,8 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
 function StatusRow({ ok, label }) {
   return (
     <div className="flex items-center gap-2">
-      {ok ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <AlertTriangle className="w-4 h-4 text-amber-400" />}
-      <span className={ok ? 'text-[var(--text-tertiary)]' : 'text-amber-200/80'}>{label}</span>
+      {ok ? <CheckCircle2 className="w-4 h-4 text-[var(--severity-low)]" /> : <AlertTriangle className="w-4 h-4 text-[var(--severity-medium)]" />}
+      <span className={ok ? 'text-[var(--text-tertiary)]' : 'text-[var(--severity-medium)]'}>{label}</span>
     </div>
   )
 }

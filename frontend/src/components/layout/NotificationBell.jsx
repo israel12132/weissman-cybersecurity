@@ -98,7 +98,7 @@ export default function NotificationBell() {
             <span className="text-[12px] font-semibold text-[var(--text-primary)]">
               {t('notifications.title')}
               {unreadCount > 0 && (
-                <span className="ml-1.5 text-[10px] font-mono text-rose-300">
+                <span className="ml-1.5 text-[10px] font-mono text-[var(--severity-critical)]">
                   {t('notifications.unread_count', { count: unreadCount })}
                 </span>
               )}

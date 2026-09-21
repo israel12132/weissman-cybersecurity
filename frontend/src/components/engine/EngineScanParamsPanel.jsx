@@ -28,7 +28,7 @@ export function EngineParamField({ def, value, onChange, disabled }) {
     <label htmlFor={fieldId} className="block text-[11px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider mb-1">
       {def.label}
       {def.type === 'password' && (
-        <span className="ml-1 text-amber-400/80 normal-case tracking-normal" title="Stored securely; masked values are not overwritten">
+        <span className="ml-1 text-[var(--severity-medium)] normal-case tracking-normal" title="Stored securely; masked values are not overwritten">
           🔒
         </span>
       )}
@@ -151,9 +151,9 @@ export default function EngineScanParamsPanel({
         )}
         {t('components.engineScanParams.title')}
         {' · '}
-        <span className="text-cyan-400/80">{schema.length}</span>
+        <span className="text-[var(--text-accent)]">{schema.length}</span>
         {filledCount > 0 && (
-          <span className="text-emerald-400/70 normal-case tracking-normal">
+          <span className="text-[var(--severity-low)] normal-case tracking-normal">
             ({filledCount} {t('components.engineScanParams.filled')})
           </span>
         )}
@@ -162,13 +162,13 @@ export default function EngineScanParamsPanel({
         {clientId && (
           <Link
             to={`/clients/${clientId}/integrations`}
-            className="text-amber-300/90 hover:text-amber-200 border border-amber-500/30 rounded px-2 py-0.5"
+            className="text-[var(--severity-medium)] hover:text-[var(--severity-medium)] border border-amber-500/30 rounded px-2 py-0.5"
           >
             {t('components.engineScanParams.integrations')}
           </Link>
         )}
         {hubRoute && (
-          <Link to={hubRoute} className="text-violet-300/90 hover:text-violet-200 border border-violet-500/30 rounded px-2 py-0.5">
+          <Link to={hubRoute} className="text-[var(--text-accent-violet)] hover:text-[var(--text-accent-violet)] border border-violet-500/30 rounded px-2 py-0.5">
             {t('components.engineScanParams.command_center')}
           </Link>
         )}
