@@ -188,6 +188,24 @@ export default function RemediationHub() {
     return list
   }, [findings, sevFilter, statusFilter, search])
 
+  const sevCounts = useMemo(() => {
+    const m = {}
+    for (const f of findings) {
+      const s = normSev(f.severity)
+      if (s) m[s] = (m[s] || 0) + 1
+    }
+    return m
+  }, [findings])
+
+  const statusCounts = useMemo(() => {
+    const m = {}
+    for (const f of findings) {
+      const s = STATUS_FROM_FINDING(f.status)
+      if (s) m[s] = (m[s] || 0) + 1
+    }
+    return m
+  }, [findings])
+
   const workflows = useMemo(() => summarizeFamilies(filteredFindings), [filteredFindings])
 
   const totals = useMemo(() => {
@@ -310,18 +328,18 @@ export default function RemediationHub() {
             )}
           </div>
           <div className="flex items-center gap-1 flex-wrap">
-            <Pill active={sevFilter === 'all'} onClick={() => setSevFilter('all')}>{t('pages.remediationHub.filter_all')}</Pill>
+            <Pill active={sevFilter === 'all'} onClick={() => setSevFilter('all')}>{t('pages.remediationHub.filter_all')} <span className="opacity-60 tabular-nums">{findings.length}</span></Pill>
             {['critical', 'high', 'medium', 'low'].map((k) => (
               <Pill key={k} active={sevFilter === k} color={SEV_META[k].color} onClick={() => setSevFilter((p) => (p === k ? 'all' : k))}>
-                {t(`pages.remediationHub.sev_${k}`)}
+                {t(`pages.remediationHub.sev_${k}`)} <span className="opacity-60 tabular-nums">{sevCounts[k] || 0}</span>
               </Pill>
             ))}
           </div>
           <div className="flex items-center gap-1 flex-wrap">
-            <Pill active={statusFilter === 'all'} onClick={() => setStatusFilter('all')}>{t('pages.remediationHub.filter_all')}</Pill>
+            <Pill active={statusFilter === 'all'} onClick={() => setStatusFilter('all')}>{t('pages.remediationHub.filter_all')} <span className="opacity-60 tabular-nums">{findings.length}</span></Pill>
             {['pending', 'running', 'completed'].map((k) => (
               <Pill key={k} active={statusFilter === k} onClick={() => setStatusFilter((p) => (p === k ? 'all' : k))}>
-                {t(`pages.remediationHub.status_${k}`)}
+                {t(`pages.remediationHub.status_${k}`)} <span className="opacity-60 tabular-nums">{statusCounts[k] || 0}</span>
               </Pill>
             ))}
           </div>

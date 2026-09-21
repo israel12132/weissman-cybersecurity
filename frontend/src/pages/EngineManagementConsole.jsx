@@ -390,6 +390,7 @@ export default function EngineManagementConsole() {
               <Button variant="unstyled"
                 key={status}
                 onClick={() => setStatusFilter(status)}
+                aria-pressed={statusFilter === status}
                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                   statusFilter === status
                     ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
@@ -401,6 +402,10 @@ export default function EngineManagementConsole() {
                   : status === 'enabled'
                     ? t('pages.engineManagementConsole.enabled')
                     : t('pages.engineManagementConsole.disabled')}
+                {' '}
+                <span className="opacity-70 tabular-nums">
+                  {status === 'all' ? engines.length : (stats[status] || 0)}
+                </span>
               </Button>
             ))}
           </div>

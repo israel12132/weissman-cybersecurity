@@ -382,13 +382,15 @@ export default function AgentManagement() {
               key={f}
               type="button"
               onClick={() => setStatusFilter(f)}
+              aria-pressed={statusFilter === f}
               className={`px-3 py-1.5 rounded-lg text-xs font-mono border transition-all ${
                 statusFilter === f
                   ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
                   : 'border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
               }`}
             >
-              {t(`agents.filter_${f}`)}
+              {t(`agents.filter_${f}`)}{' '}
+              <span className="opacity-70 tabular-nums">{f === 'all' ? metrics.total : (metrics[f] || 0)}</span>
             </Button>
           ))}
           <span className="text-[10px] font-mono text-[var(--text-muted)] ml-auto">
