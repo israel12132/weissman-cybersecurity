@@ -46,9 +46,9 @@ function Donut({ segments, total }) {
 
 function Kpi({ icon, label, value, color }) {
   return (
-    <div className="bg-black/30 border border-white/10 rounded-xl p-3">
+    <div className="bg-[var(--table-surface)] border border-[var(--border-default)] rounded-xl p-3">
       <div className="flex items-center justify-between mb-1.5">
-        <span className="text-[11px] text-white/45">{label}</span>
+        <span className="text-[11px] text-[var(--text-muted)]">{label}</span>
         {icon}
       </div>
       <div className="text-xl font-bold tabular-nums" style={color ? { color } : { color: '#fff' }}>{value}</div>
@@ -75,7 +75,7 @@ export default function RemediationAnalyticsPanel({ stats }) {
   const avgAttempts = total > 0 ? ((stats?.attemptsSum || 0) / total).toFixed(1) : '1.0'
 
   return (
-    <div className="p-4 rounded-xl border border-white/10 bg-black/40 space-y-5">
+    <div className="p-4 rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] space-y-5">
       {/* KPI row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Kpi icon={<CheckCircle className="w-4 h-4 text-green-400" />} label={t('pages.remediationHub.heal_fix_rate')} value={`${successPct}%`} color="#22c55e" />
@@ -92,8 +92,8 @@ export default function RemediationAnalyticsPanel({ stats }) {
             {segments.map((s) => (
               <div key={s.key} className="flex items-center gap-2 text-xs">
                 <span className="w-2.5 h-2.5 rounded-sm" style={{ background: s.color }} />
-                <span className="text-white/70">{t(`pages.remediationHub.${s.labelKey}`)}</span>
-                <span className="text-white/40 tabular-nums ml-auto">{s.value}</span>
+                <span className="text-[var(--text-tertiary)]">{t(`pages.remediationHub.${s.labelKey}`)}</span>
+                <span className="text-[var(--text-muted)] tabular-nums ml-auto">{s.value}</span>
               </div>
             ))}
           </div>
@@ -101,19 +101,19 @@ export default function RemediationAnalyticsPanel({ stats }) {
 
         {/* Channel bars */}
         <div className="space-y-2">
-          <div className="text-xs font-semibold text-white/70 flex items-center gap-1.5">
+          <div className="text-xs font-semibold text-[var(--text-tertiary)] flex items-center gap-1.5">
             <GitPullRequest className="w-3.5 h-3.5 text-cyan-400" /> {t('pages.remediationHub.channel_label')}
           </div>
           {channels.length === 0 ? (
-            <div className="text-xs text-white/30">—</div>
+            <div className="text-xs text-[var(--text-muted)]">—</div>
           ) : (
             channels.map((c) => (
               <div key={c.channel} className="flex items-center gap-2">
-                <span className="text-[10px] font-mono text-white/45 w-32 truncate">{c.channel}</span>
-                <div className="flex-1 h-2 rounded-full bg-white/5 overflow-hidden">
+                <span className="text-[10px] font-mono text-[var(--text-muted)] w-32 truncate">{c.channel}</span>
+                <div className="flex-1 h-2 rounded-full bg-[var(--bg-2)] overflow-hidden">
                   <div className="h-full rounded-full bg-cyan-400/70" style={{ width: `${(c.count / maxChan) * 100}%` }} />
                 </div>
-                <span className="text-[10px] tabular-nums text-white/50 w-8 text-right">{c.count}</span>
+                <span className="text-[10px] tabular-nums text-[var(--text-muted)] w-8 text-right">{c.count}</span>
               </div>
             ))
           )}

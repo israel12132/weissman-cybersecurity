@@ -35,9 +35,9 @@ export default function HealReadinessPanel() {
   const scoreColor = (s) => (s >= 90 ? '#22c55e' : s >= 55 ? '#eab308' : '#f43f5e')
 
   return (
-    <section className="rounded-2xl border border-white/10 bg-black/40 p-4 sm:p-5" dir={he ? 'rtl' : 'ltr'}>
+    <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] p-4 sm:p-5" dir={he ? 'rtl' : 'ltr'}>
       <div className="flex items-center justify-between gap-3 mb-3">
-        <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
           <ShieldCheck className="w-4 h-4 text-cyan-400" />
           {t('pages.healReadiness.title')}
         </h3>
@@ -46,7 +46,7 @@ export default function HealReadinessPanel() {
           type="button"
           onClick={load}
           disabled={loading}
-          className="inline-flex items-center gap-1.5 text-[11px] text-white/50 hover:text-white/80 disabled:opacity-40"
+          className="inline-flex items-center gap-1.5 text-[11px] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           {t('pages.healReadiness.refresh')}
@@ -70,7 +70,7 @@ export default function HealReadinessPanel() {
               }}
             >
               <div className="grid place-items-center rounded-full bg-[#0b1120]" style={{ width: 60, height: 60 }}>
-                <span className="text-lg font-bold tabular-nums text-white">{report.score}</span>
+                <span className="text-lg font-bold tabular-nums text-[var(--text-primary)]">{report.score}</span>
               </div>
             </div>
             <div className="min-w-0">
@@ -84,27 +84,27 @@ export default function HealReadinessPanel() {
                     : t('pages.healReadiness.not_ready')}
                 </span>
               </div>
-              <p className="text-xs text-white/50 mt-1">{pick(report.summary_en, report.summary_he)}</p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">{pick(report.summary_en, report.summary_he)}</p>
             </div>
           </div>
 
           <ul className="space-y-1.5">
             {(report.checks || []).map((c) => (
-              <li key={c.key} className="rounded-lg border border-white/[0.07] bg-white/[0.02] px-3 py-2">
+              <li key={c.key} className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] px-3 py-2">
                 <div className="flex items-start gap-2">
                   {c.ok
                     ? <CheckCircle className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
                     : <XCircle className={`w-4 h-4 mt-0.5 shrink-0 ${c.required ? 'text-rose-400' : 'text-amber-400'}`} />}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-medium text-white/85">{pick(c.label_en, c.label_he)}</span>
+                      <span className="text-xs font-medium text-[var(--text-secondary)]">{pick(c.label_en, c.label_he)}</span>
                       {c.required && (
                         <span className="text-[9px] uppercase tracking-wide text-rose-300/70 border border-rose-400/30 rounded px-1">
                           {t('pages.healReadiness.required')}
                         </span>
                       )}
                     </div>
-                    <p className="text-[11px] text-white/40 mt-0.5">{pick(c.detail_en, c.detail_he)}</p>
+                    <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{pick(c.detail_en, c.detail_he)}</p>
                     {!c.ok && (c.fix_en || c.fix_he) && (
                       <p className="text-[11px] text-cyan-300/80 mt-1 font-mono break-words">
                         → {pick(c.fix_en, c.fix_he)}

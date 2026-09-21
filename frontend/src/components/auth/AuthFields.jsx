@@ -11,10 +11,10 @@ import { ChevronDown } from 'lucide-react'
 
 /** Border, background, and focus treatment shared by every auth control. */
 export const authControlClass = (focused) =>
-  `peer w-full rounded-xl border bg-white/[0.03] px-4 pb-3 pt-7 text-sm text-white outline-none transition-all duration-200 placeholder:text-white/25 disabled:cursor-not-allowed disabled:opacity-50 ${
+  `peer w-full rounded-xl border bg-[var(--bg-2)] px-4 pb-3 pt-7 text-sm text-[var(--text-primary)] outline-none transition-all duration-200 placeholder:text-[var(--text-disabled)] disabled:cursor-not-allowed disabled:opacity-50 ${
     focused
       ? 'border-cyan-400/50 shadow-[0_0_0_3px_rgba(34,211,238,0.12),0_0_24px_rgba(34,211,238,0.08)]'
-      : 'border-white/10 hover:border-white/20'
+      : 'border-[var(--border-default)] hover:border-[var(--border-strong)]'
   }`
 
 /** The label itself: small caps above a filled control, placeholder-sized over an empty one. */
@@ -22,7 +22,7 @@ export const authLabelClass = (floated) =>
   `pointer-events-none absolute start-4 z-10 origin-start transition-all duration-200 ${
     floated
       ? 'top-2.5 text-[10px] font-medium uppercase tracking-[0.14em] text-cyan-400/80'
-      : 'top-1/2 -translate-y-1/2 text-sm text-white/45'
+      : 'top-1/2 -translate-y-1/2 text-sm text-[var(--text-muted)]'
   }`
 
 export const FloatingInput = React.forwardRef(function FloatingInput(
@@ -132,7 +132,7 @@ export const FloatingSelect = React.forwardRef(function FloatingSelect(
       {endAdornment ?? (
         <ChevronDown
           className={`pointer-events-none absolute end-4 top-1/2 h-4 w-4 -translate-y-1/2 transition-colors ${
-            focused ? 'text-cyan-300' : 'text-white/40'
+            focused ? 'text-cyan-300' : 'text-[var(--text-muted)]'
           }`}
           aria-hidden
         />

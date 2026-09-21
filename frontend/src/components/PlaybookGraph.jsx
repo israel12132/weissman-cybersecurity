@@ -66,7 +66,7 @@ export default function PlaybookGraph({ trigger, actions = [], onSelectAction, o
   }, [trigger, actions])
 
   return (
-    <div className="rounded-lg border border-white/10 bg-[#060a12]">
+    <div className="rounded-lg border border-[var(--border-default)] bg-[#060a12]">
       <div style={{ height: 340 }}>
         <ReactFlow
           nodes={nodes}
@@ -85,7 +85,7 @@ export default function PlaybookGraph({ trigger, actions = [], onSelectAction, o
         </ReactFlow>
       </div>
       {onDryRun && (
-        <div className="p-2 border-t border-white/10 flex justify-end">
+        <div className="p-2 border-t border-[var(--border-default)] flex justify-end">
           <Button
             variant="unstyled"
             type="button"

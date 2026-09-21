@@ -79,7 +79,7 @@ export default function TenantSlugField({
           disabled={disabled}
           describedBy={hintId}
         />
-        <div id={hintId} className="mt-2 flex items-center gap-2 px-1 text-[11px] text-white/40">
+        <div id={hintId} className="mt-2 flex items-center gap-2 px-1 text-[11px] text-[var(--text-muted)]">
           <span className="flex-1">{hint}</span>
           {listAvailable ? (
             <Button
@@ -160,7 +160,7 @@ export default function TenantSlugField({
           </>
         )}
       </FloatingSelect>
-      <p id={hintId} className="mt-2 px-1 text-[11px] text-white/35">
+      <p id={hintId} className="mt-2 px-1 text-[11px] text-[var(--text-muted)]">
         {loading ? t('auth.tenant_loading') : t('auth.tenant_select_hint')}
       </p>
     </div>

@@ -118,7 +118,7 @@ export default function CICDThreatMatrix() {
             value={runRepoUrl}
             onChange={(e) => setRunRepoUrl(e.target.value)}
             placeholder={t(`${NS}.repo_placeholder`)}
-            className="rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-white placeholder-[var(--text-muted)] w-80"
+            className="rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] w-80"
           />
           <Button variant="unstyled"
             onClick={runScan}
@@ -181,7 +181,7 @@ export default function CICDThreatMatrix() {
         {modalFinding && !findingsError && (
           // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- modal backdrop click-to-dismiss; contains interactive children
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--table-surface)] p-4"
             onClick={() => setModalFinding(null)}
           >
             {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- stopPropagation guard on the dialog panel; Escape + close button provide the keyboard path */}

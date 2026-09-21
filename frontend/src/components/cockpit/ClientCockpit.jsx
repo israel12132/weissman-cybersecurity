@@ -211,17 +211,17 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
   if (!selectedClientId) {
     if (ceoIntegrated) {
       return (
-        <main className="flex-1 flex flex-col min-h-0 min-w-0 w-full bg-black/15 backdrop-blur-sm relative isolate overflow-hidden border-s border-white/[0.04]">
+        <main className="flex-1 flex flex-col min-h-0 min-w-0 w-full bg-[var(--table-surface)] backdrop-blur-sm relative isolate overflow-hidden border-s border-[var(--border-subtle)]">
           <WarRoomSoundscape />
-          <header className="shrink-0 bg-[#080c14]/70 backdrop-blur-md border-b border-white/[0.06] px-4 sm:px-6 py-3 z-10">
-            <h1 className="text-sm font-semibold text-white tracking-tight">{t('components.cockpit.ceo_secured_title')}</h1>
-            <p className="text-[9px] text-white/35 font-mono uppercase tracking-[0.2em] mt-1">
+          <header className="shrink-0 bg-[#080c14]/70 backdrop-blur-md border-b border-[var(--border-subtle)] px-4 sm:px-6 py-3 z-10">
+            <h1 className="text-sm font-semibold text-[var(--text-primary)] tracking-tight">{t('components.cockpit.ceo_secured_title')}</h1>
+            <p className="text-[9px] text-[var(--text-muted)] font-mono uppercase tracking-[0.2em] mt-1">
               {t('components.cockpit.ceo_secured_hint')}
             </p>
           </header>
           <div className="flex-1 min-h-0 overflow-auto z-10">
             <CockpitTabErrorBoundary tabId="mission-control" tabLabel={t('components.cockpit.tabs.mission_control')}>
-              <Suspense fallback={<div className="p-6 text-white/60 text-sm">{t('components.cockpitWidgets.clientCockpit.loading_mission')}</div>}>
+              <Suspense fallback={<div className="p-6 text-[var(--text-tertiary)] text-sm">{t('components.cockpitWidgets.clientCockpit.loading_mission')}</div>}>
                 <CeoMissionControlTab />
               </Suspense>
             </CockpitTabErrorBoundary>
@@ -250,7 +250,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
 
   return (
     <main
-      className="flex-1 flex flex-col min-h-0 min-w-0 w-full max-w-full bg-black/15 backdrop-blur-sm relative isolate overflow-hidden border-s border-white/[0.04]"
+      className="flex-1 flex flex-col min-h-0 min-w-0 w-full max-w-full bg-[var(--table-surface)] backdrop-blur-sm relative isolate overflow-hidden border-s border-[var(--border-subtle)]"
       style={{ mixBlendMode: 'normal' }}
     >
       <WarRoomSoundscape />
@@ -281,10 +281,10 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
       )}
       <TacticalFindingOverlay />
       {/* Header: glass */}
-      <header className="shrink-0 bg-[#080c14]/70 backdrop-blur-md border-b border-white/[0.06] relative z-10 max-w-full">
+      <header className="shrink-0 bg-[#080c14]/70 backdrop-blur-md border-b border-[var(--border-subtle)] relative z-10 max-w-full">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-4 sm:px-6 py-3.5 max-w-full">
           <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-3 sm:gap-6 min-w-0">
-            <h1 className="text-base sm:text-lg font-semibold text-white tracking-tight truncate min-w-0 max-w-full">
+            <h1 className="text-base sm:text-lg font-semibold text-[var(--text-primary)] tracking-tight truncate min-w-0 max-w-full">
               {selectedClient?.name || t('components.cockpit.client_fallback', { id: selectedClientId })}
             </h1>
             <span
@@ -313,7 +313,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
                   ? 'border-red-500/40 bg-red-950/40 text-red-300'
                   : safeMode
                   ? 'border-emerald-500/70 bg-emerald-950/80 text-emerald-300'
-                  : 'border-white/25 bg-white/5 text-white/60 hover:text-white/90'
+                  : 'border-[var(--border-strong)] bg-[var(--bg-2)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)]'
               } disabled:opacity-50`}
             >
               {!safeModeKnown
@@ -329,7 +329,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
               type="button"
               onClick={downloadBoardReport}
               disabled={boardReportLoading}
-              className="px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-semibold text-[10px] sm:text-xs uppercase tracking-wider border border-white/20 bg-white/5 text-white/85 hover:bg-white/10 hover:border-white/30 disabled:opacity-50"
+              className="px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-semibold text-[10px] sm:text-xs uppercase tracking-wider border border-[var(--border-strong)] bg-[var(--bg-2)] text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] hover:border-[var(--border-strong)] disabled:opacity-50"
             >
               {boardReportLoading ? t('components.cockpit.board_report_loading') : t('components.cockpit.board_report')}
             </Button>
@@ -354,7 +354,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
         </div>
 
         {/* Tab nav */}
-        <nav className="flex gap-0 px-3 sm:px-6 border-t border-white/[0.06] overflow-x-auto max-w-full [-webkit-overflow-scrolling:touch]">
+        <nav className="flex gap-0 px-3 sm:px-6 border-t border-[var(--border-subtle)] overflow-x-auto max-w-full [-webkit-overflow-scrolling:touch]">
           {tabs.map((tab) => (
             <Button variant="unstyled"
               id={`cockpit-tab-${tab.id}`}
@@ -363,8 +363,8 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
               onClick={() => setActiveTab(tab.id)}
               className={`px-3 sm:px-4 py-2 sm:py-2.5 text-[10px] sm:text-[11px] font-medium border-b-2 transition-all uppercase tracking-[0.15em] whitespace-nowrap shrink-0 ${
                 activeTab === tab.id
-                  ? 'border-cyan-400 text-white shadow-[0_4px_12px_rgba(34,211,238,0.08)]'
-                  : 'border-transparent text-white/45 hover:text-white/75'
+                  ? 'border-cyan-400 text-[var(--text-primary)] shadow-[0_4px_12px_rgba(34,211,238,0.08)]'
+                  : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
               }`}
             >
               {tab.label}
@@ -374,9 +374,9 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
       </header>
 
       {/* War Room: Satellite Map + Neural Web */}
-      <div className="shrink-0 grid grid-cols-1 lg:grid-cols-12 gap-2.5 px-3 sm:px-4 py-2.5 border-b border-white/[0.06] relative z-10 w-full max-w-full min-w-0">
+      <div className="shrink-0 grid grid-cols-1 lg:grid-cols-12 gap-2.5 px-3 sm:px-4 py-2.5 border-b border-[var(--border-subtle)] relative z-10 w-full max-w-full min-w-0">
         <motion.div
-          className="lg:col-span-4 h-36 sm:h-40 lg:h-52 rounded-xl overflow-hidden border border-white/10 bg-[var(--bg-0)]/90 w-full max-w-full min-w-0"
+          className="lg:col-span-4 h-36 sm:h-40 lg:h-52 rounded-xl overflow-hidden border border-[var(--border-default)] bg-[var(--bg-0)]/90 w-full max-w-full min-w-0"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.3 }}
@@ -393,7 +393,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
         </motion.div>
         <motion.div
           ref={neuralWrapRef}
-          className="lg:col-span-8 h-36 sm:h-40 lg:h-52 rounded-xl overflow-hidden border border-white/10 bg-[var(--bg-0)]/80 flex items-center justify-center w-full max-w-full min-w-0"
+          className="lg:col-span-8 h-36 sm:h-40 lg:h-52 rounded-xl overflow-hidden border border-[var(--border-default)] bg-[var(--bg-0)]/80 flex items-center justify-center w-full max-w-full min-w-0"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.3, delay: 0.05 }}
@@ -413,14 +413,14 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
       {/* Content */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden relative z-10 min-w-0 max-w-full">
         <CockpitTabErrorBoundary key={activeTab} tabId={activeTab} tabLabel={activeTabMeta?.label}>
-          <Suspense fallback={<div className="p-6 text-white/60 text-sm">Loading cockpit tab...</div>}>
+          <Suspense fallback={<div className="p-6 text-[var(--text-tertiary)] text-sm">Loading cockpit tab...</div>}>
             <ActiveComponent />
           </Suspense>
         </CockpitTabErrorBoundary>
       </div>
 
       {/* System Pulse EKG */}
-      <div className="shrink-0 px-4 py-2.5 border-t border-white/[0.06] relative z-10">
+      <div className="shrink-0 px-4 py-2.5 border-t border-[var(--border-subtle)] relative z-10">
         <CockpitTabErrorBoundary tabId="warroom-ekg" tabLabel={t('components.cockpitWidgets.systemPulseEkg.title')}>
           <Suspense fallback={<div className="h-16 w-full bg-[var(--bg-0)]/70 rounded-lg" />}>
             <SystemPulseEKG />

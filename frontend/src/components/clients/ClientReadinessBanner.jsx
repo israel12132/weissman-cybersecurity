@@ -62,12 +62,12 @@ export default function ClientReadinessBanner({ clientId }) {
           <AlertTriangle className="w-5 h-5 text-amber-400" />
         )}
         <div>
-          <div className="text-sm font-medium text-white">
+          <div className="text-sm font-medium text-[var(--text-primary)]">
             {ready
               ? t('pages.clientOnboarding.ready_title')
               : t('pages.clientOnboarding.gaps_title', { pct: readiness.percent })}
           </div>
-          <div className="text-xs text-white/45">
+          <div className="text-xs text-[var(--text-muted)]">
             {readiness.satisfied}/{readiness.total} {t('pages.clientOnboarding.requirements_met')}
           </div>
         </div>

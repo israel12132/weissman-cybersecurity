@@ -68,7 +68,7 @@ export default function SwarmMindTab() {
 
   if (!selectedClientId) {
     return (
-      <div className="p-8 rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 text-center text-white/70">
+      <div className="p-8 rounded-2xl bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] text-center text-[var(--text-tertiary)]">
         {t(`${NS}.selectClient`)}
       </div>
     )
@@ -84,17 +84,17 @@ export default function SwarmMindTab() {
     <div className="space-y-6">
       <div className="flex items-center gap-2">
         <Network className="w-5 h-5 text-violet-400" />
-        <h2 className="text-lg font-semibold text-white">{t(`${NS}.title`)}</h2>
+        <h2 className="text-lg font-semibold text-[var(--text-primary)]">{t(`${NS}.title`)}</h2>
         <span
-          className={`ml-2 text-xs px-2 py-0.5 rounded-full ${wsConnected ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/10 text-white/50'}`}
+          className={`ml-2 text-xs px-2 py-0.5 rounded-full ${wsConnected ? 'bg-emerald-500/20 text-emerald-400' : 'bg-[var(--bg-2)] text-[var(--text-muted)]'}`}
         >
           <Radio className="w-3 h-3 inline mr-1" />
           {wsConnected ? t(`${NS}.stream`) : t(`${NS}.offline`)}
         </span>
       </div>
 
-      <div className="rounded-2xl bg-black/40 border border-violet-500/20 p-4">
-        <p className="text-xs text-white/60 mb-4">
+      <div className="rounded-2xl bg-[var(--table-surface)] border border-violet-500/20 p-4">
+        <p className="text-xs text-[var(--text-tertiary)] mb-4">
           <strong className="text-violet-300">{t(`${NS}.architectureLabel`)}</strong>{' '}
           {t(`${NS}.architectureBeforeMpsc`)}
           <code className="text-cyan-400">mpsc</code>
@@ -105,8 +105,8 @@ export default function SwarmMindTab() {
             {Object.entries(byAgent).map(([agent, n]) => (
               <div key={agent} className="flex items-center gap-2">
                 <Bot className="w-4 h-4" style={{ color: AGENT_COLORS[agent] || '#94a3b8' }} />
-                <span className="text-white/80">{agent}</span>
-                <span className="text-white/40">{n}</span>
+                <span className="text-[var(--text-secondary)]">{agent}</span>
+                <span className="text-[var(--text-muted)]">{n}</span>
               </div>
             ))}
           </div>
@@ -120,12 +120,12 @@ export default function SwarmMindTab() {
             {running ? t(`${NS}.queued`) : t(`${NS}.runSwarm`)}
           </Button>
         </div>
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-2 text-[10px] text-white/45 font-mono">
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-2 text-[10px] text-[var(--text-muted)] font-mono">
           <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-2 text-center">{t(`${NS}.flowRecon`)}</div>
           <div className="rounded-lg border border-fuchsia-500/20 bg-fuchsia-500/5 p-2 text-center">{t(`${NS}.flowExploit`)}</div>
           <div className="rounded-lg border border-violet-500/20 bg-violet-500/5 p-2 text-center">{t(`${NS}.flowBroadcast`)}</div>
         </div>
-        <p className="mt-3 text-[10px] text-white/40">
+        <p className="mt-3 text-[10px] text-[var(--text-muted)]">
           {t(`${NS}.globalIngestBeforeCron`)}
           <code className="text-cyan-500/80">WEISSMAN_THREAT_INGEST_CRON=1</code>
           {t(`${NS}.globalIngestAfterCron`)}
@@ -136,23 +136,23 @@ export default function SwarmMindTab() {
         </p>
       </div>
 
-      <div className="rounded-2xl bg-black/50 border border-white/10 overflow-hidden">
-        <div className="px-4 py-2 border-b border-white/10 text-sm text-white/80">{t(`${NS}.interAgentTraffic`)}</div>
+      <div className="rounded-2xl bg-[var(--table-surface)] border border-[var(--border-default)] overflow-hidden">
+        <div className="px-4 py-2 border-b border-[var(--border-default)] text-sm text-[var(--text-secondary)]">{t(`${NS}.interAgentTraffic`)}</div>
         <ul className="max-h-[420px] overflow-y-auto p-3 space-y-2 font-mono text-[11px]">
-          {events.length === 0 && <li className="text-white/40">{t(`${NS}.noEvents`)}</li>}
+          {events.length === 0 && <li className="text-[var(--text-muted)]">{t(`${NS}.noEvents`)}</li>}
           {events.map((e, i) => (
             <li
               key={`${e.ts}-${i}`}
-              className="rounded-lg border border-white/5 bg-black/40 px-3 py-2"
+              className="rounded-lg border border-[var(--border-subtle)] bg-[var(--table-surface)] px-3 py-2"
               style={{ borderLeftWidth: 3, borderLeftColor: AGENT_COLORS[e.agent] || '#64748b' }}
             >
-              <div className="flex flex-wrap gap-2 text-white/90">
+              <div className="flex flex-wrap gap-2 text-[var(--text-secondary)]">
                 <span style={{ color: AGENT_COLORS[e.agent] || '#94a3b8' }}>{e.agent}</span>
-                <span className="text-white/50">·</span>
+                <span className="text-[var(--text-muted)]">·</span>
                 <span>{e.event}</span>
               </div>
               {e.detail && (
-                <pre className="mt-1 text-white/55 whitespace-pre-wrap break-all max-h-24 overflow-y-auto">
+                <pre className="mt-1 text-[var(--text-tertiary)] whitespace-pre-wrap break-all max-h-24 overflow-y-auto">
                   {typeof e.detail === 'string' ? e.detail : JSON.stringify(e.detail, null, 0)}
                 </pre>
               )}

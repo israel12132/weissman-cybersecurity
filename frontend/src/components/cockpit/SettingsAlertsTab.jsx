@@ -10,14 +10,14 @@ function SettingsAlertsTabCrashUI({ error, onRetry }) {
   const { t } = useTranslation()
   const msg = error?.message || t(`${NS}.unexpectedError`)
   return (
-    <div className="p-6 text-white/90 max-w-xl mx-auto">
+    <div className="p-6 text-[var(--text-secondary)] max-w-xl mx-auto">
       <h2 className="text-lg font-semibold text-red-400 mb-2">{t(`${NS}.crashTitle`)}</h2>
-      <p className="text-sm text-white/60 mb-4">{t(`${NS}.crashBody`)}</p>
-      <p className="text-xs font-mono text-white/50 break-words mb-4">{msg}</p>
+      <p className="text-sm text-[var(--text-tertiary)] mb-4">{t(`${NS}.crashBody`)}</p>
+      <p className="text-xs font-mono text-[var(--text-muted)] break-words mb-4">{msg}</p>
       <Button variant="unstyled"
         type="button"
         onClick={onRetry}
-        className="px-4 py-2 rounded-xl text-sm border border-white/20 text-white/80 hover:bg-white/10"
+        className="px-4 py-2 rounded-xl text-sm border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)]"
       >
         {t(`${NS}.tryAgain`)}
       </Button>
@@ -124,23 +124,23 @@ function SettingsAlertsTabInner() {
   }
 
   return (
-    <div className="p-6 text-white/90 max-w-xl mx-auto">
-      <h2 className="text-lg font-semibold mb-1 tracking-tight text-white">{t(`${NS}.title`)}</h2>
-      <p className="text-xs text-white/50 mb-6 uppercase tracking-widest">
+    <div className="p-6 text-[var(--text-secondary)] max-w-xl mx-auto">
+      <h2 className="text-lg font-semibold mb-1 tracking-tight text-[var(--text-primary)]">{t(`${NS}.title`)}</h2>
+      <p className="text-xs text-[var(--text-muted)] mb-6 uppercase tracking-widest">
         {t(`${NS}.subtitle`)}
       </p>
-      {loading && <p className="text-sm text-white/40">{t(`${NS}.loading`)}</p>}
+      {loading && <p className="text-sm text-[var(--text-muted)]">{t(`${NS}.loading`)}</p>}
       {!loading && settingsUnavailable && (
         <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400" role="alert" data-testid="settings-alerts-unavailable">
           {t(`${NS}.settings_unavailable`)}
         </div>
       )}
       {!loading && (
-        <div className="space-y-6 rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md p-6">
+        <div className="space-y-6 rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] backdrop-blur-md p-6">
           {!settingsUnavailable && (
             <>
           <label className="block">
-            <span className="text-xs uppercase tracking-widest text-white/50 block mb-2">
+            <span className="text-xs uppercase tracking-widest text-[var(--text-muted)] block mb-2">
               {t(`${NS}.webhookLabel`)}
             </span>
             <input
@@ -148,9 +148,9 @@ function SettingsAlertsTabInner() {
               value={webhookUrl}
               onChange={(e) => setWebhookUrl(e.target.value)}
               placeholder={t(`${NS}.webhookPlaceholder`)}
-              className="w-full rounded-lg bg-black/50 border border-white/15 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-[#22d3ee]/50 focus:outline-none"
+              className="w-full rounded-lg bg-[var(--table-surface)] border border-[var(--border-strong)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[#22d3ee]/50 focus:outline-none"
             />
-            <span className="text-[10px] text-white/40 mt-1 block">
+            <span className="text-[10px] text-[var(--text-muted)] mt-1 block">
               {t(`${NS}.webhookHint`)}
             </span>
           </label>
@@ -159,9 +159,9 @@ function SettingsAlertsTabInner() {
               type="checkbox"
               checked={safeMode}
               onChange={(e) => setSafeMode(e.target.checked)}
-              className="rounded border-white/20 bg-black/50 w-4 h-4 accent-[#22d3ee]"
+              className="rounded border-[var(--border-strong)] bg-[var(--table-surface)] w-4 h-4 accent-[#22d3ee]"
             />
-            <span className="text-sm text-white/80">{t(`${NS}.safeModeLabel`)}</span>
+            <span className="text-sm text-[var(--text-secondary)]">{t(`${NS}.safeModeLabel`)}</span>
           </label>
             </>
           )}
@@ -176,9 +176,9 @@ function SettingsAlertsTabInner() {
               onChange={(e) => setDestructiveToken(e.target.value)}
               onBlur={() => saveDestructiveConfirmToken(destructiveToken)}
               placeholder={t(`${NS}.destructivePlaceholder`)}
-              className="w-full rounded-lg bg-black/50 border border-amber-500/25 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-amber-400/50 focus:outline-none"
+              className="w-full rounded-lg bg-[var(--table-surface)] border border-amber-500/25 px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-amber-400/50 focus:outline-none"
             />
-            <span className="text-[10px] text-white/40 mt-1 block">
+            <span className="text-[10px] text-[var(--text-muted)] mt-1 block">
               {t(`${NS}.destructiveHintBefore`)}
               <code className="text-amber-200/70">X-Weissman-Destructive-Confirm</code>
               {t(`${NS}.destructiveHintAfter`)}
@@ -202,7 +202,7 @@ function SettingsAlertsTabInner() {
               id="settings-backup-btn"
               type="button"
               onClick={runBackup}
-              className="px-4 py-2 rounded-xl text-sm font-medium border border-white/20 bg-white/5 text-white/80 hover:bg-white/10"
+              className="px-4 py-2 rounded-xl text-sm font-medium border border-[var(--border-strong)] bg-[var(--bg-2)] text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)]"
             >
               {t(`${NS}.backupDatabase`)}
             </Button>
@@ -217,7 +217,7 @@ function SettingsAlertsTabInner() {
               {backupMsg.text}
             </p>
           )}
-          <div className="text-[10px] text-white/35 space-y-1 border-t border-white/10 pt-4">
+          <div className="text-[10px] text-[var(--text-muted)] space-y-1 border-t border-[var(--border-default)] pt-4">
             <p>{t(`${NS}.smtpHint`)}</p>
           </div>
         </div>

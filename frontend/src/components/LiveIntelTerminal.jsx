@@ -53,7 +53,7 @@ export default function LiveIntelTerminal({ events, highlightedEventId, connecti
     return (
       <div
         style={style}
-        className={`terminal-line px-3 py-0.5 hover:bg-white/5 flex items-center gap-1.5 font-mono text-xs shrink-0 ${isHighlight ? 'terminal-line-highlight' : ''}`}
+        className={`terminal-line px-3 py-0.5 hover:bg-[var(--row-hover-bg)] flex items-center gap-1.5 font-mono text-xs shrink-0 ${isHighlight ? 'terminal-line-highlight' : ''}`}
       >
         <span className="text-[var(--text-muted)] tabular-nums shrink-0">[{item.time}]</span>
         <span className="text-[var(--text-muted)] shrink-0">|</span>
@@ -77,7 +77,7 @@ export default function LiveIntelTerminal({ events, highlightedEventId, connecti
       </div>
       <div ref={containerRef} className="terminal-log flex-1 min-h-0 overflow-hidden">
         {parsed.length === 0 ? (
-          <div className="text-cyan-400/90 px-3 py-4 font-mono text-xs border border-cyan-500/20 rounded bg-black/20">
+          <div className="text-cyan-400/90 px-3 py-4 font-mono text-xs border border-cyan-500/20 rounded bg-[var(--table-surface)]">
             {idleMessage}
             <div className="text-[var(--text-muted)] mt-1 text-[10px]">{t(`${NS}.idleMonitoring`)}</div>
           </div>

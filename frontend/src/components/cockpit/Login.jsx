@@ -54,7 +54,7 @@ function StepIndicator({ step, t }) {
                       ? 'bg-cyan-400/15 text-cyan-300 ring-1 ring-cyan-400/40'
                       : done
                         ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/30'
-                        : 'bg-white/5 text-white/35 ring-1 ring-white/10'
+                        : 'bg-[var(--bg-2)] text-[var(--text-muted)] ring-1 ring-[var(--border-default)]'
                   }`}
                   aria-current={active ? 'step' : undefined}
                 >
@@ -62,7 +62,7 @@ function StepIndicator({ step, t }) {
                 </span>
                 <span
                   className={`hidden sm:block truncate text-xs tracking-wide ${
-                    active ? 'text-white/90' : 'text-white/40'
+                    active ? 'text-[var(--text-secondary)]' : 'text-[var(--text-muted)]'
                   }`}
                 >
                   {s.label}
@@ -71,7 +71,7 @@ function StepIndicator({ step, t }) {
               {i < steps.length - 1 && (
                 <div
                   className={`mx-1 h-px flex-1 transition-colors ${
-                    done ? 'bg-cyan-400/30' : 'bg-white/10'
+                    done ? 'bg-cyan-400/30' : 'bg-[var(--bg-2)]'
                   }`}
                   aria-hidden
                 />
@@ -122,10 +122,10 @@ function BrandPanel({ t }) {
         <p className="mb-4 font-mono text-[11px] tracking-[0.16em] text-cyan-400/80">
           {t('auth.brand_release', { name: PLATFORM_RELEASE_NAME, release: PLATFORM_RELEASE })}
         </p>
-        <h1 className="max-w-md font-holo text-3xl font-semibold leading-tight tracking-tight text-white xl:text-4xl">
+        <h1 className="max-w-md font-holo text-3xl font-semibold leading-tight tracking-tight text-[var(--text-primary)] xl:text-4xl">
           {t('auth.brand_tagline')}
         </h1>
-        <p className="mt-5 max-w-lg text-base leading-relaxed text-white/55">
+        <p className="mt-5 max-w-lg text-base leading-relaxed text-[var(--text-tertiary)]">
           {t('auth.brand_story', { engines: PRODUCTION_ENGINE_COUNT })}
         </p>
 
@@ -133,7 +133,7 @@ function BrandPanel({ t }) {
           {trustItems.map(({ icon: Icon, label }) => (
             <li
               key={label}
-              className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-medium tracking-wide text-white/70 backdrop-blur-sm"
+              className="inline-flex items-center gap-2 rounded-full border border-[var(--border-default)] bg-[var(--bg-2)] px-4 py-2 text-xs font-medium tracking-wide text-[var(--text-tertiary)] backdrop-blur-sm"
             >
               <Icon className="h-3.5 w-3.5 text-cyan-400/80" aria-hidden />
               {label}
@@ -142,7 +142,7 @@ function BrandPanel({ t }) {
         </ul>
       </div>
 
-      <p className="relative z-10 px-12 xl:px-16 pb-10 text-[11px] tracking-wide text-white/30">
+      <p className="relative z-10 px-12 xl:px-16 pb-10 text-[11px] tracking-wide text-[var(--text-muted)]">
         {t('auth.secure_connection')}
       </p>
     </aside>
@@ -239,13 +239,13 @@ export default function Login() {
   const step = mfaToken ? 'mfa' : 'credentials'
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#030712] text-white">
+    <div className="relative min-h-screen overflow-hidden bg-[#030712] text-[var(--text-primary)]">
       <CyberLiveBackdrop />
 
       <div className="relative z-10 flex min-h-screen flex-col lg:flex-row">
         <BrandPanel t={t} />
 
-        <main className="relative flex flex-1 flex-col bg-[#030712]/80 backdrop-blur-md lg:border-s lg:border-white/[0.07] lg:bg-[#030712]/65 lg:shadow-[-24px_0_60px_-30px_rgba(34,211,238,0.25)]">
+        <main className="relative flex flex-1 flex-col bg-[#030712]/80 backdrop-blur-md lg:border-s lg:border-[var(--border-default)] lg:bg-[#030712]/65 lg:shadow-[-24px_0_60px_-30px_rgba(34,211,238,0.25)]">
           <header className="relative z-10 flex items-center justify-between px-6 pt-6 lg:justify-end lg:px-10 lg:pt-8">
             <div className="lg:hidden">
               <Logo compact size={36} glow />
@@ -264,7 +264,7 @@ export default function Login() {
                 ].map((label) => (
                   <li
                     key={label}
-                    className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[10px] tracking-wide text-white/50"
+                    className="rounded-full border border-[var(--border-default)] bg-[var(--bg-2)] px-3 py-1 text-[10px] tracking-wide text-[var(--text-muted)]"
                   >
                     {label}
                   </li>
@@ -272,10 +272,10 @@ export default function Login() {
               </ul>
 
               <div className="mb-8 lg:mb-10">
-                <h2 className="font-holo text-2xl font-semibold tracking-tight text-white sm:text-[1.65rem]">
+                <h2 className="font-holo text-2xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-[1.65rem]">
                   {mfaToken ? t('auth.mfa_required') : t('auth.welcome_back')}
                 </h2>
-                <p className="mt-2 text-sm text-white/45">
+                <p className="mt-2 text-sm text-[var(--text-muted)]">
                   {mfaToken ? t('auth.mfa_enter_code') : t('auth.sign_in_subtitle')}
                 </p>
               </div>
@@ -351,7 +351,7 @@ export default function Login() {
                         setMfaCode('')
                         setError('')
                       }}
-                      className="w-full py-2 text-xs text-white/40 transition-colors hover:text-white/70"
+                      className="w-full py-2 text-xs text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]"
                     >
                       {t('auth.mfa_back_to_password')}
                     </Button>
@@ -391,7 +391,7 @@ export default function Login() {
                         <Button variant="unstyled"
                           type="button"
                           onClick={() => setShowPassword((v) => !v)}
-                          className="absolute end-3 top-1/2 z-10 -translate-y-1/2 rounded-lg p-1.5 text-white/40 transition-colors hover:bg-white/5 hover:text-white/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50"
+                          className="absolute end-3 top-1/2 z-10 -translate-y-1/2 rounded-lg p-1.5 text-[var(--text-muted)] transition-colors hover:bg-[var(--row-hover-bg)] hover:text-[var(--text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50"
                           aria-label={showPassword ? t('auth.hide_password') : t('auth.show_password')}
                           aria-pressed={showPassword}
                           tabIndex={-1}
@@ -426,23 +426,23 @@ export default function Login() {
               {!mfaToken && (
                 <div className="mt-10 space-y-3">
                   <div className="relative flex items-center gap-3">
-                    <div className="h-px flex-1 bg-white/10" aria-hidden />
-                    <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-white/35">
+                    <div className="h-px flex-1 bg-[var(--bg-2)]" aria-hidden />
+                    <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-[var(--text-muted)]">
                       {t('auth.enterprise_sso')}
                     </span>
-                    <div className="h-px flex-1 bg-white/10" aria-hidden />
+                    <div className="h-px flex-1 bg-[var(--bg-2)]" aria-hidden />
                   </div>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <Button variant="unstyled"
                       type="button"
-                      className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white/60 transition-all hover:border-cyan-400/30 hover:bg-cyan-400/[0.04] hover:text-cyan-200/90"
+                      className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] px-4 py-3 text-sm text-[var(--text-tertiary)] transition-all hover:border-cyan-400/30 hover:bg-cyan-400/[0.04] hover:text-cyan-200/90"
                       onClick={() => beginSso('/api/auth/oidc/begin')}
                     >
                       {t('auth.sso_oidc')}
                     </Button>
                     <Button variant="unstyled"
                       type="button"
-                      className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white/60 transition-all hover:border-cyan-400/30 hover:bg-cyan-400/[0.04] hover:text-cyan-200/90"
+                      className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] px-4 py-3 text-sm text-[var(--text-tertiary)] transition-all hover:border-cyan-400/30 hover:bg-cyan-400/[0.04] hover:text-cyan-200/90"
                       onClick={() => beginSso('/api/auth/saml/begin')}
                     >
                       {t('auth.sso_saml')}
@@ -451,8 +451,8 @@ export default function Login() {
                 </div>
               )}
 
-              <footer className="mt-10 border-t border-white/10 pt-8 text-center space-y-3">
-                <p className="text-sm text-white/45">
+              <footer className="mt-10 border-t border-[var(--border-default)] pt-8 text-center space-y-3">
+                <p className="text-sm text-[var(--text-muted)]">
                   {t('auth.new_here')}{' '}
                   <a
                     href="/signup.html"
@@ -461,20 +461,20 @@ export default function Login() {
                     {t('auth.create_workspace')}
                   </a>
                 </p>
-                <p className="text-[11px] text-white/30">
-                  <a href="/terms.html" className="transition-colors hover:text-white/55">
+                <p className="text-[11px] text-[var(--text-muted)]">
+                  <a href="/terms.html" className="transition-colors hover:text-[var(--text-primary)]">
                     {t('auth.terms')}
                   </a>
                   {' · '}
-                  <a href="/privacy.html" className="transition-colors hover:text-white/55">
+                  <a href="/privacy.html" className="transition-colors hover:text-[var(--text-primary)]">
                     {t('auth.privacy')}
                   </a>
                   {' · '}
-                  <Link to="/status" className="transition-colors hover:text-white/55">
+                  <Link to="/status" className="transition-colors hover:text-[var(--text-primary)]">
                     {t('auth.status_link')}
                   </Link>
                   {' · '}
-                  <a href={apiUrl('/api/docs/')} className="transition-colors hover:text-white/55">
+                  <a href={apiUrl('/api/docs/')} className="transition-colors hover:text-[var(--text-primary)]">
                     {t('auth.api_docs')}
                   </a>
                 </p>

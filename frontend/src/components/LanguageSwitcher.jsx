@@ -13,7 +13,7 @@ export default function LanguageSwitcher({ className = '' }) {
 
   return (
     <div
-      className={`inline-flex items-center gap-1 rounded-lg border border-white/10 bg-black/30 p-1 ${className}`}
+      className={`inline-flex items-center gap-1 rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] p-1 ${className}`}
       role="group"
       aria-label={t('common.language')}
     >
@@ -30,7 +30,7 @@ export default function LanguageSwitcher({ className = '' }) {
             className={`px-2 py-1 rounded-md text-[11px] font-mono transition-colors ${
               active
                 ? 'bg-cyan-500/20 text-cyan-200 border border-cyan-500/40'
-                : 'text-white/55 hover:text-white/85 border border-transparent'
+                : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)] border border-transparent'
             }`}
             aria-pressed={active}
             title={lang.label}

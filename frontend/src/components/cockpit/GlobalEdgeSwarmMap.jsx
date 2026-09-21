@@ -61,8 +61,8 @@ export default function GlobalEdgeSwarmMap() {
         <div className="flex items-center gap-2">
           <Radio className="w-5 h-5 text-violet-400" />
           <div>
-            <h2 className="text-lg font-semibold text-white tracking-wide">{t(`${NS}.title`)}</h2>
-            <p className="text-xs text-white/50 max-w-xl">
+            <h2 className="text-lg font-semibold text-[var(--text-primary)] tracking-wide">{t(`${NS}.title`)}</h2>
+            <p className="text-xs text-[var(--text-muted)] max-w-xl">
               {t(`${NS}.description`)}{' '}
               <code className="text-violet-300/90">{t(`${NS}.heartbeatEndpoint`)}</code> {t(`${NS}.descriptionSuffix`)}
             </p>
@@ -80,7 +80,7 @@ export default function GlobalEdgeSwarmMap() {
       </div>
 
       {manifest && !error && (
-        <div className="text-[11px] font-mono text-white/40 border border-white/10 rounded-lg px-3 py-2 bg-black/30">
+        <div className="text-[11px] font-mono text-[var(--text-muted)] border border-[var(--border-default)] rounded-lg px-3 py-2 bg-[var(--table-surface)]">
           {t(`${NS}.manifest`, {
             crate: manifest.crate ?? 'fuzz_core',
             target: manifest.rust_target ?? 'wasm32-unknown-unknown',
@@ -99,7 +99,7 @@ export default function GlobalEdgeSwarmMap() {
         </div>
       )}
 
-      <div className="flex-1 rounded-2xl border border-white/10 bg-[var(--bg-0)]/90 overflow-hidden min-h-[320px]">
+      <div className="flex-1 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-0)]/90 overflow-hidden min-h-[320px]">
         <GeoWorldMap
           projection="geoEqualEarth"
           projectionScale={140}
@@ -127,7 +127,7 @@ export default function GlobalEdgeSwarmMap() {
       </div>
 
       {nodes.length === 0 && !loading && !error && (
-        <p className="text-sm text-white/45">
+        <p className="text-sm text-[var(--text-muted)]">
           {t(`${NS}.noNodes`)}{' '}
           <code className="text-cyan-300/90">region_code</code>, <code className="text-cyan-300/90">pop_label</code>, {t(`${NS}.noNodesSuffix`)}{' '}
           <code className="text-cyan-300/90">wasm_revision</code>.
@@ -135,12 +135,12 @@ export default function GlobalEdgeSwarmMap() {
       )}
 
       {!error && nodes.length > 0 && (
-        <ul className="grid gap-2 sm:grid-cols-2 text-xs text-white/70">
+        <ul className="grid gap-2 sm:grid-cols-2 text-xs text-[var(--text-tertiary)]">
           {nodes.map((n) => (
-            <li key={n.id} className="border border-white/10 rounded-lg px-3 py-2 bg-black/30 font-mono">
+            <li key={n.id} className="border border-[var(--border-default)] rounded-lg px-3 py-2 bg-[var(--table-surface)] font-mono">
               <span className="text-violet-300">{n.region_code}</span> · {n.pop_label}{' '}
-              <span className="text-white/40">{t(`${NS}.jobs`, { count: n.active_jobs ?? 0 })}</span>{' '}
-              {n.provider && <span className="text-white/35">· {n.provider}</span>}
+              <span className="text-[var(--text-muted)]">{t(`${NS}.jobs`, { count: n.active_jobs ?? 0 })}</span>{' '}
+              {n.provider && <span className="text-[var(--text-muted)]">· {n.provider}</span>}
             </li>
           ))}
         </ul>

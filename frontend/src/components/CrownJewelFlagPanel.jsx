@@ -91,7 +91,7 @@ export default function CrownJewelFlagPanel({
     >
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
             <Crown className="w-4 h-4 text-violet-300" aria-hidden />
             {t(`${NS}.flags_heading`)}
           </h2>
@@ -140,7 +140,7 @@ export default function CrownJewelFlagPanel({
               className="flex items-center justify-between gap-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--table-surface)] px-3 py-2"
             >
               <div className="min-w-0">
-                <div className="text-[12px] text-white truncate">
+                <div className="text-[12px] text-[var(--text-primary)] truncate">
                   {n.name || n.label || n.graph_key || `#${n.id}`}
                 </div>
                 <div className="text-[10px] font-mono text-[var(--text-muted)]">

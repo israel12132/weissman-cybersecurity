@@ -75,7 +75,7 @@ export default function BatchHealPanel({ findings, onClose }) {
           <Wrench className="w-3.5 h-3.5" />
           {t('pages.remediationHub.batch_heal_title', { n: healable.length })}
         </span>
-        <Button variant="unstyled" type="button" onClick={onClose} aria-label={t('common.close')} className="text-white/40 hover:text-white/70"><X className="w-3.5 h-3.5" /></Button>
+        <Button variant="unstyled" type="button" onClick={onClose} aria-label={t('common.close')} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X className="w-3.5 h-3.5" /></Button>
       </div>
 
       {result ? (
@@ -87,21 +87,21 @@ export default function BatchHealPanel({ findings, onClose }) {
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <input value={repoSlug} onChange={(e) => setRepoSlug(e.target.value)} placeholder="owner/repo"
-              className="bg-black/40 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/85 placeholder-white/25 font-mono focus:outline-none focus:border-cyan-500/40" />
+              className="bg-[var(--table-surface)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-secondary)] placeholder-[var(--text-muted)] font-mono focus:outline-none focus:border-cyan-500/40" />
             <input type="password" value={gitToken} onChange={(e) => setGitToken(e.target.value)} placeholder="git token"
-              className="bg-black/40 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/85 placeholder-white/25 font-mono focus:outline-none focus:border-cyan-500/40" />
+              className="bg-[var(--table-surface)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-secondary)] placeholder-[var(--text-muted)] font-mono focus:outline-none focus:border-cyan-500/40" />
             <select value={channel} onChange={(e) => setChannel(e.target.value)}
-              className="bg-black/40 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/85 font-mono focus:outline-none focus:border-cyan-500/40">
+              className="bg-[var(--table-surface)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40">
               {CHANNELS.map((c) => <option key={c} value={c}>{t(`pages.remediationHub.channel_${c === 'github_direct_commit' ? 'github_commit' : c}`)}</option>)}
             </select>
           </div>
-          <details className="text-[11px] text-white/45">
-            <summary className="cursor-pointer text-white/55">{t('pages.remediationHub.dual_auth_required')}</summary>
+          <details className="text-[11px] text-[var(--text-muted)]">
+            <summary className="cursor-pointer text-[var(--text-tertiary)]">{t('pages.remediationHub.dual_auth_required')}</summary>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
               <input type="password" value={destructiveConfirm} onChange={(e) => setDestructiveConfirm(e.target.value)} placeholder="X-Weissman-Destructive-Confirm"
-                className="bg-black/40 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/85 font-mono focus:outline-none focus:border-cyan-500/40" />
+                className="bg-[var(--table-surface)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40" />
               <input type="password" value={dualApprove} onChange={(e) => setDualApprove(e.target.value)} placeholder="X-Weissman-Dual-Approve"
-                className="bg-black/40 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/85 font-mono focus:outline-none focus:border-cyan-500/40" />
+                className="bg-[var(--table-surface)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40" />
             </div>
           </details>
           {error && (

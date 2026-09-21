@@ -17,7 +17,7 @@ const SEV_COLOR = {
 function Bar({ value, max, color }) {
   const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0
   return (
-    <div className="relative w-full h-1.5 rounded-full bg-white/5 overflow-hidden mt-1">
+    <div className="relative w-full h-1.5 rounded-full bg-[var(--bg-2)] overflow-hidden mt-1">
       <div
         className="absolute inset-y-0 left-0 rounded-full transition-all duration-500"
         style={{ width: `${pct}%`, background: color, boxShadow: `0 0 6px ${color}80` }}
@@ -29,16 +29,16 @@ function Bar({ value, max, color }) {
 function Card({ title, count, children, footer, accent = '#22d3ee' }) {
   return (
     <section
-      className="flex flex-col rounded-2xl border border-white/10 bg-black/35 backdrop-blur-md min-w-0"
+      className="flex flex-col rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] backdrop-blur-md min-w-0"
       aria-label={title}
     >
-      <header className="flex items-center justify-between gap-2 px-3 py-2 border-b border-white/[0.06]">
+      <header className="flex items-center justify-between gap-2 px-3 py-2 border-b border-[var(--border-subtle)]">
         <div className="min-w-0">
-          <h3 className="text-[11px] font-mono uppercase tracking-[0.18em] text-white/75 truncate">
+          <h3 className="text-[11px] font-mono uppercase tracking-[0.18em] text-[var(--text-tertiary)] truncate">
             {title}
           </h3>
           {footer && (
-            <p className="text-[10px] font-mono text-white/35 mt-0.5 truncate">{footer}</p>
+            <p className="text-[10px] font-mono text-[var(--text-muted)] mt-0.5 truncate">{footer}</p>
           )}
         </div>
         <span
@@ -57,7 +57,7 @@ function Card({ title, count, children, footer, accent = '#22d3ee' }) {
 
 function EmptyRow({ label }) {
   return (
-    <p className="text-center text-[11px] font-mono text-white/30 py-4">
+    <p className="text-center text-[11px] font-mono text-[var(--text-muted)] py-4">
       {label}
     </p>
   )
@@ -106,7 +106,7 @@ export default function TopMoversPanel({ className = '' }) {
     return (
       <div className={`grid grid-cols-1 md:grid-cols-3 gap-3 ${className}`}>
         {[0, 1, 2].map((i) => (
-          <div key={i} className="h-72 rounded-2xl bg-white/[0.025] border border-white/10 animate-pulse" />
+          <div key={i} className="h-72 rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] animate-pulse" />
         ))}
       </div>
     )
@@ -147,17 +147,17 @@ export default function TopMoversPanel({ className = '' }) {
             <Link
               key={e.id}
               to={`/findings?engine=${encodeURIComponent(e.id)}`}
-              className="block px-2 py-1.5 rounded hover:bg-white/[0.04]"
+              className="block px-2 py-1.5 rounded hover:bg-[var(--row-hover-bg)]"
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[12px] text-white/80 font-mono truncate">{e.id}</span>
+                <span className="text-[12px] text-[var(--text-secondary)] font-mono truncate">{e.id}</span>
                 <span className="flex items-baseline gap-1.5 text-[11px] font-mono shrink-0">
                   {e.critical > 0 && (
                     <span className="text-rose-400" title={t(`${NS}.criticalCount`, { count: e.critical })}>
                       ●{e.critical}
                     </span>
                   )}
-                  <span className="text-white/75 tabular-nums">{e.hits}</span>
+                  <span className="text-[var(--text-tertiary)] tabular-nums">{e.hits}</span>
                 </span>
               </div>
               <Bar value={e.hits} max={engineMax} color="#22d3ee" />
@@ -174,17 +174,17 @@ export default function TopMoversPanel({ className = '' }) {
             <Link
               key={c.id}
               to={`/clients/${c.id}`}
-              className="block px-2 py-1.5 rounded hover:bg-white/[0.04]"
+              className="block px-2 py-1.5 rounded hover:bg-[var(--row-hover-bg)]"
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[12px] text-white/80 truncate font-medium">{c.name}</span>
+                <span className="text-[12px] text-[var(--text-secondary)] truncate font-medium">{c.name}</span>
                 <span className="flex items-baseline gap-1.5 text-[11px] font-mono shrink-0">
                   {c.open_critical > 0 && (
                     <span className="text-rose-400" title={t(`${NS}.criticalOpen`, { count: c.open_critical })}>
                       ●{c.open_critical}
                     </span>
                   )}
-                  <span className="text-white/65 tabular-nums">{c.total_open}</span>
+                  <span className="text-[var(--text-tertiary)] tabular-nums">{c.total_open}</span>
                 </span>
               </div>
               <Bar
@@ -210,11 +210,11 @@ export default function TopMoversPanel({ className = '' }) {
                 href={`https://nvd.nist.gov/vuln/detail/${encodeURIComponent(c.cve)}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block px-2 py-1.5 rounded hover:bg-white/[0.04]"
+                className="block px-2 py-1.5 rounded hover:bg-[var(--row-hover-bg)]"
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[12px] text-cyan-300 font-mono truncate">{c.cve}</span>
-                  <span className="text-[11px] font-mono tabular-nums text-white/70 shrink-0">
+                  <span className="text-[11px] font-mono tabular-nums text-[var(--text-tertiary)] shrink-0">
                     {c.hits}
                   </span>
                 </div>

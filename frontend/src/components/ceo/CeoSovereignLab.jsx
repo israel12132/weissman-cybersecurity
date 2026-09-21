@@ -97,7 +97,7 @@ export default function CeoSovereignLab() {
 
   return (
     <div className="rounded-lg border border-violet-500/25 bg-violet-950/10 overflow-hidden">
-      <div className="px-4 py-3 border-b border-white/10 flex justify-between items-center flex-wrap gap-2">
+      <div className="px-4 py-3 border-b border-[var(--border-default)] flex justify-between items-center flex-wrap gap-2">
         <div>
           <h2 className="text-sm font-semibold text-violet-100 uppercase tracking-widest">
             {t('components.ceo.sovereignLab.title')}
@@ -115,7 +115,7 @@ export default function CeoSovereignLab() {
         </Button>
       </div>
       {toast && (
-        <div className="px-4 py-2 text-[11px] font-mono text-[var(--text-secondary)] border-b border-white/10 bg-black/30">
+        <div className="px-4 py-2 text-[11px] font-mono text-[var(--text-secondary)] border-b border-[var(--border-default)] bg-[var(--table-surface)]">
           {toast}
         </div>
       )}

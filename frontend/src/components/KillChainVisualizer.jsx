@@ -28,7 +28,7 @@ export default function KillChainVisualizer() {
                   ? 'border-cyber-cyan bg-cyber-cyan/10 text-cyber-cyan shadow-[0_0_12px_rgba(0,243,255,0.3)]'
                   : isPast
                     ? 'border-cyber-cyan/40 bg-cyber-cyan/5 text-cyber-cyan/80'
-                    : 'border-white/10 bg-white/5 text-[var(--text-muted)]'
+                    : 'border-[var(--border-default)] bg-[var(--bg-2)] text-[var(--text-muted)]'
               }`}
             >
               <span className="tabular-nums text-[var(--text-muted)] mr-2">0{i + 1}</span>

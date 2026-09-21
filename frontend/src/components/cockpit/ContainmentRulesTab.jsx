@@ -102,7 +102,7 @@ export default function ContainmentRulesTab() {
 
   if (!selectedClientId) {
     return (
-      <div className="p-8 rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 text-center text-white/70">
+      <div className="p-8 rounded-2xl bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] text-center text-[var(--text-tertiary)]">
         {t(`${NS}.selectClient`)}
       </div>
     )
@@ -112,7 +112,7 @@ export default function ContainmentRulesTab() {
     <div className="space-y-6">
       <div className="flex items-center gap-2">
         <ShieldOff className="w-5 h-5 text-orange-400" />
-        <h2 className="text-lg font-semibold text-white">{t(`${NS}.title`)}</h2>
+        <h2 className="text-lg font-semibold text-[var(--text-primary)]">{t(`${NS}.title`)}</h2>
       </div>
 
       <div className="rounded-xl border border-orange-500/40 bg-orange-500/10 px-4 py-3 flex gap-2 text-orange-200 text-sm">
@@ -122,34 +122,34 @@ export default function ContainmentRulesTab() {
         </div>
       </div>
 
-      <div className="rounded-2xl bg-black/40 border border-white/10 p-4 space-y-3">
-        <h3 className="text-sm font-medium text-white/90">{t(`${NS}.newRule`)}</h3>
+      <div className="rounded-2xl bg-[var(--table-surface)] border border-[var(--border-default)] p-4 space-y-3">
+        <h3 className="text-sm font-medium text-[var(--text-secondary)]">{t(`${NS}.newRule`)}</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           <input
             placeholder={t(`${NS}.ruleName`)}
             value={form.name}
             onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-            className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white text-sm"
+            className="px-3 py-2 rounded-lg bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-primary)] text-sm"
           />
           <input
             placeholder={t(`${NS}.awsRegion`)}
             value={form.aws_region}
             onChange={e => setForm(f => ({ ...f, aws_region: e.target.value }))}
-            className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white text-sm"
+            className="px-3 py-2 rounded-lg bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-primary)] text-sm"
           />
           <input
             placeholder={t(`${NS}.forensicSourceCidr`)}
             value={form.forensic_source_cidr}
             onChange={e => setForm(f => ({ ...f, forensic_source_cidr: e.target.value }))}
-            className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white text-sm"
+            className="px-3 py-2 rounded-lg bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-primary)] text-sm"
           />
           <input
             placeholder={t(`${NS}.forensicPortsCsv`)}
             value={form.forensic_ports_csv}
             onChange={e => setForm(f => ({ ...f, forensic_ports_csv: e.target.value }))}
-            className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white text-sm"
+            className="px-3 py-2 rounded-lg bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-primary)] text-sm"
           />
-          <label className="flex items-center gap-2 text-sm text-white/80">
+          <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
             <input
               type="checkbox"
               checked={form.enabled}
@@ -157,7 +157,7 @@ export default function ContainmentRulesTab() {
             />
             {t(`${NS}.enabled`)}
           </label>
-          <label className="flex items-center gap-2 text-sm text-white/80">
+          <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
             <input
               type="checkbox"
               checked={form.pre_approved}
@@ -165,7 +165,7 @@ export default function ContainmentRulesTab() {
             />
             {t(`${NS}.preApproved`)}
           </label>
-          <label className="flex items-center gap-2 text-sm text-white/80 md:col-span-2">
+          <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] md:col-span-2">
             <input
               type="checkbox"
               checked={form.allow_dns_egress}
@@ -173,7 +173,7 @@ export default function ContainmentRulesTab() {
             />
             {t(`${NS}.allowDnsEgress`)}
           </label>
-          <div className="md:col-span-2 flex items-center gap-2 text-white/50 text-xs">
+          <div className="md:col-span-2 flex items-center gap-2 text-[var(--text-muted)] text-xs">
             <Container className="w-4 h-4" />
             {t(`${NS}.kubernetesOptional`)}
           </div>
@@ -181,31 +181,31 @@ export default function ContainmentRulesTab() {
             placeholder={t(`${NS}.k8sApiServer`)}
             value={form.k8s_api_server}
             onChange={e => setForm(f => ({ ...f, k8s_api_server: e.target.value }))}
-            className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white text-sm md:col-span-2"
+            className="px-3 py-2 rounded-lg bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-primary)] text-sm md:col-span-2"
           />
           <input
             placeholder={t(`${NS}.k8sTokenEnvVar`)}
             value={form.k8s_token_env_var}
             onChange={e => setForm(f => ({ ...f, k8s_token_env_var: e.target.value }))}
-            className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white text-sm md:col-span-2"
+            className="px-3 py-2 rounded-lg bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-primary)] text-sm md:col-span-2"
           />
           <input
             placeholder={t(`${NS}.namespace`)}
             value={form.k8s_namespace}
             onChange={e => setForm(f => ({ ...f, k8s_namespace: e.target.value }))}
-            className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white text-sm"
+            className="px-3 py-2 rounded-lg bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-primary)] text-sm"
           />
           <input
             placeholder={t(`${NS}.podLabelKey`)}
             value={form.k8s_pod_label_key}
             onChange={e => setForm(f => ({ ...f, k8s_pod_label_key: e.target.value }))}
-            className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white text-sm"
+            className="px-3 py-2 rounded-lg bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-primary)] text-sm"
           />
           <input
             placeholder={t(`${NS}.podLabelValue`)}
             value={form.k8s_pod_label_value}
             onChange={e => setForm(f => ({ ...f, k8s_pod_label_value: e.target.value }))}
-            className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white text-sm md:col-span-2"
+            className="px-3 py-2 rounded-lg bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-primary)] text-sm md:col-span-2"
           />
         </div>
         <Button variant="unstyled"
@@ -218,13 +218,13 @@ export default function ContainmentRulesTab() {
         </Button>
       </div>
 
-      <div className="rounded-2xl bg-black/40 border border-white/10 p-4">
-        <h3 className="text-sm font-medium text-white/90 mb-2">{t(`${NS}.executeTitle`)}</h3>
+      <div className="rounded-2xl bg-[var(--table-surface)] border border-[var(--border-default)] p-4">
+        <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-2">{t(`${NS}.executeTitle`)}</h3>
         <div className="flex flex-wrap gap-2 items-end">
           <select
             value={exec.rule_id}
             onChange={e => setExec(x => ({ ...x, rule_id: e.target.value }))}
-            className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white text-sm"
+            className="px-3 py-2 rounded-lg bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-primary)] text-sm"
           >
             <option value="">{t(`${NS}.rulePlaceholder`)}</option>
             {(!loadError ? rules : []).map(r => (
@@ -236,7 +236,7 @@ export default function ContainmentRulesTab() {
           <select
             value={exec.mode}
             onChange={e => setExec(x => ({ ...x, mode: e.target.value }))}
-            className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white text-sm"
+            className="px-3 py-2 rounded-lg bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-primary)] text-sm"
           >
             <option value="aws_sg">aws_sg</option>
             <option value="k8s_netpol">k8s_netpol</option>
@@ -245,7 +245,7 @@ export default function ContainmentRulesTab() {
             placeholder={t(`${NS}.awsInstanceId`)}
             value={exec.aws_instance_id}
             onChange={e => setExec(x => ({ ...x, aws_instance_id: e.target.value }))}
-            className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white text-sm font-mono"
+            className="px-3 py-2 rounded-lg bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-primary)] text-sm font-mono"
           />
           <Button variant="unstyled"
             type="button"
@@ -260,15 +260,15 @@ export default function ContainmentRulesTab() {
 
       {msg && <p className={`text-sm ${msg.ok ? 'text-emerald-400' : 'text-red-400'}`}>{msg.text}</p>}
 
-      <div className="rounded-2xl bg-black/40 border border-white/10 overflow-hidden">
-        <div className="px-4 py-2 border-b border-white/10 flex justify-between items-center">
-          <span className="text-sm text-white/80">{t(`${NS}.savedRules`)}</span>
+      <div className="rounded-2xl bg-[var(--table-surface)] border border-[var(--border-default)] overflow-hidden">
+        <div className="px-4 py-2 border-b border-[var(--border-default)] flex justify-between items-center">
+          <span className="text-sm text-[var(--text-secondary)]">{t(`${NS}.savedRules`)}</span>
           <Button variant="unstyled" type="button" onClick={fetchRules} className="text-xs text-cyan-400 hover:underline">
             {t(`${NS}.refresh`)}
           </Button>
         </div>
         {loading ? (
-          <div className="p-6 text-white/50 text-sm">{t(`${NS}.loading`)}</div>
+          <div className="p-6 text-[var(--text-muted)] text-sm">{t(`${NS}.loading`)}</div>
         ) : loadError ? (
           <div
             className="p-6 text-amber-200/90 text-sm"
@@ -279,22 +279,22 @@ export default function ContainmentRulesTab() {
             {t(`${NS}.unavailable`)}
           </div>
         ) : rules.length === 0 ? (
-          <div className="p-6 text-white/50 text-sm">{t(`${NS}.noRules`)}</div>
+          <div className="p-6 text-[var(--text-muted)] text-sm">{t(`${NS}.noRules`)}</div>
         ) : (
-          <ul className="divide-y divide-white/10">
+          <ul className="divide-y divide-[var(--border-default)]">
             {rules.map(r => (
               <li key={r.id} className="p-4 text-sm">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <Server className="w-4 h-4 text-white/50" />
-                  <span className="text-white font-medium">#{r.id} {r.name}</span>
-                  <span className={r.enabled ? 'text-emerald-400' : 'text-white/40'}>
+                  <Server className="w-4 h-4 text-[var(--text-muted)]" />
+                  <span className="text-[var(--text-primary)] font-medium">#{r.id} {r.name}</span>
+                  <span className={r.enabled ? 'text-emerald-400' : 'text-[var(--text-muted)]'}>
                     {r.enabled ? t(`${NS}.on`) : t(`${NS}.off`)}
                   </span>
-                  <span className={r.pre_approved ? 'text-amber-400' : 'text-white/40'}>
+                  <span className={r.pre_approved ? 'text-amber-400' : 'text-[var(--text-muted)]'}>
                     {r.pre_approved ? t(`${NS}.preApprovedStatus`) : t(`${NS}.notApprovedStatus`)}
                   </span>
                 </div>
-                <div className="mt-1 text-xs text-white/50 font-mono">
+                <div className="mt-1 text-xs text-[var(--text-muted)] font-mono">
                   region={r.aws_region || '—'} cidr={r.forensic_source_cidr} ports={r.forensic_ports_csv}
                 </div>
               </li>

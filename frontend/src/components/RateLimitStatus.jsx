@@ -114,7 +114,7 @@ export default function RateLimitStatus({ compact = false }) {
         <span>{t(`${NS}.loading`)}</span>
       </div>
     ) : (
-      <div className="h-32 rounded-xl border border-white/10 bg-black/40 animate-pulse" />
+      <div className="h-32 rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] animate-pulse" />
     );
   }
 
@@ -139,7 +139,7 @@ export default function RateLimitStatus({ compact = false }) {
         <span>{t(`${NS}.loading`)}</span>
       </div>
     ) : (
-      <div className="h-32 rounded-xl border border-white/10 bg-black/40 animate-pulse" />
+      <div className="h-32 rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] animate-pulse" />
     );
   }
 
@@ -158,9 +158,9 @@ export default function RateLimitStatus({ compact = false }) {
   }
 
   return (
-    <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+    <div className="bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
           <Activity className="w-4 h-4 text-cyan-400" />
           {t(`${NS}.title`)}
         </h3>

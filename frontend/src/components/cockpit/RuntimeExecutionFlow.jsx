@@ -43,14 +43,14 @@ export default function RuntimeExecutionFlow({ clientId, findingId }) {
   if (!clientId) return null
 
   return (
-    <div className="rounded-xl border border-white/10 bg-black/40 backdrop-blur-sm overflow-hidden">
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10 bg-black/30">
+    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] backdrop-blur-sm overflow-hidden">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--border-default)] bg-[var(--table-surface)]">
         <Cpu className="w-4 h-4 text-[#22d3ee]" />
-        <span className="text-xs font-semibold text-white uppercase tracking-wider">{t(`${NS}.title`)}</span>
+        <span className="text-xs font-semibold text-[var(--text-primary)] uppercase tracking-wider">{t(`${NS}.title`)}</span>
       </div>
       <div className="p-3 max-h-48 overflow-y-auto">
         {loading ? (
-          <p className="text-xs text-white/50">{t(`${NS}.loading`)}</p>
+          <p className="text-xs text-[var(--text-muted)]">{t(`${NS}.loading`)}</p>
         ) : loadError ? (
           <p
             className="text-xs text-amber-200/90"
@@ -61,7 +61,7 @@ export default function RuntimeExecutionFlow({ clientId, findingId }) {
             {t(`${NS}.unavailable`)}
           </p>
         ) : traces.length === 0 ? (
-          <p className="text-xs text-white/50">
+          <p className="text-xs text-[var(--text-muted)]">
             {findingId
               ? t(`${NS}.noTracesFinding`)
               : t(`${NS}.noTracesClient`)}
@@ -76,12 +76,12 @@ export default function RuntimeExecutionFlow({ clientId, findingId }) {
                     <span className="text-[#22d3ee] flex items-center gap-1">
                       <FileCode className="w-3 h-3" />
                       {trace.source_file}
-                      {trace.line_number != null && <span className="text-white/70">:{trace.line_number}</span>}
+                      {trace.line_number != null && <span className="text-[var(--text-tertiary)]">:{trace.line_number}</span>}
                     </span>
                   )}
-                  {trace.function_name && <span className="text-white/80 block">{trace.function_name}</span>}
+                  {trace.function_name && <span className="text-[var(--text-secondary)] block">{trace.function_name}</span>}
                   {trace.payload_hash && (
-                    <span className="text-white/50 block truncate">
+                    <span className="text-[var(--text-muted)] block truncate">
                       {t(`${NS}.payloadHash`, { hash: trace.payload_hash })}
                     </span>
                   )}

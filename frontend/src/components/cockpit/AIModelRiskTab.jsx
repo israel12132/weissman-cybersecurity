@@ -38,7 +38,7 @@ export default function AIModelRiskTab() {
       columnHelper.accessor('endpoint_url', {
         header: t(`${NS}.colEndpoint`),
         cell: (info) => (
-          <span className="text-white/70 font-mono max-w-[200px] truncate block" title={info.getValue()}>
+          <span className="text-[var(--text-tertiary)] font-mono max-w-[200px] truncate block" title={info.getValue()}>
             {info.getValue()}
           </span>
         ),
@@ -165,8 +165,8 @@ export default function AIModelRiskTab() {
   if (!selectedClient) {
     return (
       <div className="p-8">
-        <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-8 text-center">
-          <p className="text-sm text-white/70">{t(`${NS}.selectClient`)}</p>
+        <div className="rounded-2xl bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] p-8 text-center">
+          <p className="text-sm text-[var(--text-tertiary)]">{t(`${NS}.selectClient`)}</p>
         </div>
       </div>
     )
@@ -175,8 +175,8 @@ export default function AIModelRiskTab() {
   return (
     <div className="p-6 md:p-8 space-y-8 max-w-6xl">
       <div className="rounded-2xl bg-gradient-to-br from-violet-950/40 to-black/60 border border-violet-500/30 p-6">
-        <h2 className="text-lg font-semibold text-white mb-1">{t(`${NS}.title`)}</h2>
-        <p className="text-sm text-white/60 mb-4">{t(`${NS}.descriptionSecure`)}</p>
+        <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-1">{t(`${NS}.title`)}</h2>
+        <p className="text-sm text-[var(--text-tertiary)] mb-4">{t(`${NS}.descriptionSecure`)}</p>
 
         <div className="space-y-3 mb-4">
           {endpointsUnavailable ? (
@@ -186,9 +186,9 @@ export default function AIModelRiskTab() {
           ) : (
             <>
               {endpoints.map((ep, i) => (
-            <div key={i} className="grid md:grid-cols-12 gap-2 p-3 rounded-xl border border-white/10 bg-black/40">
+            <div key={i} className="grid md:grid-cols-12 gap-2 p-3 rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)]">
               <input
-                className="md:col-span-5 px-3 py-2 rounded-lg bg-black/50 border border-white/10 text-sm text-white font-mono"
+                className="md:col-span-5 px-3 py-2 rounded-lg bg-[var(--table-surface)] border border-[var(--border-default)] text-sm text-[var(--text-primary)] font-mono"
                 placeholder="https://api.example.com/v1/chat/completions"
                 value={ep.url}
                 onChange={(e) => {
@@ -198,7 +198,7 @@ export default function AIModelRiskTab() {
                 }}
               />
               <input
-                className="md:col-span-3 px-3 py-2 rounded-lg bg-black/50 border border-white/10 text-sm text-white"
+                className="md:col-span-3 px-3 py-2 rounded-lg bg-[var(--table-surface)] border border-[var(--border-default)] text-sm text-[var(--text-primary)]"
                 placeholder="gpt-4o-mini"
                 value={ep.model}
                 onChange={(e) => {
@@ -210,7 +210,7 @@ export default function AIModelRiskTab() {
               <input
                 type="password"
                 autoComplete="off"
-                className="md:col-span-4 px-3 py-2 rounded-lg bg-black/50 border border-white/10 text-sm text-white font-mono"
+                className="md:col-span-4 px-3 py-2 rounded-lg bg-[var(--table-surface)] border border-[var(--border-default)] text-sm text-[var(--text-primary)] font-mono"
                 placeholder="Bearer sk-…"
                 value={ep.authorization}
                 onChange={(e) => {
@@ -256,9 +256,9 @@ export default function AIModelRiskTab() {
         )}
       </div>
 
-      <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-6">
+      <div className="rounded-2xl bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] p-6">
         <h3 className="text-xs font-mono uppercase tracking-wider text-violet-400 mb-4">{t(`${NS}.attackVectorsTitle`)}</h3>
-        {loading && <p className="text-white/50 text-sm">{t(`${NS}.loading`)}</p>}
+        {loading && <p className="text-[var(--text-muted)] text-sm">{t(`${NS}.loading`)}</p>}
         {!loading && loadError && (
           <p
             className="text-amber-200/90 text-sm"
@@ -270,7 +270,7 @@ export default function AIModelRiskTab() {
           </p>
         )}
         {!loading && !loadError && (!summary.vectors || summary.vectors.length === 0) && (
-          <p className="text-white/50 text-sm">{t(`${NS}.noTelemetry`)}</p>
+          <p className="text-[var(--text-muted)] text-sm">{t(`${NS}.noTelemetry`)}</p>
         )}
         <div className="space-y-4">
           {!loading && !loadError && (summary.vectors || []).map((v) => {
@@ -279,20 +279,20 @@ export default function AIModelRiskTab() {
             const hall = Math.min(100, (v.avg_hallucination_under_duress || 0) * 100)
             return (
               <div key={v.attack_vector} className="space-y-1">
-                <div className="flex justify-between text-xs text-white/80">
+                <div className="flex justify-between text-xs text-[var(--text-secondary)]">
                   <span>{label}</span>
-                  <span className="text-white/40">{t(`${NS}.samples`, { count: v.sample_count })}</span>
+                  <span className="text-[var(--text-muted)]">{t(`${NS}.samples`, { count: v.sample_count })}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <div className="text-[10px] text-red-400/90 mb-0.5">{t(`${NS}.leakageScore`)}</div>
-                    <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                    <div className="h-2 rounded-full bg-[var(--bg-2)] overflow-hidden">
                       <div className="h-full rounded-full bg-gradient-to-r from-red-600 to-orange-500 transition-all" style={{ width: `${leak}%` }} />
                     </div>
                   </div>
                   <div>
                     <div className="text-[10px] text-amber-400/90 mb-0.5">{t(`${NS}.hallucinationDuress`)}</div>
-                    <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                    <div className="h-2 rounded-full bg-[var(--bg-2)] overflow-hidden">
                       <div className="h-full rounded-full bg-gradient-to-r from-amber-600 to-yellow-400 transition-all" style={{ width: `${hall}%` }} />
                     </div>
                   </div>
@@ -303,8 +303,8 @@ export default function AIModelRiskTab() {
         </div>
       </div>
 
-      <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 overflow-hidden">
-        <div className="px-4 py-3 border-b border-white/10 bg-white/5">
+      <div className="rounded-2xl bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] overflow-hidden">
+        <div className="px-4 py-3 border-b border-[var(--border-default)] bg-[var(--bg-2)]">
           <h3 className="text-xs font-mono uppercase tracking-wider text-cyan-400">{t(`${NS}.recentEvents`)}</h3>
         </div>
         <DataTable
@@ -314,7 +314,7 @@ export default function AIModelRiskTab() {
           loading={loading}
           getRowId={(e) => e.id}
           animateRows={false}
-          emptyState={<span className="text-white/40">{loadError ? t(`${NS}.unavailable`) : t(`${NS}.noEvents`)}</span>}
+          emptyState={<span className="text-[var(--text-muted)]">{loadError ? t(`${NS}.unavailable`) : t(`${NS}.noEvents`)}</span>}
         />
       </div>
     </div>

@@ -89,13 +89,13 @@ export default function SystemPulseEKG() {
 
   return (
     <motion.div
-      className="rounded-xl bg-black/60 backdrop-blur border border-white/10 p-2 h-[72px]"
+      className="rounded-xl bg-[var(--table-surface)] backdrop-blur border border-[var(--border-default)] p-2 h-[72px]"
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
     >
       <div className="flex items-center justify-between mb-1 px-1">
-        <span className="text-[10px] font-mono text-white/50 uppercase tracking-wider">
+        <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wider">
           {t(`${NS}.title`)}
         </span>
         {probePending && targetUrl && (

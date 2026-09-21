@@ -23,7 +23,7 @@ function groupParams(schema) {
 
 export function EngineParamField({ def, value, onChange, disabled }) {
   const fieldId = useId()
-  const base = 'bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40 disabled:opacity-50'
+  const base = 'bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40 disabled:opacity-50'
   const label = (
     <label htmlFor={fieldId} className="block text-[11px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider mb-1">
       {def.label}

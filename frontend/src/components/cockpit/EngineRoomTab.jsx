@@ -28,7 +28,7 @@ function GroupSection({ groupDef, engines, enabledSet, configLoading, poeJobId, 
           >
             {groupDef.label}
           </h3>
-          <span className="text-[10px] font-mono text-white/40">
+          <span className="text-[10px] font-mono text-[var(--text-muted)]">
             {enabledCount}/{engines.length} enabled
           </span>
         </div>
@@ -37,7 +37,7 @@ function GroupSection({ groupDef, engines, enabledSet, configLoading, poeJobId, 
             type="button"
             onClick={() => onEnableAll(engines.map((e) => e.id))}
             disabled={configLoading}
-            className="px-2 py-0.5 rounded text-[10px] font-mono border border-white/10 text-white/50 hover:text-white/80 hover:border-white/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="px-2 py-0.5 rounded text-[10px] font-mono border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             Enable All
           </Button>
@@ -45,7 +45,7 @@ function GroupSection({ groupDef, engines, enabledSet, configLoading, poeJobId, 
             type="button"
             onClick={() => onDisableAll(engines.map((e) => e.id))}
             disabled={configLoading}
-            className="px-2 py-0.5 rounded text-[10px] font-mono border border-white/10 text-white/50 hover:text-white/80 hover:border-white/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="px-2 py-0.5 rounded text-[10px] font-mono border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             Disable All
           </Button>
@@ -147,8 +147,8 @@ export default function EngineRoomTab() {
   if (clientConfig == null || clientConfig === undefined) {
     return (
       <div className="p-8 flex items-center justify-center min-h-[280px]">
-        <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 px-8 py-10 text-center">
-          <p className="text-sm text-white/70">{t('components.cockpitWidgets.engineRoomTab.connecting')}</p>
+        <div className="rounded-2xl bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] px-8 py-10 text-center">
+          <p className="text-sm text-[var(--text-tertiary)]">{t('components.cockpitWidgets.engineRoomTab.connecting')}</p>
         </div>
       </div>
     )
@@ -157,8 +157,8 @@ export default function EngineRoomTab() {
   if (!selectedClient) {
     return (
       <div className="p-8">
-        <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-8 text-center">
-          <p className="text-sm text-white/70">{t('components.cockpitWidgets.engineRoomTab.select_client')}</p>
+        <div className="rounded-2xl bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] p-8 text-center">
+          <p className="text-sm text-[var(--text-tertiary)]">{t('components.cockpitWidgets.engineRoomTab.select_client')}</p>
         </div>
       </div>
     )
@@ -167,9 +167,9 @@ export default function EngineRoomTab() {
   if (configLoading || productionLoading) {
     return (
       <div className="p-8 flex items-center justify-center min-h-[280px]">
-        <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 px-8 py-10 text-center">
+        <div className="rounded-2xl bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] px-8 py-10 text-center">
           <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-[#22d3ee]/50 border-t-[#22d3ee] mb-4" />
-          <p className="text-sm text-white/70">{t('components.cockpitWidgets.engineRoomTab.loading')}</p>
+          <p className="text-sm text-[var(--text-tertiary)]">{t('components.cockpitWidgets.engineRoomTab.loading')}</p>
         </div>
       </div>
     )
@@ -213,17 +213,17 @@ export default function EngineRoomTab() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-xs font-semibold text-white/50 uppercase tracking-[0.2em]">
+          <h3 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-[0.2em]">
             {t('engines.title')} — {t('engines.live_engines', { count: totalEngines })}
             {catalogCount > totalEngines ? (
-              <span className="text-white/35 font-normal normal-case tracking-normal ms-2">
+              <span className="text-[var(--text-muted)] font-normal normal-case tracking-normal ms-2">
                 {t('engines.catalog_hidden', { count: catalogCount })}
               </span>
             ) : null}
           </h3>
-          <p className="text-[11px] text-white/40 mt-0.5">
+          <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
             {t('engines.enabled_count', { enabled: totalEnabled, disabled: totalEngines - totalEnabled })} ·{' '}
-            <span className="text-white/50">{t('engines.toggle_hint')}</span>
+            <span className="text-[var(--text-muted)]">{t('engines.toggle_hint')}</span>
           </p>
         </div>
       </div>
@@ -237,20 +237,20 @@ export default function EngineRoomTab() {
             placeholder={t('engines.search_placeholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm font-mono text-white/85 placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+            className="w-full bg-[var(--table-surface)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm font-mono text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
           />
           {search && (
             <Button variant="unstyled"
               type="button"
               onClick={() => setSearch('')}
               aria-label={t('common.close')}
-              className="absolute end-2 top-1/2 -translate-y-1/2 text-white/40 hover:text-[var(--text-primary)] text-xs"
+              className="absolute end-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)] text-xs"
             >
               ✕
             </Button>
           )}
         </div>
-        <label className="text-[11px] font-mono text-white/55 inline-flex items-center gap-2 select-none">
+        <label className="text-[11px] font-mono text-[var(--text-tertiary)] inline-flex items-center gap-2 select-none">
           <input
             type="checkbox"
             checked={onlyEnabled}
@@ -259,7 +259,7 @@ export default function EngineRoomTab() {
           />
           {t('engines.show_only_enabled')}
         </label>
-        <span className="text-[11px] font-mono text-white/35">
+        <span className="text-[11px] font-mono text-[var(--text-muted)]">
           {filteredRegistry.length === 1
             ? t('engines.matches', { count: filteredRegistry.length })
             : t('engines.matches_plural', { count: filteredRegistry.length })}
@@ -273,8 +273,8 @@ export default function EngineRoomTab() {
           onClick={() => setActiveGroup('all')}
           className={`px-3 py-1 rounded-lg text-[11px] font-mono transition-all ${
             activeGroup === 'all'
-              ? 'bg-white/15 text-white border border-white/30'
-              : 'text-white/50 border border-white/10 hover:border-white/20 hover:text-white/70'
+              ? 'bg-[var(--bg-2)] text-[var(--text-primary)] border border-[var(--border-strong)]'
+              : 'text-[var(--text-muted)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]'
           }`}
         >
           {t('engines.all_engines', { count: totalEngines })}
@@ -288,8 +288,8 @@ export default function EngineRoomTab() {
               onClick={() => setActiveGroup(g.id)}
               className={`px-3 py-1 rounded-lg text-[11px] font-mono transition-all ${
                 activeGroup === g.id
-                  ? 'text-white border'
-                  : 'text-white/50 border border-white/10 hover:border-white/20 hover:text-white/70'
+                  ? 'text-[var(--text-primary)] border'
+                  : 'text-[var(--text-muted)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]'
               }`}
               style={
                 activeGroup === g.id

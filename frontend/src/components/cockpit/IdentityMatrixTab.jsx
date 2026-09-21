@@ -161,20 +161,20 @@ export default function IdentityMatrixTab() {
     () => [
       columnHelper.accessor('role_name', {
         header: t(`${IM}.table.role`),
-        cell: (info) => <span className="font-medium text-white/90">{info.getValue()}</span>,
+        cell: (info) => <span className="font-medium text-[var(--text-secondary)]">{info.getValue()}</span>,
       }),
       columnHelper.accessor('privilege_order', {
         header: t(`${IM}.table.privilege_order`),
-        cell: (info) => <span className="text-white/70">{info.getValue()}</span>,
+        cell: (info) => <span className="text-[var(--text-tertiary)]">{info.getValue()}</span>,
       }),
       columnHelper.accessor('token_type', {
         header: t(`${IM}.table.token_type`),
-        cell: (info) => <span className="text-white/70">{info.getValue()}</span>,
+        cell: (info) => <span className="text-[var(--text-tertiary)]">{info.getValue()}</span>,
       }),
       columnHelper.accessor((c) => c.token_masked || '—', {
         id: 'token_masked',
         header: t(`${IM}.table.token`),
-        cell: (info) => <span className="font-mono text-[10px] text-white/50">{info.getValue()}</span>,
+        cell: (info) => <span className="font-mono text-[10px] text-[var(--text-muted)]">{info.getValue()}</span>,
       }),
       columnHelper.display({
         id: 'delete',
@@ -200,8 +200,8 @@ export default function IdentityMatrixTab() {
   if (!selectedClientId) {
     return (
       <div className="p-8 flex items-center justify-center min-h-[280px]">
-        <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 px-8 py-10 text-center">
-          <p className="text-sm text-white/70">{t('components.cockpitTabs.identityMatrix.select_client')}</p>
+        <div className="rounded-2xl bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] px-8 py-10 text-center">
+          <p className="text-sm text-[var(--text-tertiary)]">{t('components.cockpitTabs.identityMatrix.select_client')}</p>
         </div>
       </div>
     )
@@ -250,23 +250,23 @@ export default function IdentityMatrixTab() {
         </p>
       )}
       <div className="flex flex-wrap items-center gap-4">
-        <div className="flex items-center gap-2 text-white/90">
+        <div className="flex items-center gap-2 text-[var(--text-secondary)]">
           <ShieldAlert className="w-5 h-5 text-amber-500" />
           <h2 className="text-lg font-semibold tracking-wide">{t('components.cockpitTabs.identityMatrix.title')}</h2>
-          <span className="text-xs text-white/50">{t('components.cockpitTabs.identityMatrix.subtitle')}</span>
+          <span className="text-xs text-[var(--text-muted)]">{t('components.cockpitTabs.identityMatrix.subtitle')}</span>
         </div>
         <label className="flex items-center gap-2 ml-auto cursor-pointer">
-          <span className="text-sm text-white/70">{t('components.cockpitTabs.identityMatrix.auto_harvest')}</span>
+          <span className="text-sm text-[var(--text-tertiary)]">{t('components.cockpitTabs.identityMatrix.auto_harvest')}</span>
           <Button variant="unstyled"
             type="button"
             role="switch"
             aria-checked={autoHarvest}
             onClick={toggleAutoHarvest}
-            className={`relative w-11 h-6 rounded-full transition-colors ${autoHarvest ? 'bg-amber-500/60' : 'bg-white/20'}`}
+            className={`relative w-11 h-6 rounded-full transition-colors ${autoHarvest ? 'bg-amber-500/60' : 'bg-[var(--bg-2)]'}`}
           >
             <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${autoHarvest ? 'translate-x-5' : 'translate-x-0'}`} />
           </Button>
-          <span className="text-xs text-white/50">
+          <span className="text-xs text-[var(--text-muted)]">
             {autoHarvest ? t('components.cockpitTabs.identityMatrix.on') : t('components.cockpitTabs.identityMatrix.off')}
           </span>
         </label>
@@ -275,13 +275,13 @@ export default function IdentityMatrixTab() {
       {/* Add context form */}
       <motion.form
         onSubmit={handleAdd}
-        className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-6 space-y-4"
+        className="rounded-2xl bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] p-6 space-y-4"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
       >
         <div className="flex flex-wrap items-end gap-4">
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-white/50 mb-1">
+            <label className="block text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-1">
               {t('components.cockpitTabs.identityMatrix.form.role_name')}
             </label>
             <input
@@ -289,35 +289,35 @@ export default function IdentityMatrixTab() {
               value={form.role_name}
               onChange={(e) => setForm((f) => ({ ...f, role_name: e.target.value }))}
               placeholder={t('components.cockpitTabs.identityMatrix.form.role_placeholder')}
-              className="w-40 rounded-lg border border-white/20 bg-black/60 px-3 py-2 text-sm text-white placeholder-white/30 focus:border-[#22d3ee]/50 focus:outline-none"
+              className="w-40 rounded-lg border border-[var(--border-strong)] bg-[var(--table-surface)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[#22d3ee]/50 focus:outline-none"
             />
           </div>
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-white/50 mb-1">
+            <label className="block text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-1">
               {t('components.cockpitTabs.identityMatrix.form.privilege_order')}
             </label>
             <input
               type="number"
               value={form.privilege_order}
               onChange={(e) => setForm((f) => ({ ...f, privilege_order: parseInt(e.target.value, 10) || 0 }))}
-              className="w-24 rounded-lg border border-white/20 bg-black/60 px-3 py-2 text-sm text-white focus:border-[#22d3ee]/50 focus:outline-none"
+              className="w-24 rounded-lg border border-[var(--border-strong)] bg-[var(--table-surface)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[#22d3ee]/50 focus:outline-none"
             />
           </div>
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-white/50 mb-1">
+            <label className="block text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-1">
               {t('components.cockpitTabs.identityMatrix.form.token_type')}
             </label>
             <select
               value={form.token_type}
               onChange={(e) => setForm((f) => ({ ...f, token_type: e.target.value }))}
-              className="rounded-lg border border-white/20 bg-black/60 px-3 py-2 text-sm text-white focus:border-[#22d3ee]/50 focus:outline-none"
+              className="rounded-lg border border-[var(--border-strong)] bg-[var(--table-surface)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[#22d3ee]/50 focus:outline-none"
             >
               <option value="bearer">{t('components.cockpitTabs.identityMatrix.form.bearer')}</option>
               <option value="cookie">{t('components.cockpitTabs.identityMatrix.form.cookie')}</option>
             </select>
           </div>
           <div className="flex-1 min-w-[200px]">
-            <label className="block text-[10px] uppercase tracking-wider text-white/50 mb-1">
+            <label className="block text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-1">
               {t('components.cockpitTabs.identityMatrix.form.token_value')}
             </label>
             <input
@@ -329,7 +329,7 @@ export default function IdentityMatrixTab() {
                   ? t('components.cockpitTabs.identityMatrix.form.token_placeholder_cookie')
                   : t('components.cockpitTabs.identityMatrix.form.token_placeholder_bearer')
               }
-              className="w-full rounded-lg border border-white/20 bg-black/60 px-3 py-2 text-sm text-white placeholder-white/30 focus:border-[#22d3ee]/50 focus:outline-none"
+              className="w-full rounded-lg border border-[var(--border-strong)] bg-[var(--table-surface)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[#22d3ee]/50 focus:outline-none"
             />
           </div>
           <Button variant="unstyled"
@@ -343,9 +343,9 @@ export default function IdentityMatrixTab() {
       </motion.form>
 
       {/* Current contexts table */}
-      <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 overflow-hidden">
-        <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
-          <span className="text-xs uppercase tracking-wider text-white/50">
+      <div className="rounded-2xl bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] overflow-hidden">
+        <div className="px-4 py-3 border-b border-[var(--border-default)] flex items-center justify-between">
+          <span className="text-xs uppercase tracking-wider text-[var(--text-muted)]">
             {loadError
               ? t(`${IM}.unavailable`)
               : t('components.cockpitTabs.identityMatrix.session_contexts', { count: contexts.length })}
@@ -354,7 +354,7 @@ export default function IdentityMatrixTab() {
             <Button variant="unstyled"
               type="button"
               onClick={() => setPolling((p) => !p)}
-              className={`text-xs px-2 py-1 rounded ${polling ? 'bg-amber-500/20 text-amber-400' : 'text-white/50 hover:text-white/70'}`}
+              className={`text-xs px-2 py-1 rounded ${polling ? 'bg-amber-500/20 text-amber-400' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
             >
               {polling
                 ? t('components.cockpitTabs.identityMatrix.live_updates_on')
@@ -369,19 +369,19 @@ export default function IdentityMatrixTab() {
           data={contexts}
           getRowId={(c) => c.id}
           animateRows={false}
-          emptyState={<span className="text-white/50">{t(`${IM}.empty_contexts`)}</span>}
+          emptyState={<span className="text-[var(--text-muted)]">{t(`${IM}.empty_contexts`)}</span>}
         />
         )}
       </div>
 
       {/* Privilege Escalation Graph */}
-      <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 overflow-hidden">
-        <div className="px-4 py-3 border-b border-white/10 flex items-center gap-2">
+      <div className="rounded-2xl bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] overflow-hidden">
+        <div className="px-4 py-3 border-b border-[var(--border-default)] flex items-center gap-2">
           <Zap className="w-4 h-4 text-amber-500" />
-          <span className="text-sm font-medium text-white/90">
+          <span className="text-sm font-medium text-[var(--text-secondary)]">
             {t('components.cockpitTabs.identityMatrix.escalation.title')}
           </span>
-          <span className="text-xs text-white/50">
+          <span className="text-xs text-[var(--text-muted)]">
             {t('components.cockpitTabs.identityMatrix.escalation.subtitle')}
           </span>
         </div>
@@ -389,7 +389,7 @@ export default function IdentityMatrixTab() {
           {loadError ? (
             <p className="text-sm text-amber-200/90 py-6 text-center">{t(`${IM}.unavailable`)}</p>
           ) : events.length === 0 ? (
-            <p className="text-sm text-white/50 py-6 text-center">
+            <p className="text-sm text-[var(--text-muted)] py-6 text-center">
               {t('components.cockpitTabs.identityMatrix.escalation.empty')}
             </p>
           ) : (
@@ -401,14 +401,14 @@ export default function IdentityMatrixTab() {
                   animate={{ opacity: 1, x: 0 }}
                   className="flex items-center gap-3 rounded-lg border border-red-500/30 bg-red-950/20 px-4 py-3"
                 >
-                  <span className="font-medium text-white/90 min-w-[80px]">{ev.from_context}</span>
+                  <span className="font-medium text-[var(--text-secondary)] min-w-[80px]">{ev.from_context}</span>
                   <ArrowRight className="w-4 h-4 text-red-400/80 shrink-0" />
                   <span className="font-medium text-red-400 min-w-[80px]">{ev.to_context}</span>
-                  <span className="text-xs text-white/50 truncate flex-1" title={ev.url}>
+                  <span className="text-xs text-[var(--text-muted)] truncate flex-1" title={ev.url}>
                     {ev.method} {ev.url}
                   </span>
                   {ev.response_status != null && (
-                    <span className="text-xs font-mono text-white/60">{ev.response_status}</span>
+                    <span className="text-xs font-mono text-[var(--text-tertiary)]">{ev.response_status}</span>
                   )}
                 </motion.div>
               ))}

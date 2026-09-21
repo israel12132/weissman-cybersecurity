@@ -154,7 +154,7 @@ export default function OnboardingWizard({ open, onComplete }) {
               <p className="text-[9px] font-mono uppercase tracking-[0.28em] text-cyan-400/70 mb-1">
                 {t('components.onboarding.badge')}
               </p>
-              <h2 id="onboarding-wizard-title" className="text-lg font-semibold text-white tracking-tight">
+              <h2 id="onboarding-wizard-title" className="text-lg font-semibold text-[var(--text-primary)] tracking-tight">
                 {t('components.onboarding.title')}
               </h2>
               <p className="text-[13px] text-[var(--text-muted)] mt-1 leading-relaxed">
@@ -219,7 +219,7 @@ export default function OnboardingWizard({ open, onComplete }) {
                     placeholder={t('components.onboarding.client_placeholder')}
                     // eslint-disable-next-line jsx-a11y/no-autofocus -- intentional focus on first field of onboarding wizard
                     autoFocus
-                    className="w-full px-4 py-3 rounded-xl bg-[var(--bg-2)] border border-[var(--border-default)] text-white placeholder-white/25 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/40 transition-all"
+                    className="w-full px-4 py-3 rounded-xl bg-[var(--bg-2)] border border-[var(--border-default)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/40 transition-all"
                   />
                 </div>
                 <div>
@@ -234,7 +234,7 @@ export default function OnboardingWizard({ open, onComplete }) {
                       value={domain}
                       onChange={(e) => setDomain(e.target.value)}
                       placeholder={t('components.onboarding.domain_placeholder')}
-                      className="w-full pl-11 pr-4 py-3 rounded-xl bg-[var(--bg-2)] border border-[var(--border-default)] text-white placeholder-white/25 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/40 transition-all"
+                      className="w-full pl-11 pr-4 py-3 rounded-xl bg-[var(--bg-2)] border border-[var(--border-default)] text-[var(--text-primary)] placeholder-[var(--text-muted)] font-mono text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/40 transition-all"
                     />
                   </div>
                   <p className="mt-2 text-[11px] text-[var(--text-disabled)]">
@@ -278,7 +278,7 @@ export default function OnboardingWizard({ open, onComplete }) {
                 <div className="rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-5 space-y-4">
                   <div>
                     <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-1">{t('components.onboarding.client_label')}</p>
-                    <p className="text-base font-semibold text-white">{name.trim()}</p>
+                    <p className="text-base font-semibold text-[var(--text-primary)]">{name.trim()}</p>
                   </div>
                   <div>
                     <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-2">{t('components.onboarding.domains_label')}</p>
@@ -361,7 +361,7 @@ export default function OnboardingWizard({ open, onComplete }) {
                     >
                       <CheckCircle2 className="w-8 h-8 text-emerald-400" />
                     </motion.div>
-                    <h3 className="text-lg font-semibold text-white mb-1">{t('components.onboarding.scan_launched')}</h3>
+                    <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-1">{t('components.onboarding.scan_launched')}</h3>
                     <p className="text-sm text-[var(--text-tertiary)] max-w-sm">{scanResult.message}</p>
                     {scanResult.jobs_queued > 0 && (
                       <p className="mt-2 text-[11px] font-mono text-cyan-400/80">
@@ -380,7 +380,7 @@ export default function OnboardingWizard({ open, onComplete }) {
                       <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl border border-violet-500/30 bg-violet-500/10 mb-4">
                         <Radar className="w-7 h-7 text-violet-400" strokeWidth={1.5} />
                       </div>
-                      <h3 className="text-base font-semibold text-white mb-2">{t('components.onboarding.ready_title')}</h3>
+                      <h3 className="text-base font-semibold text-[var(--text-primary)] mb-2">{t('components.onboarding.ready_title')}</h3>
                       <p className="text-sm text-[var(--text-muted)] leading-relaxed max-w-sm mx-auto">
                         <Trans
                           i18nKey="components.onboarding.ready_body"

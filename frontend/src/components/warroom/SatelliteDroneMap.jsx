@@ -136,7 +136,7 @@ export default function SatelliteDroneMap() {
 
   return (
     <motion.div
-      className="absolute inset-0 rounded-2xl overflow-hidden bg-[var(--bg-0)]/90 border border-white/10"
+      className="absolute inset-0 rounded-2xl overflow-hidden bg-[var(--bg-0)]/90 border border-[var(--border-default)]"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.4 }}
@@ -225,7 +225,7 @@ export default function SatelliteDroneMap() {
           )}
         </GeoWorldMap>
       </div>
-      <div className="absolute bottom-2 left-2 text-[10px] font-mono text-white/50 uppercase tracking-wider">
+      <div className="absolute bottom-2 left-2 text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wider">
         {statusLabel}
       </div>
       {findingsUnavailable && (

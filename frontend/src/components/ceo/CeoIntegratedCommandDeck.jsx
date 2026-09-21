@@ -24,12 +24,12 @@ function formatUptime(sec, t) {
 function MetricCard({ label, value, sub, accent }) {
   return (
     <div
-      className={`rounded-xl border px-4 py-3 bg-black/40 backdrop-blur-sm ${
-        accent || 'border-white/10'
+      className={`rounded-xl border px-4 py-3 bg-[var(--table-surface)] backdrop-blur-sm ${
+        accent || 'border-[var(--border-default)]'
       }`}
     >
       <p className="text-[9px] uppercase tracking-[0.2em] text-[var(--text-muted)] font-mono mb-1">{label}</p>
-      <p className="text-lg font-semibold text-white tracking-tight font-mono">{value}</p>
+      <p className="text-lg font-semibold text-[var(--text-primary)] tracking-tight font-mono">{value}</p>
       {sub && <p className="text-[10px] text-[var(--text-muted)] font-mono mt-1">{sub}</p>}
     </div>
   )
@@ -219,7 +219,7 @@ export default function CeoIntegratedCommandDeck() {
             <p className="text-[9px] font-mono uppercase tracking-[0.4em] text-cyan-500/90 mb-2">
               {t('components.ceo.integratedCommandDeck.brandLine')}
             </p>
-            <h2 className="text-xl font-bold text-white tracking-tight">
+            <h2 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">
               {t('components.ceo.integratedCommandDeck.title')}
             </h2>
             <p className="text-[11px] font-mono text-[var(--text-muted)] mt-2 max-w-xl leading-relaxed">
@@ -275,7 +275,7 @@ export default function CeoIntegratedCommandDeck() {
                   })
                 : '—'
             }
-            accent="border-white/10"
+            accent="border-[var(--border-default)]"
           />
           <MetricCard
             label={t('components.ceo.integratedCommandDeck.queueGlobal')}
@@ -299,7 +299,7 @@ export default function CeoIntegratedCommandDeck() {
                   : t('components.ceo.integratedCommandDeck.scanningIdle')
                 : '—'
             }
-            accent={scanningActive === true ? 'border-orange-500/40' : 'border-white/10'}
+            accent={scanningActive === true ? 'border-orange-500/40' : 'border-[var(--border-default)]'}
           />
         </div>
 
@@ -321,7 +321,7 @@ export default function CeoIntegratedCommandDeck() {
               onClick={toggleGlobalSafe}
               className={`w-full py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest border ${
                 !safeModeKnown
-                  ? 'border-white/20 bg-black/40 text-white/60'
+                  ? 'border-[var(--border-strong)] bg-[var(--table-surface)] text-[var(--text-tertiary)]'
                   : globalSafe
                   ? 'border-emerald-500/60 bg-emerald-950/50 text-emerald-200'
                   : 'border-red-500/50 bg-red-950/50 text-red-100 hover:bg-red-900/40'
@@ -357,7 +357,7 @@ export default function CeoIntegratedCommandDeck() {
                 max={86400}
                 value={intervalInput}
                 onChange={(e) => setIntervalInput(e.target.value)}
-                className="flex-1 min-w-0 font-mono text-sm bg-black/50 border border-amber-500/25 rounded-lg px-3 py-2 text-amber-100"
+                className="flex-1 min-w-0 font-mono text-sm bg-[var(--table-surface)] border border-amber-500/25 rounded-lg px-3 py-2 text-amber-100"
               />
               <Button variant="unstyled"
                 type="button"
@@ -387,7 +387,7 @@ export default function CeoIntegratedCommandDeck() {
               className={`w-full py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest border ${
                 genesisKill
                   ? 'border-rose-500 bg-rose-950/70 text-rose-100'
-                  : 'border-white/20 bg-white/5 text-[var(--text-secondary)] hover:bg-white/10'
+                  : 'border-[var(--border-strong)] bg-[var(--bg-2)] text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)]'
               } disabled:opacity-40`}
             >
               {killSaving
@@ -422,11 +422,11 @@ export default function CeoIntegratedCommandDeck() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border border-cyan-500/15 bg-black/30 overflow-hidden">
+        <div className="rounded-xl border border-cyan-500/15 bg-[var(--table-surface)] overflow-hidden">
           <Button variant="unstyled"
             type="button"
             onClick={() => setVaultOpen((o) => !o)}
-            className="w-full px-4 py-3 flex items-center justify-between text-left border-b border-white/10 bg-cyan-950/20 hover:bg-cyan-950/30"
+            className="w-full px-4 py-3 flex items-center justify-between text-left border-b border-[var(--border-default)] bg-cyan-950/20 hover:bg-cyan-950/30"
           >
             <span className="text-xs font-mono uppercase tracking-widest text-cyan-200/90">
               {t('components.ceo.integratedCommandDeck.vaccineVault')}
@@ -439,11 +439,11 @@ export default function CeoIntegratedCommandDeck() {
             </div>
           )}
         </div>
-        <div className="rounded-xl border border-violet-500/15 bg-black/30 overflow-hidden">
+        <div className="rounded-xl border border-violet-500/15 bg-[var(--table-surface)] overflow-hidden">
           <Button variant="unstyled"
             type="button"
             onClick={() => setSovereignOpen((o) => !o)}
-            className="w-full px-4 py-3 flex items-center justify-between text-left border-b border-white/10 bg-violet-950/20 hover:bg-violet-950/30"
+            className="w-full px-4 py-3 flex items-center justify-between text-left border-b border-[var(--border-default)] bg-violet-950/20 hover:bg-violet-950/30"
           >
             <span className="text-xs font-mono uppercase tracking-widest text-violet-200/90">
               {t('components.ceo.integratedCommandDeck.sovereignLab')}

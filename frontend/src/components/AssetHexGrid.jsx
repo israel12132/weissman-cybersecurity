@@ -101,11 +101,11 @@ export default function AssetHexGrid({ clientId: clientIdProp = null }) {
       )}
 
       {!clientId && !loading && !clientsUnavailable && (
-        <p className="text-[10px] text-white/40 font-mono">{t(`${NS}.select_client`)}</p>
+        <p className="text-[10px] text-[var(--text-muted)] font-mono">{t(`${NS}.select_client`)}</p>
       )}
 
       {clientId && loading && (
-        <p className="text-[10px] text-white/40 font-mono animate-pulse">{t(`${NS}.loading`)}</p>
+        <p className="text-[10px] text-[var(--text-muted)] font-mono animate-pulse">{t(`${NS}.loading`)}</p>
       )}
 
       {clientId && !loading && error && (
@@ -123,7 +123,7 @@ export default function AssetHexGrid({ clientId: clientIdProp = null }) {
       )}
 
       {clientId && !loading && !error && nodes.length === 0 && (
-        <p className="text-[10px] text-white/40 font-mono">{t(`${NS}.empty`)}</p>
+        <p className="text-[10px] text-[var(--text-muted)] font-mono">{t(`${NS}.empty`)}</p>
       )}
 
       {nodes.length > 0 && (

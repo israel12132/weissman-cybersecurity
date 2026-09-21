@@ -145,7 +145,7 @@ export default function RiskGraphTab() {
 
   if (!selectedClientId) {
     return (
-      <div className="p-8 rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 text-center text-white/70">
+      <div className="p-8 rounded-2xl bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] text-center text-[var(--text-tertiary)]">
         {t('components.cockpitTabs.riskGraph.select_client')}
       </div>
     )
@@ -156,7 +156,7 @@ export default function RiskGraphTab() {
       <div className="flex items-center justify-between gap-4 mb-4">
         <div className="flex items-center gap-2">
           <Network className="w-5 h-5 text-[#22d3ee]" />
-          <h2 className="text-lg font-semibold text-white tracking-wide">
+          <h2 className="text-lg font-semibold text-[var(--text-primary)] tracking-wide">
             {t('components.cockpitTabs.riskGraph.title')}
           </h2>
         </div>
@@ -191,9 +191,9 @@ export default function RiskGraphTab() {
           {t('components.cockpitTabs.riskGraph.truncated')}
         </div>
       )}
-      <div className="flex-1 rounded-2xl bg-black/60 backdrop-blur-md border border-white/10 overflow-hidden min-h-[400px]">
+      <div className="flex-1 rounded-2xl bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] overflow-hidden min-h-[400px]">
         {loading ? (
-          <div className="flex items-center justify-center h-full text-white/50">
+          <div className="flex items-center justify-center h-full text-[var(--text-muted)]">
             {t('components.cockpitTabs.riskGraph.loading_graph')}
           </div>
         ) : error ? (
@@ -201,13 +201,13 @@ export default function RiskGraphTab() {
             {t('components.cockpitTabs.riskGraph.unavailable')}
           </div>
         ) : nodes.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-white/50 gap-2">
+          <div className="flex flex-col items-center justify-center h-full text-[var(--text-muted)] gap-2">
             <p>{t('components.cockpitTabs.riskGraph.no_graph_data')}</p>
             <Button variant="unstyled"
               type="button"
               onClick={buildGraph}
               disabled={building}
-              className="px-4 py-2 rounded-lg border border-white/20 text-white/80 hover:bg-white/5"
+              className="px-4 py-2 rounded-lg border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)]"
             >
               {t('components.cockpitTabs.riskGraph.build_graph')}
             </Button>
@@ -222,9 +222,9 @@ export default function RiskGraphTab() {
             className="bg-[#0a0a0a]"
           >
             <Background color="#333" gap={16} />
-            <Controls className="!bg-black/80 !border-white/10" />
+            <Controls className="!bg-[var(--table-surface)] !border-[var(--border-default)]" />
             <MiniMap
-              className="!bg-black/80 !border-white/10"
+              className="!bg-[var(--table-surface)] !border-[var(--border-default)]"
               nodeColor={(n) =>
                 n.data?.nodeType === 'finding' ? '#f87171' : n.data?.nodeType === 'physical_asset' ? '#f59e0b' : '#22d3ee'
               }

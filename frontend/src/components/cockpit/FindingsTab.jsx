@@ -63,7 +63,7 @@ export default function FindingsTab() {
         id: 'title',
         header: t(`${FT}.table.title`),
         cell: (info) => (
-          <span className="text-white max-w-md truncate block" title={info.getValue()}>
+          <span className="text-[var(--text-primary)] max-w-md truncate block" title={info.getValue()}>
             {info.getValue() || '—'}
           </span>
         ),
@@ -161,8 +161,8 @@ export default function FindingsTab() {
   if (!selectedClient) {
     return (
       <div className="p-8">
-        <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-8 text-center">
-          <p className="text-sm text-white/70">{t('components.cockpitTabs.findings.select_client')}</p>
+        <div className="rounded-2xl bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] p-8 text-center">
+          <p className="text-sm text-[var(--text-tertiary)]">{t('components.cockpitTabs.findings.select_client')}</p>
         </div>
       </div>
     )

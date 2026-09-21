@@ -70,10 +70,10 @@ export default function LiveActivityFeed({ maxHeight = 360, className = '' }) {
 
   return (
     <section
-      className={`flex flex-col rounded-2xl border border-white/10 bg-black/35 backdrop-blur-md ${className}`}
+      className={`flex flex-col rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] backdrop-blur-md ${className}`}
       aria-label={t(`${NS}.ariaLabel`)}
     >
-      <header className="flex items-center justify-between gap-2 px-3 py-2 border-b border-white/[0.06]">
+      <header className="flex items-center justify-between gap-2 px-3 py-2 border-b border-[var(--border-subtle)]">
         <div className="flex items-center gap-2 min-w-0">
           <span
             className={`inline-block w-1.5 h-1.5 rounded-full ${
@@ -82,10 +82,10 @@ export default function LiveActivityFeed({ maxHeight = 360, className = '' }) {
             aria-hidden="true"
             title={connected ? t(`${NS}.connected`) : t(`${NS}.reconnecting`)}
           />
-          <h3 className="text-[11px] font-mono uppercase tracking-[0.18em] text-white/75 truncate">
+          <h3 className="text-[11px] font-mono uppercase tracking-[0.18em] text-[var(--text-tertiary)] truncate">
             {t(`${NS}.title`)}
           </h3>
-          <span className="text-[10px] font-mono text-white/35 ml-1">
+          <span className="text-[10px] font-mono text-[var(--text-muted)] ml-1">
             {activity.length}
           </span>
         </div>
@@ -96,7 +96,7 @@ export default function LiveActivityFeed({ maxHeight = 360, className = '' }) {
             className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
               paused
                 ? 'border-amber-500/40 text-amber-200 bg-amber-500/10'
-                : 'border-white/10 text-white/55 hover:text-white/85'
+                : 'border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)]'
             }`}
             title={paused ? t(`${NS}.resumeTitle`) : t(`${NS}.pauseTitle`)}
             aria-pressed={paused}
@@ -106,7 +106,7 @@ export default function LiveActivityFeed({ maxHeight = 360, className = '' }) {
           <Button variant="unstyled"
             type="button"
             onClick={clearActivity}
-            className="text-[10px] font-mono px-2 py-0.5 rounded border border-white/10 text-white/45 hover:text-white/80"
+            className="text-[10px] font-mono px-2 py-0.5 rounded border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
             title={t(`${NS}.clearTitle`)}
           >
             {t(`${NS}.clear`)}
@@ -114,7 +114,7 @@ export default function LiveActivityFeed({ maxHeight = 360, className = '' }) {
         </div>
       </header>
 
-      <div className="flex items-center gap-1 px-3 py-1.5 border-b border-white/[0.04] overflow-x-auto">
+      <div className="flex items-center gap-1 px-3 py-1.5 border-b border-[var(--border-subtle)] overflow-x-auto">
         {FILTERS.map((f) => {
           const active = filter === f.id
           return (
@@ -126,7 +126,7 @@ export default function LiveActivityFeed({ maxHeight = 360, className = '' }) {
               className={`text-[10px] font-mono px-2 py-0.5 rounded transition-colors ${
                 active
                   ? 'bg-cyan-500/20 text-cyan-200 border border-cyan-500/40'
-                  : 'text-white/50 hover:text-white/85 border border-transparent'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] border border-transparent'
               }`}
             >
               {t(`${NS}.${f.labelKey}`)}
@@ -136,12 +136,12 @@ export default function LiveActivityFeed({ maxHeight = 360, className = '' }) {
       </div>
 
       <div
-        className="overflow-y-auto divide-y divide-white/[0.04] custom-scroll"
+        className="overflow-y-auto divide-y divide-[var(--border-subtle)] custom-scroll"
         style={{ maxHeight }}
         aria-live="polite"
       >
         {visible.length === 0 ? (
-          <div className="px-3 py-12 text-center text-[11px] font-mono text-white/35">
+          <div className="px-3 py-12 text-center text-[11px] font-mono text-[var(--text-muted)]">
             {activity.length === 0
               ? t(`${NS}.waiting`)
               : t(`${NS}.noMatch`)}
@@ -152,7 +152,7 @@ export default function LiveActivityFeed({ maxHeight = 360, className = '' }) {
             return (
               <div
                 key={e.id}
-                className="flex items-start gap-2 px-3 py-1.5 hover:bg-white/[0.025] group"
+                className="flex items-start gap-2 px-3 py-1.5 hover:bg-[var(--row-hover-bg)] group"
               >
                 <span
                   className="mt-1 inline-flex items-center justify-center text-[11px] shrink-0 w-4 h-4 rounded-full"
@@ -166,25 +166,25 @@ export default function LiveActivityFeed({ maxHeight = 360, className = '' }) {
                   {meta.icon}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5 text-[10px] font-mono text-white/40 uppercase tracking-widest">
+                  <div className="flex items-center gap-1.5 text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest">
                     <span style={{ color: meta.color }}>{t(`${NS}.${meta.labelKey}`)}</span>
                     {e.engine && (
                       <>
-                        <span className="text-white/15">·</span>
-                        <span className="truncate text-white/55">{e.engine}</span>
+                        <span className="text-[var(--text-disabled)]">·</span>
+                        <span className="truncate text-[var(--text-tertiary)]">{e.engine}</span>
                       </>
                     )}
                     {e.target && (
                       <>
-                        <span className="text-white/15">·</span>
+                        <span className="text-[var(--text-disabled)]">·</span>
                         <span className="truncate text-cyan-300/70">{e.target}</span>
                       </>
                     )}
-                    <span className="ms-auto text-white/30 normal-case">
+                    <span className="ms-auto text-[var(--text-muted)] normal-case">
                       {fmtAgo(e.t, now)} {t(`${NS}.ago`)}
                     </span>
                   </div>
-                  <p className="text-[12px] text-white/80 leading-snug break-words mt-0.5">
+                  <p className="text-[12px] text-[var(--text-secondary)] leading-snug break-words mt-0.5">
                     {e.message}
                   </p>
                 </div>

@@ -12,7 +12,7 @@ export default function GodModeDiscoveryStrip({ discovery, godErr }) {
   }
   if (!discovery || typeof discovery !== 'object') {
     return (
-      <div className="rounded-xl border border-white/10 bg-[var(--bg-0)]/60 px-4 py-3 text-[11px] font-mono text-[var(--text-muted)]">
+      <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-0)]/60 px-4 py-3 text-[11px] font-mono text-[var(--text-muted)]">
         {t('components.ceo.discoveryStrip.empty')}
       </div>
     )
@@ -35,7 +35,7 @@ export default function GodModeDiscoveryStrip({ discovery, godErr }) {
           <p className="text-[9px] font-mono uppercase tracking-[0.35em] text-cyan-400/90 mb-1">
             {t('components.ceo.discoveryStrip.title')}
           </p>
-          <p className="text-sm font-semibold text-white tracking-tight">
+          <p className="text-sm font-semibold text-[var(--text-primary)] tracking-tight">
             <span className="text-cyan-200/90">{name}</span>
             <span className="text-[var(--text-muted)] mx-2">·</span>
             <span className="font-mono text-amber-200/90 break-all">{target}</span>
@@ -46,7 +46,7 @@ export default function GodModeDiscoveryStrip({ discovery, godErr }) {
             <p className="text-[9px] uppercase text-[var(--text-muted)] font-mono">
               {t('components.ceo.discoveryStrip.targetList')}
             </p>
-            <p className="text-xl font-mono text-white tabular-nums">{tl != null ? tl : '—'}</p>
+            <p className="text-xl font-mono text-[var(--text-primary)] tabular-nums">{tl != null ? tl : '—'}</p>
           </div>
           <div>
             <p className="text-[9px] uppercase text-[var(--text-muted)] font-mono">

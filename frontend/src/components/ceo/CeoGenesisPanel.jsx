@@ -116,7 +116,7 @@ export default function CeoGenesisPanel() {
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
-      <form onSubmit={saveStrategy} className="rounded-lg border border-white/10 bg-black/35 p-4 space-y-4">
+      <form onSubmit={saveStrategy} className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] p-4 space-y-4">
         <h2 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-widest">
           {t('components.ceo.genesisPanel.title')}
         </h2>
@@ -144,7 +144,7 @@ export default function CeoGenesisPanel() {
             max={262144}
             value={ramMb}
             onChange={(e) => setRamMb(e.target.value)}
-            className="w-full font-mono text-sm bg-[var(--bg-0)] border border-white/15 rounded px-3 py-2 text-[var(--text-primary)]"
+            className="w-full font-mono text-sm bg-[var(--bg-0)] border border-[var(--border-strong)] rounded px-3 py-2 text-[var(--text-primary)]"
           />
         </div>
         <div>
@@ -155,7 +155,7 @@ export default function CeoGenesisPanel() {
             value={seedsRepos}
             onChange={(e) => setSeedsRepos(e.target.value)}
             rows={4}
-            className="w-full font-mono text-xs bg-[var(--bg-0)] border border-white/15 rounded px-3 py-2 text-[var(--text-primary)]"
+            className="w-full font-mono text-xs bg-[var(--bg-0)] border border-[var(--border-strong)] rounded px-3 py-2 text-[var(--text-primary)]"
           />
         </div>
         <div>
@@ -166,7 +166,7 @@ export default function CeoGenesisPanel() {
             value={seedsNpm}
             onChange={(e) => setSeedsNpm(e.target.value)}
             rows={3}
-            className="w-full font-mono text-xs bg-[var(--bg-0)] border border-white/15 rounded px-3 py-2 text-[var(--text-primary)]"
+            className="w-full font-mono text-xs bg-[var(--bg-0)] border border-[var(--border-strong)] rounded px-3 py-2 text-[var(--text-primary)]"
           />
         </div>
         <Button variant="unstyled"
@@ -187,7 +187,7 @@ export default function CeoGenesisPanel() {
         </h2>
         <div
           role="alert"
-          className="text-[11px] font-mono text-amber-200/90 bg-black/40 border border-amber-500/30 rounded p-3 leading-snug"
+          className="text-[11px] font-mono text-amber-200/90 bg-[var(--table-surface)] border border-amber-500/30 rounded p-3 leading-snug"
         >
           <Trans
             i18nKey="components.ceo.genesisPanel.hpcNotice"
@@ -220,7 +220,7 @@ export default function CeoGenesisPanel() {
           <input
             value={researchAff}
             onChange={(e) => setResearchAff(e.target.value)}
-            className="w-full font-mono text-sm bg-[var(--bg-0)] border border-white/15 rounded px-3 py-2 text-[var(--text-primary)]"
+            className="w-full font-mono text-sm bg-[var(--bg-0)] border border-[var(--border-strong)] rounded px-3 py-2 text-[var(--text-primary)]"
           />
         </div>
         <div>
@@ -230,7 +230,7 @@ export default function CeoGenesisPanel() {
           <input
             value={clientAff}
             onChange={(e) => setClientAff(e.target.value)}
-            className="w-full font-mono text-sm bg-[var(--bg-0)] border border-white/15 rounded px-3 py-2 text-[var(--text-primary)]"
+            className="w-full font-mono text-sm bg-[var(--bg-0)] border border-[var(--border-strong)] rounded px-3 py-2 text-[var(--text-primary)]"
           />
         </div>
         <div>
@@ -240,7 +240,7 @@ export default function CeoGenesisPanel() {
           <input
             value={routingNote}
             onChange={(e) => setRoutingNote(e.target.value)}
-            className="w-full font-mono text-sm bg-[var(--bg-0)] border border-white/15 rounded px-3 py-2 text-[var(--text-primary)]"
+            className="w-full font-mono text-sm bg-[var(--bg-0)] border border-[var(--border-strong)] rounded px-3 py-2 text-[var(--text-primary)]"
           />
         </div>
         <Button variant="unstyled"
@@ -252,7 +252,7 @@ export default function CeoGenesisPanel() {
           {hpcSaving ? t('components.ceo.genesisPanel.saving') : t('components.ceo.genesisPanel.applyHpcPolicy')}
         </Button>
         {eff && !hpcErr && (
-          <div className="text-[10px] font-mono text-[var(--text-tertiary)] space-y-1 border-t border-white/10 pt-3 mt-2">
+          <div className="text-[10px] font-mono text-[var(--text-tertiary)] space-y-1 border-t border-[var(--border-default)] pt-3 mt-2">
             <div>
               {t('components.ceo.genesisPanel.workerPoolEnv')}{' '}
               <span className="text-cyan-300">{eff.worker_pool_env || '—'}</span>

@@ -41,7 +41,7 @@ export default function EngineAccountingBanner() {
   ]
 
   return (
-    <section className="rounded-xl border border-white/10 bg-bg-2/40 p-4">
+    <section className="rounded-xl border border-[var(--border-default)] bg-bg-2/40 p-4">
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-text-tertiary">
           {t('engineAccounting.title')}
@@ -51,7 +51,7 @@ export default function EngineAccountingBanner() {
 
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-3">
         {cells.map((c) => (
-          <div key={c.label} className="rounded-lg border border-white/10 bg-bg-1/40 px-3 py-2">
+          <div key={c.label} className="rounded-lg border border-[var(--border-default)] bg-bg-1/40 px-3 py-2">
             <div className="text-[10px] uppercase tracking-wider text-text-muted">{c.label}</div>
             <div className={`text-xl font-mono font-semibold tabular-nums ${c.tone}`}>
               {Number(c.value).toLocaleString()}
@@ -64,7 +64,7 @@ export default function EngineAccountingBanner() {
         <span>{t('engineAccounting.ratioLabel')}</span>
         <span className="font-mono text-text-secondary tabular-nums">{ratioPct}%</span>
       </div>
-      <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+      <div className="h-2 rounded-full bg-[var(--bg-2)] overflow-hidden">
         <div
           className={`h-full ${ratioPct >= 80 ? 'bg-emerald-500' : ratioPct >= 55 ? 'bg-amber-500' : 'bg-rose-500'}`}
           style={{ width: `${Math.max(0, Math.min(100, ratioPct))}%` }}

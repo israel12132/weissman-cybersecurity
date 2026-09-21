@@ -86,8 +86,8 @@ export default function SeverityTrendChart({ className = '', height = 180 }) {
 
   if (loading && !data) {
     return (
-      <section className={`rounded-2xl border border-white/10 bg-black/35 backdrop-blur-md p-3 ${className}`}>
-        <div className="h-44 rounded bg-white/[0.025] animate-pulse" />
+      <section className={`rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] backdrop-blur-md p-3 ${className}`}>
+        <div className="h-44 rounded bg-[var(--bg-2)] animate-pulse" />
       </section>
     )
   }
@@ -106,15 +106,15 @@ export default function SeverityTrendChart({ className = '', height = 180 }) {
 
   return (
     <section
-      className={`rounded-2xl border border-white/10 bg-black/35 backdrop-blur-md ${className}`}
+      className={`rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] backdrop-blur-md ${className}`}
       aria-label={t(`${NS}.ariaLabel`)}
     >
-      <header className="flex items-center justify-between gap-2 px-3 py-2 border-b border-white/[0.06]">
+      <header className="flex items-center justify-between gap-2 px-3 py-2 border-b border-[var(--border-subtle)]">
         <div className="min-w-0">
-          <h3 className="text-[11px] font-mono uppercase tracking-[0.18em] text-white/75">
+          <h3 className="text-[11px] font-mono uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
             {t(`${NS}.title`)}
           </h3>
-          <p className="text-[10px] font-mono text-white/40 mt-0.5">
+          <p className="text-[10px] font-mono text-[var(--text-muted)] mt-0.5">
             {t(`${NS}.subtitle`)}
           </p>
         </div>

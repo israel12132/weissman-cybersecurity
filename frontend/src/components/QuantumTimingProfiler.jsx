@@ -155,7 +155,7 @@ export default function QuantumTimingProfiler() {
                 value={target}
                 onChange={(e) => setTarget(e.target.value)}
                 placeholder={t(`${NS}.target_placeholder`)}
-                className="flex-1 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-white placeholder-[var(--text-muted)] focus:ring-2 focus:ring-cyan-500/50"
+                className="flex-1 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-2 focus:ring-cyan-500/50"
                 disabled={running}
               />
               <Button variant="unstyled"
@@ -223,7 +223,7 @@ export default function QuantumTimingProfiler() {
 
         <div className="rounded-xl bg-[var(--bg-1)]/80 border border-[var(--border-default)]/60 p-4">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-white">
+            <h2 className="text-lg font-semibold text-[var(--text-primary)]">
               {t(`${NS}.oscilloscope_title`)}
             </h2>
             <div className="flex gap-4 text-xs">

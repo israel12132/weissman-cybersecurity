@@ -238,7 +238,7 @@ export function PremiumToastItem({
           type="button"
           onClick={handleDismiss}
           aria-label="Dismiss notification"
-          className="shrink-0 p-1 rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/8 transition-colors"
+          className="shrink-0 p-1 rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)] transition-colors"
           style={{ transitionDuration: 'var(--duration-fast)' }}
         >
           <X className="w-3.5 h-3.5" strokeWidth={2.5} />

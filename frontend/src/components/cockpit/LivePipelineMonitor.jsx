@@ -189,26 +189,26 @@ export default function LivePipelineMonitor() {
   }, [viewMode, dag, currentStage, setDagNodes, setDagEdges])
 
   return (
-    <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+    <div className="rounded-2xl bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-default)]">
         <div className="flex items-center gap-2">
           <Layers className="w-5 h-5 text-[#22d3ee]" />
-          <span className="font-semibold text-white">{t(`${NS}.title`)}</span>
+          <span className="font-semibold text-[var(--text-primary)]">{t(`${NS}.title`)}</span>
           {runId != null && !loadError && (
-            <span className="text-xs text-white/50 font-mono">{t(`${NS}.runPrefix`, { id: runId })}</span>
+            <span className="text-xs text-[var(--text-muted)] font-mono">{t(`${NS}.runPrefix`, { id: runId })}</span>
           )}
-          <div className="flex rounded-lg border border-white/10 overflow-hidden">
+          <div className="flex rounded-lg border border-[var(--border-default)] overflow-hidden">
             <Button variant="unstyled"
               type="button"
               onClick={() => setViewMode('stages')}
-              className={`px-2 py-1 text-xs ${viewMode === 'stages' ? 'bg-[#22d3ee]/20 text-[#22d3ee]' : 'text-white/60 hover:text-[var(--text-primary)]'}`}
+              className={`px-2 py-1 text-xs ${viewMode === 'stages' ? 'bg-[#22d3ee]/20 text-[#22d3ee]' : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)]'}`}
             >
               {t(`${NS}.stages`)}
             </Button>
             <Button variant="unstyled"
               type="button"
               onClick={() => setViewMode('dag')}
-              className={`px-2 py-1 text-xs flex items-center gap-1 ${viewMode === 'dag' ? 'bg-[#22d3ee]/20 text-[#22d3ee]' : 'text-white/60 hover:text-[var(--text-primary)]'}`}
+              className={`px-2 py-1 text-xs flex items-center gap-1 ${viewMode === 'dag' ? 'bg-[#22d3ee]/20 text-[#22d3ee]' : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)]'}`}
             >
               <GitBranch className="w-3 h-3" /> {t(`${NS}.dagTree`)}
             </Button>
@@ -235,7 +235,7 @@ export default function LivePipelineMonitor() {
               />
             </div>
           ) : (
-          <div className="rounded-xl border border-white/10 bg-black/30 overflow-hidden" style={{ height: 340 }}>
+          <div className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] overflow-hidden" style={{ height: 340 }}>
             <ReactFlow
               nodes={dagNodes}
               edges={dagEdges}
@@ -245,8 +245,8 @@ export default function LivePipelineMonitor() {
               className="bg-transparent"
             >
               <Background color="#22d3ee" gap={12} size={0.5} />
-              <Controls className="bg-black/60 border-white/10" />
-              <MiniMap className="bg-black/60" />
+              <Controls className="bg-[var(--table-surface)] border-[var(--border-default)]" />
+              <MiniMap className="bg-[var(--table-surface)]" />
             </ReactFlow>
             <style>{`
               .react-flow__node.dag-node-done { border-color: #10b981; background: rgba(16,185,129,0.15); }
@@ -266,19 +266,19 @@ export default function LivePipelineMonitor() {
             {t(`${NS}.unavailable`)}
           </p>
         ) : loading && !states.length ? (
-          <p className="text-sm text-white/50">{t(`${NS}.loading`)}</p>
+          <p className="text-sm text-[var(--text-muted)]">{t(`${NS}.loading`)}</p>
         ) : !runId ? (
-          <p className="text-sm text-white/50">{t(`${NS}.noActiveRun`)}</p>
+          <p className="text-sm text-[var(--text-muted)]">{t(`${NS}.noActiveRun`)}</p>
         ) : viewMode === 'stages' ? (
           <>
             <div className="grid grid-cols-1 gap-4">
               {displayStates.map((s) => (
                 <div
                   key={s.client_id}
-                  className="rounded-xl border border-white/10 bg-black/30 p-3"
+                  className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] p-3"
                 >
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-medium text-white/80">
+                    <span className="text-xs font-medium text-[var(--text-secondary)]">
                       {s.client_id === '__global__' ? t(`${NS}.global`) : s.client_id}
                     </span>
                     <div className="flex items-center gap-2">
@@ -286,13 +286,13 @@ export default function LivePipelineMonitor() {
                         type="button"
                         onClick={() => patchState({ client_id: s.client_id, paused: !s.paused })}
                         disabled={patching}
-                        className="flex items-center gap-1 px-2 py-1 rounded-lg border border-white/20 text-xs text-white/80 hover:bg-white/10 disabled:opacity-50"
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg border border-[var(--border-strong)] text-xs text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] disabled:opacity-50"
                       >
                         {s.paused ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
                         {s.paused ? t(`${NS}.resume`) : t(`${NS}.pause`)}
                       </Button>
                       <select
-                        className="bg-black/60 border border-white/10 rounded-lg text-xs text-white px-2 py-1"
+                        className="bg-[var(--table-surface)] border border-[var(--border-default)] rounded-lg text-xs text-[var(--text-primary)] px-2 py-1"
                         value=""
                         onChange={(e) => {
                           const v = e.target.value
@@ -323,7 +323,7 @@ export default function LivePipelineMonitor() {
                               ? 'border-[#10b981]/50 bg-[#10b981]/10 text-[#10b981]'
                               : status === 'current'
                                 ? 'border-[#22d3ee]/50 bg-[#22d3ee]/10 text-[#22d3ee]'
-                                : 'border-white/10 bg-white/5 text-white/50'
+                                : 'border-[var(--border-default)] bg-[var(--bg-2)] text-[var(--text-muted)]'
                           }`}
                         >
                           {status === 'current' && <Radio className="w-3 h-3 animate-pulse" />}
@@ -336,7 +336,7 @@ export default function LivePipelineMonitor() {
               ))}
             </div>
             {displayStates.length === 0 && runId && (
-              <p className="text-sm text-white/50">{t(`${NS}.noStateForClient`)}</p>
+              <p className="text-sm text-[var(--text-muted)]">{t(`${NS}.noStateForClient`)}</p>
             )}
           </>
         ) : null}
