@@ -8136,7 +8136,8 @@
           "medium": "medium",
           "low": "low",
           "info": "info"
-        }
+        },
+        "unavailable": "Score unavailable — awaiting live posture data."
       },
       "attackLifecycleTicker": {
         "waiting": "Attack Lifecycle Ticker — Waiting for activity..."

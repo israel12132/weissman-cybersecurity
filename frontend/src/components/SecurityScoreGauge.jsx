@@ -4,15 +4,17 @@ import { useTranslation } from 'react-i18next'
 const NS = 'components.intelWidgets.securityScoreGauge'
 
 function GaugeSvg({ score }) {
-  // Number(score) yields NaN (not null) for bad input, so `?? 0` never fired and the
-  // gauge rendered NaN. Guard on finiteness to truly default to 0.
+  // Distinguish a genuinely unknown score (null/non-finite) from a real 0: an unknown
+  // score must NOT paint a red "0 / 100" gauge implying worst-possible posture.
   const numericScore = Number(score)
-  const safeScore = Math.min(100, Math.max(0, Number.isFinite(numericScore) ? numericScore : 0))
+  const hasScore = score != null && Number.isFinite(numericScore)
+  const safeScore = hasScore ? Math.min(100, Math.max(0, numericScore)) : 0
   const r = 44
   const stroke = 8
   const circumference = 2 * Math.PI * r
-  const offset = circumference - (safeScore / 100) * circumference
-  const color = safeScore >= 90 ? '#00f5ff' : safeScore >= 70 ? '#ffb800' : '#ff3366'
+  // Unknown → empty ring (full offset), neutral gray, "—".
+  const offset = hasScore ? circumference - (safeScore / 100) * circumference : circumference
+  const color = !hasScore ? '#3a3a44' : safeScore >= 90 ? '#00f5ff' : safeScore >= 70 ? '#ffb800' : '#ff3366'
 
   return (
     <svg width="120" height="120" viewBox="0 0 120 120" className="gauge-glow mx-auto">
@@ -24,26 +26,28 @@ function GaugeSvg({ score }) {
         stroke="#1a1a1a"
         strokeWidth={stroke}
       />
-      <circle
-        cx="60"
-        cy="60"
-        r={r}
-        fill="none"
-        stroke={color}
-        strokeWidth={stroke}
-        strokeDasharray={circumference}
-        strokeDashoffset={offset}
-        strokeLinecap="round"
-        transform="rotate(-90 60 60)"
-        className="transition-all duration-700"
-      />
+      {hasScore && (
+        <circle
+          cx="60"
+          cy="60"
+          r={r}
+          fill="none"
+          stroke={color}
+          strokeWidth={stroke}
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          transform="rotate(-90 60 60)"
+          className="transition-all duration-700"
+        />
+      )}
       <text
         x="60"
         y="58"
         textAnchor="middle"
         className="text-2xl font-bold fill-[#a0aec0]"
       >
-        {Math.round(safeScore)}
+        {hasScore ? Math.round(safeScore) : '—'}
       </text>
       <text
         x="60"
@@ -71,9 +75,9 @@ export default function SecurityScoreGauge({ data }) {
       <p className="text-war-cyan text-xs font-semibold tracking-wider uppercase mb-2">
         {t(`${NS}.title`)}
       </p>
-      <GaugeSvg score={score ?? 0} />
+      <GaugeSvg score={score} />
       <p className="text-[10px] text-war-silver/60 mt-2 text-center">
-        {t(`${NS}.formula`)}
+        {score == null ? t(`${NS}.unavailable`) : t(`${NS}.formula`)}
       </p>
       {data?.benchmark?.vs_label && (
         <p
