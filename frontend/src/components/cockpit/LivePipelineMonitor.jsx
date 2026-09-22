@@ -327,7 +327,7 @@ export default function LivePipelineMonitor() {
                           }`}
                         >
                           {status === 'current' && <Radio className="w-3 h-3 animate-pulse" />}
-                          <span className="truncate max-w-[140px]">S{i}: {label.split('(')[0].trim()}</span>
+                          <span className="truncate max-w-[140px]">S{i}: {String(label).split('(')[0].trim()}</span>
                         </div>
                       )
                     })}

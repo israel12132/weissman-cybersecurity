@@ -48,7 +48,7 @@ export default function GlobalEdgeSwarmMap() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     load()

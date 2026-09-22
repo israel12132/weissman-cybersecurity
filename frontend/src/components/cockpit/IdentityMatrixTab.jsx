@@ -121,7 +121,7 @@ export default function IdentityMatrixTab() {
 
   const autoHarvest = clientConfig?.auto_harvest !== false
   const toggleAutoHarvest = useCallback(async () => {
-    if (selectedClientId) await patchConfig({ auto_harvest: !autoHarvest })
+    if (selectedClientId) await patchConfig(selectedClientId, { auto_harvest: !autoHarvest })
   }, [selectedClientId, patchConfig, autoHarvest])
 
   const handleAdd = async (e) => {

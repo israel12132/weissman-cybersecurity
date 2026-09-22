@@ -53,7 +53,7 @@ export default function ContainmentRulesTab() {
     } finally {
       setLoading(false)
     }
-  }, [selectedClientId])
+  }, [selectedClientId, t])
 
   useEffect(() => {
     fetchRules()

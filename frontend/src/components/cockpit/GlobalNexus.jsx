@@ -374,7 +374,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
               <li className="px-4 py-2 text-[11px] text-[var(--text-muted)]">{t('common.no_data')}</li>
             )}
             {clients.length === 0 && clientsError && (
-              <li className="px-4 py-2 text-[11px] text-rose-300/80">Client list unavailable.</li>
+              <li className="px-4 py-2 text-[11px] text-rose-300/80">{t(`${GN}.client_list_unavailable`)}</li>
             )}
             {clients.map((c) => {
               const id = String(c.id)
@@ -396,7 +396,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
                         : 'border-transparent text-[var(--text-tertiary)] hover:bg-[var(--row-hover-bg)] hover:text-[var(--text-secondary)]'
                     }`}
                   >
-                    <span className="block truncate">{c.name || `Client ${id}`}</span>
+                    <span className="block truncate">{c.name || t('components.cockpit.client_fallback', { id })}</span>
                     {clientScopeLocked && selected && (
                       <span className="block text-[9px] font-mono uppercase tracking-widest text-cyan-400/70 mt-0.5">
                         {t('nav.portal_locked')}

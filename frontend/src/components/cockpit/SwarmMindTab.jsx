@@ -47,6 +47,11 @@ export default function SwarmMindTab() {
       } catch (_) { /* best-effort; non-fatal */ }
     }
     return () => {
+      // Detach handlers before closing so the close/open events triggered by
+      // close() during CONNECTING/OPEN cannot call setState after unmount.
+      ws.onopen = null
+      ws.onclose = null
+      ws.onmessage = null
       ws.close()
     }
   }, [])

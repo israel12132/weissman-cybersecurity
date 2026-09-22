@@ -135,7 +135,6 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
         setSafeModeKnown(true)
         setSafeMode(d.global_safe_mode === true)
       })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
       .catch(() => setSafeModeKnown(false))
   }, [])
 
@@ -413,7 +412,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
       {/* Content */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden relative z-10 min-w-0 max-w-full">
         <CockpitTabErrorBoundary key={activeTab} tabId={activeTab} tabLabel={activeTabMeta?.label}>
-          <Suspense fallback={<div className="p-6 text-[var(--text-tertiary)] text-sm">Loading cockpit tab...</div>}>
+          <Suspense fallback={<div className="p-6 text-[var(--text-tertiary)] text-sm">{t('components.cockpitWidgets.clientCockpit.loading_tab')}</div>}>
             <ActiveComponent />
           </Suspense>
         </CockpitTabErrorBoundary>

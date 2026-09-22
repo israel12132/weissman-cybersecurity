@@ -76,7 +76,7 @@ export default function AttackChainView() {
         if (!cancelled) setLoading(false)
       })
     return () => { cancelled = true }
-  }, [clientId])
+  }, [clientId, t])
 
   const steps = useMemo(() => (Array.isArray(data?.steps) ? data.steps : []), [data])
   const runId = data?.run_id

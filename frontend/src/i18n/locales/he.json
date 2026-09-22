@@ -121,7 +121,16 @@
     "edges": "קשתות",
     "evidence_unavailable": "API הממצאים אינו זמין — ראיות ריקות אינן מאושרות.",
     "clients_unavailable": "API הלקוחות אינו זמין — אין זו רשימה ריקה מאושרת.",
-    "evidence_truncated": "חלון הממצאים הפתוחים חתוך — לצומת זה עשויות להיות ראיות מחוץ לעמוד שנטען."
+    "evidence_truncated": "חלון הממצאים הפתוחים חתוך — לצומת זה עשויות להיות ראיות מחוץ לעמוד שנטען.",
+    "canvas_label": "גרף טופולוגיית battlespace אינטראקטיבי — לחץ על צומת לבדיקה",
+    "tag_crown_jewel": "נכס כתר",
+    "tag_perimeter": "פרימטר",
+    "graph_counts": "{{nodes}} צמתים · {{edges}} קשתות",
+    "strips_summary": "STRIPS: {{steps}} צעדים → {{goal}}",
+    "sha256_integrity": "שלמות SHA-256",
+    "pcap_ref": "הפניית PCAP",
+    "stack_trace": "עקבות מחסנית",
+    "finding_fallback": "ממצא"
   },
   "engineC2": {
     "kill_switch_region": "מתג חירום",
@@ -131,7 +140,9 @@
     "emergency_stop": "⏹ עצירת חירום",
     "telemetry_strip": "טלמטריית מנוע חיה",
     "memory_telemetry": "טלמטריית זיכרון / AST",
-    "live_telemetry": "טלמטריה חיה"
+    "live_telemetry": "טלמטריה חיה",
+    "ast_tree_count": "עץ AST · {{count}} צמתים",
+    "truncated_for_safety": "נחתך מטעמי בטיחות"
   },
   "nav": {
     "cockpit": "תא הפיקוד",
@@ -2607,7 +2618,12 @@
       "posture_evidence": "מצב חי מ-GET /api/posture/score/:clientId — ציון, תת-ציונים ומניעים מחושבים בצד השרת מתוכנית ה-fix-first בהיקף הדייר. אין מדדים מפוברקים.",
       "program_evidence_notice": "תוכנית תיקון חיה מ-GET /api/remediation/priority/:clientId — מדורגת בצד השרת, ממוזגת לפי שורש הבעיה, עם סיכון אפקטיבי EPSS/KEV, צווארי בקבוק בגרף התקיפה ושעוני SLA. שום דבר אינו מחושב מחדש בדפדפן; אין טלמטריית תיקון מפוברקת.",
       "forecast_evidence_notice": "תחזית חיה מ-GET /api/remediation/sla-forecast/:clientId — ספירת הפרות SLA מצטברת לפי אופק (תת-קבוצת KEV מודגשת) עבור הלקוח הנבחר. אין טלמטריה מפוברקת.",
-      "aging_evidence_notice": "צבר חי מ-GET /api/remediation/aging/:clientId — ממצאים פתוחים מקובצים לפי גיל מתוך מאגר התיקון של הלקוח. אין טלמטריית התיישנות מפוברקת."
+      "aging_evidence_notice": "צבר חי מ-GET /api/remediation/aging/:clientId — ממצאים פתוחים מקובצים לפי גיל מתוך מאגר התיקון של הלקוח. אין טלמטריית התיישנות מפוברקת.",
+      "batch_heal_failed": "האיחוי הקבוצתי נכשל",
+      "heal_failed": "האיחוי נכשל",
+      "revert_failed": "הביטול נכשל",
+      "runs": "ריצות",
+      "verdict_distribution": "התפלגות הכרעות"
     },
     "alertRulesEngine": {
       "title": "מנוע כללי התראה",
@@ -7819,7 +7835,8 @@
       "title": "רשת מנועים עצבית",
       "no_clients": "אין לקוחות עדיין",
       "no_engines": "אין מנועים פעילים",
-      "idle": "במנוחה — ממתין לפעילות מנוע"
+      "idle": "במנוחה — ממתין לפעילות מנוע",
+      "client_fallback": "לקוח {{id}}"
     },
     "cockpitWidgets": {
       "protectedRoute": {
@@ -9364,6 +9381,13 @@
       "retry_in": "נסה שוב בעוד",
       "min_abbr": "דק׳",
       "close": "סגור"
+    },
+    "playbookGraph": {
+      "when_severity": "כאשר חומרה: {{severity}}",
+      "severity_any": "כלשהי",
+      "kev_suffix": " · KEV",
+      "action_fallback": "פעולה",
+      "dry_run": "הרצת יבש של הפלייבוק"
     }
   },
   "supremeNerveCenter": {
@@ -9559,5 +9583,28 @@
     "engines_desc": "מטריצת מנועי הסריקה",
     "go_back": "חזרה",
     "system_status": "סטטוס מערכת"
+  },
+  "forensic": {
+    "unknown_engine": "לא ידוע",
+    "tamper_label": "זיוף פורנזי",
+    "provenance_error_label": "שגיאת מקור",
+    "verifying_label": "מאמת…",
+    "remote_label": "מרוחק",
+    "local_label": "מקומי",
+    "remote_detail": "מזהה מרחוק ללא סוכן",
+    "local_detail": "אינו ניתן לזיהוי מרחוק",
+    "wasm_verified_detail": "מניפסט קריפטוגרפי אומת ב-worker מבודד",
+    "resolves_to": "מפנה אל {{canonical}}",
+    "same_engine_as": "אותו מנוע כמו {{canonical}}",
+    "canonical_title": "קנוני: {{canonical}}",
+    "aria_tamper": "זוהה זיוף פורנזי עבור מנוע {{engineId}}",
+    "aria_badge": "תג מציאות מנוע {{engineId}} {{label}}",
+    "detail_awaiting": "ממתין לאימות מקור WASM",
+    "detail_api_unavailable": "API היכולות אינו זמין — לא ניתן לאמת",
+    "detail_manifest_empty": "מניפסט היכולות ריק — לא ניתן לאמת",
+    "detail_missing_provenance": "בתגובת היכולות חסר מניפסט מקור קריפטוגרפי",
+    "detail_verified": "מניפסט אומת",
+    "detail_tamper_failed": "זיוף פורנזי — אימות המקור נכשל",
+    "detail_worker_failure": "כשל ב-worker מקור WASM"
   }
 }

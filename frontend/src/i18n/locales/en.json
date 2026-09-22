@@ -131,7 +131,16 @@
     "edges": "EDGES",
     "evidence_unavailable": "Findings API unavailable — empty evidence is not confirmed.",
     "clients_unavailable": "Clients API unavailable — the tenant list is not confirmed empty.",
-    "evidence_truncated": "Open findings page is truncated — this node may have evidence outside the loaded window."
+    "evidence_truncated": "Open findings page is truncated — this node may have evidence outside the loaded window.",
+    "canvas_label": "Interactive battlespace topology graph — click a node to inspect",
+    "tag_crown_jewel": "crown jewel",
+    "tag_perimeter": "perimeter",
+    "graph_counts": "{{nodes}} nodes · {{edges}} edges",
+    "strips_summary": "STRIPS: {{steps}} steps → {{goal}}",
+    "sha256_integrity": "SHA-256 integrity",
+    "pcap_ref": "PCAP ref",
+    "stack_trace": "Stack trace",
+    "finding_fallback": "Finding"
   },
   "engineC2": {
     "kill_switch_region": "Emergency kill switch",
@@ -141,7 +150,9 @@
     "emergency_stop": "⏹ Emergency Stop",
     "telemetry_strip": "Live engine telemetry",
     "memory_telemetry": "Memory / AST telemetry",
-    "live_telemetry": "Live telemetry"
+    "live_telemetry": "Live telemetry",
+    "ast_tree_count": "AST tree · {{count}} nodes",
+    "truncated_for_safety": "truncated for safety"
   },
   "nav": {
     "cockpit": "Cockpit",
@@ -2607,7 +2618,12 @@
       "posture_evidence": "Live posture from GET /api/posture/score/:clientId — score, sub-scores and drivers computed server-side from the tenant-scoped fix-first program. No fabricated metrics.",
       "program_evidence_notice": "Live remediation program from GET /api/remediation/priority/:clientId — backend-ranked, root-cause deduplicated, with EPSS/KEV effective risk, attack-graph choke points and SLA clocks. Nothing is recomputed in the browser; no fabricated remediation telemetry.",
       "forecast_evidence_notice": "Live forecast from GET /api/remediation/sla-forecast/:clientId — cumulative SLA-breach counts by horizon (KEV subset called out) for the selected tenant. No fabricated telemetry.",
-      "aging_evidence_notice": "Live backlog from GET /api/remediation/aging/:clientId — open findings bucketed by age from the tenant-scoped remediation store. No fabricated aging telemetry."
+      "aging_evidence_notice": "Live backlog from GET /api/remediation/aging/:clientId — open findings bucketed by age from the tenant-scoped remediation store. No fabricated aging telemetry.",
+      "batch_heal_failed": "Batch heal failed",
+      "heal_failed": "Heal failed",
+      "revert_failed": "Revert failed",
+      "runs": "runs",
+      "verdict_distribution": "Verdict distribution"
     },
     "alertRulesEngine": {
       "title": "Alert Rules Engine",
@@ -7819,7 +7835,8 @@
       "title": "Neural engine web",
       "no_clients": "No clients yet",
       "no_engines": "No engines active",
-      "idle": "Idle — awaiting engine activity"
+      "idle": "Idle — awaiting engine activity",
+      "client_fallback": "Client {{id}}"
     },
     "cockpitWidgets": {
       "protectedRoute": {
@@ -9364,6 +9381,13 @@
       "retry_in": "Retry in",
       "min_abbr": "min",
       "close": "Close"
+    },
+    "playbookGraph": {
+      "when_severity": "WHEN severity: {{severity}}",
+      "severity_any": "any",
+      "kev_suffix": " · KEV",
+      "action_fallback": "action",
+      "dry_run": "Dry-run playbook"
     }
   },
   "supremeNerveCenter": {
@@ -9559,5 +9583,28 @@
     "engines_desc": "Scan engine matrix",
     "go_back": "Go back",
     "system_status": "System status"
+  },
+  "forensic": {
+    "unknown_engine": "unknown",
+    "tamper_label": "FORENSIC TAMPER",
+    "provenance_error_label": "PROVENANCE ERROR",
+    "verifying_label": "VERIFYING…",
+    "remote_label": "REMOTE",
+    "local_label": "LOCAL",
+    "remote_detail": "Detects remotely without an agent",
+    "local_detail": "Not remotely detectable",
+    "wasm_verified_detail": "Cryptographic manifest verified in isolated worker",
+    "resolves_to": "Resolves to {{canonical}}",
+    "same_engine_as": "Same engine as {{canonical}}",
+    "canonical_title": "Canonical: {{canonical}}",
+    "aria_tamper": "Forensic tamper detected for engine {{engineId}}",
+    "aria_badge": "Engine reality badge {{engineId}} {{label}}",
+    "detail_awaiting": "awaiting WASM provenance verification",
+    "detail_api_unavailable": "capabilities API unavailable — cannot verify",
+    "detail_manifest_empty": "capabilities manifest empty — cannot verify",
+    "detail_missing_provenance": "capabilities response missing cryptographic provenance manifest",
+    "detail_verified": "manifest verified",
+    "detail_tamper_failed": "FORENSIC TAMPER — provenance verification failed",
+    "detail_worker_failure": "WASM provenance worker failure"
   }
 }

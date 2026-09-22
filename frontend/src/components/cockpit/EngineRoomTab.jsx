@@ -12,6 +12,7 @@ import Button from '../ui/Button'
 const defaultEngines = []
 
 function GroupSection({ groupDef, engines, enabledSet, configLoading, poeJobId, onToggle, onEnableAll, onDisableAll }) {
+  const { t } = useTranslation()
   const enabledCount = engines.filter((e) => enabledSet.has(e.id)).length
 
   return (
@@ -29,7 +30,7 @@ function GroupSection({ groupDef, engines, enabledSet, configLoading, poeJobId, 
             {groupDef.label}
           </h3>
           <span className="text-[10px] font-mono text-[var(--text-muted)]">
-            {enabledCount}/{engines.length} enabled
+            {t('components.cockpitWidgets.engineRoomTab.group_enabled', { enabled: enabledCount, total: engines.length })}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -39,7 +40,7 @@ function GroupSection({ groupDef, engines, enabledSet, configLoading, poeJobId, 
             disabled={configLoading}
             className="px-2 py-0.5 rounded text-[10px] font-mono border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
-            Enable All
+            {t('engines.enable_all')}
           </Button>
           <Button variant="unstyled"
             type="button"
@@ -47,7 +48,7 @@ function GroupSection({ groupDef, engines, enabledSet, configLoading, poeJobId, 
             disabled={configLoading}
             className="px-2 py-0.5 rounded text-[10px] font-mono border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
-            Disable All
+            {t('engines.disable_all')}
           </Button>
         </div>
       </div>
@@ -200,7 +201,7 @@ export default function EngineRoomTab() {
             className="text-rose-400 text-xs underline shrink-0"
             onClick={dismissConfigError}
           >
-            Dismiss
+            {t('common.dismiss')}
           </Button>
         </div>
       )}

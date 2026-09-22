@@ -109,7 +109,7 @@ export default function AIModelRiskTab() {
     } finally {
       setLoading(false)
     }
-  }, [selectedClientId, loadEndpoints])
+  }, [selectedClientId, loadEndpoints, t])
 
   useEffect(() => {
     load()
