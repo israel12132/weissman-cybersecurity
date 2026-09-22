@@ -351,7 +351,7 @@ describe('AdversaryCampaignFabric', () => {
     await waitFor(() => {
       expect(apiFetch).toHaveBeenCalledWith('/api/campaigns', {
         method: 'POST',
-        body: JSON.stringify({ client_id: 9, goal: 'access:foothold', profile_id: 'web-initial-access' }),
+        body: { client_id: 9, goal: 'access:foothold', profile_id: 'web-initial-access' },
       })
     })
     expect(await screen.findByTestId('campaign-apt-profile')).toBeInTheDocument()
