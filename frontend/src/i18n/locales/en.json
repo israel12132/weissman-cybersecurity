@@ -8209,7 +8209,8 @@
         },
         "no_attack_surface": "No attack surface data yet.",
         "no_trend": "No trend data",
-        "no_zero_day": "No zero-day activity"
+        "no_zero_day": "No zero-day activity",
+        "stats_unavailable": "Dashboard metrics unavailable — live data could not be loaded."
       },
       "execKpiStrip": {
         "no_change_vs_24h": "No change vs. 24h",

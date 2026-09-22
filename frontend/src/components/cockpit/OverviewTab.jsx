@@ -152,6 +152,7 @@ export default function OverviewTab() {
   const [trendSpark, setTrendSpark] = useState([])
   const [resolvedSpark, setResolvedSpark] = useState([])
   const [loading, setLoading] = useState(true)
+  const [statsError, setStatsError] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -167,6 +168,7 @@ export default function OverviewTab() {
           apiFetch('/api/soc/incidents').catch(() => null),
         ])
         if (cancelled) return
+        setStatsError(!statsData)
         if (statsData) {
           const d = statsData
           setStats({
@@ -207,6 +209,7 @@ export default function OverviewTab() {
         }
       } catch (_) {
         if (!cancelled) {
+          setStatsError(true)
           setFindings([])
           setIncidentCount(0)
         }
@@ -346,7 +349,7 @@ export default function OverviewTab() {
             <ShieldAlert className="w-4 h-4 text-[#22d3ee]/80" />
           </div>
           <p className="text-2xl font-bold text-[#22d3ee] mt-1 tabular-nums">
-            {loading ? '—' : stats.total_vulnerabilities}
+            {loading || statsError ? '—' : stats.total_vulnerabilities}
           </p>
           <SparklineOrEmpty
             data={trendSpark}
@@ -378,9 +381,9 @@ export default function OverviewTab() {
             <Activity className="w-4 h-4 text-emerald-400/80" />
           </div>
           <p className="text-2xl font-bold mt-1 tabular-nums" style={{
-            color: score >= 70 ? '#4ade80' : score >= 40 ? '#fbbf24' : '#ef4444',
+            color: statsError ? 'var(--text-muted)' : score >= 70 ? '#4ade80' : score >= 40 ? '#fbbf24' : '#ef4444',
           }}>
-            {loading ? '—' : `${score}%`}
+            {loading || statsError ? '—' : `${score}%`}
           </p>
           <SparklineOrEmpty
             data={resolvedSpark}
@@ -396,7 +399,13 @@ export default function OverviewTab() {
           <h3 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-widest mb-4">
             {t('components.cockpitTabs.overview.security_risk_grade')}
           </h3>
-          <RiskGauge score={score} />
+          {statsError ? (
+            <p className="text-sm text-[var(--text-muted)]">
+              {t('components.cockpitTabs.overview.stats_unavailable')}
+            </p>
+          ) : (
+            <RiskGauge score={score} />
+          )}
         </div>
         <div className={`${GLASS_CARD} min-h-[320px]`}>
           <h3 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-widest mb-4">

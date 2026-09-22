@@ -8209,7 +8209,8 @@
         },
         "no_attack_surface": "אין עדיין נתוני משטח תקיפה.",
         "no_trend": "אין נתוני מגמה",
-        "no_zero_day": "אין פעילות zero-day"
+        "no_zero_day": "אין פעילות zero-day",
+        "stats_unavailable": "מדדי לוח הבקרה אינם זמינים — לא ניתן לטעון נתונים חיים."
       },
       "execKpiStrip": {
         "no_change_vs_24h": "ללא שינוי מול 24ש׳",
