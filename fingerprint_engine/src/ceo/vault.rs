@@ -135,6 +135,14 @@ fn decrypt_keyring() -> &'static [[u8; 32]] {
     .as_slice()
 }
 
+/// The KEK decrypt keyring (current key first, then rotated-out previous keys),
+/// exposed to `crate::tenant_kms` so [`LocalKeyProvider`](crate::tenant_kms::LocalKeyProvider)
+/// can unwrap a tenant DEK that was wrapped under a now-rotated KEK. Same material
+/// [`decrypt_secret`] uses.
+pub(crate) fn kek_ring() -> &'static [[u8; 32]] {
+    decrypt_keyring()
+}
+
 fn encrypt_with_key(key: &[u8; 32], plaintext: &str) -> Option<String> {
     let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
     let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
@@ -227,7 +235,9 @@ fn row_to_vault(r: &PgRow) -> Result<VaultRowOut, sqlx::Error> {
         component_ref: r.try_get("component_ref")?,
         attack_chain_json: r.try_get("attack_chain_json")?,
         remediation_patch: r.try_get("remediation_patch")?,
-        detection_signature: decrypt_secret(&r.try_get::<String, _>("detection_signature")?),
+        // Raw stored value; the async caller decrypts via `crate::tenant_kms`
+        // (wzt1: tenant DEK, else legacy wzv1:/plaintext) since unwrap may be async.
+        detection_signature: r.try_get("detection_signature")?,
         severity: r.try_get("severity")?,
         preemptive_validated: r.try_get("preemptive_validated")?,
         simulation_feedback: r.try_get("simulation_feedback")?,
@@ -260,7 +270,21 @@ pub async fn list_vault_rows(
     for r in rows {
         out.push(row_to_vault(&r)?);
     }
-    Ok(out)
+    // Decrypt each row's secret. A wzt1: row we cannot unwrap/open (KMS outage, disabled or
+    // crypto-shredded CMK, auth-tag mismatch) is SKIPPED — never surfaced as ciphertext posing
+    // as plaintext. Legacy wzv1:/plaintext rows take the infallible path and are always kept.
+    let mut decrypted = Vec::with_capacity(out.len());
+    for mut row in out {
+        let stored = std::mem::take(&mut row.detection_signature);
+        match crate::tenant_kms::decrypt_secret_for_tenant(pool, tenant_id, &stored).await {
+            Ok(plaintext) => {
+                row.detection_signature = plaintext;
+                decrypted.push(row);
+            }
+            Err(_) => continue,
+        }
+    }
+    Ok(decrypted)
 }
 
 pub async fn get_vault_row(
@@ -279,7 +303,27 @@ pub async fn get_vault_row(
     .fetch_optional(&mut *tx)
     .await?;
     let _ = tx.commit().await;
-    row.as_ref().map(row_to_vault).transpose()
+    let out = row.as_ref().map(row_to_vault).transpose()?;
+    match out {
+        Some(mut v) => {
+            let stored = std::mem::take(&mut v.detection_signature);
+            // Fail-closed: a wzt1: row that will not decrypt (KMS outage / shredded CMK /
+            // auth-tag mismatch) surfaces as an error the handler turns into 500 — never
+            // ciphertext posing as plaintext. Legacy wzv1:/plaintext rows decrypt infallibly
+            // (Ok), so their behavior is unchanged. Map KeyProviderError into this fn's
+            // sqlx::Error result type (matching the crate's existing Configuration usage).
+            v.detection_signature =
+                crate::tenant_kms::decrypt_secret_for_tenant(pool, tenant_id, &stored)
+                    .await
+                    .map_err(|e| {
+                        sqlx::Error::Configuration(
+                            format!("tenant secret decrypt failed: {e}").into(),
+                        )
+                    })?;
+            Ok(Some(v))
+        }
+        None => Ok(None),
+    }
 }
 
 pub async fn post_vault_row(
@@ -358,7 +402,12 @@ pub async fn update_vault_row(
     id: i64,
     body: &VaultSecretBody,
 ) -> Result<bool, sqlx::Error> {
-    let insert = secret_body_to_vault_insert(body);
+    let mut insert = secret_body_to_vault_insert(body);
+    // Re-encrypt the secret under the per-tenant DEK (KEK->DEK envelope); falls back
+    // to the legacy global-key path inside `encrypt_secret_for_tenant` when no DEK/KEK
+    // material is available, so existing deployments keep working unchanged.
+    insert.detection_signature =
+        crate::tenant_kms::encrypt_secret_for_tenant(pool, tenant_id, &body.value).await;
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
     let res = sqlx::query(
         r#"UPDATE genesis_vaccine_vault

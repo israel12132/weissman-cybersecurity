@@ -200,3 +200,30 @@ spec:
           port: 443
         - protocol: TCP
           port: 80
+
+---
+# App tier -> PgBouncer pooler (transaction pooling on 6432). Without this the default-deny-ingress
+# policy blocks all traffic to the new pooler pods.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-app-to-pgbouncer
+  namespace: weissman
+spec:
+  podSelector:
+    matchLabels:
+      app: weissman-pgbouncer
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: weissman-backend
+        - podSelector:
+            matchLabels:
+              app: weissman-worker
+      ports:
+        - protocol: TCP
+          port: 6432
+

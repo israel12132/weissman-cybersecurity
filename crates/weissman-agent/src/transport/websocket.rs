@@ -377,6 +377,28 @@ async fn handle_text(
                 let _ = crate::transport::kill::latch(&reason);
                 std::process::exit(0);
             }
+            // verify() failed. Fail closed, and separate "no key was ever provisioned" from
+            // "a key is present but the signature is wrong", so an operator can tell a config gap
+            // from a forged/replayed kill.
+            if !crate::transport::kill::key_is_provisioned(&kill_hmac_key) {
+                if crate::transport::kill::allow_unsigned() {
+                    warn!(
+                        target: "agent",
+                        reason = %reason,
+                        "executing UNSIGNED kill-switch: no verification key provisioned but \
+                         WEISSMAN_AGENT_ALLOW_UNSIGNED=1 (lab only — never set in production)"
+                    );
+                    let _ = crate::transport::kill::latch(&reason);
+                    std::process::exit(0);
+                }
+                warn!(
+                    target: "agent",
+                    "refusing kill-switch: no verification key provisioned (fail-closed); \
+                     re-enroll against a server that issues a kill_hmac_key, or set \
+                     WEISSMAN_AGENT_ALLOW_UNSIGNED=1 in a lab only"
+                );
+                return;
+            }
             warn!(target: "agent", "rejected kill-switch with invalid signature");
         }
     }

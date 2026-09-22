@@ -101,3 +101,7 @@ frontend/dist-www/
 # Maintenance flag / status.json written by deploy/maintenance/maintenance-mode.sh (runtime state)
 deploy/maintenance/state/*
 !deploy/maintenance/state/.gitkeep
+
+# Local .env backups (may contain real secrets) — never commit
+.env.bak*
+.env.*.bak

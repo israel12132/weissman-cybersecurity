@@ -1,0 +1,35 @@
+# Example per-customer overrides for a dedicated install. Install:
+#   helm install cust-acme deploy/helm/weissman \
+#     -n weissman-acme --create-namespace \
+#     -f deploy/helm/weissman/ci/values-example-acme.yaml
+# Replace every CHANGE_ME with real per-customer material (openssl rand ...). Do NOT commit real secrets.
+customer:
+  name: acme
+  domain: acme.weissmancyber.com
+  region: eu-west
+  sizing: medium
+
+image:
+  digest: "sha256:REPLACE_WITH_COSIGN_VERIFIED_DIGEST"
+
+secrets:
+  databaseUrl: "postgresql://weissman_app:CHANGE_ME@weissman-pg-rw:5432/weissman?sslmode=require"
+  authDatabaseUrl: "postgresql://weissman_auth:CHANGE_ME@weissman-pg-rw:5432/weissman?sslmode=require"
+  workerDatabaseUrl: "postgresql://weissman_worker:CHANGE_ME@weissman-pg-rw:5432/weissman?sslmode=require"
+  analyticsDatabaseUrl: "postgresql://weissman_analytics:CHANGE_ME@weissman-pg-ro:5432/weissman?sslmode=require"
+  migrateUrl: "postgresql://postgres:CHANGE_ME@weissman-pg-rw:5432/weissman?sslmode=require"
+  jwtSecret: "CHANGE_ME_MIN_48_CHARS_openssl_rand_base64_48"
+  redisUrl: "redis://weissman-redis:6379/0"
+  destructiveConfirmSecret: "CHANGE_ME_MIN_32_CHARS"
+  jobOrchestratorSecret: "CHANGE_ME_MIN_32_CHARS"
+  metricsToken: "CHANGE_ME_MIN_32_CHARS"
+  ragProvenanceSecret: "CHANGE_ME_64_HEX_openssl_rand_hex_32"
+  integrationsVaultKey: "CHANGE_ME_MIN_32_CHARS"
+  vaultKey: "CHANGE_ME_64_HEX_openssl_rand_hex_32"
+
+postgres:
+  provision: true
+  imageName: ghcr.io/your-org/cnpg-postgres16-pgvector:latest
+
+redis:
+  provision: true

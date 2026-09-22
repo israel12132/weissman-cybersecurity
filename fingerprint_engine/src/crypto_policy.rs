@@ -44,7 +44,14 @@ pub fn crypto_capabilities_json(ml_kem_round_trip_ok: Option<bool>) -> Value {
         "post_quantum": {
             "ml_kem_768_available": true,
             "ml_kem_selftest_ok": ml_kem_round_trip_ok,
-            "nist_standard": "FIPS 203 (ML-KEM)",
+            // FIPS 203 is the ALGORITHM standard for ML-KEM. This is NOT a module validation:
+            // the cryptographic modules in use (pure-Rust crates + rustls default backend) are
+            // NOT CMVP / FIPS 140-2/3 validated. Reported explicitly so a reviewer cannot read
+            // "FIPS 203" as a validated-module claim. Set fips_140_mode via a CMVP-validated
+            // provider build (e.g. aws-lc-rs FIPS) before advertising validation.
+            "algorithm_spec": "FIPS 203 (ML-KEM) — algorithm standard only, not a module validation",
+            "cmvp_module_validated": false,
+            "fips_140_mode": false,
             "session_kem_mode": mode.as_str(),
             "hybrid_rollout": "Set WEISSMAN_SESSION_KEM_MODE=hybrid when frontends accept wrapped KEM blobs.",
         },
@@ -89,7 +96,21 @@ mod tests {
             j["post_quantum"]["ml_kem_768_available"],
             serde_json::Value::Bool(true)
         );
-        assert_eq!(j["post_quantum"]["nist_standard"], "FIPS 203 (ML-KEM)");
+        // Honesty: FIPS 203 is advertised as an algorithm standard only, and the response
+        // explicitly states the modules are NOT CMVP-validated, so the label cannot be
+        // mistaken for a FIPS 140 module validation.
+        assert_eq!(
+            j["post_quantum"]["algorithm_spec"],
+            "FIPS 203 (ML-KEM) — algorithm standard only, not a module validation"
+        );
+        assert_eq!(
+            j["post_quantum"]["cmvp_module_validated"],
+            serde_json::Value::Bool(false)
+        );
+        assert_eq!(
+            j["post_quantum"]["fips_140_mode"],
+            serde_json::Value::Bool(false)
+        );
         assert_eq!(j["fuzz_core_wasm"]["target"], "wasm32-unknown-unknown");
         assert_eq!(
             j["fuzz_core_wasm"]["abi_export"],

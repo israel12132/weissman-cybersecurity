@@ -107,6 +107,23 @@ async fn api_tenant_brand_put(
     (StatusCode::OK, Json(json!({"ok": true, "brand": brand}))).into_response()
 }
 
+/// Fetch + resolve the tenant's white-label brand name for report headers/footers.
+/// Opens and commits its own short-lived RLS tx; any error (store down, corrupt JSON,
+/// unset brand) collapses to `None` so document generation never fails on branding.
+async fn tenant_brand_name(state: &Arc<AppState>, tenant_id: i64) -> Option<String> {
+    let mut tx = db::begin_tenant_tx(&state.app_pool, tenant_id).await.ok()?;
+    let raw: Option<String> = sqlx::query_scalar(
+        "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'tenant_brand'",
+    )
+    .bind(tenant_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
+    let _ = tx.commit().await;
+    crate::pdf_report::brand_name_from_tenant_brand_json(raw.as_deref())
+}
+
 async fn api_itdr_connectors_get(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,

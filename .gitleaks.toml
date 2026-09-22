@@ -30,7 +30,28 @@ useDefault = true
 [allowlist]
 description = "Example/fixture secrets in the security engines' test corpora, the IaC/secret-scanner demo UI, and CI/E2E test fixtures (non-real placeholders; real secrets come from env/Vault)."
 paths = [
-    '''fingerprint_engine/src/.*\.(rs|inc)$''',
+    # Detection-engine fixture corpora ONLY. Example AWS keys, PEM private keys, poison
+    # prompts and alg:none JWTs are these engines' own detector TEST INPUTS, not credentials.
+    # Scoped to the specific engine files that carry them (was a blanket
+    # `fingerprint_engine/src/.*\.(rs|inc)$` that also exempted every platform handler in the
+    # same tree — auth_*.rs, admin_users.rs, audit_log.rs, ceo/, billing/, secret_zeroize/,
+    # soar/, server_handlers_*.inc — from the secret scan; those are now scanned again).
+    # The canonical AWS example key (AKIAIOSFODNN7EXAMPLE) that most other engine fixtures use
+    # is handled by a content regex below, so deception_*, engine_probes and pipeline_engine
+    # need no path entry and stay scanned for real secrets.
+    '''fingerprint_engine/src/cicd_ast_scan\.rs$''',
+    # AWS EventBridge deception engine: JSON honeytoken payloads embed placeholder AWS keys
+    # (AKIAIOSFODNN7EXAMPLE and, in earlier commits, AKIAAAAAAAAAAAAAAAAA / AKIABBBBBBBBBBBBBBBB).
+    # A path entry (not just the AKIAIOSFODNN7EXAMPLE content regex) so the git-history scan,
+    # which sees those older commits, is covered too.
+    '''fingerprint_engine/src/deception_eventbridge\.rs$''',
+    '''fingerprint_engine/src/exploit_synthesis_engine\.rs$''',
+    '''fingerprint_engine/src/honey_deception_node\.rs$''',
+    '''fingerprint_engine/src/identity_engine\.rs$''',
+    '''fingerprint_engine/src/llm_fuzzer_engine\.rs$''',
+    '''fingerprint_engine/src/web_scan_intel\.rs$''',
+    '''fingerprint_engine/src/timing_sidechannel_engine\.rs$''',
+    '''fingerprint_engine/src/iac_misconfig_engine/.*\.rs$''',
     '''frontend/src/pages/IacSecurityCenter\.jsx$''',
     '''frontend/src/pages/SovereignDefenseMatrix\.jsx$''',
     '''frontend/src/lib/engineParamDefsExplicit\.js$''',
@@ -60,6 +81,18 @@ paths = [
     '''Cargo\.lock$''',
 ]
 regexes = [
+    # Canonical AWS-docs example key. It is the test input for many engine detectors AND the
+    # #[cfg(test)] round-trip in the ceo/vault.rs HANDLER. A content allowlist (not a path)
+    # so ceo/vault.rs, the deception engines, engine_probes and pipeline_engine all keep being
+    # scanned for genuine secrets while this one non-credential example is ignored everywhere.
+    '''AKIAIOSFODNN7EXAMPLE''',
+    # slack_interactivity.rs unit-test signing-secret fixture (the literal contains `yyyzzz`,
+    # i.e. deliberately not hex — a mock, not a real Slack secret). Content regex so the Slack
+    # interactivity handler itself stays under the scanner.
+    '''8f742231b10e8888abcd99yyyzzz85a5''',
+    # ws_intelligence_bus.rs unit-test JWT fixture (sub=1, literal `sig` signature). Content
+    # regex so the websocket bus handler stays scanned for real tokens.
+    '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.eyJzdWIiOiIxIn0\.sig''',
     # `key = 'enable_rfc3161_signing'` is a config FLAG NAME, not a credential —
     # the generic-api-key heuristic mis-fires on the `key = '...'` shape.
     '''enable_rfc3161_signing''',

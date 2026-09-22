@@ -271,7 +271,8 @@ async fn api_client_report_pdf(
             )
         })
         .collect();
-    let pdf_bytes: Vec<u8> = match crate::pdf_report::build_client_report_pdf(&client_name, &findings, proof.as_ref()) {
+    let brand_name = tenant_brand_name(&state, auth.tenant_id).await;
+    let pdf_bytes: Vec<u8> = match crate::pdf_report::build_client_report_pdf(&client_name, &findings, proof.as_ref(), brand_name.as_deref()) {
         Ok(b) => b,
         Err(e) => {
             return (

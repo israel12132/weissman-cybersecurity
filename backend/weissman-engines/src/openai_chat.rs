@@ -141,6 +141,13 @@ pub fn endpoint_circuit_open(base_url: &str) -> bool {
     matches!(circuit_check(base_url), Err(LlmError::CircuitOpen { .. }))
 }
 
+/// Fail-closed data-residency egress guard. Called at the very top of every request-issuing
+/// entrypoint below, BEFORE the `/v1/models` health probe or the POST fires, so a
+/// policy-disallowed host never receives customer data. See [`crate::llm_egress`].
+fn egress_guard(base_url: &str) -> Result<(), LlmError> {
+    crate::llm_egress::llm_egress_allowed(base_url).map_err(LlmError::EgressBlocked)
+}
+
 fn health_cache() -> &'static Mutex<HashMap<String, Instant>> {
     static H: OnceLock<Mutex<HashMap<String, Instant>>> = OnceLock::new();
     H.get_or_init(|| Mutex::new(HashMap::new()))
@@ -213,13 +220,22 @@ pub struct LlmClientErrorBody {
 /// Structured LLM failure (maps to frontend-facing `LlmClientErrorBody`).
 #[derive(Debug, Clone)]
 pub enum LlmError {
-    CircuitOpen { cooldown_secs: u64 },
+    CircuitOpen {
+        cooldown_secs: u64,
+    },
     Unreachable(String),
-    Http { status: u16, body_preview: String },
+    Http {
+        status: u16,
+        body_preview: String,
+    },
     Timeout,
     Decode(String),
     EmptyContent,
     InternalLock,
+    /// Configured LLM endpoint host fails the data-residency egress policy
+    /// (see [`crate::llm_egress`]). Fail-closed: no request is sent. Not retryable against
+    /// the same URL, but the router may still try a different (in-region) endpoint.
+    EgressBlocked(String),
 }
 
 impl LlmError {
@@ -250,6 +266,9 @@ impl LlmError {
         match self {
             LlmError::Http { status, .. } => matches!(status, 401 | 403 | 404),
             LlmError::EmptyContent => true,
+            // A residency/egress block on one endpoint is not retryable against the same
+            // URL, but a different provider in the chain may be in-region.
+            LlmError::EgressBlocked(_) => true,
             _ => false,
         }
     }
@@ -301,6 +320,12 @@ impl LlmError {
                 retryable: true,
                 detail: None,
             },
+            LlmError::EgressBlocked(reason) => LlmClientErrorBody {
+                code: "llm_egress_blocked",
+                message: reason.clone(),
+                retryable: false,
+                detail: None,
+            },
         }
     }
 }
@@ -334,6 +359,7 @@ fn record_llm_error_outcome(started: Instant, error: &LlmError) {
         LlmError::Http { .. } => "http_error",
         LlmError::Decode(_) => "decode",
         LlmError::EmptyContent => "empty",
+        LlmError::EgressBlocked(_) => "egress_blocked",
         _ => "error",
     };
     record_llm_outcome(started, outcome);
@@ -587,6 +613,7 @@ pub async fn chat_completion_detailed(
     operation: &'static str,
     sanitize_user_input: bool,
 ) -> Result<ChatCompletionOutput, LlmError> {
+    egress_guard(base_url)?;
     circuit_check(base_url)?;
     if let Err(e) = ensure_llm_reachable(client, base_url).await {
         circuit_on_failure(base_url);
@@ -741,6 +768,7 @@ pub async fn chat_completion_detailed_json_object(
     operation: &'static str,
     sanitize_user_input: bool,
 ) -> Result<ChatCompletionOutput, LlmError> {
+    egress_guard(base_url)?;
     circuit_check(base_url)?;
     if let Err(e) = ensure_llm_reachable(client, base_url).await {
         circuit_on_failure(base_url);
@@ -865,6 +893,7 @@ pub async fn create_embedding(
     tenant_id: Option<i64>,
     operation: &'static str,
 ) -> Result<Vec<f32>, LlmError> {
+    egress_guard(base_url)?;
     circuit_check(base_url)?;
     if let Err(e) = ensure_llm_reachable(client, base_url).await {
         circuit_on_failure(base_url);
@@ -971,6 +1000,7 @@ pub fn chat_completion_text_blocking(
     operation: &'static str,
     sanitize_user_input: bool,
 ) -> Result<String, LlmError> {
+    egress_guard(base_url)?;
     circuit_check(base_url)?;
     let base = normalize_openai_base_url(base_url)
         .trim_end_matches('/')
@@ -1114,6 +1144,7 @@ pub async fn check_model_available(
     base_url: &str,
     model: &str,
 ) -> Result<bool, LlmError> {
+    egress_guard(base_url)?;
     let base = normalize_openai_base_url(base_url)
         .trim_end_matches('/')
         .to_string();

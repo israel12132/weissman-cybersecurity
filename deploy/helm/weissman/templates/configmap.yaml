@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "weissman.configName" . }}
+  namespace: {{ include "weissman.namespace" . }}
+  labels:
+    {{- include "weissman.labels" . | nindent 4 }}
+data:
+  PORT: {{ .Values.config.port | quote }}
+  WEISSMAN_ENV: {{ .Values.config.env | quote }}
+  WEISSMAN_COOKIE_SECURE: {{ .Values.config.cookieSecure | quote }}
+  WEISSMAN_PUBLIC_BASE_URL: {{ .Values.config.publicBaseUrl | default (printf "https://%s" (required "customer.domain is required" .Values.customer.domain)) | quote }}
+  WEISSMAN_MIGRATIONS_DIR: {{ .Values.config.migrationsDir | quote }}
+  WEISSMAN_BILLING_STRICT: {{ .Values.config.billingStrict | quote }}
+  WEISSMAN_WORKER_LIGHT_CONCURRENCY: {{ .Values.config.workerLightConcurrency | quote }}
+  WEISSMAN_WORKER_HEAVY_CONCURRENCY: {{ .Values.config.workerHeavyConcurrency | quote }}
+  WEISSMAN_SOAR_VERIFY_WORKER: {{ .Values.config.soarVerifyWorker | quote }}
+  WEISSMAN_AGENT_BIN_DIR: {{ .Values.config.agentBinDir | quote }}
+  {{- range $k, $v := .Values.config.extra }}
+  {{ $k }}: {{ $v | quote }}
+  {{- end }}

@@ -881,6 +881,11 @@ pub async fn register_tenant_and_admin(
     if password.len() < 10 {
         return Err("password must be at least 10 characters".to_string());
     }
+    // bcrypt truncates at 72 bytes; reject rather than persist a hash over a truncated
+    // secret (matches admin_users.rs / signup.rs). `str::len()` is already bytes.
+    if password.len() > weissman_db::BCRYPT_MAX_PASSWORD_BYTES {
+        return Err("password must be at most 72 bytes".to_string());
+    }
     let plan_ok: bool = sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS(SELECT 1 FROM billing_plans WHERE slug = $1 AND active = true)",
     )

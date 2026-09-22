@@ -1,0 +1,144 @@
+# Dedicated (single-tenant) Weissman deployment — one isolated instance per customer.
+# Copy per customer (e.g. deploy/helm/weissman/ci/values-<customer>.yaml), fill the customer
+# stanza + image.digest + secrets, then install into a matching namespace:
+#
+#   helm install cust-acme deploy/helm/weissman \
+#     -n weissman-acme --create-namespace \
+#     -f deploy/helm/weissman/ci/values-example-acme.yaml
+#
+# The namespace passed with -n MUST equal namespace.name (default weissman-<customer.name>).
+
+# ---- Customer identity (REQUIRED) --------------------------------------------------------
+customer:
+  # DNS-label-safe (a-z, 0-9, '-'); used in the namespace and as a label value (<=63 chars).
+  name: ""            # e.g. "acme"
+  # Primary FQDN this instance serves; the ingress host and (default) WEISSMAN_PUBLIC_BASE_URL.
+  domain: ""          # e.g. "acme.weissmancyber.com"
+  # Inventory metadata (label only; does not size anything). Must be label-value-safe if set.
+  region: ""          # e.g. "eu-west"
+  sizing: ""          # e.g. "small" | "medium" | "large"
+
+nameOverride: ""
+
+namespace:
+  # false (default): run `helm install -n <ns> --create-namespace`; chart does NOT own the ns.
+  # true: chart renders/owns the Namespace object (GitOps); then do NOT also pass
+  #       --create-namespace, and ensure the ns exists before the release-storage write.
+  create: false
+  name: ""            # defaults to weissman-<customer.name>
+  annotations: {}
+
+image:
+  repository: ghcr.io/israel12132/weissman-cybersecurity/weissman-backend
+  # Prefer an immutable, cosign-verified digest (see deploy/k8s/backend-deployment.yaml header).
+  digest: ""          # e.g. "sha256:abc123..." — wins over tag
+  tag: ""             # used only when digest is empty; falls back to Chart.appVersion
+  pullPolicy: IfNotPresent
+
+config:
+  name: ""            # defaults to weissman-config
+  port: "8000"
+  env: "production"
+  cookieSecure: "1"
+  publicBaseUrl: ""   # defaults to https://<customer.domain>
+  migrationsDir: "/srv/migrations"
+  billingStrict: "1"
+  workerLightConcurrency: "8"
+  workerHeavyConcurrency: "2"
+  soarVerifyWorker: "1"
+  agentBinDir: "/srv/bin/agents"
+  extra: {}          # extra non-secret WEISSMAN_* keys, map of string->string
+
+secrets:
+  # false: provide a Secret named `secrets.name` out-of-band (Sealed Secrets / External
+  # Secrets / SOPS) with the same keys; the chart templates no secret material.
+  create: true
+  name: ""            # defaults to weissman-secrets
+  # All REQUIRED for a production dedicated install — a missing value fails the render.
+  databaseUrl: ""            # weissman_app DSN — NOSUPERUSER/NOBYPASSRLS (ADR 0001)
+  authDatabaseUrl: ""        # weissman_auth DSN (login/billing plane)
+  workerDatabaseUrl: ""      # weissman_worker DSN (job bus)
+  analyticsDatabaseUrl: ""   # weissman_analytics DSN
+  migrateUrl: ""             # superuser/owner DSN — migrations ONLY
+  jwtSecret: ""              # >=48 chars in production
+  jwtSecretPrevious: ""      # optional — set during JWT rotation (ADR 0002)
+  redisUrl: ""               # e.g. redis://:<pass>@weissman-redis:6379/0
+  destructiveConfirmSecret: ""  # >=32 chars
+  jobOrchestratorSecret: ""     # >=32 chars
+  metricsToken: ""              # >=32 chars
+  ragProvenanceSecret: ""       # 64 hex
+  integrationsVaultKey: ""      # >=32 chars — dedicated secrets-at-rest key (ADR 0002)
+  vaultKey: ""                  # 64 hex — CEO genesis vault; prod boot fails closed without it
+  dualApprovalSecret: ""        # optional — SOAR dual approval
+  adminEmail: ""                # optional bootstrap admin
+  adminPassword: ""             # optional bootstrap admin
+
+backend:
+  replicaCount: 2
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits:   { cpu: "2",  memory: 2Gi }
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 75
+
+worker:
+  replicaCount: 1
+  resources:
+    requests: { cpu: 200m, memory: 384Mi }
+    limits:   { cpu: "2",  memory: 2Gi }
+  autoscaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 12
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 75
+
+podDisruptionBudget:
+  enabled: true
+
+ingress:
+  enabled: true
+  className: nginx
+  # Service in this namespace that terminates HTTP. Default = backend API (8000). If you also
+  # deploy the nginx gateway here, set these to weissman-gateway / 80.
+  backendService: backend
+  backendPort: 8000
+  tlsSecretName: weissman-tls
+  clusterIssuer: letsencrypt-prod
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/enable-modsecurity: "true"
+    nginx.ingress.kubernetes.io/enable-owasp-core-rules: "true"
+    nginx.ingress.kubernetes.io/limit-rps: "50"
+    nginx.ingress.kubernetes.io/limit-connections: "100"
+    nginx.ingress.kubernetes.io/ssl-protocols: "TLSv1.2 TLSv1.3"
+
+redis:
+  # Provision a dedicated in-namespace Redis (best-effort fan-out / leases / rate limits;
+  # Postgres is the durable source of truth). false -> point secrets.redisUrl at managed Redis.
+  provision: true
+  image: redis:7-alpine
+  maxmemory: "384mb"
+  maxmemoryPolicy: allkeys-lru
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
+
+postgres:
+  # Provision a dedicated CloudNativePG cluster (requires the CNPG operator + a pgvector image;
+  # see deploy/k8s/postgres-ha.yaml). false -> secrets.*DatabaseUrl point at external/managed PG.
+  provision: false
+  instances: 3
+  imageName: ghcr.io/your-org/cnpg-postgres16-pgvector:latest  # MUST include pgvector
+  storageSize: 50Gi
+  storageClass: ""
+  backup:
+    enabled: false
+    destinationPath: ""                 # e.g. s3://weissman-acme-pg-backups/
+    s3CredentialsSecret: weissman-pg-backup
+    retentionPolicy: "30d"

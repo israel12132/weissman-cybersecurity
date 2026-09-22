@@ -64,7 +64,8 @@ export default function CryptoPosture() {
       {
         id: 'ml-kem-768',
         name: t(`${NS}.ctl_ml_kem`),
-        value: pq.nist_standard || 'FIPS 203 (ML-KEM)',
+        // Honest label: FIPS 203 is the ML-KEM algorithm standard, NOT a CMVP module validation.
+        value: pq.algorithm_spec || pq.nist_standard || 'FIPS 203 (ML-KEM) — algorithm spec only',
         ok: pq.ml_kem_768_available === true,
       },
       {
@@ -172,7 +173,7 @@ export default function CryptoPosture() {
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <ExecutiveWidget label={t(`${NS}.kpi_standard`)} value={pq.nist_standard ? 'FIPS 203' : '—'} accent="#4ade80" />
+              <ExecutiveWidget label={t(`${NS}.kpi_standard`)} value={(pq.algorithm_spec || pq.nist_standard) ? (pq.cmvp_module_validated ? 'FIPS 203 (CMVP)' : 'FIPS 203 (algo)') : '—'} accent="#4ade80" />
               <ExecutiveWidget
                 label={t(`${NS}.kpi_ciphertext`)}
                 value={selftest?.ciphertext_bytes != null ? `${selftest.ciphertext_bytes} B` : '—'}

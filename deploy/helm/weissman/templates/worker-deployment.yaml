@@ -1,0 +1,121 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: weissman-worker
+  namespace: {{ include "weissman.namespace" . }}
+  labels:
+    {{- include "weissman.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.worker.replicaCount }}
+  selector:
+    matchLabels:
+      app: weissman-worker
+  template:
+    metadata:
+      labels:
+        app: weissman-worker
+        {{- include "weissman.labels" . | nindent 8 }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 45
+      containers:
+        - name: worker
+          image: {{ include "weissman.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/usr/local/bin/weissman-worker"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "weissman.configName" . }}
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weissman.secretName" . }}
+                  key: database_url
+            - name: WEISSMAN_AUTH_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weissman.secretName" . }}
+                  key: auth_database_url
+            - name: WEISSMAN_WORKER_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weissman.secretName" . }}
+                  key: worker_database_url
+            - name: WEISSMAN_ANALYTICS_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weissman.secretName" . }}
+                  key: analytics_database_url
+            - name: WEISSMAN_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weissman.secretName" . }}
+                  key: jwt_secret
+            - name: WEISSMAN_JWT_SECRET_PREVIOUS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weissman.secretName" . }}
+                  key: jwt_secret_previous
+                  optional: true
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weissman.secretName" . }}
+                  key: redis_url
+            - name: WEISSMAN_JOB_ORCHESTRATOR_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weissman.secretName" . }}
+                  key: job_orchestrator_secret
+            - name: WEISSMAN_RAG_PROVENANCE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weissman.secretName" . }}
+                  key: rag_provenance_secret
+            - name: WEISSMAN_INTEGRATIONS_VAULT_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weissman.secretName" . }}
+                  key: integrations_vault_key
+            - name: WEISSMAN_VAULT_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weissman.secretName" . }}
+                  key: vault_key
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "pgrep -x weissman-worker >/dev/null 2>&1 || grep -q weissman-worker /proc/1/comm"
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - 'test -n "$(find /tmp/weissman-worker-alive -mmin -2 2>/dev/null)"'
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

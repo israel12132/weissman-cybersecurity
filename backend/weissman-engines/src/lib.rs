@@ -25,6 +25,7 @@ pub mod discovery_corpus;
 pub mod engine_trait;
 pub mod factory;
 pub mod fuzzer;
+pub mod llm_egress;
 pub mod llm_handshake;
 pub mod llm_json_repair;
 pub mod llm_router;

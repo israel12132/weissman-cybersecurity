@@ -144,6 +144,20 @@ async fn run_security_events_llm_cycle(
     if llm_base.trim().is_empty() {
         return Ok(());
     }
+    // Data-residency gate (item 2): this loop reads client IPs and auth/BYPASSRLS audit
+    // lines out of `security_events` and posts them to the tenant's configured LLM endpoint.
+    // Refuse to even assemble that payload unless the endpoint passes the egress policy
+    // (sovereign => loopback/private/in-cluster only). Fail closed: skip the cycle. This is
+    // belt-and-suspenders with the per-call guard in weissman_engines::openai_chat.
+    if let Err(reason) = weissman_engines::llm_egress::llm_egress_allowed(&llm_base) {
+        tracing::warn!(
+            target: "predictive_analyzer",
+            endpoint = %llm_base,
+            reason = %reason,
+            "security_events LLM cycle skipped: endpoint fails data-residency egress policy"
+        );
+        return Ok(());
+    }
     // Scope to `tid`. This read used to run on the bare `pool` with no tenant predicate, against a
     // table that (until 20260817000000_security_events_rls) had no RLS at all — so it returned the
     // most recent 120 events across EVERY tenant, stamped each line with `tenant:<id>` and the

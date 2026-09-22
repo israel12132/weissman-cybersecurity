@@ -22,6 +22,8 @@ pub struct ExecutiveBoardParams {
     pub soc2_pct: u8,
     pub iso_pct: u8,
     pub gdpr_pct: u8,
+    /// White-label brand display name; `None` ⇒ the vendor mark.
+    pub brand_name: Option<String>,
 }
 
 pub fn render_executive_board_pdf(p: &ExecutiveBoardParams) -> Result<Vec<u8>, String> {
@@ -36,6 +38,7 @@ pub fn render_executive_board_pdf(p: &ExecutiveBoardParams) -> Result<Vec<u8>, S
         p.soc2_pct,
         p.iso_pct,
         p.gdpr_pct,
+        p.brand_name.as_deref(),
     )
 }
 
@@ -56,6 +59,7 @@ mod tests {
             soc2_pct: 88,
             iso_pct: 91,
             gdpr_pct: 84,
+            brand_name: None,
         };
         let bytes = render_executive_board_pdf(&params).expect("PDF render must succeed");
         assert!(bytes.starts_with(b"%PDF-1.4"), "must be a PDF-1.4 document");
@@ -76,6 +80,7 @@ mod tests {
             soc2_pct: 100,
             iso_pct: 100,
             gdpr_pct: 100,
+            brand_name: None,
         };
         let bytes = render_executive_board_pdf(&params).expect("PDF render must succeed");
         assert!(bytes.starts_with(b"%PDF-1.4"));

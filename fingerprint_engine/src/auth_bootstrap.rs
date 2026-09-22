@@ -282,6 +282,18 @@ async fn seed_admin_password_if_empty(
     }
 
     // First boot: no credential yet — seed it from WEISSMAN_ADMIN_PASSWORD.
+    // bcrypt only hashes the first 72 bytes; refuse to seed a silently-truncated admin
+    // credential rather than store a hash that ignores the operator's trailing entropy.
+    if password.len() > weissman_db::BCRYPT_MAX_PASSWORD_BYTES {
+        tracing::error!(
+            target: "auth_bootstrap",
+            user_id = row.user_id,
+            "WEISSMAN_ADMIN_PASSWORD exceeds {} bytes; refusing to seed a bcrypt-truncated admin credential",
+            weissman_db::BCRYPT_MAX_PASSWORD_BYTES
+        );
+        let _ = tx.rollback().await;
+        return;
+    }
     let new_hash = match bcrypt::hash(password, 12) {
         Ok(h) => h,
         Err(e) => {

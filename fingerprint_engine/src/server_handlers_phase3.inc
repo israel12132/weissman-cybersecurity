@@ -1048,6 +1048,7 @@ async fn api_reports_executive(
         .map(|p| p.compliance_percent)
         .unwrap_or(100);
 
+    let brand_name = tenant_brand_name(&state, auth.tenant_id).await;
     let params = crate::executive_pdf::ExecutiveBoardParams {
         org_label: tenant_name.clone(),
         client_label: client_name.clone(),
@@ -1059,6 +1060,7 @@ async fn api_reports_executive(
         soc2_pct: soc2,
         iso_pct: iso,
         gdpr_pct: gdpr,
+        brand_name,
     };
     let pdf = match crate::executive_pdf::render_executive_board_pdf(&params) {
         Ok(b) => b,

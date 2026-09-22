@@ -114,8 +114,13 @@ pub fn init_jwt_secret_from_env() -> Result<(), String> {
     if trimmed.is_empty() {
         return Err("WEISSMAN_JWT_SECRET is set but empty".to_string());
     }
-    if weissman_core::tls_policy::is_production_environment() && trimmed.len() < 32 {
-        return Err("WEISSMAN_JWT_SECRET must be at least 32 characters in production".to_string());
+    if weissman_core::tls_policy::is_production_environment()
+        && trimmed.len() < crate::security_startup::MIN_JWT_SECRET_LEN_PROD
+    {
+        return Err(format!(
+            "WEISSMAN_JWT_SECRET must be at least {} characters in production",
+            crate::security_startup::MIN_JWT_SECRET_LEN_PROD
+        ));
     }
     JWT_SECRET
         .set(trimmed.as_bytes().to_vec())

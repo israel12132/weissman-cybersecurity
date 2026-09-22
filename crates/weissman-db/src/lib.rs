@@ -19,10 +19,18 @@ pub mod pg_binary_copy;
 pub mod role_guard;
 pub mod secret;
 
-use sqlx::postgres::{PgPool, PgPoolOptions};
+use sqlx::postgres::{PgConnectOptions, PgPool, PgPoolOptions};
 use sqlx::{Postgres, Transaction};
 use std::sync::Arc;
 use std::time::Duration;
+
+/// bcrypt hashes only the first 72 bytes of a password and silently ignores the rest
+/// (it errors only on an embedded NUL, never on length). Every password-set path must
+/// reject longer input rather than persist a hash over a truncated secret — otherwise two
+/// passwords sharing a 72-byte prefix authenticate identically and any entropy past byte 72
+/// is discarded without warning. Single source of truth so the cap cannot drift between the
+/// HTTP handlers and the env-bootstrap paths (drift is exactly what left signup uncapped).
+pub const BCRYPT_MAX_PASSWORD_BYTES: usize = 72;
 
 /// Primary application database URL (role `weissman_app`, RLS). Read from `DATABASE_URL` when the process starts each call.
 pub fn database_url_from_env() -> Result<String, std::env::VarError> {
@@ -150,55 +158,111 @@ pub async fn run_migrations(database_url: &str) -> Result<(), sqlx::migrate::Mig
     Ok(())
 }
 
-/// Warn loudly when this process's configured pool ceilings cannot all fit in the server's
-/// connection budget.
+/// Pure budget check: `Some(diagnostic)` when the fleet at full scale over-subscribes the server
+/// budget, `None` when it fits. Kept pure so it is unit-testable without a live Postgres.
+fn fleet_budget_overflow(
+    process_label: &str,
+    per_pod_ceiling: u32,
+    replicas: u32,
+    budget: u32,
+    budget_source: &str,
+) -> Option<String> {
+    let fleet_demand = per_pod_ceiling.saturating_mul(replicas);
+    if fleet_demand <= budget {
+        return None;
+    }
+    Some(format!(
+        "connection budget exceeded: process={process_label} per_pod_ceiling={per_pod_ceiling} \
+         WEISSMAN_EXPECTED_REPLICAS={replicas} fleet_demand={fleet_demand} > budget={budget} \
+         ({budget_source}). Front the fleet with PgBouncer (WEISSMAN_DB_POOLER_MODE=transaction) \
+         and raise WEISSMAN_DB_POOLER_MAX_CLIENT_CONN, or lower \
+         WEISSMAN_{{APP,AUTH,INTEL,CONTROL}}_POOL_MAX."
+    ))
+}
+
+/// Fleet-aware connection-admission check, run once at boot.
 ///
-/// The deployment was found configured to open up to 152 connections (backend 72 + worker 80)
-/// against a server `max_connections` of 100, with no pooler in front. Nothing detected that,
-/// because it only manifests under the concurrent load the pools exist to survive: past ~97
-/// in-use slots every further connect fails with SQLSTATE 53300, and the first casualty is
-/// whichever pool happens to be opening a connection at that moment — including the worker's
-/// control-plane pool, which exists precisely so job-state writes can never be starved.
+/// The old check compared a single process's ceiling against Postgres `max_connections` and only
+/// warned. That is blind to horizontal scale: the backend HPA reaches 8 replicas and the worker HPA
+/// 12 (deploy/k8s/backend-hpa.yaml:13, worker-hpa.yaml:12), so at full scale ~20 pods each opening
+/// up to `per_pod_ceiling` (app 48 + auth 12 + intel 12 + control 8 = 80) demand ~1600 connections —
+/// far past a 200-slot Postgres. The fix is PgBouncer in front (transaction pooling multiplexes
+/// those onto DEFAULT_POOL_SIZE server connections); this check makes the remaining invariant
+/// fail-closed in production instead of surfacing as SQLSTATE 53300 under load.
 ///
-/// This warns rather than refuses to start. A process that declines to boot because the *other*
-/// process might also be busy would turn a capacity smell into an outage, and the safe reading
-/// ("how many connections is the rest of the fleet actually holding?") is not knowable from here.
-/// The point is to make the condition visible at boot instead of at 3am under load.
-pub async fn warn_if_pool_budget_exceeds_server(
+/// Budget source:
+///  - Pooler mode (`WEISSMAN_DB_POOLER_MODE=transaction`): the binding limit is the pooler's
+///    client-connection ceiling (`WEISSMAN_DB_POOLER_MAX_CLIENT_CONN`, PgBouncer MAX_CLIENT_CONN).
+///    Set `WEISSMAN_EXPECTED_REPLICAS` to the TOTAL pods sharing the pooler so the single-process
+///    check approximates aggregate demand.
+///  - Direct mode: Postgres `max_connections` minus `superuser_reserved_connections`.
+pub async fn enforce_pool_budget_for_fleet(
     pool: &PgPool,
     process_label: &str,
-    configured: u32,
-) {
-    let Ok(max_conn) = sqlx::query_scalar::<_, String>("SHOW max_connections")
-        .fetch_one(pool)
-        .await
-    else {
-        return;
+    per_pod_ceiling: u32,
+) -> Result<(), sqlx::Error> {
+    let replicas = env_u32("WEISSMAN_EXPECTED_REPLICAS", 1).max(1);
+
+    let (budget, budget_source) = if pooler_transaction_mode() {
+        (
+            env_u32("WEISSMAN_DB_POOLER_MAX_CLIENT_CONN", 1000).max(1),
+            "pgbouncer_max_client_conn",
+        )
+    } else {
+        // Introspection is best-effort: a transient SHOW failure must not block boot.
+        let Ok(max_conn) = sqlx::query_scalar::<_, String>("SHOW max_connections")
+            .fetch_one(pool)
+            .await
+        else {
+            return Ok(());
+        };
+        let reserved = sqlx::query_scalar::<_, String>("SHOW superuser_reserved_connections")
+            .fetch_one(pool)
+            .await
+            .ok()
+            .and_then(|s| s.parse::<u32>().ok())
+            .unwrap_or(3);
+        let Ok(max_conn) = max_conn.parse::<u32>() else {
+            return Ok(());
+        };
+        (
+            max_conn.saturating_sub(reserved),
+            "postgres_max_connections",
+        )
     };
-    let reserved = sqlx::query_scalar::<_, String>("SHOW superuser_reserved_connections")
-        .fetch_one(pool)
-        .await
-        .ok()
-        .and_then(|s| s.parse::<u32>().ok())
-        .unwrap_or(3);
-    let Ok(max_conn) = max_conn.parse::<u32>() else {
-        return;
+
+    let Some(diag) = fleet_budget_overflow(
+        process_label,
+        per_pod_ceiling,
+        replicas,
+        budget,
+        budget_source,
+    ) else {
+        return Ok(());
     };
-    let usable = max_conn.saturating_sub(reserved);
-    // A single process claiming more than half the budget cannot coexist with its sibling.
-    if configured * 2 > usable {
-        tracing::warn!(
+
+    if env_bootstrap::is_production_env() {
+        tracing::error!(
             target: "db_pool_budget",
             process = process_label,
-            configured_max_connections = configured,
-            server_max_connections = max_conn,
-            usable_after_reserved = usable,
-            "connection pool ceiling is too large for this Postgres: two processes at this size \
-             over-subscribe the server and will hit SQLSTATE 53300 under load. Raise \
-             max_connections (compose and deploy/k8s/postgres-ha.yaml both set 200) or lower \
-             WEISSMAN_{{APP,AUTH,INTEL,CONTROL}}_POOL_MAX."
+            per_pod_ceiling,
+            replicas,
+            budget,
+            budget_source,
+            "{diag}"
         );
+        return Err(sqlx::Error::Configuration(diag.into()));
     }
+    tracing::warn!(
+        target: "db_pool_budget",
+        process = process_label,
+        per_pod_ceiling,
+        replicas,
+        budget,
+        budget_source,
+        "{diag}"
+    );
+    Ok(())
 }
 
 fn env_u32(var: &str, default: u32) -> u32 {
@@ -268,6 +332,40 @@ fn acquire_retry_backoff(attempt: u32) -> Duration {
     Duration::from_millis(base_ms.saturating_mul(1_u64 << shift).min(cap_ms))
 }
 
+/// True when a transaction-mode connection pooler (PgBouncer) sits between this process and
+/// Postgres. Set `WEISSMAN_DB_POOLER_MODE=transaction` on every pod whose DSN points at the pooler.
+/// Grounded in deploy/k8s/pgbouncer.yaml (POOL_MODE=transaction) and docker-compose.prod.yml.
+pub fn pooler_transaction_mode() -> bool {
+    std::env::var("WEISSMAN_DB_POOLER_MODE")
+        .ok()
+        .map(|v| v.trim().eq_ignore_ascii_case("transaction"))
+        .unwrap_or(false)
+}
+
+/// Build `PgConnectOptions` for a runtime pool, applying transaction-pooler-safe settings.
+///
+/// Under PgBouncer transaction pooling a client holds a server backend only for one transaction, so
+/// a NAMED prepared statement sqlx cached on one backend is invalid on the next transaction (which
+/// may land on a different backend) — the classic `prepared statement "sqlx_s_1" does not exist`
+/// failure. Disabling the cache makes sqlx use the unnamed statement, re-prepared per transaction,
+/// which is safe through the pooler. In direct mode the cache stays on for performance.
+///
+/// Per-connection GUCs (statement_timeout, search_path, read-only) are intentionally NOT set here.
+/// A session-level `SET` in `after_connect` binds only the first backend PgBouncer assigns and does
+/// not survive transaction reuse. Those are made durable at the Postgres *role* level, mirroring the
+/// existing `ALTER ROLE weissman_ro SET statement_timeout` in
+/// `20260827115800_hermetic_db_roles.sql`; see `20260922130000_role_statement_timeout_defaults.sql`.
+/// The `after_connect` SETs are retained as belt-and-suspenders for direct / session-mode links, so
+/// adding pooler support here cannot regress non-pooled deployments.
+fn pooled_connect_options(database_url: &str) -> Result<PgConnectOptions, sqlx::Error> {
+    let opts: PgConnectOptions = database_url.trim().parse()?;
+    if pooler_transaction_mode() {
+        Ok(opts.statement_cache_capacity(0))
+    } else {
+        Ok(opts)
+    }
+}
+
 async fn connect_app_with_pool_tuning(
     database_url: &str,
     max: u32,
@@ -290,7 +388,7 @@ async fn connect_app_with_pool_tuning(
                 Ok(())
             })
         })
-        .connect(database_url)
+        .connect_with(pooled_connect_options(database_url)?)
         .await?;
     role_guard::assert_pool_role(&pool, role_guard::PoolKind::App).await?;
     Ok(pool)
@@ -365,7 +463,7 @@ pub async fn connect_control(database_url: &str) -> Result<PgPool, sqlx::Error> 
                 Ok(())
             })
         })
-        .connect(database_url)
+        .connect_with(pooled_connect_options(database_url)?)
         .await?;
     role_guard::assert_pool_role(&pool, role_guard::PoolKind::Worker).await?;
     Ok(pool)
@@ -474,7 +572,7 @@ pub async fn connect_auth(database_url: &str) -> Result<PgPool, sqlx::Error> {
                 Ok(())
             })
         })
-        .connect(database_url)
+        .connect_with(pooled_connect_options(database_url)?)
         .await?;
     role_guard::assert_pool_role(&pool, role_guard::PoolKind::Auth).await?;
     Ok(pool)
@@ -573,7 +671,7 @@ pub async fn connect_intel(database_url: &str) -> Result<PgPool, sqlx::Error> {
                 Ok(())
             })
         })
-        .connect(database_url)
+        .connect_with(pooled_connect_options(database_url)?)
         .await?;
     role_guard::assert_pool_role(&pool, role_guard::PoolKind::App).await?;
     Ok(pool)
@@ -756,7 +854,18 @@ pub async fn ensure_admin_user(auth_pool: &PgPool) -> Result<(), sqlx::Error> {
                 .ok()
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty())
-                .and_then(|p| bcrypt::hash(&p, bcrypt::DEFAULT_COST).ok())
+                .and_then(|p| {
+                    if p.len() > BCRYPT_MAX_PASSWORD_BYTES {
+                        tracing::error!(
+                            target: "security_audit",
+                            "WEISSMAN_ADMIN_PASSWORD is {} bytes; bcrypt truncates at {} — refusing to seed a truncated admin credential",
+                            p.len(),
+                            BCRYPT_MAX_PASSWORD_BYTES
+                        );
+                        return None;
+                    }
+                    bcrypt::hash(&p, bcrypt::DEFAULT_COST).ok()
+                })
         })
         .or_else(|| {
             if matches!(
@@ -823,7 +932,18 @@ pub async fn ensure_master_bootstrap_user(auth_pool: &PgPool) -> Result<(), sqlx
                 .ok()
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty())
-                .and_then(|p| bcrypt::hash(&p, bcrypt::DEFAULT_COST).ok())
+                .and_then(|p| {
+                    if p.len() > BCRYPT_MAX_PASSWORD_BYTES {
+                        tracing::error!(
+                            target: "security_audit",
+                            "WEISSMAN_MASTER_BOOTSTRAP_PASSWORD is {} bytes; bcrypt truncates at {} — refusing to seed a truncated bootstrap credential",
+                            p.len(),
+                            BCRYPT_MAX_PASSWORD_BYTES
+                        );
+                        return None;
+                    }
+                    bcrypt::hash(&p, bcrypt::DEFAULT_COST).ok()
+                })
         });
     let Some(hash) = hash_opt else {
         tracing::debug!(
@@ -962,5 +1082,42 @@ mod url_and_path_helper_tests {
             acquire_retry_backoff(20),
             std::time::Duration::from_millis(2_000)
         );
+    }
+
+    #[test]
+    fn pooler_transaction_mode_reads_env() {
+        let _guard = env_lock();
+        std::env::remove_var("WEISSMAN_DB_POOLER_MODE");
+        assert!(!super::pooler_transaction_mode());
+        std::env::set_var("WEISSMAN_DB_POOLER_MODE", "transaction");
+        assert!(super::pooler_transaction_mode());
+        std::env::set_var("WEISSMAN_DB_POOLER_MODE", "TRANSACTION");
+        assert!(super::pooler_transaction_mode());
+        std::env::set_var("WEISSMAN_DB_POOLER_MODE", "session");
+        assert!(!super::pooler_transaction_mode());
+        std::env::remove_var("WEISSMAN_DB_POOLER_MODE");
+    }
+
+    #[test]
+    fn pooled_connect_options_parses_in_both_modes() {
+        let _guard = env_lock();
+        std::env::remove_var("WEISSMAN_DB_POOLER_MODE");
+        assert!(super::pooled_connect_options("postgres://u:p@h:6432/db").is_ok());
+        std::env::set_var("WEISSMAN_DB_POOLER_MODE", "transaction");
+        assert!(super::pooled_connect_options("  postgresql://u:p@h:6432/db  ").is_ok());
+        std::env::remove_var("WEISSMAN_DB_POOLER_MODE");
+    }
+
+    #[test]
+    fn fleet_budget_overflow_flags_only_when_demand_exceeds() {
+        // Pooler budget 2000: neither fleet alone, nor the 20-pod aggregate, exceeds it.
+        assert!(super::fleet_budget_overflow("backend", 80, 8, 2000, "pgb").is_none());
+        assert!(super::fleet_budget_overflow("worker", 80, 12, 2000, "pgb").is_none());
+        assert!(super::fleet_budget_overflow("fleet", 80, 20, 2000, "pgb").is_none());
+        // Under-sized pooler budget (1000) with the full 20-pod aggregate over-subscribes.
+        assert!(super::fleet_budget_overflow("fleet", 80, 20, 1000, "pgb").is_some());
+        // Direct Postgres (197 usable): even a modest fleet over-subscribes -> the reason for a pooler.
+        assert!(super::fleet_budget_overflow("worker", 80, 3, 197, "pg").is_some());
+        assert!(super::fleet_budget_overflow("worker", 80, 2, 197, "pg").is_none());
     }
 }

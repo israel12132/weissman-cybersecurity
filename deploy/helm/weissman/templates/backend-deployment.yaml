@@ -1,0 +1,161 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: weissman-backend
+  namespace: {{ include "weissman.namespace" . }}
+  labels:
+    {{- include "weissman.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.backend.replicaCount }}
+  selector:
+    matchLabels:
+      app: weissman-backend
+  template:
+    metadata:
+      labels:
+        app: weissman-backend
+        {{- include "weissman.labels" . | nindent 8 }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: weissman-backend
+                topologyKey: kubernetes.io/hostname
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: weissman-backend
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      containers:
+        - name: backend
+          image: {{ include "weissman.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - containerPort: 8000
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "weissman.configName" . }}
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weissman.secretName" . }}
+                  key: database_url
+            - name: WEISSMAN_AUTH_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weissman.secretName" . }}
+                  key: auth_database_url
+            - name: WEISSMAN_WORKER_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weissman.secretName" . }}
+                  key: worker_database_url
+            - name: WEISSMAN_ANALYTICS_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weissman.secretName" . }}
+                  key: analytics_database_url
+            - name: WEISSMAN_MIGRATE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weissman.secretName" . }}
+                  key: migrate_url
+            - name: WEISSMAN_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weissman.secretName" . }}
+                  key: jwt_secret
+            - name: WEISSMAN_JWT_SECRET_PREVIOUS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weissman.secretName" . }}
+                  key: jwt_secret_previous
+                  optional: true
+            - name: WEISSMAN_ADMIN_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weissman.secretName" . }}
+                  key: admin_email
+                  optional: true
+            - name: WEISSMAN_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weissman.secretName" . }}
+                  key: admin_password
+                  optional: true
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weissman.secretName" . }}
+                  key: redis_url
+            - name: WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weissman.secretName" . }}
+                  key: destructive_confirm_secret
+            - name: WEISSMAN_JOB_ORCHESTRATOR_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weissman.secretName" . }}
+                  key: job_orchestrator_secret
+            - name: WEISSMAN_METRICS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weissman.secretName" . }}
+                  key: metrics_token
+            - name: WEISSMAN_RAG_PROVENANCE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weissman.secretName" . }}
+                  key: rag_provenance_secret
+            - name: WEISSMAN_INTEGRATIONS_VAULT_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weissman.secretName" . }}
+                  key: integrations_vault_key
+            - name: WEISSMAN_VAULT_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weissman.secretName" . }}
+                  key: vault_key
+            - name: WEISSMAN_MIGRATIONS_DIR
+              value: "/srv/migrations"
+          readinessProbe:
+            httpGet:
+              path: /api/ready
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp

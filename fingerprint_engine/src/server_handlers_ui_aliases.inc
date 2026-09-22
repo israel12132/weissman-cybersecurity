@@ -756,12 +756,14 @@ async fn api_compliance_frameworks_report(
         })
         .collect();
     let framework_label = crate::compliance_engine::framework_display_name(&framework_id);
+    let brand_name = tenant_brand_name(&state, auth.tenant_id).await;
     let pdf = match crate::pdf_report::build_compliance_framework_pdf(
         &tenant_name,
         framework_label,
         compliance_pct,
         &pdf_controls,
         invalid_orphans.as_deref(),
+        brand_name.as_deref(),
     ) {
         Ok(b) => b,
         Err(e) => {
