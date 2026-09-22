@@ -20,6 +20,22 @@ const MARGIN: f64 = 50.0;
 const FOOTER_Y: f64 = 40.0;
 const PAGE_BREAK_Y: f64 = 90.0;
 
+/// Resolve a white-label brand *display name* from the raw `system_configs.tenant_brand`
+/// JSON value (as persisted by `PUT /api/tenant/brand`, e.g. `{"name":"Acme","logoUrl":..}`).
+/// Returns the trimmed `name` when present and non-empty; otherwise `None`, so every PDF/XLSX
+/// builder falls back to the vendor mark. Never fails: malformed/absent config → `None`.
+#[must_use]
+pub fn brand_name_from_tenant_brand_json(raw: Option<&str>) -> Option<String> {
+    let raw = raw?;
+    let v: JsonValue = serde_json::from_str(raw).ok()?;
+    let name = v.get("name").and_then(|x| x.as_str())?.trim();
+    if name.is_empty() {
+        None
+    } else {
+        Some(name.to_string())
+    }
+}
+
 fn pdf_escape(s: &str) -> String {
     s.replace('\\', "\\\\")
         .replace('(', "\\(")
@@ -442,8 +458,13 @@ pub fn build_client_report_pdf(
     client_name: &str,
     findings: &[FindingRow],
     crypto_proof: Option<&CryptoProof>,
+    brand_name: Option<&str>,
 ) -> Result<Vec<u8>, String> {
     let date = israel_now();
+    let confidential_footer = match brand_name {
+        Some(name) => format!("(c) {name} — Confidential."),
+        None => "(c) Weissman Cybersecurity — Confidential.".to_string(),
+    };
     let (critical, high, medium, low_info) =
         findings
             .iter()
@@ -480,7 +501,7 @@ pub fn build_client_report_pdf(
 
     // ---------- COVER PAGE ----------
     b.set_fill_rgb(0.0, 0.0, 0.0);
-    b.text(24, "WEISSMAN CYBERSECURITY");
+    b.text(24, brand_name.unwrap_or("WEISSMAN CYBERSECURITY"));
     b.y -= 8.0;
     b.set_fill_rgb(0.4, 0.5, 0.6);
     b.text(12, "Executive Security Assessment Report");
@@ -514,7 +535,7 @@ pub fn build_client_report_pdf(
     }
     b.y = FOOTER_Y;
     b.set_fill_rgb(0.4, 0.4, 0.45);
-    b.text_at(72.0, 8, "(c) Weissman Cybersecurity — Confidential.");
+    b.text_at(72.0, 8, &confidential_footer);
     b.new_page();
 
     // ---------- EXECUTIVE SUMMARY ----------
@@ -830,7 +851,7 @@ pub fn build_client_report_pdf(
         b.text_at(72.0, 9, &format!("SHA-256: {}", truncate_ascii(h, 70)));
         b.text_at(72.0, 9, &truncate_ascii(verify, 70));
     }
-    b.text_at(72.0, 8, "(c) Weissman Cybersecurity — Confidential.");
+    b.text_at(72.0, 8, &confidential_footer);
 
     let streams = b.finish();
 
@@ -971,11 +992,16 @@ pub fn build_executive_board_pdf(
     soc2_pct: u8,
     iso_pct: u8,
     gdpr_pct: u8,
+    brand_name: Option<&str>,
 ) -> Result<Vec<u8>, String> {
     let date = israel_now();
     let mut b = PdfBuilder::new();
     b.set_fill_rgb(0.06, 0.09, 0.14);
-    b.text(22, "WEISSMAN — EXECUTIVE / BOARD BRIEFING");
+    let brand_title = match brand_name {
+        Some(name) => format!("{name} — EXECUTIVE / BOARD BRIEFING"),
+        None => "WEISSMAN — EXECUTIVE / BOARD BRIEFING".to_string(),
+    };
+    b.text(22, &brand_title);
     b.set_fill_rgb(0.55, 0.62, 0.72);
     b.text(
         11,
@@ -1108,11 +1134,16 @@ pub fn build_adversary_mirror_pdf(
     total_findings: u32,
     headline: &str,
     signal_titles: &[String],
+    brand_name: Option<&str>,
 ) -> Result<Vec<u8>, String> {
     let date = israel_now();
     let mut b = PdfBuilder::new();
     b.set_fill_rgb(0.06, 0.09, 0.14);
-    b.text(22, "WEISSMAN — ADVERSARY GAP MIRROR");
+    let brand_title = match brand_name {
+        Some(name) => format!("{name} — ADVERSARY GAP MIRROR"),
+        None => "WEISSMAN — ADVERSARY GAP MIRROR".to_string(),
+    };
+    b.text(22, &brand_title);
     b.set_fill_rgb(0.55, 0.62, 0.72);
     b.text(
         11,
@@ -1266,6 +1297,7 @@ pub fn build_compliance_framework_pdf(
     compliance_pct: u8,
     controls: &[(String, String, bool)],
     invalid_orphans: Option<&[(String, String)]>,
+    brand_name: Option<&str>,
 ) -> Result<Vec<u8>, String> {
     let date = israel_now();
     let mut b = PdfBuilder::new();
@@ -1273,7 +1305,11 @@ pub fn build_compliance_framework_pdf(
         b.set_watermark("INVALID - INCONSISTENT STATE");
     }
     b.set_fill_rgb(0.06, 0.09, 0.14);
-    b.text(22, "WEISSMAN — COMPLIANCE AUDIT REPORT");
+    let brand_title = match brand_name {
+        Some(name) => format!("{name} — COMPLIANCE AUDIT REPORT"),
+        None => "WEISSMAN — COMPLIANCE AUDIT REPORT".to_string(),
+    };
+    b.text(22, &brand_title);
     b.set_fill_rgb(0.55, 0.62, 0.72);
     b.text(
         11,
@@ -1456,8 +1492,14 @@ pub fn build_client_report_html(
     client_name: &str,
     findings: &[FindingRow],
     crypto_proof: Option<&CryptoProof>,
+    brand_name: Option<&str>,
 ) -> String {
     let date = israel_now();
+    let brand_h1 = brand_name.map(escape).unwrap_or_else(|| "WEISSMAN CYBERSECURITY".to_string());
+    let brand_title = brand_name.map(escape).unwrap_or_else(|| "Weissman".to_string());
+    let brand_footer = brand_name
+        .map(escape)
+        .unwrap_or_else(|| "Weissman Cybersecurity".to_string());
     let (critical, high, medium, low_info) =
         findings
             .iter()
@@ -1575,7 +1617,7 @@ pub fn build_client_report_html(
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <title>Weissman Executive Report — {client_name}</title>
+  <title>{brand_title} Executive Report — {client_name}</title>
   <style>
     body {{ font-family: 'Segoe UI', system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 2rem; color: #1e293b; }}
     h1 {{ color: #0f172a; border-bottom: 2px solid #0ea5e9; padding-bottom: 0.5rem; }}
@@ -1606,9 +1648,9 @@ pub fn build_client_report_html(
   </style>
 </head>
 <body>
-  <h1>WEISSMAN CYBERSECURITY</h1>
+  <h1>{brand_h1}</h1>
   <p class="meta">Executive Security Assessment Report — {client_name}<br/>Report Generated: {date} (Israel)</p>
-  <h2>Weissman Security Rating</h2>
+  <h2>{brand_title} Security Rating</h2>
   <div class="rating-box">{score}/100</div>
   {heatmap}
   <h2>Detailed Findings (Live from DB)</h2>
@@ -1617,7 +1659,7 @@ pub fn build_client_report_html(
     <tbody>{table_body}</tbody>
   </table>
   {crypto_section}
-  <p class="footer">© Weissman Cybersecurity — Confidential.</p>
+  <p class="footer">© {brand_footer} — Confidential.</p>
   <div class="integrity"><strong>Digital Integrity Stamp:</strong> {{HASH_PLACEHOLDER}}</div>
 </body>
 </html>"##,
@@ -1627,6 +1669,9 @@ pub fn build_client_report_html(
         heatmap = heatmap,
         table_body = table_body,
         crypto_section = crypto_section,
+        brand_h1 = brand_h1,
+        brand_title = brand_title,
+        brand_footer = brand_footer,
     );
 
     let content_for_hash = body_without_stamp.replace("{{HASH_PLACEHOLDER}}", "");
@@ -1657,7 +1702,7 @@ mod watermark_tests {
     #[test]
     fn valid_report_has_no_watermark() {
         let pdf =
-            build_compliance_framework_pdf("Acme", "ISO/IEC 27001:2022", 80, &controls(), None)
+            build_compliance_framework_pdf("Acme", "ISO/IEC 27001:2022", 80, &controls(), None, None)
                 .expect("pdf builds");
         let body = String::from_utf8_lossy(&pdf);
         assert!(!body.contains("INVALID - INCONSISTENT STATE"));
@@ -1674,6 +1719,7 @@ mod watermark_tests {
             80,
             &controls(),
             Some(&orphans),
+            None,
         )
         .expect("pdf builds");
         let body = String::from_utf8_lossy(&pdf);
@@ -1711,6 +1757,7 @@ mod adversary_mirror_pdf_tests {
             4,
             "Ransomware leak-site listing",
             &["Ransomware leak-site listing".into()],
+            None,
         )
         .expect("pdf");
         assert!(bytes.starts_with(b"%PDF-1.4"));
@@ -1972,7 +2019,7 @@ mod tests {
 
     #[test]
     fn html_report_empty_findings() {
-        let html = build_client_report_html("Acme", &[], None);
+        let html = build_client_report_html("Acme", &[], None, None);
         assert!(html.contains("WEISSMAN CYBERSECURITY"));
         // No findings -> perfect score 100.
         assert!(html.contains("100/100"));
@@ -1985,7 +2032,7 @@ mod tests {
     #[test]
     fn html_report_scores_and_escapes() {
         let findings = vec![row(7, "<script>", "critical", "engine", "", "")];
-        let html = build_client_report_html("Acme", &findings, None);
+        let html = build_client_report_html("Acme", &findings, None, None);
         // 100 - 25 (one critical) = 75.
         assert!(html.contains("75/100"));
         // Title is HTML-escaped.
@@ -2002,7 +2049,7 @@ mod tests {
             "data:image/png;base64,AAA".to_string(),
             "http://verify.example".to_string(),
         );
-        let html = build_client_report_html("Acme", &[], Some(&cp));
+        let html = build_client_report_html("Acme", &[], Some(&cp), None);
         assert!(html.contains("Cryptographic Proof of Integrity"));
         assert!(html.contains("deadbeef"));
         assert!(html.contains("http://verify.example"));
@@ -2018,7 +2065,7 @@ mod tests {
             "known ransomware campaign use",
             "GET https://www.cisa.gov HTTP 200",
         )];
-        let bytes = build_client_report_pdf("Acme", &findings, None).expect("pdf");
+        let bytes = build_client_report_pdf("Acme", &findings, None, None).expect("pdf");
         let text = String::from_utf8_lossy(&bytes);
         assert!(text.contains("%PDF-1.4"));
         assert!(!text.contains("APT28"));
@@ -2029,5 +2076,75 @@ mod tests {
         assert!(text.contains("KEV-tagged") || text.contains("fusion"));
         assert!(!text.contains("Industry Benchmark"));
         assert!(text.contains("Live severity heatmap") || text.contains("finding-weight"));
+    }
+
+    #[test]
+    fn brand_name_resolves_from_config_json() {
+        assert_eq!(brand_name_from_tenant_brand_json(None), None);
+        assert_eq!(brand_name_from_tenant_brand_json(Some("{}")), None);
+        assert_eq!(brand_name_from_tenant_brand_json(Some("not json")), None);
+        assert_eq!(
+            brand_name_from_tenant_brand_json(Some(r#"{"name":"   "}"#)),
+            None
+        );
+        assert_eq!(
+            brand_name_from_tenant_brand_json(Some(
+                r#"{"name":"Northwind Security","logoUrl":"x"}"#
+            )),
+            Some("Northwind Security".to_string())
+        );
+    }
+
+    #[test]
+    fn branded_client_report_pdf_drops_vendor_mark() {
+        let findings = vec![row(
+            1,
+            "t",
+            "high",
+            "src",
+            r#"{"remediation":"fix"}"#,
+            "curl x",
+        )];
+        // Branded: brand appears, no "Weissman" anywhere in the title/footer path.
+        let bytes =
+            build_client_report_pdf("Client Org", &findings, None, Some("Northwind Security"))
+                .expect("pdf");
+        let text = String::from_utf8_lossy(&bytes);
+        assert!(text.contains("Northwind Security"), "brand must appear");
+        assert!(
+            !text.contains("Weissman"),
+            "branded PDF must carry no vendor mark"
+        );
+        assert!(
+            !text.contains("WEISSMAN"),
+            "branded PDF must carry no vendor mark"
+        );
+        // Default (None) preserves the vendor mark — no legacy regression.
+        let legacy = build_client_report_pdf("Client Org", &findings, None, None).expect("pdf");
+        let legacy_text = String::from_utf8_lossy(&legacy);
+        assert!(legacy_text.contains("WEISSMAN CYBERSECURITY"));
+        assert!(legacy_text.contains("(c) Weissman Cybersecurity — Confidential."));
+    }
+
+    #[test]
+    fn branded_executive_board_pdf_drops_vendor_mark() {
+        let bytes = build_executive_board_pdf(
+            "Tenant Org",
+            Some("Acme"),
+            1,
+            2,
+            3,
+            4,
+            5,
+            90,
+            91,
+            92,
+            Some("Northwind Security"),
+        )
+        .expect("pdf");
+        let text = String::from_utf8_lossy(&bytes);
+        assert!(text.contains("Northwind Security"));
+        assert!(!text.contains("Weissman"));
+        assert!(!text.contains("WEISSMAN"));
     }
 }
