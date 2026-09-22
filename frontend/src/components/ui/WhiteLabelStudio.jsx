@@ -1,4 +1,5 @@
 import { useId } from 'react'
+import { useTranslation } from 'react-i18next'
 import { RotateCcw } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import Button from './Button.jsx'
@@ -12,9 +13,9 @@ const DEFAULTS = {
 }
 
 const COLOR_FIELDS = [
-  { key: 'primary', label: 'Primary' },
-  { key: 'gradientMid', label: 'Gradient mid' },
-  { key: 'secondary', label: 'Secondary' },
+  { key: 'primary', label: 'Primary', labelKey: 'components.whiteLabelStudio.labelPrimary' },
+  { key: 'gradientMid', label: 'Gradient mid', labelKey: 'components.whiteLabelStudio.labelGradientMid' },
+  { key: 'secondary', label: 'Secondary', labelKey: 'components.whiteLabelStudio.labelSecondary' },
 ]
 
 /**
@@ -28,6 +29,7 @@ const COLOR_FIELDS = [
  * @param {()=>void} [onReset]
  */
 export default function WhiteLabelStudio({ brand, onChange, onReset, className, ...props }) {
+  const { t } = useTranslation()
   const uid = useId()
   const b = brand || {}
   const emit = (key, value) => onChange?.({ [key]: value })
@@ -41,13 +43,13 @@ export default function WhiteLabelStudio({ brand, onChange, onReset, className, 
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-3">
           <Input
-            label="Brand name"
+            label={t('components.whiteLabelStudio.brandName', 'Brand name')}
             value={b.name ?? ''}
             onChange={(e) => emit('name', e.target.value)}
-            placeholder="Acme Security"
+            placeholder={t('components.whiteLabelStudio.brandNamePlaceholder', 'Acme Security')}
           />
           <Input
-            label="Logo URL"
+            label={t('components.whiteLabelStudio.logoUrl', 'Logo URL')}
             value={b.logoUrl ?? ''}
             onChange={(e) => emit('logoUrl', e.target.value)}
             placeholder="https://…/logo.svg"
@@ -55,28 +57,33 @@ export default function WhiteLabelStudio({ brand, onChange, onReset, className, 
         </div>
 
         <div className="flex flex-col gap-2">
-          <span className="text-sm font-medium text-text-secondary">Palette</span>
+          <span className="text-sm font-medium text-text-secondary">
+            {t('components.whiteLabelStudio.palette', 'Palette')}
+          </span>
           <div className="flex flex-wrap gap-4">
-            {COLOR_FIELDS.map(({ key, label }) => (
-              <label key={key} htmlFor={`${uid}-${key}`} className="flex items-center gap-2 text-xs text-text-secondary">
-                <input
-                  id={`${uid}-${key}`}
-                  type="color"
-                  aria-label={`${label} color`}
-                  value={b[key] ?? DEFAULTS[key]}
-                  onChange={(e) => emit(key, e.target.value)}
-                  className="size-8 cursor-pointer rounded-md border border-border-default bg-transparent"
-                />
-                {label}
-              </label>
-            ))}
+            {COLOR_FIELDS.map(({ key, label, labelKey }) => {
+              const fieldLabel = t(labelKey, label)
+              return (
+                <label key={key} htmlFor={`${uid}-${key}`} className="flex items-center gap-2 text-xs text-text-secondary">
+                  <input
+                    id={`${uid}-${key}`}
+                    type="color"
+                    aria-label={`${fieldLabel} ${t('components.whiteLabelStudio.colorWord', 'color')}`}
+                    value={b[key] ?? DEFAULTS[key]}
+                    onChange={(e) => emit(key, e.target.value)}
+                    className="size-8 cursor-pointer rounded-md border border-border-default bg-transparent"
+                  />
+                  {fieldLabel}
+                </label>
+              )
+            })}
           </div>
         </div>
 
         {onReset && (
           <div>
             <Button variant="ghost" size="sm" leftIcon={<RotateCcw />} onClick={onReset} disabled={!brand}>
-              Reset to default palette
+              {t('components.whiteLabelStudio.resetPalette', 'Reset to default palette')}
             </Button>
           </div>
         )}
@@ -84,7 +91,9 @@ export default function WhiteLabelStudio({ brand, onChange, onReset, className, 
 
       {/* Live preview — reflects the applied brand when onChange drives setBrand. */}
       <div className="flex flex-col gap-3 rounded-xl border border-border-default bg-bg-2 p-4">
-        <span className="text-[10px] uppercase tracking-widest text-text-muted">Preview</span>
+        <span className="text-[10px] uppercase tracking-widest text-text-muted">
+          {t('components.whiteLabelStudio.preview', 'Preview')}
+        </span>
         <div className="flex items-center gap-3">
           {b.logoUrl ? (
             <img src={b.logoUrl} alt="" className="size-8 rounded-md object-contain" />
@@ -99,8 +108,8 @@ export default function WhiteLabelStudio({ brand, onChange, onReset, className, 
         </div>
         <div className="h-8 rounded-lg bg-accent-gradient" aria-hidden="true" />
         <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm">Primary action</Button>
-          <Button size="sm" variant="premium">Premium</Button>
+          <Button size="sm">{t('components.whiteLabelStudio.primaryAction', 'Primary action')}</Button>
+          <Button size="sm" variant="premium">{t('components.whiteLabelStudio.premium', 'Premium')}</Button>
           <Badge kind="severity" value="critical" />
         </div>
       </div>

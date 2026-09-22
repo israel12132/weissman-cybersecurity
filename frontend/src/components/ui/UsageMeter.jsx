@@ -1,4 +1,5 @@
 import { forwardRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { cn } from '../../lib/cn'
 
 /**
@@ -15,6 +16,7 @@ const UsageMeter = forwardRef(function UsageMeter(
   { label, used = 0, limit = 100, unit, warnAt = 0.8, tiers = [], className, ...props },
   ref,
 ) {
+  const { t } = useTranslation()
   const safeLimit = limit > 0 ? limit : 1
   const ratio = used / safeLimit
   const pct = Math.min(100, Math.max(0, ratio * 100))
@@ -37,7 +39,7 @@ const UsageMeter = forwardRef(function UsageMeter(
           <span className={cn('text-xs tabular-nums', over ? 'text-severity-critical' : 'text-text-muted')}>
             {fmt(used)} / {fmt(limit)}
             {unit ? ` ${unit}` : ''}
-            {over && ' · over limit'}
+            {over && ` · ${t('components.usageMeter.overLimit', 'over limit')}`}
           </span>
         </div>
       )}
@@ -46,7 +48,7 @@ const UsageMeter = forwardRef(function UsageMeter(
         aria-valuenow={Math.round(pct)}
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-label={typeof label === 'string' ? label : 'Usage'}
+        aria-label={typeof label === 'string' ? label : t('components.usageMeter.ariaLabel', 'Usage')}
         className="relative h-2.5 w-full overflow-hidden rounded-full bg-bg-3"
       >
         <div

@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { AlertTriangle, CheckCircle2, Info, X, XCircle } from 'lucide-react'
 import Button from './Button'
 
@@ -114,9 +115,10 @@ export function useToast() {
 }
 
 export function ToastViewport({ items, dismiss, className = '' }) {
+  const { t } = useTranslation()
   if (items.length === 0) return null
 
-  const hasAssertive = items.some((t) => (VARIANT_CONFIG[t.variant] || VARIANT_CONFIG.info).live === 'assertive')
+  const hasAssertive = items.some((item) => (VARIANT_CONFIG[item.variant] || VARIANT_CONFIG.info).live === 'assertive')
 
   return (
     <div
@@ -124,10 +126,10 @@ export function ToastViewport({ items, dismiss, className = '' }) {
       role="region"
       aria-live={hasAssertive ? 'assertive' : 'polite'}
       aria-relevant="additions"
-      aria-label="Notifications"
+      aria-label={t('components.toaster.regionLabel', 'Notifications')}
     >
-      {items.map((t) => (
-        <PremiumToastItem key={t.id} {...t} onDismiss={dismiss} />
+      {items.map((item) => (
+        <PremiumToastItem key={item.id} {...item} onDismiss={dismiss} />
       ))}
     </div>
   )
@@ -176,15 +178,18 @@ export function PremiumToastItem({
   onAction,
   onDismiss,
 }) {
+  const { t } = useTranslation()
   const c = VARIANT_CONFIG[variant] || VARIANT_CONFIG.info
   const { Icon } = c
   const [entered, setEntered] = useState(false)
   const [exiting, setExiting] = useState(false)
   const [paused, setPaused] = useState(false)
+  const exitTimerRef = useRef(null)
 
   const handleDismiss = useCallback(() => {
     setExiting(true)
-    setTimeout(() => onDismiss(id), 180)
+    if (exitTimerRef.current) clearTimeout(exitTimerRef.current)
+    exitTimerRef.current = setTimeout(() => onDismiss(id), 180)
   }, [onDismiss, id])
 
   useDismissTimer({ ttl, onDismiss: handleDismiss, paused })
@@ -192,6 +197,11 @@ export function PremiumToastItem({
   useEffect(() => {
     const enterTimer = setTimeout(() => setEntered(true), 16)
     return () => clearTimeout(enterTimer)
+  }, [])
+
+  // Cancel the pending exit-animation timer if the toast unmounts first.
+  useEffect(() => () => {
+    if (exitTimerRef.current) clearTimeout(exitTimerRef.current)
   }, [])
 
   return (
@@ -237,7 +247,7 @@ export function PremiumToastItem({
         <Button variant="unstyled"
           type="button"
           onClick={handleDismiss}
-          aria-label="Dismiss notification"
+          aria-label={t('components.toaster.dismiss', 'Dismiss notification')}
           className="shrink-0 p-1 rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)] transition-colors"
           style={{ transitionDuration: 'var(--duration-fast)' }}
         >
