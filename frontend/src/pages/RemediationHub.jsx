@@ -290,13 +290,14 @@ export default function RemediationHub() {
               <HealStat label={t('pages.remediationHub.heal_fix_rate')} value={`${Math.round((healStats.fixed / Math.max(1, healStats.total)) * 100)}%`} color="#22c55e" />
               <HealStat label={t('pages.remediationHub.heal_avg_attempts')} value={(healStats.attemptsSum / Math.max(1, healStats.total)).toFixed(1)} />
               <HealStat label={t('pages.remediationHub.heal_attested')} value={healStats.attested} color="#34d399" />
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="xs"
                 onClick={() => setShowAnalytics((v) => !v)}
-                className="ml-auto text-[10px] font-mono px-2.5 py-1 rounded-md border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/10"
+                className="ml-auto"
               >
                 {showAnalytics ? t('pages.remediationHub.hide_analytics') : t('pages.remediationHub.show_analytics')}
-              </button>
+              </Button>
             </div>
             {showAnalytics && <RemediationAnalyticsPanel stats={healStats} />}
           </div>
@@ -381,8 +382,8 @@ export default function RemediationHub() {
                 return (
                 <div key={w.id} className="hover:bg-[var(--bg-2)] transition-colors">
                   <div className="p-4 flex items-center justify-between gap-3">
-                    <button
-                      type="button"
+                    <Button
+                      variant="unstyled"
                       onClick={() => setExpanded((e) => ({ ...e, [w.id]: !e[w.id] }))}
                       className="flex-1 min-w-0 text-left flex items-start gap-2"
                     >
@@ -409,7 +410,7 @@ export default function RemediationHub() {
                           })}
                         </div>
                       </div>
-                    </button>
+                    </Button>
                     <Link
                       to={`/findings?q=${encodeURIComponent(w.label)}`}
                       className="px-3 py-1.5 bg-[var(--bg-2)] text-[var(--text-tertiary)] border border-[var(--border-default)] rounded-lg text-xs font-medium hover:bg-[var(--row-hover-bg)] transition-colors shrink-0"
@@ -424,14 +425,14 @@ export default function RemediationHub() {
                           {batchOpen === w.id ? (
                             <BatchHealPanel findings={w.items} onClose={() => setBatchOpen(null)} />
                           ) : (
-                            <button
-                              type="button"
+                            <Button
+                              variant="secondary"
+                              size="xs"
                               onClick={() => setBatchOpen(w.id)}
-                              className="text-[11px] px-2.5 py-1 rounded-md border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/10 flex items-center gap-1.5"
+                              leftIcon={<Wrench />}
                             >
-                              <Wrench className="w-3 h-3" />
                               {t('pages.remediationHub.batch_heal_open', { n: w.items.filter((f) => f.has_patch).length })}
-                            </button>
+                            </Button>
                           )}
                         </div>
                       )}
@@ -442,14 +443,15 @@ export default function RemediationHub() {
                             <span className="text-xs text-[var(--text-secondary)] truncate">{f.title || f.finding_id}</span>
                             {f.has_patch && <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 shrink-0">FIX</span>}
                           </div>
-                          <button
-                            type="button"
+                          <Button
+                            variant="primary"
+                            size="xs"
                             onClick={() => setSelectedFinding(f)}
-                            className="px-2.5 py-1 bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded-md text-[11px] font-medium hover:bg-cyan-500/30 transition-colors shrink-0 flex items-center gap-1"
+                            leftIcon={<Sparkles />}
+                            className="shrink-0"
                           >
-                            <Sparkles className="w-3 h-3" />
                             {t('pages.remediationHub.view_fix')}
-                          </button>
+                          </Button>
                         </div>
                       ))}
                       {w.items.length > 50 && (

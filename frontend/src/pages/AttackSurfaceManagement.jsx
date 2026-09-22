@@ -11,6 +11,7 @@ import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissma
 import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import Button from '../components/ui/Button'
+import DataTable from '../components/ui/DataTable'
 import FirstSeenHitsPanel from '../components/intel/FirstSeenHitsPanel'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
 
@@ -281,6 +282,20 @@ export function ctKillChain(nerve) {
   }
 }
 
+// First-mover delta grid: static per-kind styling and the summary cap (the
+// panel shows the first 24 changes, as it always has).
+const FIRST_MOVER_TABLE_ROWS = 24
+const FIRST_MOVER_KIND_COLOR = {
+  added: '#22d3ee',
+  changed: '#fbbf24',
+  removed: '#94a3b8',
+}
+const FIRST_MOVER_KIND_KEY = {
+  added: 'pages.attackSurfaceManagement.first_mover_kind_added',
+  changed: 'pages.attackSurfaceManagement.first_mover_kind_changed',
+  removed: 'pages.attackSurfaceManagement.first_mover_kind_removed',
+}
+
 export function FirstMoverDeltaPanel({
   diff,
   loading,
@@ -298,24 +313,48 @@ export function FirstMoverDeltaPanel({
   nerve,
 }) {
   const { t } = useTranslation()
-  const added = Array.isArray(diff?.added) ? diff.added : []
-  const removed = Array.isArray(diff?.removed) ? diff.removed : []
-  const changed = Array.isArray(diff?.changed) ? diff.changed : []
-  const rows = [
-    ...added.map((r) => ({ ...r, kind: 'added' })),
-    ...changed.map((r) => ({ ...r, kind: 'changed' })),
-    ...removed.map((r) => ({ ...r, kind: 'removed' })),
-  ]
-  const kindColor = {
-    added: '#22d3ee',
-    changed: '#fbbf24',
-    removed: '#94a3b8',
-  }
-  const kindKey = {
-    added: 'pages.attackSurfaceManagement.first_mover_kind_added',
-    changed: 'pages.attackSurfaceManagement.first_mover_kind_changed',
-    removed: 'pages.attackSurfaceManagement.first_mover_kind_removed',
-  }
+  const { added, removed, changed, rows, tableRows } = useMemo(() => {
+    const addedRows = Array.isArray(diff?.added) ? diff.added : []
+    const removedRows = Array.isArray(diff?.removed) ? diff.removed : []
+    const changedRows = Array.isArray(diff?.changed) ? diff.changed : []
+    const all = [
+      ...addedRows.map((r) => ({ ...r, kind: 'added' })),
+      ...changedRows.map((r) => ({ ...r, kind: 'changed' })),
+      ...removedRows.map((r) => ({ ...r, kind: 'removed' })),
+    ]
+    return {
+      added: addedRows,
+      removed: removedRows,
+      changed: changedRows,
+      rows: all,
+      tableRows: all.slice(0, FIRST_MOVER_TABLE_ROWS),
+    }
+  }, [diff])
+  const columns = useMemo(() => [
+    {
+      id: 'fqdn',
+      accessorKey: 'fqdn',
+      header: t('pages.attackSurfaceManagement.first_mover_col_host'),
+      cell: ({ getValue }) => <span className="text-cyan-100">{getValue()}</span>,
+    },
+    {
+      id: 'kind',
+      // Sort / filter / export on the translated label the operator actually sees.
+      accessorFn: (r) => t(FIRST_MOVER_KIND_KEY[r.kind]),
+      header: t('pages.attackSurfaceManagement.first_mover_col_change'),
+      cell: ({ row, getValue }) => (
+        <span style={{ color: FIRST_MOVER_KIND_COLOR[row.original.kind] }}>{getValue()}</span>
+      ),
+    },
+    {
+      id: 'evidence',
+      accessorKey: 'evidence',
+      header: t('pages.attackSurfaceManagement.first_mover_col_evidence'),
+      cell: ({ getValue }) => (
+        <span className="block max-w-xl truncate text-[var(--text-tertiary)]">{getValue()}</span>
+      ),
+    },
+  ], [t])
   const cs = nerve?.certstream || {}
   const oast = nerve?.oast || {}
   const nvd = nerve?.nvd || {}
@@ -491,28 +530,14 @@ export function FirstMoverDeltaPanel({
         <p className="text-[12px] font-mono text-[var(--text-tertiary)]">{t('pages.attackSurfaceManagement.first_mover_empty')}</p>
       )}
       {rows.length > 0 && (
-        <div className="overflow-x-auto rounded-xl border border-[var(--border-subtle)]">
-          <table className="w-full text-start text-[12px] font-mono">
-            <thead>
-              <tr className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] border-b border-[var(--border-subtle)]">
-                <th className="px-3 py-2 font-medium">{t('pages.attackSurfaceManagement.first_mover_col_host')}</th>
-                <th className="px-3 py-2 font-medium">{t('pages.attackSurfaceManagement.first_mover_col_change')}</th>
-                <th className="px-3 py-2 font-medium">{t('pages.attackSurfaceManagement.first_mover_col_evidence')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.slice(0, 24).map((r) => (
-                <tr key={`${r.kind}-${r.fqdn}`} className="border-t border-[var(--border-subtle)]">
-                  <td className="px-3 py-2 text-cyan-100">{r.fqdn}</td>
-                  <td className="px-3 py-2">
-                    <span style={{ color: kindColor[r.kind] }}>{t(kindKey[r.kind])}</span>
-                  </td>
-                  <td className="px-3 py-2 text-[var(--text-tertiary)] max-w-xl truncate">{r.evidence}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          columns={columns}
+          data={tableRows}
+          getRowId={(r) => `${r.kind}-${r.fqdn}`}
+          animateRows={false}
+          hidePagination
+          tableClassName="text-[12px] font-mono"
+        />
       )}
     </div>
   )

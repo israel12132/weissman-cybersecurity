@@ -16,14 +16,13 @@ import { downloadClientPdf, downloadClientXlsx } from '../../lib/downloadClientR
 const columnHelper = createColumnHelper()
 const FT = 'components.cockpitTabs.findings'
 
-function severityToCvss(severity) {
-  if (!severity) return '—'
-  const s = String(severity).toLowerCase()
-  if (s.includes('critical')) return '9.0–10.0'
-  if (s.includes('high')) return '7.0–8.9'
-  if (s.includes('medium') || s.includes('med')) return '4.0–6.9'
-  if (s.includes('low') || s.includes('info')) return '0.1–3.9'
-  return '—'
+// Display honesty: the CVSS column shows only a CVSS the engine actually published.
+// We must NOT derive one from severity (severity has its own column) — a severity-mapped
+// band presented under a "CVSS" header reads as a measured standards score it never was.
+function displayCvss(finding) {
+  const raw = finding?.cvss_score ?? finding?.score
+  const n = typeof raw === 'number' ? raw : parseFloat(raw)
+  return Number.isFinite(n) && n > 0 ? n.toFixed(1) : '—'
 }
 
 export default function FindingsTab() {
@@ -54,10 +53,10 @@ export default function FindingsTab() {
         header: t(`${FT}.table.severity`),
         cell: (info) => <SeverityBadge severity={info.getValue()} size="sm" />,
       }),
-      columnHelper.accessor((f) => severityToCvss(f.severity), {
+      columnHelper.accessor((f) => displayCvss(f), {
         id: 'cvss',
         header: t(`${FT}.table.cvss`),
-        cell: (info) => <span className="text-[#9ca3af] font-mono text-xs">{info.getValue()}</span>,
+        cell: (info) => <span className="text-[var(--text-muted)] font-mono text-xs">{info.getValue()}</span>,
       }),
       columnHelper.accessor((f) => sanitizeFindingPlainText(f.title, 2000), {
         id: 'title',

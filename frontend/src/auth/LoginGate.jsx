@@ -541,22 +541,24 @@ export default function LoginGate({
                       {submitting ? <><AuthSpinner />{t('auth.authenticating')}</> : t('auth.authenticate')}
                     </Button>
                     <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                      <button
+                      <Button
+                        variant="unstyled"
                         type="button"
                         className="text-xs text-white/40 hover:text-white/70"
                         onClick={() => setShowWorkspace((v) => !v)}
                         aria-expanded={showWorkspace}
                       >
                         {showWorkspace ? t('auth.hide_workspace') : t('auth.different_workspace')}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="unstyled"
                         type="button"
                         className="text-xs text-white/40 hover:text-white/70"
                         onClick={() => setShowSso((v) => !v)}
                         aria-expanded={showSso}
                       >
                         {t('auth.use_company_sso')}
-                      </button>
+                      </Button>
                     </div>
                   </motion.form>
                 )}

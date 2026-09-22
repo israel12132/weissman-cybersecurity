@@ -157,7 +157,7 @@ pub async fn api_signup(
             Json(json!({
                 "ok": false,
                 "code": "self_serve_disabled",
-                "detail": "Self-serve signup is not enabled on this deployment. Contact sales@weissman.io to request an account."
+                "detail": "Self-serve signup is not enabled on this deployment. Contact weissmancybersecurity@gmail.com to request an account."
             })),
         )
             .into_response();
@@ -364,7 +364,7 @@ pub async fn api_verify(
 
     // RLS on `users` is forced — must set tenant GUC before INSERT so the WITH CHECK
     // policy `tenant_id = current_setting('app.current_tenant_id')::bigint` passes.
-    if let Err(e) = sqlx::query("SET LOCAL app.current_tenant_id = $1::text")
+    if let Err(e) = sqlx::query("SELECT set_config('app.current_tenant_id', $1, true)")
         .bind(tenant_id.to_string())
         .execute(&mut *tx)
         .await

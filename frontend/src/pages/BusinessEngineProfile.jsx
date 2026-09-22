@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../utils/apiFetch'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import { strategicEnginesNeedingDedicatedPage } from '../lib/strategicEngineProgram'
-import { buildSimpleTextPdf, downloadBytes } from '../lib/pdfExport'
+import { renderTextPdf, downloadBytes } from '../lib/pdfExport'
 import AgentRequiredGate from '../components/engine/AgentRequiredGate'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
@@ -319,7 +319,7 @@ export default function BusinessEngineProfile() {
       lines.push(`${t('pages.businessEngineProfile.pdf_active_job')}: ${liveJob.id}`)
       lines.push(`${t('common.status')}: ${liveJob.status || '-'}`)
     }
-    const bytes = buildSimpleTextPdf(lines)
+    const bytes = renderTextPdf(lines)
     downloadBytes(bytes, `${engineId}-business-export.pdf`, 'application/pdf')
   }
 

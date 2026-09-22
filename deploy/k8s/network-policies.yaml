@@ -29,6 +29,31 @@ spec:
         - protocol: TCP
           port: 80
 ---
+# Ingress controller → maintenance page (the ingress-nginx default backend,
+# deploy/k8s/maintenance-deployment.yaml). The default-deny above would otherwise drop
+# exactly the traffic this pod exists for, and nobody would notice until the gateway is
+# down: ingress-nginx would fall back, time out, and show its own error page. The port is
+# the POD port: ingress-nginx connects to pod IPs directly (it bypasses the Service), and a
+# NetworkPolicy port always names the pod side — the Service's port 80 → targetPort 8080
+# translation happens before the policy is evaluated.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-maintenance
+  namespace: weissman
+spec:
+  podSelector:
+    matchLabels:
+      app: weissman-maintenance
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 8080
+---
 # Gateway → backend API (internal ClusterIP).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

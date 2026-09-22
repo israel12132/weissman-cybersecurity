@@ -117,7 +117,13 @@ export async function installCommandCenterApiMocks(page: Page): Promise<void> {
       return fulfillJson(route, { region: 'us-e2e' })
     }
     if (path.startsWith('/api/search') && method === 'GET') {
-      return fulfillJson(route, { results: [{ type: 'finding', id: 101, title: 'SQL Injection in /login', path: '/findings', icon: '🔎' }] })
+      // Query-aware, like the real endpoint: only surface results whose title
+      // matches ?q=. A query-agnostic result pollutes the ⌘K palette's option
+      // count and hijacks the route-filter keyboard-navigation assertion.
+      const q = (url.searchParams.get('q') || '').toLowerCase()
+      const all = [{ type: 'finding', id: 101, title: 'SQL Injection in /login', path: '/findings', icon: '🔎' }]
+      const results = q ? all.filter((r) => r.title.toLowerCase().includes(q)) : []
+      return fulfillJson(route, { results })
     }
 
     if (/^\/api\/clients\/\d+\/risk-graph$/.test(path) && method === 'GET') {

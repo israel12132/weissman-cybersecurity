@@ -77,7 +77,7 @@ function SummaryCard({ label, value, tone, icon: Icon }) {
         <span className="text-xs uppercase tracking-wider text-[var(--text-muted)]">{label}</span>
         {Icon ? <Icon className="h-4 w-4 text-[var(--text-muted)]" /> : null}
       </div>
-      <div className="text-2xl font-bold tabular-nums" style={{ color: tone || '#f8fafc' }}>
+      <div className="text-2xl font-bold tabular-nums" style={{ color: tone || 'var(--text-primary)' }}>
         {value}
       </div>
     </div>

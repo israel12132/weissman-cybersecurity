@@ -7,6 +7,8 @@ import { useTranslation } from 'react-i18next'
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
+import Button from '../components/ui/Button'
+import DataTable from '../components/ui/DataTable'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
 import { apiFetch } from '../utils/apiFetch'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
@@ -56,6 +58,47 @@ export default function HoneyRoutingGateway() {
     ready: Boolean(clientId) && Boolean(target.trim()),
   }), [clientId, target])
 
+  // Live-session grid. Accessors expose the raw field so sorting works on real
+  // values (integer confidence / hit counts); cells keep the original presentation.
+  const sessionColumns = useMemo(
+    () => [
+      {
+        id: 'source_ip',
+        accessorKey: 'source_ip',
+        header: t('pages.honeyRouting.col_ip'),
+        cell: ({ row }) => <span className="text-amber-200">{row.original.source_ip}</span>,
+      },
+      {
+        id: 'decoy_path',
+        accessorKey: 'decoy_path',
+        header: t('pages.honeyRouting.col_path'),
+        cell: ({ row }) => <span className="block truncate max-w-[220px]">{row.original.decoy_path}</span>,
+      },
+      {
+        id: 'confidence',
+        accessorKey: 'confidence',
+        header: t('pages.honeyRouting.col_conf'),
+        cell: ({ row }) => (
+          <span className={row.original.high_confidence ? 'text-rose-400' : 'text-cyan-300'}>
+            {row.original.confidence}{row.original.lateral_attempt ? ' ⚡' : ''}
+          </span>
+        ),
+      },
+      {
+        id: 'hit_count',
+        accessorKey: 'hit_count',
+        header: t('pages.honeyRouting.col_hits'),
+      },
+      {
+        id: 'mitre',
+        accessorFn: (s) => (s.mitre_techniques || []).join(', '),
+        header: t('pages.honeyRouting.col_mitre'),
+        cell: ({ getValue }) => <span className="block truncate max-w-[180px]">{getValue()}</span>,
+      },
+    ],
+    [t],
+  )
+
   const {
     searchQuery,
     setSearchQuery,
@@ -71,7 +114,7 @@ export default function HoneyRoutingGateway() {
     if (!clientId) return
     try {
       const dash = await apiFetch(`/api/honey-routing/${clientId}/dashboard`)
-      if (dash) {
+      if (dash && dash.ok !== false && !dash.unavailable) {
         setDashboard(dash)
         setLastUpdated(new Date().toISOString())
       }
@@ -322,40 +365,17 @@ export default function HoneyRoutingGateway() {
                 className="bg-[var(--table-surface)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs font-mono w-56"
               />
             </div>
-            {filteredSessions.length === 0 ? (
-              <p className="text-[12px] text-[var(--text-muted)]">{t('pages.honeyRouting.no_sessions')}</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-[11px] font-mono">
-                  <thead className="text-[var(--text-muted)] uppercase text-[10px]">
-                    <tr>
-                      <th className="text-left py-1">{t('pages.honeyRouting.col_ip')}</th>
-                      <th className="text-left py-1">{t('pages.honeyRouting.col_path')}</th>
-                      <th className="text-left py-1">{t('pages.honeyRouting.col_conf')}</th>
-                      <th className="text-left py-1">{t('pages.honeyRouting.col_hits')}</th>
-                      <th className="text-left py-1">{t('pages.honeyRouting.col_mitre')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredSessions.map((s) => (
-                      <tr
-                        key={s.id}
-                        className={`border-t border-[var(--border-subtle)] cursor-pointer hover:bg-amber-950/20 ${selectedSession?.id === s.id ? 'bg-amber-950/30' : ''}`}
-                        onClick={() => openSession(s)}
-                      >
-                        <td className="py-1.5 text-amber-200">{s.source_ip}</td>
-                        <td className="py-1.5 truncate max-w-[220px]">{s.decoy_path}</td>
-                        <td className={s.high_confidence ? 'text-rose-400' : 'text-cyan-300'}>
-                          {s.confidence}{s.lateral_attempt ? ' ⚡' : ''}
-                        </td>
-                        <td>{s.hit_count}</td>
-                        <td className="truncate max-w-[180px]">{(s.mitre_techniques || []).join(', ')}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            <DataTable
+              columns={sessionColumns}
+              data={filteredSessions}
+              hidePagination
+              tableClassName="text-[11px] font-mono"
+              emptyState={
+                <p className="text-[12px] text-[var(--text-muted)]">{t('pages.honeyRouting.no_sessions')}</p>
+              }
+              selectedRowId={selectedSession?.id ?? null}
+              onRowClick={(row) => openSession(row.original)}
+            />
           </div>
 
           {selectedSession && (
@@ -375,20 +395,12 @@ export default function HoneyRoutingGateway() {
                 </ul>
               )}
               <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={requestIsolate}
-                  className="px-3 py-1.5 rounded-lg text-[11px] font-mono border border-amber-500/40 text-amber-200 hover:bg-amber-950/40"
-                >
+                <Button variant="secondary" size="xs" type="button" onClick={requestIsolate}>
                   {t('pages.honeyRouting.isolate_request')}
-                </button>
-                <button
-                  type="button"
-                  onClick={approveIsolate}
-                  className="px-3 py-1.5 rounded-lg text-[11px] font-mono border border-rose-500/40 text-rose-200 hover:bg-rose-950/40"
-                >
+                </Button>
+                <Button variant="danger" size="xs" type="button" onClick={approveIsolate}>
                   {t('pages.honeyRouting.isolate_approve')}
-                </button>
+                </Button>
               </div>
               {isolateMsg && <p className="mt-2 text-[11px] font-mono text-amber-200/80">{isolateMsg}</p>}
             </div>

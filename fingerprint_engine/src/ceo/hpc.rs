@@ -160,7 +160,9 @@ pub async fn put_hpc_policy(
     .map_err(|_| "store_down".to_string())?;
     tx.commit().await.map_err(|_| "store_down".to_string())?;
     Ok(HpcPolicyRow {
-        tenant_id: row.try_get("tenant_id").map_err(|_| "store_down".to_string())?,
+        tenant_id: row
+            .try_get("tenant_id")
+            .map_err(|_| "store_down".to_string())?,
         research_core_share_percent: row
             .try_get("research_core_share_percent")
             .map_err(|_| "store_down".to_string())?,
@@ -170,7 +172,11 @@ pub async fn put_hpc_policy(
         client_scan_cpu_affinity: row
             .try_get("client_scan_cpu_affinity")
             .map_err(|_| "store_down".to_string())?,
-        routing_note: row.try_get("routing_note").map_err(|_| "store_down".to_string())?,
-        updated_at: row.try_get("updated_at").map_err(|_| "store_down".to_string())?,
+        routing_note: row
+            .try_get("routing_note")
+            .map_err(|_| "store_down".to_string())?,
+        updated_at: row
+            .try_get("updated_at")
+            .map_err(|_| "store_down".to_string())?,
     })
 }

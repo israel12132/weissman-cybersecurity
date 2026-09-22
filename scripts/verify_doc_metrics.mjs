@@ -47,6 +47,7 @@ function computeCanonical() {
     total: engines.total ?? null, // production engine IDs
     real_probe: engines.real_probe ?? null,
     distinct: engines.distinct_real_implementations ?? null,
+    advisory: engines.advisory_only ?? null,
     alias: engines.alias ?? null,
     agent_required: engines.agent_required ?? null,
     migrations, // crates/weissman-db/migrations *.sql count
@@ -85,6 +86,16 @@ const REFS = [
   { file: 'SECURITY_AND_COMPLIANCE.md', metric: 'distinct', re: /\((\d+) distinct impls\)/, label: 'distinct impls' },
   { file: 'SECURITY_AND_COMPLIANCE.md', metric: 'alias', re: /(\d+) alias,/, label: 'alias' },
   { file: 'SECURITY_AND_COMPLIANCE.md', metric: 'agent_required', re: /(\d+) agent_required,/, label: 'agent_required' },
+
+  // Extra gated occurrences the first-match-only version missed (these are exactly the
+  // spots that silently drifted to 592 / 563 / "2 advisory-only"). matchAll below
+  // asserts EVERY occurrence, so both README engine-ID sentences must agree.
+  { file: 'README.md', metric: 'advisory', re: /(\d+) advisory-only/, label: 'advisory-only' },
+  { file: 'README.md', metric: 'total', re: /▶ (\d+) engines\b/, label: 'worker→engines diagram' },
+  { file: 'AGENTS.md', metric: 'total', re: /(\d+) engine IDs ↔ dispatch/, label: 'engine IDs ↔ dispatch' },
+  { file: 'docs/architecture.md', metric: 'total', re: /▶│ (\d+) engines\b/, label: 'engines (diagram)' },
+  { file: 'docs/SOC_ENGINES_ARCHITECTURE.md', metric: 'total', re: /\*\*(\d+) entries\*\*/, label: 'PRODUCTION_ENGINE_IDS entries' },
+  { file: 'docs/SOC_ENGINES_ARCHITECTURE.md', metric: 'total', re: /all (\d+) engine IDs/, label: 'Engine Matrix engine IDs' },
 ];
 
 function main() {
@@ -101,6 +112,7 @@ function main() {
   }
 
   const failures = [];
+  let occurrencesChecked = 0;
   for (const ref of REFS) {
     const abs = join(ROOT, ref.file);
     if (!existsSync(abs)) {
@@ -108,16 +120,24 @@ function main() {
       continue;
     }
     const text = readFileSync(abs, 'utf8');
-    const m = text.match(ref.re);
     const want = canonical[ref.metric];
-    if (!m) {
+    // Assert EVERY occurrence, not just the first. A single doc can restate the same
+    // metric more than once (README states the engine count in two sentences plus a
+    // diagram), and gating only the first match is exactly how "592"/"563" slipped
+    // through before.
+    const matches = [...text.matchAll(new RegExp(ref.re.source, 'g'))];
+    if (matches.length === 0) {
       failures.push(`${ref.file}: could not locate "${ref.label}" (pattern ${ref.re}); expected ${want}. Re-anchor the curated regex or fix the doc.`);
       continue;
     }
-    const got = parseInt(m[1], 10);
-    if (got !== want) {
-      failures.push(`${ref.file}: "${ref.label}" says ${got} but canonical ${ref.metric} = ${want}. Update the doc to ${want}.`);
-    }
+    matches.forEach((m, i) => {
+      occurrencesChecked++;
+      const got = parseInt(m[1], 10);
+      if (got !== want) {
+        const which = matches.length > 1 ? ` (occurrence ${i + 1} of ${matches.length})` : '';
+        failures.push(`${ref.file}: "${ref.label}"${which} says ${got} but canonical ${ref.metric} = ${want}. Update every occurrence to ${want}.`);
+      }
+    });
   }
 
   if (failures.length) {
@@ -128,7 +148,7 @@ function main() {
     process.exit(1);
   }
 
-  console.log(`✅ ${REFS.length} doc metric references across ${new Set(REFS.map((r) => r.file)).size} docs match source. Canonical: ${JSON.stringify(canonical)}`);
+  console.log(`✅ ${occurrencesChecked} doc metric occurrences (${REFS.length} curated references across ${new Set(REFS.map((r) => r.file)).size} docs) match source. Canonical: ${JSON.stringify(canonical)}`);
 }
 
 main();

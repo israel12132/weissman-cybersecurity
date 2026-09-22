@@ -1,7 +1,7 @@
 //! Threat Emulation Engine — runs known APT group TTPs against the target and checks detection.
 
 use crate::engine_probes::{extract_host, tcp_open};
-use crate::engine_result::{EngineResult, print_result};
+use crate::engine_result::{print_result, EngineResult};
 use serde_json::json;
 use std::time::Duration;
 

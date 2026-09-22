@@ -175,13 +175,12 @@ async fn binary_copy_rollback_drops_the_batch() {
     let copied = writer.finish().await.expect("copy finish");
     assert_eq!(copied, 1);
 
-    let visible: Option<i64> = sqlx::query_scalar(
-        "SELECT id FROM agent_metric_samples WHERE id = $1",
-    )
-    .bind(id)
-    .fetch_optional(&mut *tx)
-    .await
-    .expect("select in-tx");
+    let visible: Option<i64> =
+        sqlx::query_scalar("SELECT id FROM agent_metric_samples WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await
+            .expect("select in-tx");
     assert_eq!(visible, Some(id), "row must be visible inside the open tx");
 
     tx.rollback().await.expect("rollback");
@@ -193,13 +192,12 @@ async fn binary_copy_rollback_drops_the_batch() {
             return;
         }
     };
-    let leftover: Option<i64> = sqlx::query_scalar(
-        "SELECT id FROM agent_metric_samples WHERE id = $1",
-    )
-    .bind(id)
-    .fetch_optional(&mut *check)
-    .await
-    .expect("select after rollback");
+    let leftover: Option<i64> =
+        sqlx::query_scalar("SELECT id FROM agent_metric_samples WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&mut *check)
+            .await
+            .expect("select after rollback");
     let _ = check.rollback().await;
     assert!(
         leftover.is_none(),
@@ -264,13 +262,15 @@ async fn binary_copy_abort_leaves_no_row() {
             return;
         }
     };
-    let leftover: Option<i64> = sqlx::query_scalar(
-        "SELECT id FROM agent_metric_samples WHERE agent_id = $1",
-    )
-    .bind(&marker)
-    .fetch_optional(&mut *check)
-    .await
-    .expect("select after abort");
+    let leftover: Option<i64> =
+        sqlx::query_scalar("SELECT id FROM agent_metric_samples WHERE agent_id = $1")
+            .bind(&marker)
+            .fetch_optional(&mut *check)
+            .await
+            .expect("select after abort");
     let _ = check.rollback().await;
-    assert!(leftover.is_none(), "aborted COPY must not persist the sample");
+    assert!(
+        leftover.is_none(),
+        "aborted COPY must not persist the sample"
+    );
 }

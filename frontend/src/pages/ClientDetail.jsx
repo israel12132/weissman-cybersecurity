@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import PageShell from './PageShell'
@@ -6,9 +6,12 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import PremiumPageHeader from '../components/ui/PremiumPageHeader'
 import Button from '../components/ui/Button'
+import Avatar from '../components/ui/Avatar'
 import { SkeletonCard } from '../components/ui/Skeleton'
 import { apiFetch } from '../utils/apiFetch'
 import { confirmDialog } from '../utils/confirmDialog'
+import { fileToDataUrl } from '../lib/imageUpload'
+import { usePermissions } from '../context/AuthContext'
 import ClientReadinessBanner from '../components/clients/ClientReadinessBanner'
 import ClientReportDownloadBar from '../components/ClientReportDownloadBar'
 
@@ -16,12 +19,17 @@ export default function ClientDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { t } = useTranslation()
+  const { hasRole } = usePermissions()
+  const canManageLogo = hasRole('operator')
   const [client, setClient] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [launchingScan, setLaunchingScan] = useState(false)
   const [scanResult, setScanResult] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(null)
+  const [logoUploading, setLogoUploading] = useState(false)
+  const [logoError, setLogoError] = useState('')
+  const logoFileRef = useRef(null)
 
   useEffect(() => {
     loadClient()
@@ -88,6 +96,27 @@ export default function ClientDetail() {
     }
   }
 
+  async function handleLogoFile(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || !client) return
+    setLogoUploading(true)
+    setLogoError('')
+    try {
+      const dataUrl = await fileToDataUrl(file, { maxDim: 512, quality: 0.85 })
+      const res = await apiFetch(`/api/clients/${client.id}/logo`, {
+        method: 'POST',
+        body: { logo_url: dataUrl },
+      })
+      if (!res || res.ok === false) throw new Error(res?.detail || t('client_detail.logo_failed'))
+      setClient((c) => ({ ...(c || {}), logo_url: res.logo_url }))
+    } catch (err) {
+      setLogoError(err.message || t('client_detail.logo_failed'))
+    } finally {
+      setLogoUploading(false)
+    }
+  }
+
   // Derived findings + workbench must run unconditionally (Rules of Hooks), so
   // they live above the loading/error/not-found early returns and null-guard on
   // `client` (which is null until the fetch resolves).
@@ -137,13 +166,9 @@ export default function ClientDetail() {
           <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-5 py-4 text-rose-300">
             {error}
           </div>
-          <button
-            type="button"
-            onClick={() => navigate('/clients')}
-            className="px-4 py-2 rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-mono text-sm transition-colors"
-          >
+          <Button variant="secondary" onClick={() => navigate('/clients')}>
             {t('client_detail.back')}
-          </button>
+          </Button>
         </div>
       </PageShell>
     )
@@ -154,13 +179,9 @@ export default function ClientDetail() {
       <PageShell title={t('client_detail.title')} subtitle={t('client_detail.not_found')}>
         <div className="max-w-2xl mx-auto text-center py-12">
           <p className="text-[var(--text-muted)]">{t('client_detail.not_found')}</p>
-          <button
-            type="button"
-            onClick={() => navigate('/clients')}
-            className="mt-6 px-4 py-2 rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-mono text-sm transition-colors"
-          >
+          <Button variant="secondary" onClick={() => navigate('/clients')} className="mt-6">
             {t('client_detail.back')}
-          </button>
+          </Button>
         </div>
       </PageShell>
     )
@@ -221,13 +242,9 @@ export default function ClientDetail() {
           onRefresh={loadClient}
           refreshLabel={t('common.refresh')}
         >
-          <button
-            type="button"
-            onClick={() => navigate('/clients')}
-            className={navBtnClass}
-          >
+          <Button variant="unstyled" onClick={() => navigate('/clients')} className={navBtnClass}>
             {t('client_detail.back')}
-          </button>
+          </Button>
           <Link to={`/findings?client_id=${client.id}`} className={navBtnClass}>
             {t('client_detail.view_findings')}
           </Link>
@@ -290,6 +307,33 @@ export default function ClientDetail() {
           <h3 className="text-sm font-mono uppercase tracking-widest text-[var(--text-muted)] mb-4">
             {t('client_detail.overview')}
           </h3>
+          <div className="flex items-center gap-4 mb-5">
+            <Avatar src={client.logo_url} name={client.name} size="xl" shape="square" />
+            <div className="min-w-0">
+              <div className="text-white font-semibold truncate">{client.name}</div>
+              {canManageLogo && (
+                <>
+                  <Button
+                    variant="unstyled"
+                    type="button"
+                    onClick={() => logoFileRef.current?.click()}
+                    disabled={logoUploading}
+                    className="mt-1.5 px-3 py-1.5 rounded-lg text-[11px] font-mono border border-white/12 bg-white/[0.04] text-white/70 hover:text-white hover:border-white/25 disabled:opacity-50 transition-colors"
+                  >
+                    {logoUploading ? t('profile.uploading') : t('client_detail.change_logo')}
+                  </Button>
+                  <input
+                    ref={logoFileRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleLogoFile}
+                    className="hidden"
+                  />
+                </>
+              )}
+              {logoError && <div className="text-[11px] text-rose-300 mt-1">{logoError}</div>}
+            </div>
+          </div>
           <dl className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
               <dt className="text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{t('client_detail.client_name')}</dt>

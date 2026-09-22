@@ -1027,7 +1027,8 @@ async fn api_clients_get(
             COALESCE(auto_detect_tech_stack, true) AS auto_detect_tech_stack,
             COALESCE(aws_cross_account_role_arn,'') AS aws_cross_account_role_arn,
             COALESCE(aws_external_id,'') AS aws_external_id,
-            COALESCE(gcp_project_id,'') AS gcp_project_id
+            COALESCE(gcp_project_id,'') AS gcp_project_id,
+            COALESCE(logo_url,'') AS logo_url
            FROM clients WHERE id = $1"#,
     )
     .bind(id)
@@ -1076,6 +1077,7 @@ async fn api_clients_get(
             "aws_cross_account_role_arn": r.try_get::<String,_>("aws_cross_account_role_arn").ok(),
             "aws_external_id": r.try_get::<String,_>("aws_external_id").ok(),
             "gcp_project_id": r.try_get::<String,_>("gcp_project_id").ok(),
+            "logo_url": r.try_get::<String,_>("logo_url").ok(),
         })),
     )
         .into_response()
@@ -1234,7 +1236,8 @@ async fn api_clients_update(
             COALESCE(auto_detect_tech_stack, true) AS auto_detect_tech_stack,
             COALESCE(aws_cross_account_role_arn,'') AS aws_cross_account_role_arn,
             COALESCE(aws_external_id,'') AS aws_external_id,
-            COALESCE(gcp_project_id,'') AS gcp_project_id
+            COALESCE(gcp_project_id,'') AS gcp_project_id,
+            COALESCE(logo_url,'') AS logo_url
            FROM clients WHERE id = $1"#,
     )
         .bind(id)

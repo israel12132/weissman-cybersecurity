@@ -85,6 +85,7 @@ export const ServerlessSecurityCommandCenter = React$lazy(() => import('../pages
 export const DigitalTwinSimulator = React$lazy(() => import('../pages/DigitalTwinSimulator'))
 export const FindingsCommandCenter = React$lazy(() => import('../pages/FindingsCommandCenter'))
 export const AdminManagement = React$lazy(() => import('../pages/AdminManagement'))
+export const Messages = React$lazy(() => import('../pages/Messages'))
 export const DomainDiscovery = React$lazy(() => import('../pages/DomainDiscovery'))
 export const ThreatIntelHub = React$lazy(() => import('../pages/ThreatIntelHub'))
 export const IncidentResponseCenter = React$lazy(() => import('../pages/IncidentResponseCenter'))

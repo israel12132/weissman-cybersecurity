@@ -152,7 +152,7 @@ function PrismaCloudHonestyCard({ honesty, t }) {
             className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-3"
           >
             <div className="text-[10px] font-mono uppercase tracking-[0.12em] text-amber-200/80">{p.label}</div>
-            <div className={`text-[12px] font-semibold mt-1 ${p.live ? 'text-emerald-300' : 'text-slate-400'}`}>
+            <div className={`text-[12px] font-semibold mt-1 ${p.live ? 'text-emerald-300' : 'text-text-secondary'}`}>
               {p.status}
             </div>
             <div className="text-[11px] text-[var(--text-tertiary)] mt-1 leading-snug">{p.hint}</div>

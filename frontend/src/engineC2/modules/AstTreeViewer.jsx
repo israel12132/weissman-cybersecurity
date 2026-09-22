@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { List } from 'react-window'
 import CopyButton from '../../components/ui/CopyButton'
@@ -75,7 +75,6 @@ export default function AstTreeViewer({
     [capped],
   )
 
-  const onCopy = useCallback(() => {}, [])
 
   if (loading && !capped.length) {
     return (
@@ -115,7 +114,7 @@ export default function AstTreeViewer({
         rowCount={capped.length}
         rowHeight={ROW_HEIGHT}
         rowComponent={MemoAstRow}
-        rowProps={{ ...itemData, onCopy }}
+        rowProps={itemData}
         overscanCount={8}
       />
     </div>

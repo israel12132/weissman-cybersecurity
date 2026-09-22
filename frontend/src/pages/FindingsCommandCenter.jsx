@@ -752,7 +752,7 @@ export default function FindingsCommandCenter() {
           <Button variant="unstyled"
             type="button"
             onClick={handleExportXlsx}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-mono border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 transition-all"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-mono border border-emerald-500/40 text-[var(--severity-low)] hover:bg-emerald-500/10 transition-all"
           >
             {t('common.export_xlsx')}
           </Button>
@@ -925,7 +925,7 @@ export default function FindingsCommandCenter() {
               <span className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{t('findings.views_label')}</span>
               {savedViews.map((v) => (
                 <span key={v.id} className="inline-flex items-center gap-1 rounded-lg border border-[var(--border-default)] bg-[var(--row-hover-bg)] pl-2.5 pr-1 py-1 text-[11px] font-mono text-[var(--text-secondary)]">
-                  <Button variant="unstyled" type="button" onClick={() => applyView(v.state)} className="hover:text-cyan-300 transition-colors" title={t('findings.view_apply')}>
+                  <Button variant="unstyled" type="button" onClick={() => applyView(v.state)} className="hover:text-[var(--text-accent)] transition-colors" title={t('findings.view_apply')}>
                     {v.name}
                   </Button>
                   <Button variant="unstyled" type="button" onClick={() => deleteView(v.id)} aria-label={t('findings.view_delete', { name: v.name })} className="w-4 h-4 flex items-center justify-center rounded text-[var(--text-muted)] hover:text-rose-300 transition-colors">×</Button>
@@ -949,7 +949,7 @@ export default function FindingsCommandCenter() {
                 <Button variant="unstyled"
                   type="submit"
                   disabled={!viewName.trim()}
-                  className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 px-2.5 py-1.5 text-[11px] font-mono text-cyan-300 hover:bg-cyan-500/15 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 px-2.5 py-1.5 text-[11px] font-mono text-[var(--text-accent)] hover:bg-cyan-500/15 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   {t('findings.view_save')}
                 </Button>
@@ -976,7 +976,7 @@ export default function FindingsCommandCenter() {
 
         {selectedRows.length > 0 && !error && (
           <div className="sticky top-2 z-10 flex flex-wrap items-center gap-3 rounded-xl border border-cyan-500/30 bg-[var(--bg-elevated)] px-4 py-2.5 shadow-lg">
-            <span className="text-[12px] font-mono text-cyan-300">
+            <span className="text-[12px] font-mono text-[var(--text-accent)]">
               {t('findings.bulk_selected', { count: selectedRows.length })}
             </span>
             <div className="flex items-center gap-2 ms-auto">
@@ -996,7 +996,7 @@ export default function FindingsCommandCenter() {
                 type="button"
                 disabled={!bulkStatus || bulkBusy}
                 onClick={applyBulkStatus}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-[12px] font-mono text-cyan-200 hover:bg-cyan-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-[12px] font-mono text-[var(--text-accent)] hover:bg-cyan-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 {bulkBusy && <span className="w-3 h-3 border-2 border-cyan-400/40 border-t-cyan-400 rounded-full animate-spin" />}
                 {t('findings.bulk_apply', { count: selectedRows.length })}

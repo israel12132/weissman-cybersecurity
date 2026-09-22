@@ -71,7 +71,7 @@ export default function HealTrendSparkline({ clientIds = [], days = 30 }) {
       </p>
     )
   }
-  if (!data || data.total === 0 || data.days.length === 0) return null
+  if (!data || data.total === 0 || !data.days?.length) return null
 
   const W = 560
   const H = 96

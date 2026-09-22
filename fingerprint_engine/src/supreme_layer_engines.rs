@@ -983,12 +983,7 @@ pub async fn run_prevention_fabric_breach_proof_result(
         ("zero_trust_bypass", &ztna),
     ];
     for (label, result) in children {
-        if ingest(
-            &mut merged,
-            label,
-            "prevention_fabric_breach_proof",
-            result,
-        ) {
+        if ingest(&mut merged, label, "prevention_fabric_breach_proof", result) {
             child_ok += 1;
         } else {
             child_fail.push(format!("{label}: {}", result.message));

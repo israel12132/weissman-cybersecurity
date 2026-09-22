@@ -71,6 +71,32 @@ services:
       timeout: 3s
       retries: 20
 
+  # Scheduled logical backups (pg_dump, custom format) for the single-node compose
+  # path. Without this the recommended stack ran ONE Postgres container with NO
+  # automated backups — a disk failure or a bad auto-migration (migrations run at
+  # backend boot) was unrecoverable. Each cycle dumps, verifies the archive is
+  # readable, and prunes to WEISSMAN_BACKUP_RETENTION. This is logical backup, not
+  # PITR/HA — for continuous PITR, cross-region DR and the 99.95% SLA use the
+  # Kubernetes/CNPG stack (deploy/k8s/backup-cronjob.yaml, scripts/dr_orchestrator.sh).
+  db-backup:
+    image: pgvector/pgvector:pg16
+    logging: *default-logging
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set a strong POSTGRES_PASSWORD for production}
+      POSTGRES_DB: ${POSTGRES_DB:-weissman}
+      WEISSMAN_BACKUP_INTERVAL_SECONDS: ${WEISSMAN_BACKUP_INTERVAL_SECONDS:-86400}
+      WEISSMAN_BACKUP_RETENTION: ${WEISSMAN_BACKUP_RETENTION:-14}
+    volumes:
+      - weissman_db_backups:/backups
+      - ./deploy/db-backup.sh:/usr/local/bin/db-backup.sh:ro
+    entrypoint: ["/usr/local/bin/db-backup.sh"]
+
   backend:
     logging: *default-logging
     # Pull in the operator's full .env so OPTIONAL settings the app reads directly
@@ -236,3 +262,9 @@ services:
   alertmanager:
     logging: *default-logging
     image: prom/alertmanager:v0.28.0
+
+volumes:
+  # Logical DB backups written by the db-backup service. Named so it survives
+  # `docker compose down` (only `down -v` removes it). Back this with off-host
+  # storage (bind-mount / rclone) for real durability.
+  weissman_db_backups:

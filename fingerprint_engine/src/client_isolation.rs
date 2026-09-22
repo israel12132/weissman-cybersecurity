@@ -26,7 +26,9 @@ pub const CLIENT_ROLE: &str = "client";
 #[inline]
 #[must_use]
 pub fn is_platform_owner(auth: &AuthContext) -> bool {
-    auth.is_superadmin || auth.role.eq_ignore_ascii_case(crate::rbac::roles::CEO)
+    auth.is_superadmin
+        || auth.role.eq_ignore_ascii_case(crate::rbac::roles::CEO)
+        || auth.role.eq_ignore_ascii_case(crate::rbac::roles::OWNER)
 }
 
 #[inline]
@@ -35,10 +37,27 @@ pub fn is_client_role(role: &str) -> bool {
     role.trim().eq_ignore_ascii_case(CLIENT_ROLE)
 }
 
+/// A human whose role sits **below admin** (viewer / analyst / operator, or any
+/// unrecognised role) is always confined to a single customer. If a client has
+/// been assigned they see only that client; if none has been assigned they see
+/// nothing (every non-self-service request is refused by the scope middleware).
+/// Admin, CEO, owner and superadmin are unscoped ("staff"), so this returns
+/// `false` for them. Agents are handled separately.
+#[inline]
+#[must_use]
+pub fn is_below_admin_human(auth: &AuthContext) -> bool {
+    auth.agent_id.is_none()
+        && !auth.is_superadmin
+        && crate::rbac::role_rank(&auth.role) < crate::rbac::role_rank(crate::rbac::roles::ADMIN)
+}
+
 #[inline]
 #[must_use]
 pub fn is_client_scoped(auth: &AuthContext) -> bool {
-    auth.agent_id.is_none() && (auth.assigned_client_id.is_some() || is_client_role(&auth.role))
+    auth.agent_id.is_none()
+        && (auth.assigned_client_id.is_some()
+            || is_client_role(&auth.role)
+            || is_below_admin_human(auth))
 }
 
 #[inline]
@@ -175,10 +194,13 @@ pub fn bind_requested_client(
 ) -> Result<Option<i64>, Response> {
     match auth.assigned_client_id {
         None => {
-            if is_client_role(&auth.role) {
+            // A client-scoped identity with no bound customer (portal user OR any
+            // below-admin human) must never fall through to "all clients". Fail
+            // closed — they have to be assigned a client before they can see one.
+            if is_client_scoped(auth) {
                 return Err(denied(
                     auth,
-                    "Client portal account is missing a bound customer",
+                    "This account is not assigned to a customer workspace. Contact the platform owner.",
                     "client_scope_unbound",
                 ));
             }
@@ -196,7 +218,9 @@ pub fn bind_requested_client(
 #[must_use]
 pub fn payload_visible_to(auth: &AuthContext, payload: &Value) -> bool {
     let Some(cid) = auth.assigned_client_id else {
-        return !is_client_role(&auth.role);
+        // No bound customer: only genuine staff/owner (admin and above) see
+        // everything. A below-admin human with no assignment sees nothing.
+        return is_staff(auth);
     };
     json_client_id(payload) == Some(cid)
 }
@@ -333,6 +357,7 @@ mod tests {
     #[test]
     fn owner_is_ceo_or_superadmin() {
         assert!(is_platform_owner(&ctx("ceo", false, None)));
+        assert!(is_platform_owner(&ctx("owner", false, None)));
         assert!(is_platform_owner(&ctx("viewer", true, None)));
         assert!(!is_platform_owner(&ctx("admin", false, None)));
         assert!(!is_platform_owner(&ctx("operator", false, None)));
@@ -353,9 +378,29 @@ mod tests {
     fn portal_user_is_scoped() {
         assert!(is_client_scoped(&ctx("client", false, Some(4))));
         assert!(is_client_scoped(&ctx("viewer", false, Some(4))));
-        assert!(!is_client_scoped(&ctx("analyst", false, None)));
-        assert!(is_staff(&ctx("operator", false, None)));
         assert!(!is_staff(&ctx("client", false, Some(1))));
+    }
+
+    #[test]
+    fn below_admin_humans_are_always_scoped() {
+        // Every role below admin is client-scoped even with no assignment
+        // (they see nothing until a client is assigned).
+        assert!(is_client_scoped(&ctx("viewer", false, None)));
+        assert!(is_client_scoped(&ctx("analyst", false, None)));
+        assert!(is_client_scoped(&ctx("operator", false, None)));
+        assert!(!is_staff(&ctx("viewer", false, None)));
+        assert!(!is_staff(&ctx("analyst", false, None)));
+        assert!(!is_staff(&ctx("operator", false, None)));
+
+        // Admin and above are unscoped staff/owner (see every client).
+        assert!(!is_client_scoped(&ctx("admin", false, None)));
+        assert!(!is_client_scoped(&ctx("ceo", false, None)));
+        assert!(!is_client_scoped(&ctx("owner", false, None)));
+        assert!(is_staff(&ctx("admin", false, None)));
+        assert!(is_staff(&ctx("owner", false, None)));
+        // Superadmin flag is never client-scoped regardless of role string.
+        assert!(!is_client_scoped(&ctx("viewer", true, None)));
+        assert!(is_staff(&ctx("viewer", true, None)));
     }
 
     #[test]
@@ -385,7 +430,21 @@ mod tests {
         assert_eq!(bind_requested_client(&portal, Some(5)).unwrap(), Some(5));
         assert!(bind_requested_client(&portal, Some(9)).is_err());
 
-        let staff = ctx("operator", false, None);
+        // A below-admin human bound to a client is scoped to it.
+        let scoped_operator = ctx("operator", false, Some(5));
+        assert_eq!(
+            bind_requested_client(&scoped_operator, None).unwrap(),
+            Some(5)
+        );
+        assert!(bind_requested_client(&scoped_operator, Some(9)).is_err());
+
+        // A below-admin human with no assignment is refused, never given "all".
+        let unbound_operator = ctx("operator", false, None);
+        assert!(bind_requested_client(&unbound_operator, None).is_err());
+        assert!(bind_requested_client(&unbound_operator, Some(9)).is_err());
+
+        // Genuine staff (admin and above) are unscoped.
+        let staff = ctx("admin", false, None);
         assert_eq!(bind_requested_client(&staff, None).unwrap(), None);
         assert_eq!(bind_requested_client(&staff, Some(9)).unwrap(), Some(9));
     }
@@ -399,6 +458,12 @@ mod tests {
 
         let mut bad = json!({"client_id": 99});
         assert!(force_json_client_id(&portal, &mut bad).is_err());
+
+        // A below-admin human bound to a client also gets auto-aimed.
+        let operator = ctx("operator", false, Some(8));
+        let mut body = json!({"engine": "asm"});
+        force_json_client_id(&operator, &mut body).unwrap();
+        assert_eq!(body["client_id"], json!(8));
     }
 
     #[test]
@@ -446,7 +511,14 @@ mod tests {
         assert!(payload_visible_to(&portal, &json!({"client_id": "3"})));
         assert!(!payload_visible_to(&portal, &json!({"client_id": 4})));
         assert!(!payload_visible_to(&portal, &json!({"engine": "asm"})));
-        let staff = ctx("analyst", false, None);
+        // Genuine staff (admin and above) see every payload.
+        let staff = ctx("admin", false, None);
         assert!(payload_visible_to(&staff, &json!({"client_id": 4})));
+        // A below-admin human with no assignment sees nothing.
+        let unbound_analyst = ctx("analyst", false, None);
+        assert!(!payload_visible_to(
+            &unbound_analyst,
+            &json!({"client_id": 4})
+        ));
     }
 }

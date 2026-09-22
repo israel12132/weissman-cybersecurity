@@ -150,3 +150,67 @@ tests:
                 These rows are pending but fail the claim predicate — no zero-trust envelope, or at
                 their attempt ceiling. They will never run and never drain. Retire them explicitly
                 (status='dead' with a reason) rather than leaving them to distort queue depth.
+
+  # ── The meta-alerts whose whole job is to detect a BROKEN notification path ───
+  # A rule that fires but cannot be delivered is the exact 4-day-silent-outage failure mode.
+  # go_live_check.sh only greps that these rules are PRESENT; nothing proved they FIRE. These
+  # cases prove each meta-alert fires on a breach and stays silent when the pipeline is healthy.
+  - interval: 1m
+    name: "alert delivery failing: notification sends erroring fires AlertDeliveryFailing"
+    input_series:
+      # Counter climbing => rate[10m] > 0. 40m of samples clears the rate window + for:10m.
+      - series: 'alertmanager_notifications_failed_total{integration="webhook"}'
+        values: '0+1x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: AlertDeliveryFailing
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              category: availability
+              integration: webhook
+            exp_annotations:
+              summary: "Alertmanager cannot deliver notifications (webhook)"
+              description: >-
+                Notifications to the webhook receiver are failing. Alerts are being
+                raised and silently dropped. If the receiver still points at a *.invalid placeholder,
+                configure the real endpoint per monitoring/secrets/README.md.
+
+  - interval: 1m
+    name: "alert delivery healthy: a flat failure counter stays silent"
+    input_series:
+      - series: 'alertmanager_notifications_failed_total{integration="webhook"}'
+        values: '7x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: AlertDeliveryFailing
+        exp_alerts: []
+
+  - interval: 1m
+    name: "alerting pipeline unverified: alertmanager unscrapeable fires the meta-alert"
+    input_series:
+      - series: 'up{job="alertmanager"}'
+        values: '0x40'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: AlertingPipelineUnverified
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              category: availability
+              job: alertmanager
+            exp_annotations:
+              summary: "Alertmanager is not scrapeable — delivery health is unknown"
+              description: >-
+                Prometheus cannot scrape Alertmanager, so notification-failure counters are not being
+                collected and there is no evidence any alert can reach a human.
+
+  - interval: 1m
+    name: "alerting pipeline healthy: alertmanager up stays silent"
+    input_series:
+      - series: 'up{job="alertmanager"}'
+        values: '1x40'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: AlertingPipelineUnverified
+        exp_alerts: []

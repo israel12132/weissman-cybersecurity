@@ -14,7 +14,13 @@ include!("inc/types.inc.rs");
 include!("inc/findings.inc.rs");
 include!("inc/scanners.inc.rs");
 include!("inc/analysis.inc.rs");
-include!("inc/runner.inc.rs");
+// runner is a REAL child module (converted from inc/runner.inc.rs, Step 8): it is a pure
+// leaf consumer — it defines only the 3 entry-point fns and references nothing but items
+// this parent module provides, so `use super::*` in runner.rs re-imports the crate:: uses
+// and the sibling-fragment types with zero visibility edits, while `pub use` preserves the
+// external call-site paths (engine_dispatch, supreme_layer_engines, main, …).
+mod runner;
+pub use runner::{run_cloud_posture, run_cloud_posture_result, run_cloud_posture_result_ctx};
 #[cfg(test)]
 mod tests {
     use super::*;

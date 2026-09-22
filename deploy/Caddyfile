@@ -4,28 +4,153 @@
 #   - DNS A/AAAA for your hostname points to this VPS.
 #   - Rust app listening on 127.0.0.1:8000 (weissman-server or fingerprint_engine serve).
 #   - Ports 80 and 443 open to the world.
+#   - Maintenance page on disk (see "Maintenance page" below):
+#       sudo WEISSMAN_MAINTENANCE_ROOT=/opt/weissman/maintenance \
+#            WEISSMAN_MAINTENANCE_STATE_DIR=/opt/weissman/maintenance/state \
+#            bash deploy/maintenance/install.sh
 #
 # Install (Debian/Ubuntu):  sudo apt install -y caddy
 # Deploy:                   sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
 # Validate:                 sudo caddy validate --config /etc/caddy/Caddyfile
 # Reload:                   sudo systemctl reload caddy
 #
-# Set the site label below to your real FQDN (e.g. weissmancyber.com).
+# Set the site label at the bottom to your real FQDN (e.g. weissmancyber.com).
+#
+# Maintenance page — automatic, nothing to switch on:
+#   Whenever the Rust app cannot answer (systemctl restart, a rebuild, the ~90 s of
+#   migrations at startup, a crash), reverse_proxy fails with a Caddy-generated 502/504
+#   and `handle_errors` below answers with the branded page from deploy/maintenance/dist
+#   instead of Caddy's bare error: HTTP 503 + Retry-After: 30, the Hebrew page under /he,
+#   api.json for API-shaped requests. The page polls /api/health and reloads the visitor's
+#   original URL on the first genuine 200, so it disappears by itself the moment the app
+#   is back. A 503 that the app itself returns is passed through untouched — those are
+#   legitimate answers (POST /api/public/demo-request without SMTP) and never the page.
+#
+#   Announced windows (optional extra, off by default):
+#     sudo WEISSMAN_MAINTENANCE_STATE_DIR=/opt/weissman/maintenance/state \
+#          deploy/maintenance/maintenance-mode.sh on --reason "…" --until "…"   (… off)
+#   creates maintenance.on + status.json there. While the flag exists every request except
+#   the page's own assets gets the 503 page even though the app may still be up, and the
+#   page shows the reason and "expected back by" from status.json. The directory is
+#   checked per request, so neither `on` nor `off` needs a Caddy reload.
 # -----------------------------------------------------------------------------
 
-weissmancyber.com {
+(weissman) {
 	encode zstd gzip
 
-	# Streaming (SSE) and WebSockets: avoid buffering delays.
-	reverse_proxy 127.0.0.1:8000 {
-		flush_interval -1
+	# ── Maintenance page assets: served from disk, never proxied ───────────────────
+	# These sit in front of both the flag check and the proxy on purpose: the page's
+	# script must arrive as a real 200 (browsers refuse to run a script delivered with a
+	# 5xx) and it must keep loading while the app is out or the flag is on. no-store,
+	# because the files are tiny and a copy cached during one window must never mask a
+	# rebuilt page in the next one.
+	handle /maintenance/status.json {
+		# The announced-window descriptor lives in the state directory, not in dist/.
+		# 404 is the normal answer when nothing is announced; the page treats it as such.
+		root * /opt/weissman/maintenance/state
+		rewrite * /status.json
+		header {
+			Cache-Control no-store
+			X-Content-Type-Options nosniff
+			X-Robots-Tag "noindex, nofollow"
+		}
+		file_server
 	}
+
+	# The state directory sits under the page root so install.sh creates both with one
+	# owner. Only status.json (above) belongs on the wire; the flag file and its timestamp
+	# do not — the same 404 nginx-weissman.conf answers for this prefix.
+	handle /maintenance/state/* {
+		respond 404
+	}
+
+	handle /maintenance/* {
+		root * /opt/weissman/maintenance
+		uri strip_prefix /maintenance
+		header {
+			Cache-Control no-store
+			X-Content-Type-Options nosniff
+			X-Robots-Tag "noindex, nofollow"
+		}
+		file_server
+	}
+
+	# ── Everything else: announced-window flag, then the app ───────────────────────
+	handle {
+		# The flag file turns every remaining request into a 503, which handle_errors
+		# renders as the page. A host without the maintenance install simply never
+		# matches here — a missing directory is not an error.
+		@maint file {
+			root /opt/weissman/maintenance/state
+			try_files /maintenance.on
+		}
+		error @maint 503
+
+		# Streaming (SSE) and WebSockets: avoid buffering delays.
+		reverse_proxy 127.0.0.1:8000 {
+			flush_interval -1
+			# A stopped app refuses the connection instantly, so the page is immediate.
+			# The dial timeout only bounds the odd half-alive listener (e.g. a wedged
+			# process whose backlog is full) so it cannot hold visitors for a minute.
+			transport http {
+				dial_timeout 5s
+			}
+		}
+	}
+
+	# ── Branded fallback for 502 / 503 / 504 ───────────────────────────────────────
+	# Only errors raised inside Caddy reach this block: a failed dial or upstream
+	# timeout from reverse_proxy (502/504) and the flag's `error 503` above. An upstream
+	# response is never an error, which is exactly why an app-generated 503 stays as is.
+	handle_errors {
+		@maintenance expression {http.error.status_code} in [502, 503, 504]
+		route @maintenance {
+			root * /opt/weissman/maintenance
+			encode zstd gzip
+			header {
+				Retry-After 30
+				Cache-Control no-store
+				X-Weissman-Maintenance 1
+				X-Content-Type-Options nosniff
+				X-Frame-Options DENY
+				X-Robots-Tag "noindex, nofollow"
+				# The app normally sets the security headers; on this page Caddy is the
+				# only source, and the header contract is the same one nginx-weissman.conf
+				# sends (HSTS included — the site is HTTPS-only). This policy is exactly what
+				# the page needs: one same-origin script, inline <style>, data: fonts and
+				# favicon, fetch to /api/health.
+				Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+				Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+			}
+			# Pick the file the way nginx's `map` does — this is a `route`, so the lines
+			# run in order and the last matching `vars` wins. Everything gets the page in
+			# the visitor's language (the Hebrew site lives under /he); API-shaped
+			# requests get api.json (application/json) instead, so the Command Center,
+			# webhooks, WebSocket upgrades, a `curl … /install/agent.sh | sh` and any JSON
+			# client see a machine-readable 503 and never an HTML document — the same
+			# prefix set as the two nginx confs. Nested `handle` blocks would not do here: inside
+			# `route` they are not mutually exclusive on the Caddy that Debian/Ubuntu ship
+			# (2.6), so the catch-all would win and every visitor would get the English page.
+			@he path /he /he/*
+			@json expression "path('/api/*', '/hooks/*', '/ws/*', '/install/*') || header({'Accept': ['*application/json*']})"
+			vars maint_page /index.html
+			vars @he maint_page /he/index.html
+			vars @json maint_page /api.json
+			rewrite * {http.vars.maint_page}
+			# 503 for machines regardless of what failed upstream; Retry-After says when
+			# to look again.
+			file_server {
+				status 503
+			}
+		}
+	}
+}
+
+weissmancyber.com {
+	import weissman
 }
 
 # Optional: serve both apex and www (uncomment and fix names).
 # weissmancyber.com, www.weissmancyber.com {
-# 	encode zstd gzip
-# 	reverse_proxy 127.0.0.1:8000 {
-# 		flush_interval -1
-# 	}
+# 	import weissman
 # }

@@ -70,19 +70,15 @@ async fn try_copy_upsert(
     client_id: i64,
     rows: &[StealthCheckRow],
 ) -> Result<u64, sqlx::Error> {
-    let mut conn = pool.acquire().await?;
-    sqlx::query("SELECT set_config('app.current_tenant_id', $1, true)")
-        .bind(tenant_id.to_string())
-        .execute(&mut *conn)
-        .await?;
-    sqlx::query("SELECT set_config('app.current_client_id', $1, true)")
-        .bind(client_id.to_string())
-        .execute(&mut *conn)
-        .await?;
+    // One tenant transaction so the transaction-local `app.current_tenant_id` /
+    // `app.current_client_id` GUCs stay set across every statement below. On a bare
+    // pooled connection (autocommit) a `SET LOCAL` is discarded the instant its own
+    // statement ends, so the RLS-protected UPSERT then ran with no tenant context and
+    // FORCE ROW LEVEL SECURITY rejected the insert ("new row violates row-level security
+    // policy") — sending every COPY through the slower INSERT fallback.
+    let mut tx = crate::begin_tenant_tx_scoped(pool, tenant_id, Some(client_id)).await?;
 
-    sqlx::query("DROP TABLE IF EXISTS stealth_evasion_ingest")
-        .execute(&mut *conn)
-        .await?;
+    // TEMP table is scoped to the transaction and cleaned up on commit/rollback.
     sqlx::query(
         r#"CREATE TEMP TABLE stealth_evasion_ingest (
             tenant_id BIGINT NOT NULL,
@@ -94,9 +90,9 @@ async fn try_copy_upsert(
             mitre TEXT NOT NULL,
             title TEXT NOT NULL,
             evidence_json JSONB NOT NULL
-        )"#,
+        ) ON COMMIT DROP"#,
     )
-    .execute(&mut *conn)
+    .execute(&mut *tx)
     .await?;
 
     let csv = encode_csv(tenant_id, client_id, rows);
@@ -105,11 +101,14 @@ async fn try_copy_upsert(
         "(tenant_id, client_id, check_id, domain, status, severity, mitre, title, evidence_json) ",
         "FROM STDIN WITH (FORMAT csv, HEADER false)"
     );
-    let mut copy = conn.copy_in_raw(stmt).await?;
-    if !csv.is_empty() {
-        copy.send(csv.into_bytes()).await?;
+    // The COPY writer borrows `tx`; keep the borrow scoped so `tx` is free for the UPSERT.
+    {
+        let mut copy = tx.copy_in_raw(stmt).await?;
+        if !csv.is_empty() {
+            copy.send(csv.into_bytes()).await?;
+        }
+        let _copied = copy.finish().await?;
     }
-    let _copied = copy.finish().await?;
 
     let n = sqlx::query_scalar::<_, i64>(
         r#"WITH up AS (
@@ -129,12 +128,10 @@ async fn try_copy_upsert(
         )
         SELECT COUNT(*) FROM up"#,
     )
-    .fetch_one(&mut *conn)
+    .fetch_one(&mut *tx)
     .await?;
 
-    let _ = sqlx::query("DROP TABLE IF EXISTS stealth_evasion_ingest")
-        .execute(&mut *conn)
-        .await;
+    tx.commit().await?;
 
     Ok(n as u64)
 }

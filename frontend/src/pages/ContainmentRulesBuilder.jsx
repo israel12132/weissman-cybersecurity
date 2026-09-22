@@ -22,7 +22,7 @@ export default function ContainmentRulesBuilder() {
   const [unavailable, setUnavailable] = useState(false);
   const [createModal, setCreateModal] = useState(false);
   const [editModal, setEditModal] = useState(null);
-  const [killing, setKilling] = useState(false);
+  const [killSwitching, setKillSwitching] = useState(false);
 
   useEffect(() => {
     if (clientLoading) return;
@@ -91,6 +91,30 @@ export default function ContainmentRulesBuilder() {
     }
   };
 
+  // Emergency kill switch: create an always-on isolation containment rule via the
+  // existing verified endpoint. Reversible — it appears in the list and can be
+  // toggled off — so an emergency action never becomes an irreversible surprise.
+  const handleKillSwitch = async () => {
+    if (clientId == null) return;
+    if (!(await confirmDialog(t('pages.containmentRulesBuilder.kill_switch_confirm')))) return;
+    setKillSwitching(true);
+    try {
+      await api.post(withClientId('/api/containment/rules', clientId), {
+        name: t('pages.containmentRulesBuilder.kill_switch_rule_name'),
+        action: 'isolate',
+        enabled: true,
+        auto_trigger: true,
+      });
+      toast.success(t('pages.containmentRulesBuilder.kill_switch_created'));
+      await fetchRules(clientId);
+    } catch (error) {
+      console.error('Kill switch failed:', error);
+      toast.error(t('common.error'));
+    } finally {
+      setKillSwitching(false);
+    }
+  };
+
   const getActionColor = (action) => {
     switch (action) {
       case 'isolate':
@@ -143,34 +167,6 @@ export default function ContainmentRulesBuilder() {
 
   const reloadRules = () => {
     if (clientId != null) fetchRules(clientId)
-  }
-
-  // Emergency isolation: arm every isolation-action rule at once via the live rules API.
-  const activateKillSwitch = async () => {
-    if (clientId == null || killing) return;
-    if (!(await confirmDialog(t('pages.containmentRulesBuilder.kill_switch_confirm')))) return;
-    const targets = rules.filter((r) => r.action === 'isolate' && !r.enabled);
-    if (targets.length === 0) {
-      toast.error(t('pages.containmentRulesBuilder.kill_switch_none'));
-      return;
-    }
-    setKilling(true);
-    try {
-      await Promise.all(
-        targets.map((r) =>
-          api.patch(withClientId(`/api/containment/rules/${r.id}`, clientId), { enabled: true })
-        )
-      );
-      setRules((prev) =>
-        prev.map((r) => (r.action === 'isolate' ? { ...r, enabled: true } : r))
-      );
-      toast.success(t('pages.containmentRulesBuilder.kill_switch_ok', { count: targets.length }));
-    } catch (error) {
-      console.error('Failed to activate kill switch:', error);
-      toast.error(t('common.error'));
-    } finally {
-      setKilling(false);
-    }
   }
 
   return (
@@ -373,11 +369,11 @@ export default function ContainmentRulesBuilder() {
             <Button
               variant="unstyled"
               type="button"
-              onClick={activateKillSwitch}
-              disabled={killing || clientId == null}
+              onClick={handleKillSwitch}
+              disabled={killSwitching || clientId == null}
               className="px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-medium hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {killing ? t('pages.containmentRulesBuilder.saving') : t('pages.containmentRulesBuilder.kill_switch')}
+              {killSwitching ? t('common.running') : t('pages.containmentRulesBuilder.kill_switch')}
             </Button>
           </div>
         </div>

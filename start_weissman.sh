@@ -457,6 +457,23 @@ cmd_start_local() {
 
 # ── systemd ──────────────────────────────────────────────────────────────────
 
+# Optional announced-window flag (deploy/maintenance/maintenance-mode.sh on|off). The
+# continuity page itself is AUTOMATIC — nginx/Caddy serve it while the origin is away and
+# drop it on the first 200 — so this is never required; it only adds the "Planned
+# maintenance" wording. Used ONLY when WEISSMAN_REBUILD_MAINTENANCE_FLAG=1 and the helper
+# exists. State dir per the VPS layout: /opt/weissman/maintenance/state (root-owned unless
+# install.sh was given an owner, hence the sudo fallback). Never fails the deploy.
+systemd_maintenance_flag() {
+  local mm="$ROOT/deploy/maintenance/maintenance-mode.sh"
+  local dir="${WEISSMAN_MAINTENANCE_STATE_DIR:-/opt/weissman/maintenance/state}"
+  [[ -f "$mm" ]] || return 1
+  if [[ -d "$dir" && -w "$dir" ]]; then
+    WEISSMAN_MAINTENANCE_STATE_DIR="$dir" bash "$mm" "$@" >/dev/null
+  else
+    sudo env WEISSMAN_MAINTENANCE_STATE_DIR="$dir" bash "$mm" "$@" >/dev/null
+  fi
+}
+
 cmd_start_systemd() {
   if have_cmd cargo; then
     log "Building release binaries before systemd restart..."
@@ -474,9 +491,49 @@ cmd_start_systemd() {
   else
     log "cargo not on PATH — restarting installed systemd units as-is"
   fi
+
+  # Flag only on explicit request; cleared on every exit path so a failed restart can never
+  # leave the site announced as "in maintenance" (for a zero-downtime rollout use
+  # deploy/rebuild.sh, which does the same with a finer-grained recreate).
+  local flag_up=0
+  if [[ "${WEISSMAN_REBUILD_MAINTENANCE_FLAG:-0}" == "1" ]]; then
+    if systemd_maintenance_flag on --reason "Platform update in progress"; then
+      flag_up=1
+      trap 'systemd_maintenance_flag off || true' EXIT
+      log "Announced window: maintenance flag ON (cleared automatically when the origin is back)"
+    else
+      log "WARN: maintenance flag not set (helper missing or state dir not writable) — continuing; the page still appears automatically"
+    fi
+  fi
+
+  # The restart is the moment the origin goes away; nginx/Caddy serve the continuity page
+  # from here until /api/health answers 200 again, and the summary below says how long that
+  # took. The units are "started" as soon as the process exec's, so `systemctl restart`
+  # returning says nothing about readiness — migrations can hold the server for ~90 s.
+  local health="http://127.0.0.1:${PORT:-8000}/api/health"
+  local t0=$SECONDS deadline=$((SECONDS + ${WEISSMAN_HEALTH_TIMEOUT:-300})) code="" state=""
   sudo systemctl restart weissman-server weissman-worker
+  log "Units restarted — waiting for ${health} (the continuity page covers the origin meanwhile)..."
+  while :; do
+    code="$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 2 --max-time 4 "$health" 2>/dev/null || true)"
+    [[ "$code" == 200 ]] && break
+    state="$(systemctl is-active weissman-server 2>/dev/null || true)"
+    if [[ "$state" == failed || "$state" == inactive ]]; then
+      sudo journalctl -u weissman-server -n 30 --no-pager 2>/dev/null >&2 || true
+      die "weissman-server is '$state' after the restart — see the journal above (the gateway keeps serving the continuity page until it starts)"
+    fi
+    if (( SECONDS >= deadline )); then
+      sudo systemctl --no-pager --full status weissman-server weissman-worker || true
+      die "origin did not answer 200 at ${health} within ${WEISSMAN_HEALTH_TIMEOUT:-300} s (last: HTTP ${code}) — raise WEISSMAN_HEALTH_TIMEOUT if the start is merely slow"
+    fi
+    sleep 1
+  done
+  if (( flag_up == 1 )); then
+    trap - EXIT
+    systemd_maintenance_flag off && log "Maintenance flag cleared" || log "WARN: could not clear the maintenance flag — run: deploy/maintenance/maintenance-mode.sh off"
+  fi
   sudo systemctl --no-pager --full status weissman-server weissman-worker || true
-  log "systemd units restarted"
+  log "systemd units restarted — origin unreachable for $((SECONDS - t0)) s (the continuity page covered that window automatically); ${health} answers 200"
 }
 
 # ── live (Docker Compose) ────────────────────────────────────────────────────

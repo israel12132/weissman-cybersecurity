@@ -38,9 +38,7 @@ pub async fn enqueue_verification(
     .execute(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
-    tx.commit()
-        .await
-        .map_err(|_| "store_down".to_string())?;
+    tx.commit().await.map_err(|_| "store_down".to_string())?;
     Ok(id)
 }
 
@@ -125,9 +123,7 @@ pub async fn claim_due_tasks(
             ports,
         });
     }
-    tx.commit()
-        .await
-        .map_err(|_| "store_down".to_string())?;
+    tx.commit().await.map_err(|_| "store_down".to_string())?;
     Ok(out)
 }
 
@@ -161,9 +157,7 @@ pub async fn mark_verified(
     .execute(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
-    tx.commit()
-        .await
-        .map_err(|_| "store_down".to_string())?;
+    tx.commit().await.map_err(|_| "store_down".to_string())?;
     Ok(())
 }
 
@@ -212,8 +206,6 @@ pub async fn reschedule_or_fail(
         .await
         .map_err(|e| e.to_string())?;
     }
-    tx.commit()
-        .await
-        .map_err(|_| "store_down".to_string())?;
+    tx.commit().await.map_err(|_| "store_down".to_string())?;
     Ok(())
 }

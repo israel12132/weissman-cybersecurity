@@ -12,7 +12,7 @@ function SettingsAlertsTabCrashUI({ error, onRetry }) {
   return (
     <div className="p-6 text-[var(--text-secondary)] max-w-xl mx-auto">
       <h2 className="text-lg font-semibold text-red-400 mb-2">{t(`${NS}.crashTitle`)}</h2>
-      <p className="text-sm text-[var(--text-tertiary)] mb-4">{t(`${NS}.crashBody`)}</p>
+      <p className="text-sm text-[var(--text-secondary)] mb-4">{t(`${NS}.crashBody`)}</p>
       <p className="text-xs font-mono text-[var(--text-muted)] break-words mb-4">{msg}</p>
       <Button variant="unstyled"
         type="button"

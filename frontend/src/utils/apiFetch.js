@@ -15,10 +15,19 @@
  *
  * All new behavior is opt-in; existing callers keep their exact semantics.
  * 429 toast handling shares the callback registered by RateLimitProvider via
- * lib/apiBase so both clients show the same global rate-limit toast.
+ * lib/apiBase so both clients show the same global rate-limit toast. Branded
+ * maintenance responses (gateway 502/503/504 carrying `X-Weissman-Maintenance`
+ * or a `maintenance` JSON marker) likewise share the callback registered by
+ * MaintenanceProvider, so the full-screen overlay appears whichever client hit it.
  */
 
-import { apiFetch as baseApiFetch, setRateLimitToastCallback } from '../lib/apiBase.js'
+import {
+  apiFetch as baseApiFetch,
+  setRateLimitToastCallback,
+  setMaintenanceCallback,
+  getMaintenanceCallback,
+  isMaintenanceResponse,
+} from '../lib/apiBase.js'
 import {
   isRetryableStatus,
   computeBackoffDelay,
@@ -28,7 +37,7 @@ import {
   CircuitOpenError,
 } from '../lib/resilience.js'
 
-export { setRateLimitToastCallback }
+export { setRateLimitToastCallback, setMaintenanceCallback }
 export { CircuitOpenError, BoundaryValidationError, v } from '../lib/resilience.js'
 
 function parseRetryAfter(retryAfterHeader) {
@@ -56,6 +65,39 @@ async function readErrorMessage(response) {
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+/**
+ * Signal the maintenance overlay for a branded gateway 502/503/504. Runs before
+ * the retry / circuit-breaker decision so the overlay is raised on the FIRST
+ * branded answer, not after a retry budget is exhausted — while the response
+ * still flows through the normal failure path below (counts against the
+ * breaker, throws the same error callers already handle). The provider is
+ * idempotent, so a second signal for a response lib/apiBase already reported is
+ * a no-op. Wrapped end to end: signalling must never alter a request's outcome,
+ * and test doubles of lib/apiBase may not define the maintenance exports.
+ */
+async function signalMaintenance(response) {
+  try {
+    const status = response?.status
+    if (status !== 502 && status !== 503 && status !== 504) return
+    const notify = getMaintenanceCallback()
+    if (typeof notify !== 'function') return
+    let matched = isMaintenanceResponse(response)
+    if (!matched) {
+      let body = null
+      try {
+        body = await response.clone().json()
+      } catch {
+        body = null
+      }
+      matched = isMaintenanceResponse(response, body)
+    }
+    if (!matched) return
+    notify({ status, retryAfter: parseRetryAfter(response.headers.get('Retry-After')) })
+  } catch {
+    // never let UI signalling change what the caller receives
+  }
+}
 
 /**
  * Fetch JSON from API paths (relative or absolute). Throws on non-OK responses.
@@ -146,6 +188,10 @@ export async function apiFetch(url, options = {}) {
     // Transport-level failure (offline, DNS, TLS): retryable + counts against breaker.
     return retryOrThrow(networkError)
   }
+
+  // Maintenance detection first: a branded 502/503/504 raises the overlay and
+  // then continues as an ordinary failure (breaker + retries + thrown error).
+  await signalMaintenance(response)
 
   if (response.status === 429) {
     // apiBase.apiFetch already fired the shared rate-limit toast for this 429

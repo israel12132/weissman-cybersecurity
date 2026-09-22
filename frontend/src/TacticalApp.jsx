@@ -12,6 +12,7 @@ import RequireRole, { RequireStaff } from './components/auth/RequireRole'
 import RouteErrorBoundary from './components/RouteErrorBoundary'
 import { ToastProvider } from './components/ui/Toaster'
 import RateLimitProvider from './components/RateLimitProvider'
+import MaintenanceProvider from './components/MaintenanceProvider'
 import KeyboardShortcuts from './components/ui/KeyboardShortcuts'
 import GlobalSearch from './components/GlobalSearch'
 import SkipToContent from './components/ui/SkipToContent'
@@ -91,6 +92,7 @@ import {
   DigitalTwinSimulator,
   FindingsCommandCenter,
   AdminManagement,
+  Messages,
   DomainDiscovery,
   ThreatIntelHub,
   IncidentResponseCenter,
@@ -348,6 +350,8 @@ export default function TacticalApp() {
           <Route path="engine-catalog" element={<EngineClientCatalog />} />
           <Route path="engine-reliability" element={<EngineReliability />} />
           <Route path="admin" element={<RequireRole min="ceo"><AdminManagement /></RequireRole>} />
+          {/* Per-client message + help board — available to every employee. */}
+          <Route path="messages" element={<Messages />} />
           <Route path="clients" element={<Clients />} />
           <Route path="clients/new" element={<RequireRole min="ceo"><ClientNew /></RequireRole>} />
           <Route path="clients/:id" element={<ClientDetail />} />
@@ -417,7 +421,11 @@ export function TacticalProviders({ children }) {
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
             <ToastProvider>
-              <RateLimitProvider>{children}</RateLimitProvider>
+              <RateLimitProvider>
+                {/* Full-screen "Command Center is being updated" overlay while the
+                    gateway answers with the branded maintenance page. */}
+                <MaintenanceProvider>{children}</MaintenanceProvider>
+              </RateLimitProvider>
             </ToastProvider>
           </AuthProvider>
         </QueryClientProvider>

@@ -178,7 +178,9 @@ pub async fn api_public_contact(
     if company.len() > MAX_COMPANY {
         return (
             StatusCode::BAD_REQUEST,
-            Json(json!({ "ok": false, "code": "invalid_company", "detail": "Company is too long." })),
+            Json(
+                json!({ "ok": false, "code": "invalid_company", "detail": "Company is too long." }),
+            ),
         )
             .into_response();
     }
@@ -196,9 +198,17 @@ pub async fn api_public_contact(
         state.app_pool.as_ref(),
         name,
         &email,
-        if company.is_empty() { None } else { Some(company) },
+        if company.is_empty() {
+            None
+        } else {
+            Some(company)
+        },
         message,
-        if source.is_empty() { None } else { Some(source) },
+        if source.is_empty() {
+            None
+        } else {
+            Some(source)
+        },
         &ip,
     )
     .await
@@ -221,7 +231,7 @@ pub async fn api_public_contact(
                 Json(json!({
                     "ok": false,
                     "code": "contact_unavailable",
-                    "detail": "Could not store the request. Email sales@weissman.io or try again."
+                    "detail": "Could not store the request. Email weissmancybersecurity@gmail.com or try again."
                 })),
             )
                 .into_response()
@@ -254,7 +264,8 @@ async fn insert_contact_lead(
 }
 
 fn notify_sales(name: &str, email: &str, company: &str, message: &str) {
-    let to = std::env::var("WEISSMAN_SALES_EMAIL").unwrap_or_else(|_| "sales@weissman.io".into());
+    let to = std::env::var("WEISSMAN_SALES_EMAIL")
+        .unwrap_or_else(|_| "weissmancybersecurity@gmail.com".into());
     let body = format!(
         "New Weissman demo request\n\nName: {name}\nEmail: {email}\nCompany: {company}\n\n{message}\n"
     );
@@ -297,7 +308,10 @@ mod tests {
         let n = v["count"].as_u64().unwrap() as usize;
         let engines = v["engines"].as_array().unwrap();
         assert_eq!(n, engines.len());
-        assert_eq!(n, weissman_core::models::engine::production_engine_ids().len());
+        assert_eq!(
+            n,
+            weissman_core::models::engine::production_engine_ids().len()
+        );
         let osint = engines.iter().find(|e| e["id"] == "osint").expect("osint");
         assert!(osint["category"].as_str().unwrap().len() > 1);
         assert!(osint["mitre"].is_array());

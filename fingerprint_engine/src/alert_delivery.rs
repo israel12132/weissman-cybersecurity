@@ -83,8 +83,9 @@ async fn load_delivery_config(pool: &PgPool, tenant_id: i64) -> Result<DeliveryC
 
     let integrations = match config_value(pool, tenant_id, "integrations_registry").await? {
         None => Vec::new(),
-        Some(raw) => serde_json::from_str::<Vec<Value>>(&raw)
-            .map_err(|_| "store_down".to_string())?,
+        Some(raw) => {
+            serde_json::from_str::<Vec<Value>>(&raw).map_err(|_| "store_down".to_string())?
+        }
     };
 
     Ok(DeliveryConfig {
@@ -522,7 +523,10 @@ fn outbox_envelope(rule: &AlertRuleInfo, finding: &AlertFindingInfo) -> Value {
 fn rule_from_envelope(env: &Value) -> AlertRuleInfo {
     let r = env.get("rule");
     AlertRuleInfo {
-        id: r.and_then(|v| v.get("id")).and_then(Value::as_i64).unwrap_or(0),
+        id: r
+            .and_then(|v| v.get("id"))
+            .and_then(Value::as_i64)
+            .unwrap_or(0),
         name: r
             .and_then(|v| v.get("name"))
             .and_then(Value::as_str)

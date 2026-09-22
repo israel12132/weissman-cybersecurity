@@ -32,7 +32,10 @@ pub enum HstsObservation {
     /// Successful HTTPS response with no Strict-Transport-Security.
     Missing,
     /// Present; `max_age` is the parsed directive (0 if unparsable).
-    Present { max_age: u64, include_subdomains: bool },
+    Present {
+        max_age: u64,
+        include_subdomains: bool,
+    },
     /// WAF/CDN challenge — header set on the origin is unknown.
     UnknownWaf,
     /// Non-success HTTP — do not claim HSTS is missing.
@@ -90,7 +93,8 @@ fn parse_hsts_max_age(hsts: &str) -> u64 {
         .split(';')
         .filter_map(|part| {
             let p = part.trim();
-            p.strip_prefix("max-age=").and_then(|v| v.trim().parse().ok())
+            p.strip_prefix("max-age=")
+                .and_then(|v| v.trim().parse().ok())
         })
         .next()
         .unwrap_or(0)
@@ -329,7 +333,11 @@ mod tests {
             "Attention Required! Cloudflare",
         );
         assert!(probe_is_edge_block(&p));
-        assert!(!probe_is_edge_block(&probe(200, vec![("server", "nginx")], "ok")));
+        assert!(!probe_is_edge_block(&probe(
+            200,
+            vec![("server", "nginx")],
+            "ok"
+        )));
         assert!(!probe_is_edge_block(&probe(
             401,
             vec![("www-authenticate", "Basic")],

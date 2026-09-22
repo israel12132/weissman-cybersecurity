@@ -425,9 +425,7 @@ pub async fn saml_acs(
             .map_err(|_| {
                 (
                     StatusCode::UNAUTHORIZED,
-                    Json(
-                        json!({"ok": false, "detail": "SAML xmlsec verify failed"}),
-                    ),
+                    Json(json!({"ok": false, "detail": "SAML xmlsec verify failed"})),
                 )
             })?;
     }

@@ -82,7 +82,7 @@ export default function DominionBoardPack() {
       subtitle={t(`${NS}.subtitle`)}
       badge={t(`${NS}.badge`)}
       badgeColor="#f59e0b"
-      icon={Crown}
+      icon={<Crown className="w-5 h-5" />}
       engineId="dominion_fusion"
     >
       <DominionBoardPackBody />

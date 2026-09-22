@@ -14,6 +14,7 @@ import {
   Sun,
   Moon,
   Contrast,
+  Camera,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { sessionIdentityLabel, isClientUser } from '../../lib/clientScope'
@@ -21,6 +22,9 @@ import { canAccessNavItem } from '../../lib/appNav'
 import { useTheme } from '../../context/ThemeContext'
 import { SUPPORTED_LANGUAGES } from '../../i18n'
 import useFocusTrap from '../../hooks/useFocusTrap'
+import { apiFetch } from '../../utils/apiFetch'
+import { fileToDataUrl } from '../../lib/imageUpload'
+import Avatar from './Avatar'
 import Button from './Button'
 
 const QUICK_LINKS = [
@@ -42,10 +46,30 @@ export default function ProfileMenu({ variant = 'header' }) {
   const { session, logout } = useAuth()
   const { theme, cycleTheme } = useTheme()
   const [open, setOpen] = useState(false)
+  const [profile, setProfile] = useState(null)
+  const [uploading, setUploading] = useState(false)
+  const [avatarError, setAvatarError] = useState(null)
   const ref = useRef(null)
   const menuRef = useRef(null)
+  const fileRef = useRef(null)
   const isSidebar = variant === 'sidebar'
   useFocusTrap(menuRef, open)
+
+  useEffect(() => {
+    let alive = true
+    apiFetch('/api/account/profile')
+      .then((data) => {
+        if (alive && data && data.ok !== false) setProfile(data)
+      })
+      .catch(() => {
+        // Avatar/profile is optional chrome — on failure keep the initials
+        // fallback and the session email; nothing user-facing to surface.
+        return null
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
 
   useEffect(() => {
     if (!open) return undefined
@@ -59,7 +83,29 @@ export default function ProfileMenu({ variant = 'header' }) {
     }
   }, [open])
 
-  const email = session?.email || t('profile.signed_in')
+  const handleAvatarFile = async (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setUploading(true)
+    setAvatarError(null)
+    try {
+      const dataUrl = await fileToDataUrl(file, { maxDim: 256, quality: 0.85 })
+      const res = await apiFetch('/api/account/avatar', {
+        method: 'POST',
+        body: { avatar_url: dataUrl },
+      })
+      if (!res || res.ok === false) throw new Error(res?.detail || t('profile.avatar_failed'))
+      setProfile((p) => ({ ...(p || {}), avatar_url: res.avatar_url }))
+    } catch (err) {
+      setAvatarError(err.message || t('profile.avatar_failed'))
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const email = profile?.email || session?.email || t('profile.signed_in')
+  const avatarUrl = profile?.avatar_url || ''
   const initial = (String(email).replace(/[^a-zA-Z0-9]/g, '')[0] || '?').toUpperCase()
   const identity = sessionIdentityLabel(session, t)
   const portal = isClientUser(session)
@@ -80,9 +126,8 @@ export default function ProfileMenu({ variant = 'header' }) {
         aria-expanded={open}
         aria-label={t('a11y.open_account_menu')}
       >
-        <span className="w-7 h-7 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 text-[11px] font-bold text-black flex items-center justify-center shrink-0">
-          {initial}
-        </span>
+        <Avatar src={avatarUrl} name={email} size="sm" className="shrink-0" />
+        <span className="sr-only">{initial}</span>
         {isSidebar ? (
           <span className="flex-1 min-w-0 text-start">
             <span className="block text-[11px] text-[var(--text-primary)] font-mono truncate">{email}</span>
@@ -110,10 +155,39 @@ export default function ProfileMenu({ variant = 'header' }) {
             isSidebar ? 'absolute bottom-full mb-2 start-0 end-0' : 'absolute end-0 mt-2'
           } w-64 rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] backdrop-blur-md shadow-2xl z-50 p-3 space-y-3`}
         >
-          <div className="px-1">
-            <div className="text-[13px] text-[var(--text-primary)] font-mono truncate">{email}</div>
-            <div className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] mt-1">
-              {identity}{portal ? ` · ${t('profile.bound_workspace')}` : ''}
+          <div className="px-1 flex items-center gap-3">
+            <div className="relative shrink-0">
+              <Avatar src={avatarUrl} name={email} size="lg" />
+              <Button
+                variant="unstyled"
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                disabled={uploading}
+                aria-label={t('profile.change_photo')}
+                title={t('profile.change_photo')}
+                className="absolute -bottom-1 -end-1 w-6 h-6 rounded-full bg-cyan-500/90 text-black flex items-center justify-center border-2 border-[var(--bg-elevated)] hover:bg-cyan-400 disabled:opacity-50"
+              >
+                <Camera className="w-3 h-3" aria-hidden="true" />
+              </Button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarFile}
+                className="hidden"
+              />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[13px] text-[var(--text-primary)] font-mono truncate">{email}</div>
+              <div className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] mt-1">
+                {identity}{portal ? ` · ${t('profile.bound_workspace')}` : ''}
+              </div>
+              {uploading && (
+                <div className="text-[10px] text-cyan-300 mt-1">{t('profile.uploading')}</div>
+              )}
+              {avatarError && (
+                <div className="text-[10px] text-rose-300 mt-1">{avatarError}</div>
+              )}
             </div>
           </div>
 

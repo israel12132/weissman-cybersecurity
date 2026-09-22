@@ -206,13 +206,19 @@ export default function AttackPaths() {
     [graphNodes, nodeQuery],
   )
 
+  // Reload only when the selected client changes. `load` is intentionally NOT a
+  // dependency: it is recreated whenever `t`/`toast` change identity, and keying
+  // the effect on it would re-fire the reset+fetch on every render if either is
+  // unstable — an infinite async reload loop that starves the event loop. The
+  // client id is the real trigger; `load` always closes over the current id.
   useEffect(() => {
     setSnapshot(null)
     setWhatIfSnapshot(null)
     setGraphNodes([])
     setJewelInventory(null)
     if (selectedClientId != null) load(false)
-  }, [selectedClientId, load])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedClientId])
 
   const display = whatIfSnapshot || snapshot
   const chokePoints = useMemo(

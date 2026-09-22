@@ -597,6 +597,7 @@ mod tests {
 
     #[test]
     fn scrub_unsets_vault_key_env_but_keeps_dedicated_flag() {
+        let _env = crate::secret_zeroize::vault_env_test_lock();
         let hex: String = "ab".repeat(32);
         std::env::set_var("WEISSMAN_VAULT_KEY", &hex);
         prime_keys_from_env();

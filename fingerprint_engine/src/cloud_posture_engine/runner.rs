@@ -1,4 +1,10 @@
 // ─── Entry points ──────────────────────────────────────────────────────────────
+// Real child module (Step 8, was inc/runner.inc.rs). `use super::*` re-imports the parent
+// cloud_posture_engine module's crate:: use-aliases (finding_rich, print_result,
+// EngineResult, EngineRunContext, assume_role_sdk_config, …) and the sibling-fragment types
+// (CloudScanOptions, ENGINE_ID, …), so this file compiles identically to when it was glued
+// in via include!(), but now with a real module boundary that cargo tooling can see.
+use super::*;
 
 pub async fn run_cloud_posture_result(target: &str) -> EngineResult {
     run_cloud_posture_result_ctx(target, &EngineRunContext::default()).await
@@ -81,16 +87,7 @@ pub async fn run_cloud_posture_result_ctx(target: &str, ctx: &EngineRunContext) 
         findings.extend(scan_iam_roles(&sdk, &opts, target, &mut graph).await);
     }
     if opts.wants("s3") {
-        findings.extend(
-            scan_s3(
-                &sdk,
-                &opts,
-                target,
-                home_region.as_ref(),
-                &mut graph,
-            )
-            .await,
-        );
+        findings.extend(scan_s3(&sdk, &opts, target, home_region.as_ref(), &mut graph).await);
     }
     if opts.wants("ec2") || opts.wants("vpc") {
         findings.extend(scan_ec2_vpc(&sdk, &opts, target, &mut graph).await);
@@ -121,9 +118,8 @@ pub async fn run_cloud_posture_result_ctx(target: &str, ctx: &EngineRunContext) 
     }
     if let Some(ref acct) = account_id {
         if opts.wants("account") {
-            findings.extend(
-                scan_account_s3_public_block(&sdk, acct, &opts, target, &mut graph).await,
-            );
+            findings
+                .extend(scan_account_s3_public_block(&sdk, acct, &opts, target, &mut graph).await);
         }
     }
     if opts.wants("eks") {

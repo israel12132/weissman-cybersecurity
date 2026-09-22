@@ -1,13 +1,17 @@
 /**
  * Customer-client isolation policy — mirrors `fingerprint_engine/src/client_isolation.rs`.
  *
- * Owner (CEO / superadmin): sees every client, may create and delete.
- * Staff (unscoped humans): sees every client, cannot create or delete.
+ * Owner (`owner` role / CEO / superadmin): sees every client, may create and delete.
+ * Staff (admin): sees every client, cannot create or delete.
+ * Below admin (viewer / analyst / operator): confined to their assigned client;
+ *   with no assignment they see nothing.
  * Portal (`role=client` + `assigned_client_id`): locked to one customer; engines
- * auto-aim; no client picker at login.
+ *   auto-aim; no client picker at login.
  *
  * Server flags on `/api/auth/me` win when present so the UI cannot drift.
  */
+
+import { ROLE_RANK } from './roles'
 
 function normRole(session) {
   return String(session?.role || '')
@@ -21,11 +25,21 @@ export function assignedClientId(session) {
   return Number.isFinite(n) && n > 0 ? n : null
 }
 
+// Local fallback for `is_client_user` when the server flag is absent: the portal
+// `client` role, an explicit assignment, or any non-superadmin human below admin.
+function belowAdminHuman(session) {
+  if (session?.is_superadmin === true) return false
+  const rank = ROLE_RANK[normRole(session)]
+  return Boolean(rank) && rank < ROLE_RANK.admin
+}
+
 export function isClientUser(session) {
   if (!session || session.ok === false) return false
   if (session.is_client_user === true) return true
+  if (session.is_client_user === false) return false
   if (assignedClientId(session)) return true
-  return normRole(session) === 'client'
+  if (normRole(session) === 'client') return true
+  return belowAdminHuman(session)
 }
 
 export function isPlatformOwner(session) {
@@ -33,7 +47,8 @@ export function isPlatformOwner(session) {
   if (isClientUser(session)) return false
   if (session.is_owner === true) return true
   if (session.is_superadmin === true) return true
-  return normRole(session) === 'ceo'
+  const r = normRole(session)
+  return r === 'owner' || r === 'ceo'
 }
 
 export function isStaffUser(session) {

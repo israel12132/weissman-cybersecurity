@@ -9,6 +9,7 @@ import { apiFetch } from '../utils/apiFetch'
 import { apiUrl } from '../lib/apiBase'
 import { downloadApiFile } from '../lib/downloadApiFile'
 import StandaloneLabShell from './ui/StandaloneLabShell'
+import Button from './ui/Button'
 
 export default function ReportView() {
   const { t } = useTranslation()
@@ -78,10 +79,14 @@ export default function ReportView() {
   }
 
   const clientName = client?.name || t('components.reportView.client_fallback', { id: clientId })
-  const verifiedFindings = findings.filter((f) => !!f?.verified || !!f?.poc_sealed)
+  const verifiedFindings = findings.filter((f) => !!f?.verified || !!f?.poc_sealed || !!f?.reproduced)
   const verificationBreakdown = verifiedFindings.reduce((acc, f) => {
-    const raw = String(f?.verification_method || (f?.poc_sealed ? 'crypto_seal' : 'verified') || '').trim()
-    const key = raw || 'verified'
+    // Honest assurance tiers: an independent live re-scan re-observing the finding
+    // (`reproduced`) is a strictly stronger signal than a PoC sealed at scan time
+    // (`crypto_seal`). Count them separately so the report never inflates the former.
+    const key = f?.reproduced
+      ? 'reproduced_live'
+      : (String(f?.verification_method || (f?.poc_sealed || f?.has_poc ? 'crypto_seal' : 'verified')).trim() || 'verified')
     acc[key] = (acc[key] || 0) + 1
     return acc
   }, {})
@@ -93,7 +98,8 @@ export default function ReportView() {
       maxWidth="max-w-4xl"
       actions={!error ? (
         <div className="flex items-center gap-3">
-          <button
+          <Button
+            variant="unstyled"
             type="button"
             onClick={() => {
               downloadApiFile(`/api/clients/${clientId}/export/xlsx`, 'Weissman_Board.xlsx').catch((e) => {
@@ -103,7 +109,7 @@ export default function ReportView() {
             className="text-sm text-emerald-400 hover:underline"
           >
             {t('components.reportView.download_xlsx')}
-          </button>
+          </Button>
           <a
             href={apiUrl(`/api/clients/${clientId}/report/pdf`)}
             download
@@ -167,8 +173,8 @@ export default function ReportView() {
                   <td className="px-3 py-2 text-sm">{f.title || '—'}</td>
                   <td className="px-3 py-2 text-sm">{f.severity || '—'}</td>
                   <td className="px-3 py-2 text-sm">{f.source || '—'}</td>
-                  <td className="px-3 py-2 text-sm">{(f.verified || f.poc_sealed) ? '✓' : '—'}</td>
-                  <td className="px-3 py-2 text-xs font-mono text-[var(--text-tertiary)]">{f.verification_method || (f.poc_sealed ? 'crypto_seal' : '—')}</td>
+                  <td className="px-3 py-2 text-sm">{(f.verified || f.poc_sealed || f.reproduced) ? '✓' : '—'}</td>
+                  <td className="px-3 py-2 text-xs font-mono text-[var(--text-tertiary)]">{f.reproduced ? 'reproduced (live)' : (f.verification_method || ((f.has_poc || f.poc_sealed) ? 'crypto_seal (PoC)' : '—'))}</td>
                 </tr>
               ))}
             </tbody>

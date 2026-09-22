@@ -239,7 +239,11 @@ mod tests {
         let mut raw = vec![0.25f32; VECTOR_DIM];
         assert!(l2_normalize(&mut raw));
         let r = verify_embedding(&raw, None);
-        assert!(r.ok, "post-normalize must sit inside ε: n={} {}", r.l2_norm, r.reason);
+        assert!(
+            r.ok,
+            "post-normalize must sit inside ε: n={} {}",
+            r.l2_norm, r.reason
+        );
         assert!(unit_norm_ok(r.l2_norm));
     }
 

@@ -219,7 +219,7 @@ export default function StealthyPersistenceEvasion() {
     }
   }, [selectedClientId, loadStatus])
 
-  const jobStatus = uiJobStatus(pendingJobId, scanning)
+  const jobStatus = uiJobStatus(scanning ? 'running' : pendingJobId ? 'queued' : 'idle')
   const cp = status?.control_plane || {}
   const host = status?.host || {}
 

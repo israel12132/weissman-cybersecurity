@@ -14,7 +14,7 @@
 //! We map common alias keys defensively so any engine that emits `cvss`/`risk`/`description`
 //! still produces a useful row.
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use std::sync::LazyLock;
@@ -22,7 +22,7 @@ use tokio::sync::{Semaphore, SemaphorePermit};
 
 use crate::db;
 use crate::findings_correlator::{self, ClusterAttrs};
-use crate::findings_gate::{self, Sealed, VulnerabilitiesWriter, gate_finding};
+use crate::findings_gate::{self, gate_finding, Sealed, VulnerabilitiesWriter};
 use crate::fp_feedback;
 use crate::intel_epss;
 use crate::intel_kev;
@@ -149,6 +149,21 @@ fn extract_cvss(f: &Value) -> f64 {
         }
     }
     0.0
+}
+
+/// The CVSS value to *display* for a finding: `Some(score)` only when the engine
+/// actually published one, `None` otherwise. Callers must never substitute a
+/// severity-derived number here — a fabricated CVSS reads to an auditor as a
+/// standards-based score the engine never measured, and skews triage. Severity
+/// still drives the internal risk ranking (`base_risk`/`effective_risk`); the
+/// DISPLAYED CVSS stays `null` (UI "—") when absent, mirroring EPSS behaviour.
+fn cvss_for_display(f: &Value) -> Option<f64> {
+    let c = extract_cvss(f);
+    if c > 0.0 {
+        Some(c)
+    } else {
+        None
+    }
 }
 
 fn severity_to_score(sev: &str) -> f64 {
@@ -357,10 +372,9 @@ pub async fn persist_engine_findings(
     // findings in this call share `engine`, so a single query replaces the former per-finding
     // is_suppressed() that opened its own tenant transaction each time (N+1). Matched hashes are
     // collected and their hit_count telemetry is bumped in one statement before commit.
-    let active_suppressions =
-        fp_feedback::active_suppressions_for_engine(pool, tenant_id, engine)
-            .await
-            .map_err(|_| "store_down".to_string())?;
+    let active_suppressions = fp_feedback::active_suppressions_for_engine(pool, tenant_id, engine)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let mut suppression_hits: Vec<String> = Vec::new();
 
     let mut inserted: u64 = 0;
@@ -379,10 +393,12 @@ pub async fn persist_engine_findings(
         let finding_id = gated.finding_id().to_string();
         let dedup_hash = gated.dedup_hash().to_string();
         let severity = gated.severity().to_string();
-        let mut cvss = extract_cvss(&f);
-        if cvss <= 0.0 {
-            cvss = severity_to_score(&severity);
-        }
+        // Real CVSS only. When the engine / CVE provides no CVSS we must NOT fabricate one
+        // from severity for display: a severity-shaped 9.5 reads to an analyst as a real,
+        // standards-based CVSS and skews triage. severity still drives the internal risk
+        // ranking (base_risk / effective_risk) below; the DISPLAYED CVSS is `null` when
+        // absent so the UI renders "—", mirroring the EPSS behaviour.
+        let real_cvss: Option<f64> = cvss_for_display(&f);
         let title = extract_title(&f, engine);
         let description = extract_description(&f);
         let target_url = extract_target(&f, target);
@@ -442,7 +458,7 @@ pub async fn persist_engine_findings(
         let mut raw_data_enriched = json!({
             "engine": engine,
             "target": target_url,
-            "cvss_score": cvss,
+            "cvss_score": real_cvss,
             "mitre_attack": mitre,
             "cwe": cwe,
             "cve": cve,
@@ -549,11 +565,9 @@ pub async fn persist_engine_findings(
             fp_feedback::confidence_multiplier_tx(&mut tx, tenant_id, engine, &signature_hash)
                 .await
                 .map_err(|_| "store_down".to_string())?;
-        let base_risk = if cvss > 0.0 {
-            cvss
-        } else {
-            severity_to_score(&severity)
-        };
+        // Internal risk ranking: the real CVSS when present, else the severity-derived
+        // score (unchanged prioritization — this is NOT displayed as a CVSS).
+        let base_risk = real_cvss.unwrap_or_else(|| severity_to_score(&severity));
         // Fold live exploit intel (already resolved above) into the platform's core priority
         // score so a KEV-listed / high-EPSS finding outranks a theoretical one with the same CVSS.
         let mut effective = base_risk * conf_mult;
@@ -751,7 +765,7 @@ pub async fn persist_engine_findings(
                 severity: &severity,
                 cwe: &cwe,
                 cve: if cve.is_empty() { None } else { Some(&cve) },
-                cvss: Some(cvss),
+                cvss: real_cvss,
                 epss_score,
                 kev_listed,
                 is_new_member: vuln_is_new,
@@ -889,7 +903,7 @@ pub async fn persist_engine_findings(
             source: engine.to_string(),
             target: target_url.clone(),
             status: effective_status.to_string(),
-            cvss: Some(cvss as f32),
+            cvss: real_cvss.map(|c| c as f32),
             epss: epss_score,
             kev: kev_listed,
             kev_known_ransomware,
@@ -1004,6 +1018,32 @@ mod tests {
         assert_eq!(extract_cvss(&json!({"unrelated": 1})), 0.0);
         assert_eq!(severity_to_score("critical"), 9.5);
         assert_eq!(severity_to_score("info"), 1.0);
+    }
+
+    #[test]
+    fn cvss_display_is_none_when_engine_published_no_score() {
+        // Display honesty: a finding with no CVSS must surface as null (UI "—"),
+        // NOT a fabricated number derived from severity. A `critical` finding with
+        // no measured CVSS still shows "—", never "9.5".
+        assert_eq!(cvss_for_display(&json!({"severity": "critical"})), None);
+        assert_eq!(cvss_for_display(&json!({"cvss_score": 0.0})), None);
+        assert_eq!(cvss_for_display(&json!({"title": "x"})), None);
+        // A real published score is preserved (and clamped) exactly.
+        assert_eq!(cvss_for_display(&json!({"cvss_score": 7.5})), Some(7.5));
+        assert_eq!(cvss_for_display(&json!({"cvss": 15.0})), Some(10.0));
+    }
+
+    #[test]
+    fn absent_cvss_serializes_to_json_null_not_zero() {
+        // The persisted payload must carry JSON null, so the UI renders "—" and an
+        // auditor never mistakes a missing score for a measured 0.0.
+        let payload = json!({ "cvss_score": cvss_for_display(&json!({"severity": "high"})) });
+        assert!(payload.get("cvss_score").unwrap().is_null());
+        let measured = json!({ "cvss_score": cvss_for_display(&json!({"cvss_score": 8.1})) });
+        assert_eq!(
+            measured.get("cvss_score").and_then(Value::as_f64),
+            Some(8.1)
+        );
     }
 
     #[test]
