@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import {
   useReactTable,
@@ -153,6 +154,7 @@ export default function DataTable({
   // Change this value (e.g. bump a counter after a bulk action) to clear selection.
   selectionResetSignal,
 }) {
+  const { t } = useTranslation()
   const defaultPageSize = pageSizes?.[0] ?? 25
   // Normalise once so a non-array `data` (undefined / null from an unresolved or
   // malformed fetch) still routes through the empty state instead of rendering a
@@ -410,14 +412,14 @@ export default function DataTable({
       return (
         <EmptyState
           icon="inbox"
-          title="No data"
-          body="Nothing to display yet."
+          title={t('components.dataTable.noData', 'No data')}
+          body={t('components.dataTable.noDataBody', 'Nothing to display yet.')}
         />
       )
     }
     if (React.isValidElement(emptyState)) return emptyState
     return <EmptyState {...emptyState} />
-  }, [emptyState])
+  }, [emptyState, t])
 
   const showEmpty = !loading && rowsData.length === 0
   const showFilteredEmpty = !loading && rowsData.length > 0 && rows.length === 0
@@ -455,13 +457,19 @@ export default function DataTable({
               type="button"
               onClick={() => writeDensity(density === 'compact' ? 'comfortable' : 'compact')}
               aria-pressed={density === 'compact'}
-              aria-label={density === 'compact' ? 'Switch to comfortable rows' : 'Switch to compact rows'}
+              aria-label={density === 'compact'
+                ? t('components.dataTable.switchComfortable', 'Switch to comfortable rows')
+                : t('components.dataTable.switchCompact', 'Switch to compact rows')}
               className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[var(--border-default)] text-[11px] font-mono text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)]"
             >
               {density === 'compact'
                 ? <Rows3 className="w-3.5 h-3.5" aria-hidden />
                 : <Rows2 className="w-3.5 h-3.5" aria-hidden />}
-              <span aria-hidden="true">{density === 'compact' ? 'Compact' : 'Cozy'}</span>
+              <span aria-hidden="true">
+                {density === 'compact'
+                  ? t('components.dataTable.densityCompact', 'Compact')
+                  : t('components.dataTable.densityCozy', 'Cozy')}
+              </span>
             </Button>
           )}
           {columnToggle && (
@@ -474,7 +482,7 @@ export default function DataTable({
                 className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[var(--border-default)] text-[11px] font-mono text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)]"
               >
                 <Columns3 className="w-3.5 h-3.5" aria-hidden />
-                Columns
+                {t('components.dataTable.columns', 'Columns')}
               </Button>
               {colMenuOpen && (
                 <div
@@ -482,8 +490,8 @@ export default function DataTable({
                   className="absolute end-0 mt-1 z-30 min-w-[160px] rounded-lg border border-[var(--border-default)] bg-[var(--bg-elevated)] shadow-2xl p-1.5"
                 >
                   <div className="flex items-center justify-between px-1.5 pb-1">
-                    <span className="text-[9px] font-mono uppercase tracking-widest text-[var(--text-muted)]">Columns</span>
-                    <Button variant="unstyled" type="button" onClick={() => setColMenuOpen(false)} aria-label="Close" className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+                    <span className="text-[9px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{t('components.dataTable.columns', 'Columns')}</span>
+                    <Button variant="unstyled" type="button" onClick={() => setColMenuOpen(false)} aria-label={t('components.dataTable.close', 'Close')} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
                       <X className="w-3 h-3" aria-hidden />
                     </Button>
                   </div>
@@ -507,7 +515,7 @@ export default function DataTable({
               className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/5 text-[11px] font-mono text-[var(--text-accent)] hover:bg-cyan-500/15 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Download className="w-3.5 h-3.5" aria-hidden />
-              CSV
+              {t('components.dataTable.csv', 'CSV')}
             </Button>
           )}
         </div>
@@ -683,10 +691,10 @@ export default function DataTable({
       {!hidePagination && (
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-[var(--border-subtle)] bg-[var(--bg-1)]">
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-mono text-[var(--text-muted)]">Rows:</span>
+          <span className="text-[10px] font-mono text-[var(--text-muted)]">{t('components.dataTable.rowsLabel', 'Rows:')}</span>
           <select
             value={pageSize}
-            aria-label="Rows per page"
+            aria-label={t('components.dataTable.rowsPerPage', 'Rows per page')}
             onChange={(e) =>
               effectiveOnPaginationChange({ pageIndex: 0, pageSize: Number(e.target.value) })
             }
@@ -713,14 +721,14 @@ export default function DataTable({
             <PaginationBtn
               onClick={() => table.setPageIndex(0)}
               disabled={!table.getCanPreviousPage()}
-              label="First page"
+              label={t('components.dataTable.firstPage', 'First page')}
             >
               «
             </PaginationBtn>
             <PaginationBtn
               onClick={() => table.previousPage()}
               disabled={!table.getCanPreviousPage()}
-              label="Previous page"
+              label={t('components.dataTable.prevPage', 'Previous page')}
             >
               ‹
             </PaginationBtn>
@@ -760,14 +768,14 @@ export default function DataTable({
             <PaginationBtn
               onClick={() => table.nextPage()}
               disabled={!table.getCanNextPage()}
-              label="Next page"
+              label={t('components.dataTable.nextPage', 'Next page')}
             >
               ›
             </PaginationBtn>
             <PaginationBtn
               onClick={() => table.setPageIndex(pageCount - 1)}
               disabled={!table.getCanNextPage()}
-              label="Last page"
+              label={t('components.dataTable.lastPage', 'Last page')}
             >
               »
             </PaginationBtn>

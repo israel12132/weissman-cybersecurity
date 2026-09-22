@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Check, Copy } from 'lucide-react'
 import Button from './Button'
 
@@ -30,8 +31,10 @@ function fallbackCopy(text) {
  *  - className
  */
 export default function CopyButton({ value, label = 'Copy', size = 'sm', className = '' }) {
+  const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
   const timerRef = useRef(null)
+  const copiedLabel = t('components.copyButton.copied', 'Copied')
 
   useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
 
@@ -64,8 +67,8 @@ export default function CopyButton({ value, label = 'Copy', size = 'sm', classNa
         copy()
       }}
       className={`inline-flex items-center gap-1 rounded border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[var(--text-muted)] hover:text-[var(--text-accent)] hover:border-cyan-500/30 transition-colors ${pad} ${className}`}
-      aria-label={copied ? 'Copied' : label}
-      title={copied ? 'Copied' : label}
+      aria-label={copied ? copiedLabel : label}
+      title={copied ? copiedLabel : label}
     >
       {copied ? (
         <Check className={`${iconSize} text-[var(--severity-low)]`} strokeWidth={2.5} />
@@ -73,7 +76,7 @@ export default function CopyButton({ value, label = 'Copy', size = 'sm', classNa
         <Copy className={iconSize} strokeWidth={2} />
       )}
       {size === 'md' && (
-        <span className="text-[10px] font-mono">{copied ? 'Copied' : label}</span>
+        <span className="text-[10px] font-mono">{copied ? copiedLabel : label}</span>
       )}
     </Button>
   )

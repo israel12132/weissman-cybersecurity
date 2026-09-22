@@ -1,4 +1,5 @@
 import { forwardRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { cn } from '../../lib/cn'
 
 const STATUS = {
@@ -24,7 +25,11 @@ const ComplianceMatrix = forwardRef(function ComplianceMatrix(
   { frameworks = [], controls = [], onCellClick, title = 'Compliance coverage', className, ...props },
   ref,
 ) {
+  const { t } = useTranslation()
   const interactive = typeof onCellClick === 'function'
+  const statusLabel = (key) =>
+    t(`components.complianceMatrix.status.${key}`, STATUS[key]?.label ?? STATUS.na.label)
+  const controlLabel = t('components.complianceMatrix.control', 'Control')
 
   return (
     <div ref={ref} className={cn('flex flex-col gap-3', className)} {...props}>
@@ -34,7 +39,7 @@ const ComplianceMatrix = forwardRef(function ComplianceMatrix(
           <thead>
             <tr className="border-b border-border-subtle">
               <th className="px-3 py-2 text-start text-[10px] font-medium uppercase tracking-widest text-text-muted">
-                Control
+                {controlLabel}
               </th>
               {frameworks.map((fw) => (
                 <th
@@ -56,7 +61,7 @@ const ComplianceMatrix = forwardRef(function ComplianceMatrix(
                 {frameworks.map((fw) => {
                   const key = ctrl.status?.[fw.id] ?? 'na'
                   const meta = STATUS[key] ?? STATUS.na
-                  const cellLabel = `${typeof ctrl.label === 'string' ? ctrl.label : 'Control'} · ${typeof fw.label === 'string' ? fw.label : fw.id}: ${meta.label}`
+                  const cellLabel = `${typeof ctrl.label === 'string' ? ctrl.label : controlLabel} · ${typeof fw.label === 'string' ? fw.label : fw.id}: ${statusLabel(key)}`
                   const dot = (
                     <span className={cn('inline-block size-2.5 rounded-full', meta.dot)} aria-hidden="true" />
                   )
@@ -90,7 +95,7 @@ const ComplianceMatrix = forwardRef(function ComplianceMatrix(
         {STATUS_ORDER.map((k) => (
           <span key={k} className="inline-flex items-center gap-1.5 text-[11px] text-text-tertiary">
             <span className={cn('size-2.5 rounded-full', STATUS[k].dot)} aria-hidden="true" />
-            {STATUS[k].label}
+            {statusLabel(k)}
           </span>
         ))}
       </div>

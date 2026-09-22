@@ -1,11 +1,12 @@
 import { useId, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { cn } from '../../lib/cn'
 import BlastRadius from './BlastRadius.jsx'
 
 const LIKELIHOOD = [
-  { value: '0.5', label: 'Low' },
-  { value: '1', label: 'Expected' },
-  { value: '2', label: 'High' },
+  { value: '0.5', label: 'Low', key: 'low' },
+  { value: '1', label: 'Expected', key: 'expected' },
+  { value: '2', label: 'High', key: 'high' },
 ]
 
 /**
@@ -25,6 +26,7 @@ export default function BlastRadiusSimulator({
   className,
   ...props
 }) {
+  const { t } = useTranslation()
   const uid = useId()
   const [mitigation, setMitigation] = useState(0)
   const [likelihood, setLikelihood] = useState('1')
@@ -53,7 +55,7 @@ export default function BlastRadiusSimulator({
       <div className="flex flex-col gap-3 rounded-xl border border-border-default bg-bg-2 p-4 sm:flex-row sm:items-end sm:gap-6">
         <label htmlFor={`${uid}-mit`} className="flex-1">
           <span className="mb-1 flex items-center justify-between text-xs text-text-secondary">
-            <span>Mitigation coverage</span>
+            <span>{t('components.blastRadiusSimulator.mitigationCoverage', 'Mitigation coverage')}</span>
             <span className="tabular-nums text-text-primary">{mitigation}%</span>
           </span>
           <input
@@ -68,7 +70,7 @@ export default function BlastRadiusSimulator({
           />
         </label>
         <label htmlFor={`${uid}-lik`} className="flex flex-col gap-1 text-xs text-text-secondary">
-          <span>Threat likelihood</span>
+          <span>{t('components.blastRadiusSimulator.threatLikelihood', 'Threat likelihood')}</span>
           <select
             id={`${uid}-lik`}
             value={likelihood}
@@ -77,20 +79,28 @@ export default function BlastRadiusSimulator({
           >
             {LIKELIHOOD.map((o) => (
               <option key={o.value} value={o.value}>
-                {o.label}
+                {t(`components.blastRadiusSimulator.likelihood.${o.key}`, o.label)}
               </option>
             ))}
           </select>
         </label>
       </div>
 
-      <BlastRadius sle={sle} ale={ale} currency={currency} crownJewels={jewels} title="Projected exposure" />
+      <BlastRadius
+        sle={sle}
+        ale={ale}
+        currency={currency}
+        crownJewels={jewels}
+        title={t('components.blastRadiusSimulator.projectedExposure', 'Projected exposure')}
+      />
 
       <div
         className="flex items-center justify-between rounded-xl border border-status-active/30 bg-status-active-bg px-4 py-3"
         aria-live="polite"
       >
-        <span className="text-xs uppercase tracking-widest text-text-muted">Annualized savings vs baseline</span>
+        <span className="text-xs uppercase tracking-widest text-text-muted">
+          {t('components.blastRadiusSimulator.savingsVsBaseline', 'Annualized savings vs baseline')}
+        </span>
         <span className="font-display text-lg font-semibold text-status-active tabular-nums" data-testid="savings">
           {fmt.format(savings)}
         </span>

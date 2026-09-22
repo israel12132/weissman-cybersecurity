@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Download, Search } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import Input from './Input.jsx'
@@ -15,6 +16,7 @@ import { exportAuditTrailCsv, exportAuditTrailJson } from '../../lib/exportAudit
  * @param {string} [filenamePrefix='audit-trail']
  */
 export default function AuditTrailExport({ entries = [], filenamePrefix = 'audit-trail', className, ...props }) {
+  const { t } = useTranslation()
   const [query, setQuery] = useState('')
   const [result, setResult] = useState('all')
 
@@ -32,22 +34,22 @@ export default function AuditTrailExport({ entries = [], filenamePrefix = 'audit
       <div className="flex flex-wrap items-end gap-3">
         <div className="min-w-[12rem] flex-1">
           <Input
-            label="Filter"
+            label={t('components.auditTrailExport.filter', 'Filter')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="actor, action or target…"
+            placeholder={t('components.auditTrailExport.filterPlaceholder', 'actor, action or target…')}
             leftAddon={<Search />}
           />
         </div>
         <div className="w-40">
           <Select
-            label="Result"
+            label={t('components.auditTrailExport.result', 'Result')}
             value={result}
             onChange={(e) => setResult(e.target.value)}
             options={[
-              { value: 'all', label: 'All results' },
-              { value: 'success', label: 'Success' },
-              { value: 'failure', label: 'Failure' },
+              { value: 'all', label: t('components.auditTrailExport.allResults', 'All results') },
+              { value: 'success', label: t('components.auditTrailExport.success', 'Success') },
+              { value: 'failure', label: t('components.auditTrailExport.failure', 'Failure') },
             ]}
           />
         </div>
@@ -65,7 +67,7 @@ export default function AuditTrailExport({ entries = [], filenamePrefix = 'audit
             disabled={filtered.length === 0}
             onClick={() => exportAuditTrailCsv(filtered, filenamePrefix)}
           >
-            Export CSV
+            {t('components.auditTrailExport.exportCsv', 'Export CSV')}
           </Button>
           <Button
             size="sm"
@@ -74,7 +76,7 @@ export default function AuditTrailExport({ entries = [], filenamePrefix = 'audit
             disabled={filtered.length === 0}
             onClick={() => exportAuditTrailJson(filtered, filenamePrefix)}
           >
-            Export JSON
+            {t('components.auditTrailExport.exportJson', 'Export JSON')}
           </Button>
         </div>
       </div>

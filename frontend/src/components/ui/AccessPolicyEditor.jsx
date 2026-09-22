@@ -1,4 +1,5 @@
 import { forwardRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Plus, Trash2 } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import Select from './Select.jsx'
@@ -31,6 +32,7 @@ const AccessPolicyEditor = forwardRef(function AccessPolicyEditor(
   },
   ref,
 ) {
+  const { t } = useTranslation()
   const patch = (id, key, value) =>
     onChange?.(rules.map((r) => (r.id === id ? { ...r, [key]: value } : r)))
 
@@ -55,67 +57,69 @@ const AccessPolicyEditor = forwardRef(function AccessPolicyEditor(
           >
             <div className="w-28">
               <Select
-                aria-label="Effect"
+                aria-label={t('components.accessPolicyEditor.effect', 'Effect')}
                 value={rule.effect}
                 onChange={(e) => patch(rule.id, 'effect', e.target.value)}
                 options={[
-                  { value: 'allow', label: 'Allow' },
-                  { value: 'deny', label: 'Deny' },
+                  { value: 'allow', label: t('components.accessPolicyEditor.allow', 'Allow') },
+                  { value: 'deny', label: t('components.accessPolicyEditor.deny', 'Deny') },
                 ]}
                 className={cn('font-medium', EFFECT_STYLE[rule.effect])}
               />
             </div>
             <div className="min-w-[8rem] flex-1">
               <Select
-                aria-label="Subject"
+                aria-label={t('components.accessPolicyEditor.subject', 'Subject')}
                 value={rule.subject}
                 onChange={(e) => patch(rule.id, 'subject', e.target.value)}
-                placeholder="Subject (role/attr)"
+                placeholder={t('components.accessPolicyEditor.subjectPlaceholder', 'Subject (role/attr)')}
                 options={subjects}
               />
             </div>
             <div className="min-w-[8rem] flex-1">
               <Select
-                aria-label="Action"
+                aria-label={t('components.accessPolicyEditor.action', 'Action')}
                 value={rule.action}
                 onChange={(e) => patch(rule.id, 'action', e.target.value)}
-                placeholder="Action"
+                placeholder={t('components.accessPolicyEditor.action', 'Action')}
                 options={actions}
               />
             </div>
             <div className="min-w-[8rem] flex-1">
               <Select
-                aria-label="Resource"
+                aria-label={t('components.accessPolicyEditor.resource', 'Resource')}
                 value={rule.resource}
                 onChange={(e) => patch(rule.id, 'resource', e.target.value)}
-                placeholder="Resource"
+                placeholder={t('components.accessPolicyEditor.resource', 'Resource')}
                 options={resources}
               />
             </div>
             <div className="min-w-[10rem] flex-1">
               <Input
-                aria-label="Condition"
+                aria-label={t('components.accessPolicyEditor.condition', 'Condition')}
                 value={rule.condition ?? ''}
                 onChange={(e) => patch(rule.id, 'condition', e.target.value)}
-                placeholder="Condition (e.g. env == 'prod')"
+                placeholder={t('components.accessPolicyEditor.conditionPlaceholder', "Condition (e.g. env == 'prod')")}
               />
             </div>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => remove(rule.id)}
-              aria-label="Remove rule"
+              aria-label={t('components.accessPolicyEditor.removeRule', 'Remove rule')}
               leftIcon={<Trash2 />}
             />
           </li>
         ))}
       </ul>
       {rules.length === 0 && (
-        <p className="text-xs text-text-muted">No rules yet — every request is denied by default.</p>
+        <p className="text-xs text-text-muted">
+          {t('components.accessPolicyEditor.emptyHint', 'No rules yet — every request is denied by default.')}
+        </p>
       )}
       <div>
         <Button variant="secondary" size="sm" leftIcon={<Plus />} onClick={add}>
-          Add rule
+          {t('components.accessPolicyEditor.addRule', 'Add rule')}
         </Button>
       </div>
     </div>
