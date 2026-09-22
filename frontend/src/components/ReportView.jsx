@@ -68,7 +68,12 @@ export default function ReportView() {
       cancelled = true
       ac.abort()
     }
-  }, [clientId, t])
+    // Fetch keys on the client only. `t` is closed over solely for fallback error
+    // strings; keying the effect on it would re-fire this full clients+findings+
+    // crypto-proof reload on every render whenever `t`'s identity churns (e.g. a
+    // language-context update), looping re-fetches and clobbering loaded state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId])
 
   if (loading) {
     return (
