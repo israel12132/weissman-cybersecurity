@@ -2920,7 +2920,11 @@
       "configure_tenant": "Configure tenant",
       "catalog_unavailable_title": "Engine requirements catalog unavailable",
       "catalog_unavailable_body": "GET /api/engines/requirements and GET /api/onboarding/tenant-status could not be confirmed. 0% is not an unready client.",
-      "readiness_unavailable": "Readiness GET unavailable — leftover leftover-percent is not this client."
+      "readiness_unavailable": "Readiness GET unavailable — leftover leftover-percent is not this client.",
+      "module_meta": "{{engines}} engines · {{reqs}} reqs",
+      "azure_tenant_id": "Azure Tenant ID",
+      "domains_count": "{{n}} domains",
+      "scope_tenant_tag": "(tenant)"
     },
     "threatIntelHub": {
       "title": "Threat Intelligence Hub",

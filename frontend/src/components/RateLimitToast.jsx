@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Clock, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -10,6 +10,12 @@ import Button from './ui/Button'
 export default function RateLimitToast({ show, onClose, retryAfter = 60, message }) {
   const { t } = useTranslation();
   const [countdown, setCountdown] = useState(retryAfter);
+  // Keep onClose in a ref so a parent re-render (e.g. a sibling toast mounting)
+  // does not tear down and restart the countdown interval, which would reset the timer.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!show) return;
@@ -19,7 +25,7 @@ export default function RateLimitToast({ show, onClose, retryAfter = 60, message
       setCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(interval);
-          onClose?.();
+          onCloseRef.current?.();
           return 0;
         }
         return prev - 1;
@@ -27,7 +33,7 @@ export default function RateLimitToast({ show, onClose, retryAfter = 60, message
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [show, retryAfter, onClose]);
+  }, [show, retryAfter]);
 
   if (!show) return null;
 

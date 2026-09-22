@@ -1,7 +1,10 @@
 import { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ReactFlow, Background, Controls, MarkerType } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import Button from './ui/Button'
+
+const NS = 'components.playbookGraph'
 
 const ACTION_COLORS = {
   set_status: '#22d3ee',
@@ -29,11 +32,12 @@ const nodeBase = {
  * `onSelectAction(index)`. (Conditional branches would require a backend schema change.)
  */
 export default function PlaybookGraph({ trigger, actions = [], onSelectAction, onDryRun }) {
+  const { t } = useTranslation()
   const { nodes, edges } = useMemo(() => {
     const sev = Array.isArray(trigger?.severity) && trigger.severity.length
       ? trigger.severity.join(', ')
-      : 'any'
-    const triggerLabel = `WHEN severity: ${sev}${trigger?.kev ? ' · KEV' : ''}`
+      : t(`${NS}.severity_any`)
+    const triggerLabel = `${t(`${NS}.when_severity`, { severity: sev })}${trigger?.kev ? t(`${NS}.kev_suffix`) : ''}`
 
     const nodeList = [
       {
@@ -45,7 +49,7 @@ export default function PlaybookGraph({ trigger, actions = [], onSelectAction, o
       ...actions.map((a, i) => ({
         id: `a${i}`,
         position: { x: 0, y: (i + 1) * 92 },
-        data: { label: `${i + 1}. ${a.kind || 'action'}` },
+        data: { label: `${i + 1}. ${a.kind || t(`${NS}.action_fallback`)}` },
         style: { ...nodeBase, border: `1px solid ${ACTION_COLORS[a.kind] || '#475569'}`, cursor: 'pointer' },
       })),
     ]
@@ -63,7 +67,7 @@ export default function PlaybookGraph({ trigger, actions = [], onSelectAction, o
       prev = `a${i}`
     })
     return { nodes: nodeList, edges: edgeList }
-  }, [trigger, actions])
+  }, [trigger, actions, t])
 
   return (
     <div className="rounded-lg border border-[var(--border-default)] bg-[#060a12]">
@@ -92,7 +96,7 @@ export default function PlaybookGraph({ trigger, actions = [], onSelectAction, o
             onClick={onDryRun}
             className="text-[11px] font-mono px-2 py-1 rounded border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10"
           >
-            Dry-run playbook
+            {t(`${NS}.dry_run`)}
           </Button>
         </div>
       )}

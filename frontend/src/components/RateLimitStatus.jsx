@@ -102,9 +102,11 @@ export default function RateLimitStatus({ compact = false }) {
   };
 
   const formatResetTime = (seconds) => {
-    if (seconds <= 0) return t(`${NS}.resetNow`);
-    if (seconds < 60) return `${seconds}s`;
-    return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+    const s = Number(seconds);
+    if (!Number.isFinite(s)) return '—';
+    if (s <= 0) return t(`${NS}.resetNow`);
+    if (s < 60) return `${s}s`;
+    return `${Math.floor(s / 60)}m ${s % 60}s`;
   };
 
   if (loading && !limits) {

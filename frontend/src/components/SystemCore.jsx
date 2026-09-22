@@ -124,7 +124,8 @@ export default function SystemCore() {
         setAiHeavyEntitled(aiEnt !== 'false' && aiEnt !== '0')
         setEnablePoeSynthesis((list?.find((c) => c.key === 'enable_poe_synthesis')?.value ?? 'true') === 'true')
         setSafetyRailsNoShells((list?.find((c) => c.key === 'poe_safety_rails_no_shells')?.value ?? 'true') === 'true')
-        setPoeMaxPocLength(Math.max(0, parseInt(list?.find((c) => c.key === 'poe_max_poc_length')?.value ?? '1048576', 10) ?? 1048576))
+        const rawMaxPocLen = parseInt(list?.find((c) => c.key === 'poe_max_poc_length')?.value ?? '1048576', 10)
+        setPoeMaxPocLength(Number.isNaN(rawMaxPocLen) ? 1048576 : Math.max(0, rawMaxPocLen))
         const chains = list?.find((c) => c.key === 'poe_gadget_chains')?.value ?? '{}'
         try {
           setPoeGadgetChains(typeof chains === 'string' ? JSON.stringify(JSON.parse(chains), null, 2) : '{}')

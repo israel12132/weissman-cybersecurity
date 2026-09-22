@@ -2920,7 +2920,11 @@
       "configure_tenant": "הגדר tenant",
       "catalog_unavailable_title": "קטלוג דרישות המנועים אינו זמין",
       "catalog_unavailable_body": "לא ניתן לאשר את GET /api/engines/requirements ו-GET /api/onboarding/tenant-status. 0% אינו לקוח לא מוכן.",
-      "readiness_unavailable": "GET מוכנות אינו זמין — אחוז מממצא אחר אינו המוכנות של הלקוח הזה."
+      "readiness_unavailable": "GET מוכנות אינו זמין — אחוז מממצא אחר אינו המוכנות של הלקוח הזה.",
+      "module_meta": "{{engines}} מנועים · {{reqs}} דרישות",
+      "azure_tenant_id": "Azure Tenant ID",
+      "domains_count": "{{n}} דומיינים",
+      "scope_tenant_tag": "(טננט)"
     },
     "threatIntelHub": {
       "title": "מרכז מודיעין איומים",
