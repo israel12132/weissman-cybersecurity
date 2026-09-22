@@ -1,0 +1,27 @@
+{{- if .Values.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: weissman-backend
+  namespace: {{ include "weissman.namespace" . }}
+  labels:
+    {{- include "weissman.labels" . | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: weissman-backend
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: weissman-worker
+  namespace: {{ include "weissman.namespace" . }}
+  labels:
+    {{- include "weissman.labels" . | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: weissman-worker
+{{- end }}

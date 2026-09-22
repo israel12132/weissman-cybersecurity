@@ -1,3 +1,19 @@
+# ============================================================================
+# QUARANTINED / DEAD CODE — DO NOT CITE AS AN ACTIVE CONTROL.
+#
+# This legacy Python residency gate is UNWIRED: nothing in the repo imports
+# region_manager, should_process_tenant, get_tenant_region, or region_matches
+# (verified repo-wide, 2026-09-22). The production Rust platform does NOT call it.
+#
+# The LIVE, enforced data-residency / egress control is the fail-closed guard
+# in backend/weissman-engines/src/llm_egress.rs
+# (weissman_engines::llm_egress::llm_egress_allowed), enforced per-LLM-call in
+# backend/weissman-engines/src/openai_chat.rs and at startup in
+# fingerprint_engine/src/security_startup.rs::enforce_llm_egress_policy.
+#
+# Retained only for historical reference. Do not import; do not reference in
+# compliance / SOC 2 / DPA evidence as a running mechanism.
+# ============================================================================
 """
 Weissman-cybersecurity: Data sovereignty (GDPR / regional compliance).
 WEISSMAN_REGION restricts data storage and scan origination to the configured region

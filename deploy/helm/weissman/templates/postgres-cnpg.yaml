@@ -1,0 +1,52 @@
+{{- if .Values.postgres.provision }}
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: weissman-pg
+  namespace: {{ include "weissman.namespace" . }}
+  labels:
+    {{- include "weissman.labels" . | nindent 4 }}
+spec:
+  instances: {{ .Values.postgres.instances }}
+  imageName: {{ .Values.postgres.imageName | quote }}
+  primaryUpdateStrategy: unsupervised
+  postgresql:
+    parameters:
+      max_connections: "200"
+      wal_level: replica
+      synchronous_commit: "on"
+  bootstrap:
+    initdb:
+      database: weissman
+      owner: weissman
+      postInitSQL:
+        - CREATE EXTENSION IF NOT EXISTS vector
+  storage:
+    size: {{ .Values.postgres.storageSize | quote }}
+    {{- with .Values.postgres.storageClass }}
+    storageClass: {{ . | quote }}
+    {{- end }}
+  {{- if .Values.postgres.backup.enabled }}
+  backup:
+    barmanObjectStore:
+      destinationPath: {{ required "postgres.backup.destinationPath is required when postgres.backup.enabled" .Values.postgres.backup.destinationPath | quote }}
+      s3Credentials:
+        accessKeyId:
+          name: {{ .Values.postgres.backup.s3CredentialsSecret }}
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: {{ .Values.postgres.backup.s3CredentialsSecret }}
+          key: SECRET_ACCESS_KEY
+      encryption: AES256
+      wal:
+        compression: gzip
+        encryption: AES256
+      data:
+        compression: gzip
+        encryption: AES256
+    retentionPolicy: {{ .Values.postgres.backup.retentionPolicy | quote }}
+  {{- end }}
+  affinity:
+    podAntiAffinityType: preferred
+    topologyKey: kubernetes.io/hostname
+{{- end }}

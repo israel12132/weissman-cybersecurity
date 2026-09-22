@@ -237,8 +237,46 @@ fn enforce_production_security_policy_with_scope(scope: StartupScope) -> Result<
     // (`cfg(not(debug_assertions))`) are fail-closed with no env-var gate —
     // unsetting WEISSMAN_ENV cannot disable vault HMAC. Debug builds warn +
     // fall back for local `cargo test` / laptop DX.
+    enforce_llm_egress_policy()?;
     enforce_rag_provenance_policy()?;
 
+    Ok(())
+}
+
+/// Fail-closed LLM egress / data-residency guard (called from the production boot guard).
+///
+/// Every endpoint the platform is configured to reach — the `WEISSMAN_LLM_ENDPOINTS`
+/// failover chain, or the single `WEISSMAN_LLM_BASE_URL` default — must satisfy the egress
+/// policy at boot, so a residency violation is refused at startup rather than discovered on
+/// the first customer request. Mirrors the per-call guard in `weissman_engines::openai_chat`.
+///
+/// Posture (`WEISSMAN_LLM_EGRESS`): default `sovereign` permits only loopback/private/
+/// in-cluster hosts; `hosted` additionally permits hosts in `WEISSMAN_LLM_ALLOWED_HOSTS` and
+/// is refused unless that allowlist is set.
+pub fn enforce_llm_egress_policy() -> Result<(), String> {
+    let posture = std::env::var("WEISSMAN_LLM_EGRESS")
+        .unwrap_or_default()
+        .trim()
+        .to_ascii_lowercase();
+    if posture == "hosted" {
+        let allow = std::env::var("WEISSMAN_LLM_ALLOWED_HOSTS").unwrap_or_default();
+        if allow.trim().is_empty() {
+            return Err(
+                "WEISSMAN_LLM_EGRESS=hosted requires a non-empty WEISSMAN_LLM_ALLOWED_HOSTS \
+                 allowlist in production; unset WEISSMAN_LLM_EGRESS to use the sovereign \
+                 (loopback/private/in-cluster only) default"
+                    .into(),
+            );
+        }
+    }
+    for ep in weissman_engines::llm_router::resolve_endpoints() {
+        if let Err(reason) = weissman_engines::llm_egress::llm_egress_allowed(&ep.base_url) {
+            return Err(format!(
+                "LLM endpoint '{}' ({}) violates the data-residency egress policy: {reason}",
+                ep.label, ep.base_url
+            ));
+        }
+    }
     Ok(())
 }
 

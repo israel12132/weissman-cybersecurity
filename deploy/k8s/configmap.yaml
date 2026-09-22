@@ -14,6 +14,12 @@ data:
   WEISSMAN_WORKER_HEAVY_CONCURRENCY: "2"
   WEISSMAN_SOAR_VERIFY_WORKER: "1"
   WEISSMAN_AGENT_BIN_DIR: "/srv/bin/agents"
+  # Transaction-pooled DB path via PgBouncer (deploy/k8s/pgbouncer.yaml). The database_url /
+  # auth_database_url / worker_database_url secrets must point at weissman-pgbouncer:6432.
+  WEISSMAN_DB_POOLER_MODE: "transaction"
+  WEISSMAN_DB_POOLER_MAX_CLIENT_CONN: "2000"
+  # Total pooled pods sharing the pooler at full HPA scale (backend max 8 + worker max 12).
+  WEISSMAN_EXPECTED_REPLICAS: "20"
   # Secrets (database_url, jwt_secret, destructive_confirm_secret, job_orchestrator_secret,
   # metrics_token, redis_url, migrate_url) MUST come from Secret weissman-secrets.
   # See deploy/k8s/secret.example.yaml and scripts/k8s-generate-secrets.sh.

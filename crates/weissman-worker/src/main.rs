@@ -747,8 +747,13 @@ async fn async_main() {
 
     // app 48 + auth 12 + intel 12 + control 8. Paired with the backend's own 72, this was 152
     // against a server max_connections of 100 — see warn_if_pool_budget_exceeds_server.
-    weissman_db::warn_if_pool_budget_exceeds_server(ctrl_pool.as_ref(), "worker", 48 + 12 + 12 + 8)
-        .await;
+    if let Err(e) =
+        weissman_db::enforce_pool_budget_for_fleet(ctrl_pool.as_ref(), "worker", 48 + 12 + 12 + 8)
+            .await
+    {
+        eprintln!("[startup] worker DB connection-budget refusal: {e}");
+        std::process::exit(2);
+    }
 
     spawn_billing_snapshot_loop(ctrl_pool.clone());
     match weissman_db::connect_analytics_from_env().await {

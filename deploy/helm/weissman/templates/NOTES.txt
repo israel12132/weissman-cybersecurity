@@ -1,0 +1,19 @@
+Weissman — DEDICATED (single-tenant) instance installed.
+
+  Customer : {{ required "customer.name is required" .Values.customer.name }}
+  Namespace: {{ include "weissman.namespace" . }}
+  Domain   : https://{{ required "customer.domain is required" .Values.customer.domain }}
+  Image    : {{ include "weissman.image" . }}
+  SKU      : dedicated (single-tenant) — see docs/adr/0003-dedicated-single-tenant-tier.md
+
+Checklist:
+  * The namespace above MUST equal the -n you installed with (Helm errors on a mismatch).
+  * Postgres: {{ if .Values.postgres.provision }}CNPG cluster weissman-pg — you MUST bootstrap the
+    weissman_app / weissman_auth / weissman_worker / weissman_analytics roles and run migrations,
+    then re-run the RLS live contract against this DB (ADR 0001).{{ else }}external / managed —
+    secrets.*DatabaseUrl point at your DB; RLS + roles must be provisioned there too.{{ end }}
+  * Redis: {{ if .Values.redis.provision }}in-namespace weissman-redis{{ else }}external (secrets.redisUrl){{ end }}.
+  * This customer has its OWN jwt_secret + vault_key + integrations_vault_key. Rotating them is
+    independent of the fleet; set jwt_secret_previous during rotation (ADR 0002).
+  * NetworkPolicies are not shipped by this chart yet — apply deploy/k8s/network-policies.yaml
+    (namespaced) as defence-in-depth.

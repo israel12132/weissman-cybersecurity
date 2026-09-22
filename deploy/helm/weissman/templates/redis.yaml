@@ -1,0 +1,73 @@
+{{- if .Values.redis.provision }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: weissman-redis
+  namespace: {{ include "weissman.namespace" . }}
+  labels:
+    {{- include "weissman.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: weissman-redis
+  template:
+    metadata:
+      labels:
+        app: weissman-redis
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: redis
+          image: {{ .Values.redis.image | quote }}
+          args:
+            - "--maxmemory"
+            - {{ .Values.redis.maxmemory | quote }}
+            - "--maxmemory-policy"
+            - {{ .Values.redis.maxmemoryPolicy | quote }}
+          ports:
+            - containerPort: 6379
+          resources:
+            {{- toYaml .Values.redis.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: weissman-redis
+  namespace: {{ include "weissman.namespace" . }}
+  labels:
+    {{- include "weissman.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: weissman-redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+{{- end }}

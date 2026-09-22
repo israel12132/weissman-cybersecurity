@@ -3785,7 +3785,15 @@ async fn api_ceo_vault_secrets_post(
         )
             .into_response();
     }
-    let insert = crate::ceo::vault::secret_body_to_vault_insert(&body);
+    let mut insert = crate::ceo::vault::secret_body_to_vault_insert(&body);
+    // Encrypt the new secret under the per-tenant DEK (KEK->DEK); transparent fallback
+    // to the legacy global vault key when BYOK/DEK material is unavailable.
+    insert.detection_signature = crate::tenant_kms::encrypt_secret_for_tenant(
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+        &body.value,
+    )
+    .await;
     match crate::ceo::vault::post_vault_row(state.app_pool.as_ref(), auth.tenant_id, &insert).await {
         Ok(id) => (StatusCode::CREATED, Json(json!({ "ok": true, "id": id }))).into_response(),
         Err(e) => (
