@@ -327,16 +327,17 @@ export default function TopTierEngineHub() {
             <div className="col-span-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-6 text-sm text-[var(--text-tertiary)] text-center">
               {t('pages.topTierEngineHub.no_search_results')}
             </div>
-          ) : filteredEngineIds.map((id, idx) => {
+          ) : filteredEngineIds.map((id) => {
             const engine = ENGINES_BY_ID[id]
             const row = auditById[id]
             const path = auditUnavailable ? '—' : (row?.execution_path || 'unknown')
             const probe = probeByEngine[id] || null
+            const rank = TOP_TIER_ENGINE_IDS.indexOf(id) + 1
             return (
               <article key={id} className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 space-y-3">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-[11px] font-mono text-[var(--text-muted)]">{t('pages.topTierEngineHub.top_tier_num', { num: idx + 1 })}</div>
+                    <div className="text-[11px] font-mono text-[var(--text-muted)]">{t('pages.topTierEngineHub.top_tier_num', { num: rank })}</div>
                     <h3 className="text-base font-semibold text-[var(--text-primary)]">{engine?.label || id}</h3>
                     <div className="text-[11px] font-mono text-[var(--text-muted)]">{id}</div>
                   </div>

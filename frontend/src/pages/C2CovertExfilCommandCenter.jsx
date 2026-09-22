@@ -1,7 +1,7 @@
 import { firstClientTarget } from '../lib/clientTarget'
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'
@@ -87,6 +87,7 @@ function extractGrade(findings) {
 }
 
 function CategoryBreakdown({ findings }) {
+  const { t } = useTranslation()
   const groups = useMemo(() => {
     const counts = new Map()
     for (const f of findings) {
@@ -108,7 +109,7 @@ function CategoryBreakdown({ findings }) {
           style={{ color: meta.color, borderColor: `${meta.color}33`, background: `${meta.color}0f` }}
         >
           <span aria-hidden="true">{meta.icon}</span>
-          {meta.label}
+          {t(`pages.c2CovertExfil.cat_${key}`, { defaultValue: meta.label })}
           <span className="px-1.5 py-0.5 rounded bg-[var(--scrim)] text-[var(--text-secondary)]">{count}</span>
         </span>
       ))}
@@ -117,11 +118,12 @@ function CategoryBreakdown({ findings }) {
 }
 
 function Scorecard({ score, grade }) {
+  const { t } = useTranslation()
   if (score == null && !grade) return null
   return (
     <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/5 p-5 mb-6 flex flex-wrap items-center gap-6">
       <div>
-        <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">Covert-channel posture</div>
+        <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{t('pages.c2CovertExfil.scorecard_title', { defaultValue: 'Covert-channel posture' })}</div>
         <div className="text-4xl font-mono font-semibold" style={{ color: gradeColor(grade) }}>
           {score ?? '—'}<span className="text-lg text-[var(--text-muted)]">/100</span>
         </div>
@@ -133,7 +135,7 @@ function Scorecard({ score, grade }) {
         {grade || '—'}
       </div>
       <p className="text-xs text-[var(--text-secondary)] max-w-xl font-mono">
-        Live fused assessment — beacon Z-score, DNS entropy, HTTP/3/WSS, NTP/ICMP feasibility, LSB stego, CDN/Tor fronting, ingress choke-points. No simulated findings.
+        {t('pages.c2CovertExfil.scorecard_desc', { defaultValue: 'Live fused assessment — beacon Z-score, DNS entropy, HTTP/3/WSS, NTP/ICMP feasibility, LSB stego, CDN/Tor fronting, ingress choke-points. No simulated findings.' })}
       </p>
     </div>
   )
@@ -211,10 +213,13 @@ export default function C2CovertExfilCommandCenter() {
     applyHistoryFindings(run, setFindings, { setLastUpdated, setJobId: setLastJobId })
   }, [refreshFromHistory, setLastUpdated, setLastJobId])
 
+  const toastTimerRef = useRef(null)
   const showToast = useCallback((sev, msg) => {
     setToast({ sev, msg })
-    setTimeout(() => setToast(null), 5000)
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = setTimeout(() => setToast(null), 5000)
   }, [])
+  useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current) }, [])
 
   useEffect(() => {
     apiFetch('/api/clients').then((d) => {
@@ -280,10 +285,10 @@ export default function C2CovertExfilCommandCenter() {
     setStatus('running')
     setFindings([])
     try {
-      const { ok, data: d, status } = await postScan(buildBody())
+      const { ok, data: d, status: httpStatus } = await postScan(buildBody())
       if (!ok) {
         setStatus('error')
-        const locked = status === 409 || d.code === 'c2_scan_lock'
+        const locked = httpStatus === 409 || d.code === 'c2_scan_lock'
         showToast('error', locked ? t('pages.c2CovertExfil.scan_locked') : (d.detail || t('pages.c2CovertExfil.scan_failed')))
         return
       }
@@ -349,7 +354,7 @@ export default function C2CovertExfilCommandCenter() {
           </div>
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: statusColor }} />
-            <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{status}</span>
+            <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t(`pages.c2CovertExfil.status_${status}`, { defaultValue: status })}</span>
           </div>
           <Button variant="unstyled" type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
             className="px-5 py-2 rounded-xl font-mono text-sm border border-cyan-500/40 text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20 disabled:opacity-40">
@@ -366,9 +371,9 @@ export default function C2CovertExfilCommandCenter() {
               <div className="mt-5 pt-5 border-t border-[var(--border-subtle)] grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="grid grid-cols-1 gap-1.5 max-h-[420px] overflow-y-auto pr-1">
                   {PROBE_TOGGLES.map((tg) => (
-                    <label key={tg.key} title={tg.hint} className="flex items-center gap-2 text-xs font-mono text-[var(--text-secondary)] cursor-pointer">
-                      <input type="checkbox" checked={!!toggles[tg.key]} onChange={(e) => setToggles((p) => ({ ...p, [tg.key]: e.target.checked }))} className="accent-cyan-500" />
-                      {tg.label}
+                    <label key={tg.key} title={t(`pages.c2CovertExfil.toggle_${tg.key}_hint`, { defaultValue: tg.hint })} className="flex items-center gap-2 text-xs font-mono text-[var(--text-secondary)] cursor-pointer">
+                      <input type="checkbox" checked={!!toggles[tg.key]} onChange={(e) => setToggles((p) => ({ ...p, [tg.key]: e.target.checked }))} className="accent-cyan-500" aria-label={t(`pages.c2CovertExfil.toggle_${tg.key}`, { defaultValue: tg.label })} />
+                      {t(`pages.c2CovertExfil.toggle_${tg.key}`, { defaultValue: tg.label })}
                     </label>
                   ))}
                 </div>

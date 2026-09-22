@@ -1,7 +1,7 @@
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useHubEngineFocus } from '../hooks/useLaunchEngineScan'
 import { Link } from 'react-router'
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import PageShell from './PageShell'
@@ -190,10 +190,16 @@ export default function SupplyChainHub() {
       .catch(() => setClientsUnavailable(true))
   }, [])
 
+  const toastTimerRef = useRef(null)
   const showToast = useCallback((sev, msg) => {
     const id = Date.now()
     setToast({ id, sev, msg })
-    setTimeout(() => setToast((cur) => (cur?.id === id ? null : cur)), 5000)
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = setTimeout(() => setToast((cur) => (cur?.id === id ? null : cur)), 5000)
+  }, [])
+
+  useEffect(() => () => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
   }, [])
 
   const handleFindingsUpdate = useCallback((engineId, findings) => {
@@ -278,6 +284,7 @@ export default function SupplyChainHub() {
         <select
           value={selectedClientId ?? ''}
           onChange={(e) => setSelectedClientId(e.target.value || null)}
+          aria-label={t('pages.supplyChainHub.client_label')}
           className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-[#84cc16]/40"
         >
           <option value="">{t('pages.supplyChainHub.select_client')}</option>
@@ -291,7 +298,7 @@ export default function SupplyChainHub() {
       )}
 
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-[#84cc16]/30 text-[#84cc16]'}`}>
+        <div role="status" aria-live="polite" className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-[#84cc16]/30 text-[#84cc16]'}`}>
           {toast.msg}
         </div>
       )}

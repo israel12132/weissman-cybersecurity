@@ -26,7 +26,7 @@ const textareaCls = `${inputCls} font-mono`
 
 function Section({ icon: Icon, title, children }) {
   return (
-    <section className="rounded-2xl border border-[var(--border-default)] bg-gradient-to-b from-white/[0.04] to-black/40 p-5 space-y-4">
+    <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-5 space-y-4">
       <div className="flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
         <Icon className="w-4 h-4 text-cyan-400" />
         {title}
@@ -118,7 +118,7 @@ export default function ClientIntegrations() {
       setUnavailable(false)
       setIntegrationsGetFailed(false)
     } catch (e) {
-      setError(e.message || 'Failed to load')
+      setError(e.message || t('pages.clientIntegrations.load_failed'))
       // Leftover leftover-form stays. Always set integrationsGetFailed so
       // page-header Export CSV unmounts. EmptyState dump stays first-load
       // only (`unavailable` + hasLoadedRef). PATCH save still uses `error`.
@@ -127,7 +127,7 @@ export default function ClientIntegrations() {
     } finally {
       setLoading(false)
     }
-  }, [id])
+  }, [id, t])
 
   useEffect(() => { load() }, [load])
 
@@ -195,7 +195,7 @@ export default function ClientIntegrations() {
       setSaved(true)
       await load()
     } catch (e) {
-      setError(e.message || 'Save failed')
+      setError(e.message || t('pages.clientIntegrations.save_failed'))
     } finally {
       setSaving(false)
     }
@@ -220,6 +220,29 @@ export default function ClientIntegrations() {
   }
 
   const label = (def) => (isHe ? def?.label_he : def?.label_en) || def?.id || ''
+
+  const searchTerm = searchQuery.trim().toLowerCase()
+  const sectionMatches = (...parts) =>
+    !searchTerm || parts.filter(Boolean).some((p) => String(p).toLowerCase().includes(searchTerm))
+  const showCloud = sectionMatches(
+    t('pages.clientIntegrations.cloud'),
+    label(catalog?.requirements?.aws_cross_account),
+    t('pages.clientOnboarding.aws_external_id'),
+    label(catalog?.requirements?.gcp_project),
+    t('pages.clientIntegrations.azure_sub'),
+    t('pages.clientIntegrations.azure_tenant'),
+  )
+  const showIdentity = sectionMatches(t('pages.clientIntegrations.identity'), label(catalog?.requirements?.ad_domain))
+  const showIac = sectionMatches(t('pages.clientIntegrations.iac'), label(catalog?.requirements?.iac_repos))
+  const showAgents = sectionMatches(
+    t('pages.clientIntegrations.agents_ot'),
+    ...AGENT_PLATFORMS,
+    label(catalog?.requirements?.industrial_ot),
+    label(catalog?.requirements?.scope_ips),
+    t('pages.clientIntegrations.open_agents'),
+  )
+  const showLlm = sectionMatches(t('pages.clientIntegrations.llm_client'), t('pages.clientIntegrations.add_endpoint'))
+  const anySectionVisible = showCloud || showIdentity || showIac || showAgents || showLlm
 
   return (
     <PageShell
@@ -276,6 +299,7 @@ export default function ClientIntegrations() {
       ) : (
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2 space-y-5">
+            {showCloud && (
             <Section icon={Cloud} title={t('pages.clientIntegrations.cloud')}>
               <div className="grid sm:grid-cols-2 gap-4">
                 <Field label={label(catalog?.requirements?.aws_cross_account)} required>
@@ -298,19 +322,25 @@ export default function ClientIntegrations() {
                 </Field>
               </div>
             </Section>
+            )}
 
+            {showIdentity && (
             <Section icon={Shield} title={t('pages.clientIntegrations.identity')}>
               <Field label={label(catalog?.requirements?.ad_domain)}>
                 <input className={inputCls} value={form.ad_domain} onChange={(e) => patch({ ad_domain: e.target.value })} placeholder="corp.example.com" />
               </Field>
             </Section>
+            )}
 
+            {showIac && (
             <Section icon={Link2} title={t('pages.clientIntegrations.iac')}>
               <Field label={label(catalog?.requirements?.iac_repos)}>
                 <textarea className={textareaCls} rows={3} value={form.repo_urls} onChange={(e) => patch({ repo_urls: e.target.value })} />
               </Field>
             </Section>
+            )}
 
+            {showAgents && (
             <Section icon={Cpu} title={t('pages.clientIntegrations.agents_ot')}>
               <div className="flex flex-wrap gap-2 mb-3">
                 {AGENT_PLATFORMS.map((p) => (
@@ -334,23 +364,25 @@ export default function ClientIntegrations() {
                 {t('pages.clientIntegrations.open_agents')}
               </Link>
             </Section>
+            )}
 
+            {showLlm && (
             <Section icon={KeyRound} title={t('pages.clientIntegrations.llm_client')}>
               {form.llm_endpoints.map((ep, i) => (
                 <div key={i} className="grid sm:grid-cols-3 gap-2 mb-2 p-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--table-surface)]">
-                  <input className={inputCls} placeholder="https://api.example.com/v1/chat" value={ep.url}
+                  <input className={inputCls} aria-label={t('pages.clientIntegrations.llm_url')} placeholder="https://api.example.com/v1/chat" value={ep.url}
                     onChange={(e) => {
                       const next = [...form.llm_endpoints]
                       next[i] = { ...next[i], url: e.target.value }
                       patch({ llm_endpoints: next })
                     }} />
-                  <input className={inputCls} placeholder="model" value={ep.model}
+                  <input className={inputCls} aria-label={t('pages.clientIntegrations.llm_model')} placeholder="model" value={ep.model}
                     onChange={(e) => {
                       const next = [...form.llm_endpoints]
                       next[i] = { ...next[i], model: e.target.value }
                       patch({ llm_endpoints: next })
                     }} />
-                  <input type="password" autoComplete="off" className={inputCls} placeholder="Bearer sk-…" value={ep.authorization}
+                  <input type="password" autoComplete="off" className={inputCls} aria-label={t('pages.clientIntegrations.llm_authorization')} placeholder="Bearer sk-…" value={ep.authorization}
                     onChange={(e) => {
                       const next = [...form.llm_endpoints]
                       next[i] = { ...next[i], authorization: e.target.value }
@@ -364,6 +396,16 @@ export default function ClientIntegrations() {
                 + {t('pages.clientIntegrations.add_endpoint')}
               </Button>
             </Section>
+            )}
+
+            {!anySectionVisible && (
+              <EmptyState
+                icon="search"
+                title={t('weissmanFindings.filtered_title')}
+                body={t('weissmanFindings.filtered_body')}
+                compact
+              />
+            )}
 
             <Button variant="unstyled" type="button" disabled={saving || unavailable} onClick={save}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-medium text-sm">

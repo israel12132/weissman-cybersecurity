@@ -71,7 +71,7 @@ export default function CompetitiveWinRoom() {
   }, [load])
 
   const gaps = Array.isArray(data?.honest_gaps) ? data.honest_gaps : []
-  const lanes = Array.isArray(data?.moat?.lanes) ? data.moat.lanes : []
+  const lanes = useMemo(() => (Array.isArray(data?.moat?.lanes) ? data.moat.lanes : []), [data])
   const findings = Array.isArray(data?.live_findings) ? data.live_findings : []
   const fabric = Array.isArray(data?.prevention_fabric_engines) ? data.prevention_fabric_engines : []
 

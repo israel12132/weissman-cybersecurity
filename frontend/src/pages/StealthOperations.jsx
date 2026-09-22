@@ -246,7 +246,7 @@ export default function StealthOperations() {
             <Stat label={t('stealthOps.queued')} value={`${l.waiting}`} sub={t('stealthOps.parkedForSlot')} />
             <Stat
               label={t('stealthOps.activeHostsStat')}
-              value={`${l.active_hosts.length}`}
+              value={`${activeHosts.length}`}
               sub={t('stealthOps.tracked', { n: l.tracked_hosts })}
             />
             <Stat

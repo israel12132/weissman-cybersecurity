@@ -120,7 +120,7 @@ export default function ClientEngagements() {
     } catch (e) {
       if (e?.response) {
         const data = await e.response.json().catch(() => ({}))
-        setError(data?.detail || `Create failed (HTTP ${e.status})`)
+        setError(data?.detail || t('pages.clientEngagements.create_failed_http', { status: e.status }))
       } else {
         setError(e?.message || t('pages.clientEngagements.create_failed'))
       }
@@ -148,7 +148,7 @@ export default function ClientEngagements() {
     } catch (e) {
       if (e?.response) {
         const data = await e.response.json().catch(() => ({}))
-        toast.error(data?.detail || `Close failed (HTTP ${e.status})`)
+        toast.error(data?.detail || t('pages.clientEngagements.close_failed_http', { status: e.status }))
       } else {
         toast.error(e?.message || t('pages.clientEngagements.close_failed'))
       }
@@ -254,6 +254,7 @@ export default function ClientEngagements() {
                 className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-[var(--text-primary)]"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                aria-label={t('pages.clientEngagements.name')}
                 placeholder={t('pages.clientEngagements.name_placeholder')}
               />
             </div>
@@ -264,6 +265,7 @@ export default function ClientEngagements() {
                 className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-[var(--text-primary)]"
                 value={roeMode}
                 onChange={(e) => setRoeMode(e.target.value)}
+                aria-label={t('pages.clientEngagements.roe_mode')}
               >
                 <option value="safe_proofs">{t('pages.clientEngagements.roe_safe')}</option>
                 <option value="weaponized_god_mode">{t('pages.clientEngagements.roe_weaponized')}</option>
@@ -277,6 +279,7 @@ export default function ClientEngagements() {
                 className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-[var(--text-primary)]"
                 value={startAt}
                 onChange={(e) => setStartAt(e.target.value)}
+                aria-label={t('pages.clientEngagements.start')}
               />
             </div>
 
@@ -287,6 +290,7 @@ export default function ClientEngagements() {
                 className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-[var(--text-primary)]"
                 value={endAt}
                 onChange={(e) => setEndAt(e.target.value)}
+                aria-label={t('pages.clientEngagements.end_optional')}
               />
             </div>
 
@@ -296,6 +300,7 @@ export default function ClientEngagements() {
                 className="w-full min-h-24 px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-[var(--text-primary)]"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
+                aria-label={t('pages.clientEngagements.notes_optional')}
                 placeholder={t('pages.clientEngagements.notes_placeholder')}
               />
             </div>
@@ -352,7 +357,7 @@ export default function ClientEngagements() {
                         className="px-3 py-1 text-xs border border-[var(--border-default)] text-[var(--text-secondary)] rounded hover:bg-[var(--bg-3)]"
                         target="_blank"
                         rel="noopener noreferrer"
-                        title="Open engagement JSON from API"
+                        title={t('pages.clientEngagements.open_api_title')}
                       >
                         {t('pages.clientEngagements.api')}
                       </a>

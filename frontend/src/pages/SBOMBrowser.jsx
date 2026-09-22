@@ -275,6 +275,7 @@ export default function SBOMBrowser() {
                 <select
                   value={ecosystemFilter}
                   onChange={(e) => setEcosystemFilter(e.target.value)}
+                  aria-label={t('pages.sbomBrowser.ecosystems')}
                   className="px-3 py-2 bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
                 >
                   <option value="all">{t('pages.sbomBrowser.all_ecosystems')}</option>
@@ -341,7 +342,7 @@ export default function SBOMBrowser() {
                   const vulns = component.vulnerabilities || [];
                   return (
                     <div
-                      key={component.id}
+                      key={String(component.id || component.purl || component.name)}
                       className="p-4 hover:bg-[var(--row-hover-bg)] transition-colors"
                     >
                       <div className="flex items-start gap-3">
@@ -354,7 +355,7 @@ export default function SBOMBrowser() {
                               {component.name || component.package_name}
                             </h4>
                             <span className="text-xs text-[var(--text-tertiary)] font-mono">
-                              v{component.version || component.version_spec || 'unknown'}
+                              v{component.version || component.version_spec || t('pages.sbomBrowser.version_unknown')}
                             </span>
                             {component.type && (
                               <span

@@ -60,19 +60,32 @@ export default function CeoVault() {
 
   const toggleSecretVisibility = async (secretId) => {
     if (!showSecret[secretId]) {
-      // Log access attempt
-      await api.post(`/api/ceo/vault/secrets/${secretId}/access`);
+      // Log access attempt (best-effort; do not block the reveal on an audit write)
+      try {
+        await api.post(`/api/ceo/vault/secrets/${secretId}/access`);
+      } catch {
+        // audit logging is non-fatal
+      }
     }
     setShowSecret((prev) => ({ ...prev, [secretId]: !prev[secretId] }));
   };
 
   const copyToClipboard = async (secretId, value) => {
-    await navigator.clipboard.writeText(value);
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      toast.error(t('pages.ceoVault.copy_failed'));
+      return;
+    }
     setCopiedId(secretId);
     setTimeout(() => setCopiedId(null), 2000);
 
-    // Log copy event
-    await api.post(`/api/ceo/vault/secrets/${secretId}/copy`);
+    // Log copy event (best-effort)
+    try {
+      await api.post(`/api/ceo/vault/secrets/${secretId}/copy`);
+    } catch {
+      // audit logging is non-fatal
+    }
   };
 
   const deleteSecret = async (secretId) => {
@@ -302,6 +315,7 @@ export default function CeoVault() {
 
                         <Button variant="unstyled"
                           onClick={() => toggleSecretVisibility(secret.id)}
+                          aria-label={showSecret[secret.id] ? t('pages.ceoVault.hide_value') : t('pages.ceoVault.show_value')}
                           className="p-2 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)] transition-colors"
                         >
                           {showSecret[secret.id] ? (
@@ -315,6 +329,7 @@ export default function CeoVault() {
                           onClick={() =>
                             copyToClipboard(secret.id, secret.value)
                           }
+                          aria-label={t('common.copy')}
                           className="p-2 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)] transition-colors"
                         >
                           {copiedId === secret.id ? (
@@ -349,12 +364,14 @@ export default function CeoVault() {
                     <div className="flex items-center gap-2">
                       <Button variant="unstyled"
                         onClick={() => setEditModal(secret)}
+                        aria-label={t('common.edit')}
                         className="p-2 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg hover:bg-cyan-500/30 transition-colors"
                       >
                         <Edit className="w-4 h-4" />
                       </Button>
                       <Button variant="unstyled"
                         onClick={() => deleteSecret(secret.id)}
+                        aria-label={t('common.delete')}
                         className="p-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -432,6 +449,7 @@ function SecretModal({ secret, onClose, onSave }) {
           </h3>
           <Button variant="unstyled"
             onClick={onClose}
+            aria-label={t('common.close')}
             className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
           >
             ✕

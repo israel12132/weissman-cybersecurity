@@ -113,7 +113,9 @@ function CloudEnginePanel({ tab, clientId, target, showToast, t, onFindingsUpdat
               </div>
             </div>
             <p className="text-sm text-[var(--text-tertiary)] leading-relaxed">
-              {ENGINE_DESCRIPTIONS[tab.engine] ?? t('pages.cloudControlTower.default_description')}
+              {ENGINE_DESCRIPTIONS[tab.engine]
+                ? t(`pages.cloudControlTower.desc_${tab.engine}`, { defaultValue: ENGINE_DESCRIPTIONS[tab.engine] })
+                : t('pages.cloudControlTower.default_description')}
             </p>
           </div>
           <div className="flex flex-col items-end gap-2 shrink-0">
@@ -122,7 +124,7 @@ function CloudEnginePanel({ tab, clientId, target, showToast, t, onFindingsUpdat
                 className="w-2 h-2 rounded-full"
                 style={{ backgroundColor: statusColor, boxShadow: status === 'running' ? `0 0 6px ${tab.color}` : 'none' }}
               />
-              <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{status}</span>
+              <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t(`pages.cloudControlTower.status_${status}`, { defaultValue: status })}</span>
             </div>
             <Button variant="unstyled"
               type="button"
@@ -250,6 +252,7 @@ export default function CloudControlTower() {
         <select
           value={selectedClientId ?? ''}
           onChange={(e) => setSelectedClientId(e.target.value || null)}
+          aria-label={t('pages.cloudControlTower.client_label')}
           className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-blue-500/40"
         >
           <option value="">{t('pages.cloudControlTower.select_client')}</option>
@@ -274,13 +277,13 @@ export default function CloudControlTower() {
         className="group flex items-center justify-between gap-3 rounded-2xl border border-cyan-500/25 bg-gradient-to-r from-cyan-950/30 to-black/30 px-4 py-3 mb-4 hover:border-cyan-400/45 transition-all"
       >
         <div className="flex items-center gap-3">
-          <span className="text-2xl">🌐</span>
+          <span className="text-2xl" aria-hidden="true">🌐</span>
           <div>
-            <p className="text-sm font-semibold text-[var(--text-primary)]">Attack Surface Management (EASM)</p>
-            <p className="text-[11px] font-mono text-[var(--text-muted)]">Discover internet-facing assets & score external exposure — assets, services, TLS/HTTP, cloud footprint, takeover risk.</p>
+            <p className="text-sm font-semibold text-[var(--text-primary)]">{t('pages.cloudControlTower.easm_title')}</p>
+            <p className="text-[11px] font-mono text-[var(--text-muted)]">{t('pages.cloudControlTower.easm_desc')}</p>
           </div>
         </div>
-        <span className="text-[11px] font-mono text-cyan-300/80 group-hover:translate-x-0.5 transition-transform">Open →</span>
+        <span className="text-[11px] font-mono text-cyan-300/80 group-hover:translate-x-0.5 transition-transform">{t('pages.cloudControlTower.open_cross')}</span>
       </Link>
 
       {/* Agentless CSPM / CNAPP cross-link (Wiz-style) */}
@@ -289,13 +292,13 @@ export default function CloudControlTower() {
         className="group flex items-center justify-between gap-3 rounded-2xl border border-orange-500/25 bg-gradient-to-r from-orange-950/30 to-black/30 px-4 py-3 mb-6 hover:border-orange-400/45 transition-all"
       >
         <div className="flex items-center gap-3">
-          <span className="text-2xl">◈</span>
+          <span className="text-2xl" aria-hidden="true">◈</span>
           <div>
-            <p className="text-sm font-semibold text-[var(--text-primary)]">Cloud Posture Management (CSPM)</p>
-            <p className="text-[11px] font-mono text-[var(--text-muted)]">Agentless AWS inventory via cross-account role — IAM, S3, EC2, RDS, Lambda, CloudTrail, compliance grades & toxic-combination attack paths.</p>
+            <p className="text-sm font-semibold text-[var(--text-primary)]">{t('pages.cloudControlTower.cspm_title')}</p>
+            <p className="text-[11px] font-mono text-[var(--text-muted)]">{t('pages.cloudControlTower.cspm_desc')}</p>
           </div>
         </div>
-        <span className="text-[11px] font-mono text-orange-300/80 group-hover:translate-x-0.5 transition-transform">Open →</span>
+        <span className="text-[11px] font-mono text-orange-300/80 group-hover:translate-x-0.5 transition-transform">{t('pages.cloudControlTower.open_cross')}</span>
       </Link>
 
       {/* Cloud tabs */}

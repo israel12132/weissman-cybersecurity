@@ -370,6 +370,7 @@ export default function CemDagoMesh() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder={t(`${NS}.search_placeholder`)}
+              aria-label={t(`${NS}.search_placeholder`)}
               className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-secondary)] w-full max-w-xs focus:outline-none focus:border-cyan-500/40"
             />
           </div>

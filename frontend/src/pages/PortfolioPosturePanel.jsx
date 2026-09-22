@@ -121,10 +121,7 @@ export default function PortfolioPosturePanel() {
   return (
     <div className="bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
       <div className="px-4 pt-4">
-        <EvidenceNotice>
-          Live tenant-wide roll-up from GET /api/portfolio/posture — grade distribution and worst
-          offenders computed across all clients. No fabricated posture telemetry.
-        </EvidenceNotice>
+        <EvidenceNotice>{t('clients_page.portfolio_evidence')}</EvidenceNotice>
       </div>
       <div className="p-4 border-b border-[var(--border-default)] flex items-center justify-between gap-3 flex-wrap">
         <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
@@ -133,7 +130,9 @@ export default function PortfolioPosturePanel() {
         </h3>
         <div className="flex items-center gap-4 text-[11px] font-mono">
           <span className="text-[var(--text-tertiary)]">
-            {t('clients_page.portfolio_avg', { score: Number(data.average_score).toFixed(0) })}
+            {t('clients_page.portfolio_avg', {
+              score: Number.isFinite(Number(data.average_score)) ? Number(data.average_score).toFixed(0) : '—',
+            })}
           </span>
           {Number(data.clients_at_risk) > 0 && (
             <span className="inline-flex items-center gap-1 text-[var(--severity-critical)]">
@@ -233,7 +232,7 @@ export default function PortfolioPosturePanel() {
                 {Number(c.kev_actions) > 0 && (
                   <span className="text-[10px] font-mono text-[var(--severity-high)]">{t('clients_page.portfolio_kev', { count: c.kev_actions })}</span>
                 )}
-                <span className="text-[12px] font-bold tabular-nums w-8 text-right" style={{ color: gradeColor(c.grade) }}>{Number(c.score).toFixed(0)}</span>
+                <span className="text-[12px] font-bold tabular-nums w-8 text-right" style={{ color: gradeColor(c.grade) }}>{Number.isFinite(Number(c.score)) ? Number(c.score).toFixed(0) : '—'}</span>
               </div>
             ))}
           </div>

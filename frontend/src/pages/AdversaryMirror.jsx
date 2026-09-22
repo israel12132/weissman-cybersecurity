@@ -250,10 +250,16 @@ function AdversaryMirrorBody() {
       columnHelper.accessor((f) => f.source || f.engine || '', {
         id: 'source',
         header: t(`${NS}.col_source`),
+        cell: (ctx) => <span className="text-[var(--text-tertiary)]">{ctx.getValue() || '—'}</span>,
       }),
       columnHelper.accessor((f) => f.target || '', {
         id: 'target',
         header: t(`${NS}.col_target`),
+        cell: (ctx) => (
+          <span className="text-[var(--text-tertiary)] max-w-xs truncate block" title={ctx.getValue()}>
+            {ctx.getValue() || '—'}
+          </span>
+        ),
       }),
     ],
     [t],
@@ -320,6 +326,7 @@ function AdversaryMirrorBody() {
             className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs font-mono"
             value={selectedClientId ?? ''}
             onChange={(e) => setSelectedClientId(e.target.value || null)}
+            aria-label={t(`${NS}.select_client`)}
           >
             <option value="">{t(`${NS}.select_client`)}</option>
             {clients.map((c) => (
@@ -381,6 +388,7 @@ function AdversaryMirrorBody() {
               <input
                 className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg pl-9 pr-3 py-2 text-sm"
                 placeholder={t(`${NS}.search_placeholder`)}
+                aria-label={t(`${NS}.search_placeholder`)}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />

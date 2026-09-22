@@ -435,8 +435,8 @@ export default function RemediationHub() {
                           )}
                         </div>
                       )}
-                      {w.items.slice(0, 50).map((f) => (
-                        <div key={f.raw_id || f.finding_id} className="flex items-center justify-between gap-3 p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--table-surface)]">
+                      {w.items.slice(0, 50).map((f, i) => (
+                        <div key={f.raw_id || f.finding_id || `${w.id}-${i}`} className="flex items-center justify-between gap-3 p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--table-surface)]">
                           <div className="min-w-0 flex items-center gap-2">
                             <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: SEV_META[normSev(f.severity)].color }} />
                             <span className="text-xs text-[var(--text-secondary)] truncate">{f.title || f.finding_id}</span>

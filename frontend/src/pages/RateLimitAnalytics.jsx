@@ -142,6 +142,7 @@ export default function RateLimitAnalytics() {
           <Button variant="unstyled"
             key={range}
             type="button"
+            aria-pressed={timeRange === range}
             onClick={() => setTimeRange(range)}
             className={`px-2.5 py-1 rounded-md text-[11px] font-mono transition-all ${
               timeRange === range

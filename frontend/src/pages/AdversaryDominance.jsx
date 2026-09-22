@@ -328,17 +328,19 @@ export default function AdversaryDominance() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder={t(`${NS}.search_placeholder`)}
+                  aria-label={t(`${NS}.search_placeholder`)}
                   className="w-full pl-8 pr-3 py-2 rounded-xl bg-[var(--table-surface)] border border-[var(--border-default)] text-sm text-[var(--text-primary)]"
                 />
               </div>
               <select
                 value={severityFilter}
                 onChange={(e) => setSeverityFilter(e.target.value)}
+                aria-label={t(`${NS}.filter_severity`)}
                 className="px-3 py-2 rounded-xl bg-[var(--table-surface)] border border-[var(--border-default)] text-sm text-[var(--text-primary)]"
               >
                 <option value="all">{t(`${NS}.filter_all`)} ({stats.total})</option>
                 {SEV_KEYS.map((k) => (
-                  <option key={k} value={k}>{k} ({stats[k] || 0})</option>
+                  <option key={k} value={k}>{t(`${NS}.${k}`)} ({stats[k]})</option>
                 ))}
               </select>
               <Link to="/dark-web" className="text-xs font-mono text-violet-300 hover:underline">

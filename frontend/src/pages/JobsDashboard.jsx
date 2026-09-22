@@ -255,6 +255,14 @@ export default function JobsDashboard() {
   )
 
   const selectedJobId = selectedJob ? selectedJob.id || selectedJob.job_id : null
+  // Keep the detail panel live: re-read the selected job from the freshly polled
+  // list so its status / heartbeat / error update in place instead of showing a
+  // stale snapshot captured at click time. Falls back to the clicked row if the
+  // job has since dropped out of the returned window.
+  const activeJob = useMemo(() => {
+    if (!selectedJobId) return null
+    return jobs.find((j) => (j.id || j.job_id) === selectedJobId) || selectedJob
+  }, [jobs, selectedJobId, selectedJob])
 
   return (
     <PageShell
@@ -324,6 +332,7 @@ export default function JobsDashboard() {
                 <Button variant="unstyled"
                   key={status}
                   type="button"
+                  aria-pressed={statusFilter === status}
                   onClick={() => setStatusFilter(statusFilter === status ? 'all' : status)}
                   className={`p-4 rounded-xl border text-center transition-all ${
                     statusFilter === status
@@ -367,7 +376,7 @@ export default function JobsDashboard() {
                     }`}
                   >
                     {t(`pages.jobsDashboard.filter_${key}`)}{' '}
-                    <span className="opacity-70 tabular-nums">{key === 'all' ? jobs.length : (statusCounts[key] || 0)}</span>
+                    <span className="opacity-70 tabular-nums">{error ? '—' : key === 'all' ? jobs.length : statusCounts[key]}</span>
                   </Button>
                 ))}
               </div>
@@ -406,63 +415,63 @@ export default function JobsDashboard() {
 
                 <aside className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-5 space-y-4 h-fit sticky top-4">
                   <h3 className="text-sm font-semibold text-[var(--text-primary)]">
-                    {selectedJob ? t('pages.jobsDashboard.detail_title') : t('pages.jobsDashboard.detail_empty')}
+                    {activeJob ? t('pages.jobsDashboard.detail_title') : t('pages.jobsDashboard.detail_empty')}
                   </h3>
-                  {selectedJob ? (
+                  {activeJob ? (
                     <>
                       <CopyableField
                         label={t('pages.jobsDashboard.col_job_id')}
-                        value={selectedJob.id || selectedJob.job_id}
+                        value={activeJob.id || activeJob.job_id}
                       />
                       <div className="grid grid-cols-2 gap-3 text-[12px]">
                         <div>
                           <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t('pages.jobsDashboard.col_kind')}</div>
-                          <div className="text-[var(--text-secondary)] mt-0.5">{selectedJob.kind || selectedJob.type || '—'}</div>
+                          <div className="text-[var(--text-secondary)] mt-0.5">{activeJob.kind || activeJob.type || '—'}</div>
                         </div>
                         <div>
                           <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t('pages.jobsDashboard.col_status')}</div>
-                          <span className={`inline-block mt-0.5 px-2 py-0.5 text-xs border rounded ${getStatusBadgeClass(selectedJob.status)}`}>
-                            {normalizeJobStatus(selectedJob.status)}
+                          <span className={`inline-block mt-0.5 px-2 py-0.5 text-xs border rounded ${getStatusBadgeClass(activeJob.status)}`}>
+                            {normalizeJobStatus(activeJob.status)}
                           </span>
                         </div>
                         <div>
                           <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t('pages.jobsDashboard.col_attempt')}</div>
-                          <div className="text-[var(--text-secondary)] mt-0.5">{selectedJob.attempt_count ?? selectedJob.retries ?? 0}</div>
+                          <div className="text-[var(--text-secondary)] mt-0.5">{activeJob.attempt_count ?? activeJob.retries ?? 0}</div>
                         </div>
                         <div>
                           <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t('pages.jobsDashboard.field_client')}</div>
                           <div className="text-[var(--text-secondary)] mt-0.5">
-                            {selectedJob.client_id != null ? (
-                              <Link to={`/clients/${selectedJob.client_id}`} className="text-cyan-400 hover:underline">
-                                #{selectedJob.client_id}
+                            {activeJob.client_id != null ? (
+                              <Link to={`/clients/${activeJob.client_id}`} className="text-cyan-400 hover:underline">
+                                #{activeJob.client_id}
                               </Link>
                             ) : '—'}
                           </div>
                         </div>
                       </div>
-                      {selectedJob.target && (
-                        <CopyableField label={t('pages.jobsDashboard.col_target')} value={selectedJob.target} />
+                      {activeJob.target && (
+                        <CopyableField label={t('pages.jobsDashboard.col_target')} value={activeJob.target} />
                       )}
-                      {selectedJob.engine && (
-                        <CopyableField label={t('pages.jobsDashboard.field_engine')} value={selectedJob.engine} />
+                      {activeJob.engine && (
+                        <CopyableField label={t('pages.jobsDashboard.field_engine')} value={activeJob.engine} />
                       )}
-                      {selectedJob.worker_id && (
-                        <CopyableField label={t('pages.jobsDashboard.field_worker')} value={selectedJob.worker_id} />
+                      {activeJob.worker_id && (
+                        <CopyableField label={t('pages.jobsDashboard.field_worker')} value={activeJob.worker_id} />
                       )}
                       <div className="text-[11px] font-mono text-[var(--text-muted)] space-y-1">
-                        <div>{t('pages.jobsDashboard.field_created')}: {fmtTime(selectedJob.created_at)}</div>
-                        <div>{t('pages.jobsDashboard.field_updated')}: {fmtTime(selectedJob.updated_at)}</div>
-                        {selectedJob.heartbeat_at && (
-                          <div>{t('pages.jobsDashboard.field_heartbeat')}: {fmtTime(selectedJob.heartbeat_at)}</div>
+                        <div>{t('pages.jobsDashboard.field_created')}: {fmtTime(activeJob.created_at)}</div>
+                        <div>{t('pages.jobsDashboard.field_updated')}: {fmtTime(activeJob.updated_at)}</div>
+                        {activeJob.heartbeat_at && (
+                          <div>{t('pages.jobsDashboard.field_heartbeat')}: {fmtTime(activeJob.heartbeat_at)}</div>
                         )}
                       </div>
-                      {selectedJob.last_error && (
+                      {activeJob.last_error && (
                         <div role="alert" className="rounded-lg border border-rose-500/30 bg-rose-950/20 p-3">
                           <div className="text-[10px] font-mono text-rose-300/70 uppercase mb-1">
                             {t('pages.jobsDashboard.field_error')}
                           </div>
                           <pre className="text-[11px] font-mono text-rose-200 whitespace-pre-wrap break-words">
-                            {selectedJob.last_error}
+                            {activeJob.last_error}
                           </pre>
                         </div>
                       )}

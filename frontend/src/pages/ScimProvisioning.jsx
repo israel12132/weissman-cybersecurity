@@ -184,7 +184,7 @@ export default function ScimProvisioning() {
 
         {loading && tokens.length === 0 ? (
           <p className="text-xs text-[var(--text-muted)]">{t(`${NS}.loading`)}</p>
-        ) : visibleTokens.length === 0 ? (
+        ) : error ? null : visibleTokens.length === 0 ? (
           <EmptyState icon="shield" title={t(`${NS}.empty_title`)} body={t(`${NS}.empty_body`)} />
         ) : (
           <ul className="space-y-2">
@@ -219,7 +219,7 @@ export default function ScimProvisioning() {
           <h2 className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">
             {t(`${NS}.audit_heading`)}
           </h2>
-          {events.length === 0 ? (
+          {error ? null : events.length === 0 ? (
             <p className="text-xs text-[var(--text-muted)]">{t(`${NS}.audit_empty`)}</p>
           ) : (
             <ul className="space-y-1 max-h-64 overflow-y-auto font-mono text-[11px] text-[var(--text-secondary)]">

@@ -420,10 +420,10 @@ export default function TransportSecurityCommandCenter() {
           </div>
           <Button variant="unstyled" type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
             className="px-5 py-2 rounded-xl font-mono text-sm border border-violet-500/40 text-violet-300 bg-violet-500/10 hover:bg-violet-500/20 disabled:opacity-40">
-            {status === 'running' ? '⟳ Scanning…' : '▶ Run Transport Scan'}
+            {status === 'running' ? t('pages.transportSecurity.scanning', '⟳ Scanning…') : t('pages.transportSecurity.run_scan', '▶ Run Transport Scan')}
           </Button>
           <Button variant="unstyled" type="button" onClick={() => setShowParams((s) => !s)} className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)]">
-            {showParams ? '▾ Params' : '▸ Params'}
+            {showParams ? t('pages.transportSecurity.hide_params', '▾ Params') : t('pages.transportSecurity.show_params', '▸ Params')}
           </Button>
         </div>
 
@@ -441,24 +441,24 @@ export default function TransportSecurityCommandCenter() {
                 </div>
                 <div className="space-y-3">
                   <div>
-                    <label htmlFor="tsc-tls-ports" className="text-[10px] font-mono text-[var(--text-muted)] block mb-1">TLS ports</label>
+                    <label htmlFor="tsc-tls-ports" className="text-[10px] font-mono text-[var(--text-muted)] block mb-1">{t('pages.transportSecurity.tls_ports', 'TLS ports')}</label>
                     <input id="tsc-tls-ports" value={ports} onChange={(e) => setPorts(e.target.value)} className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)]" />
                   </div>
                   <div>
-                    <label htmlFor="tsc-grpc-ports" className="text-[10px] font-mono text-[var(--text-muted)] block mb-1">gRPC ports</label>
+                    <label htmlFor="tsc-grpc-ports" className="text-[10px] font-mono text-[var(--text-muted)] block mb-1">{t('pages.transportSecurity.grpc_ports', 'gRPC ports')}</label>
                     <input id="tsc-grpc-ports" value={grpcPorts} onChange={(e) => setGrpcPorts(e.target.value)} className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)]" />
                   </div>
                   <div>
-                    <label htmlFor="tsc-sni" className="text-[10px] font-mono text-[var(--text-muted)] block mb-1">SNI override</label>
+                    <label htmlFor="tsc-sni" className="text-[10px] font-mono text-[var(--text-muted)] block mb-1">{t('pages.transportSecurity.sni_override', 'SNI override')}</label>
                     <input id="tsc-sni" value={sni} onChange={(e) => setSni(e.target.value)} placeholder="api.example.com" className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)]" />
                   </div>
                 </div>
                   <div>
-                    <label htmlFor="tsc-grpc-paths" className="text-[10px] font-mono text-[var(--text-muted)] block mb-1">Custom gRPC paths</label>
+                    <label htmlFor="tsc-grpc-paths" className="text-[10px] font-mono text-[var(--text-muted)] block mb-1">{t('pages.transportSecurity.grpc_paths', 'Custom gRPC paths')}</label>
                     <input id="tsc-grpc-paths" value={grpcPaths} onChange={(e) => setGrpcPaths(e.target.value)} placeholder="/my.Service/Method" className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)]" />
                   </div>
                   <div>
-                    <label htmlFor="tsc-timeout-ms" className="text-[10px] font-mono text-[var(--text-muted)] block mb-1">Timeout (ms)</label>
+                    <label htmlFor="tsc-timeout-ms" className="text-[10px] font-mono text-[var(--text-muted)] block mb-1">{t('pages.transportSecurity.timeout_ms', 'Timeout (ms)')}</label>
                   <input id="tsc-timeout-ms" type="number" min={400} max={30000} value={timeoutMs} onChange={(e) => setTimeoutMs(e.target.value)}
                     className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)]" />
                 </div>
@@ -466,7 +466,7 @@ export default function TransportSecurityCommandCenter() {
             </motion.div>
           )}
         </AnimatePresence>
-        {lastRun && <p className="text-[10px] font-mono text-[var(--text-disabled)] mt-3">Last: {lastRun}</p>}
+        {lastRun && <p className="text-[10px] font-mono text-[var(--text-disabled)] mt-3">{t('pages.transportSecurity.last_run', 'Last: {{time}}', { time: lastRun })}</p>}
       </div>
 
       {findings.length > 0 && !historyUnavailable && <Scorecard score={score} grade={grade} dimensions={dimensions} t={t} />}

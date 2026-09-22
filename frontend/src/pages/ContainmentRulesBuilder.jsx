@@ -22,6 +22,7 @@ export default function ContainmentRulesBuilder() {
   const [unavailable, setUnavailable] = useState(false);
   const [createModal, setCreateModal] = useState(false);
   const [editModal, setEditModal] = useState(null);
+  const [killing, setKilling] = useState(false);
 
   useEffect(() => {
     if (clientLoading) return;
@@ -37,6 +38,9 @@ export default function ContainmentRulesBuilder() {
       return;
     }
     fetchRules(clientId);
+    // fetchRules is a stable closure recreated each render; re-running only on client/
+    // availability changes is intentional (including it would refetch on every render).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, clientLoading, clientsUnavailable]);
 
   const fetchRules = async (cid) => {
@@ -139,6 +143,34 @@ export default function ContainmentRulesBuilder() {
 
   const reloadRules = () => {
     if (clientId != null) fetchRules(clientId)
+  }
+
+  // Emergency isolation: arm every isolation-action rule at once via the live rules API.
+  const activateKillSwitch = async () => {
+    if (clientId == null || killing) return;
+    if (!(await confirmDialog(t('pages.containmentRulesBuilder.kill_switch_confirm')))) return;
+    const targets = rules.filter((r) => r.action === 'isolate' && !r.enabled);
+    if (targets.length === 0) {
+      toast.error(t('pages.containmentRulesBuilder.kill_switch_none'));
+      return;
+    }
+    setKilling(true);
+    try {
+      await Promise.all(
+        targets.map((r) =>
+          api.patch(withClientId(`/api/containment/rules/${r.id}`, clientId), { enabled: true })
+        )
+      );
+      setRules((prev) =>
+        prev.map((r) => (r.action === 'isolate' ? { ...r, enabled: true } : r))
+      );
+      toast.success(t('pages.containmentRulesBuilder.kill_switch_ok', { count: targets.length }));
+    } catch (error) {
+      console.error('Failed to activate kill switch:', error);
+      toast.error(t('common.error'));
+    } finally {
+      setKilling(false);
+    }
   }
 
   return (
@@ -338,8 +370,14 @@ export default function ContainmentRulesBuilder() {
                 {t('pages.containmentRulesBuilder.emergency_body')}
               </p>
             </div>
-            <Button variant="unstyled" className="px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-medium hover:bg-red-600 transition-colors">
-              {t('pages.containmentRulesBuilder.kill_switch')}
+            <Button
+              variant="unstyled"
+              type="button"
+              onClick={activateKillSwitch}
+              disabled={killing || clientId == null}
+              className="px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-medium hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {killing ? t('pages.containmentRulesBuilder.saving') : t('pages.containmentRulesBuilder.kill_switch')}
             </Button>
           </div>
         </div>
@@ -417,8 +455,9 @@ function RuleModal({ rule, clientId, onClose, onSave }) {
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">{t('pages.containmentRulesBuilder.rule_name')}</label>
+            <label htmlFor="rule-name" className="block text-sm font-medium text-[var(--text-secondary)] mb-2">{t('pages.containmentRulesBuilder.rule_name')}</label>
             <input
+              id="rule-name"
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -428,8 +467,9 @@ function RuleModal({ rule, clientId, onClose, onSave }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">{t('pages.containmentRulesBuilder.action')}</label>
+            <label htmlFor="rule-action" className="block text-sm font-medium text-[var(--text-secondary)] mb-2">{t('pages.containmentRulesBuilder.action')}</label>
             <select
+              id="rule-action"
               value={formData.action}
               onChange={(e) => setFormData({ ...formData, action: e.target.value })}
               className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"

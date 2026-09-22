@@ -151,9 +151,9 @@ export default function EndpointEdr() {
             <EmptyState title={t(`${NS}.empty_title`)} body={t(`${NS}.empty_body`)} />
           ) : (
             <ul className="space-y-1.5 text-sm">
-              {filtered.map((r) => (
+              {filtered.map((r, i) => (
                 <li
-                  key={`${r.kind}-${r.id}`}
+                  key={`${r.kind}-${r.id ?? i}`}
                   className="border border-[var(--border-default)] bg-[var(--table-surface)] rounded-lg px-3 py-2 flex items-center justify-between gap-3"
                 >
                   <span className="text-[var(--text-primary)] truncate" title={r.title}>{r.title || '—'}</span>

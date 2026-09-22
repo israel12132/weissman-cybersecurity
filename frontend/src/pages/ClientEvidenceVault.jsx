@@ -148,7 +148,7 @@ export default function ClientEvidenceVault() {
     } catch (e) {
       if (e?.response) {
         const body = await e.response.json().catch(() => ({}))
-        setError(body?.detail || body?.error || `Upload failed (HTTP ${e.status})`)
+        setError(body?.detail || body?.error || t('pages.clientEvidenceVault.upload_failed_http', { status: e.status }))
       } else {
         setError(e?.message || t('pages.clientEvidenceVault.upload_failed'))
       }
@@ -173,7 +173,7 @@ export default function ClientEvidenceVault() {
     } catch (e) {
       if (e?.response) {
         const data = await e.response.json().catch(() => ({}))
-        toast.error(data?.detail || data?.error || `Delete failed (HTTP ${e.status})`)
+        toast.error(data?.detail || data?.error || t('pages.clientEvidenceVault.delete_failed_http', { status: e.status }))
       } else {
         toast.error(e?.message || t('pages.clientEvidenceVault.delete_failed'))
       }
@@ -249,7 +249,7 @@ export default function ClientEvidenceVault() {
         return (
           <div className="text-[var(--text-primary)]">
             <div className="font-medium">{ev.filename}</div>
-            <div className="text-[11px] text-[var(--text-muted)]">{new Date(ev.created_at).toLocaleString()}</div>
+            <div className="text-[11px] text-[var(--text-muted)]">{ev.created_at ? new Date(ev.created_at).toLocaleString() : '—'}</div>
           </div>
         )
       },
@@ -303,7 +303,7 @@ export default function ClientEvidenceVault() {
             <Button variant="unstyled"
               type="button"
               onClick={() => downloadEvidence(ev)}
-              className="px-3 py-1 text-xs bg-[var(--bg-4)] text-[var(--text-primary)] rounded hover:bg-[var(--bg-4)]"
+              className="px-3 py-1 text-xs bg-[var(--bg-4)] text-[var(--text-primary)] rounded hover:opacity-80 transition-opacity"
             >
               {t('pages.clientEvidenceVault.download')}
             </Button>
@@ -387,6 +387,7 @@ export default function ClientEvidenceVault() {
               <input
                 type="file"
                 className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-[var(--text-primary)]"
+                aria-label={t('pages.clientEvidenceVault.file')}
                 onChange={(e) => setFile(e.target.files?.[0] || null)}
               />
               {file && (
@@ -402,6 +403,7 @@ export default function ClientEvidenceVault() {
                 className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-[var(--text-primary)]"
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
+                aria-label={t('pages.clientEvidenceVault.label_optional')}
                 placeholder={t('pages.clientEvidenceVault.label_placeholder')}
               />
             </div>
@@ -412,6 +414,8 @@ export default function ClientEvidenceVault() {
                 className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] font-mono"
                 value={engagementId}
                 onChange={(e) => setEngagementId(e.target.value)}
+                aria-label={t('pages.clientEvidenceVault.engagement_id_optional')}
+                inputMode="numeric"
                 placeholder="123"
               />
             </div>
@@ -422,6 +426,8 @@ export default function ClientEvidenceVault() {
                 className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] font-mono"
                 value={vulnerabilityId}
                 onChange={(e) => setVulnerabilityId(e.target.value)}
+                aria-label={t('pages.clientEvidenceVault.vuln_id_optional')}
+                inputMode="numeric"
                 placeholder="456"
               />
             </div>
@@ -432,6 +438,7 @@ export default function ClientEvidenceVault() {
                 className="w-full min-h-24 px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-[var(--text-primary)]"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
+                aria-label={t('pages.clientEvidenceVault.notes_optional')}
                 placeholder={t('pages.clientEvidenceVault.notes_placeholder')}
               />
             </div>

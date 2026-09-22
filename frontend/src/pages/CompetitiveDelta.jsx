@@ -160,7 +160,7 @@ export default function CompetitiveDelta() {
   }
 
   const enginesTotal = data?.engines?.total_ids ?? data?.moat?.engines_total ?? '—'
-  const lanesCovered = data?.moat ? `${data.moat.lanes_covered}/${data.moat.lanes_total}` : '—'
+  const lanesCovered = data?.moat ? `${data.moat.lanes_covered ?? '—'}/${data.moat.lanes_total ?? '—'}` : '—'
   const otOk = Boolean(data?.ot_safety?.in_production_catalog)
   const campaign = data?.revision?.campaign_fabric
   const proof = data?.revision?.proof_artifacts
@@ -266,6 +266,7 @@ export default function CompetitiveDelta() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={t(`${NS}.search_placeholder`)}
+                  aria-label={t(`${NS}.search_placeholder`)}
                   className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] pl-9 pr-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
                 />
               </label>

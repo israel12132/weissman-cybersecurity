@@ -63,7 +63,7 @@ export default function BaselineAndDrift() {
     } finally {
       setLoading(false);
     }
-  }, [timeRange]);
+  }, [timeRange, t]);
 
   useEffect(() => {
     fetchData();

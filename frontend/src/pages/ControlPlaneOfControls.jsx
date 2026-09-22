@@ -65,7 +65,7 @@ export default function ControlPlaneOfControls() {
     const q = searchQuery.trim().toLowerCase()
     if (!q) return findings
     return findings.filter((f) =>
-      `${f.title} ${f.source} ${f.description} ${f.severity}`.toLowerCase().includes(q),
+      `${f.title || ''} ${f.source || ''} ${f.description || ''} ${f.severity || ''}`.toLowerCase().includes(q),
     )
   }, [findings, searchQuery])
 
@@ -118,13 +118,13 @@ export default function ControlPlaneOfControls() {
             <EmptyState title={t(`${NS}.empty_title`)} body={t(`${NS}.empty_body`)} />
           ) : (
             <ul className="space-y-2">
-              {filtered.map((f) => {
+              {filtered.map((f, i) => {
                 const s = (f.severity || 'info').toLowerCase()
                 const c = SEV_COLOR[s] || SEV_COLOR.info
                 return (
-                  <li key={f.id || f.finding_id} className="rounded-lg border border-[var(--border-default)] p-3">
+                  <li key={f.id || f.finding_id || i} className="rounded-lg border border-[var(--border-default)] p-3">
                     <div className="flex gap-2 items-center">
-                      <span className="text-[10px] font-mono uppercase" style={{ color: c }}>{s}</span>
+                      <span className="text-[10px] font-mono uppercase" style={{ color: c }}>{t(`severity.${s}`, { defaultValue: s })}</span>
                       <span className="text-xs text-[var(--text-muted)] font-mono">{f.source || f.type}</span>
                     </div>
                     <div className="text-sm text-[var(--text-primary)] mt-1">{f.title}</div>

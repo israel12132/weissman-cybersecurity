@@ -12,8 +12,9 @@ import { useToast } from '../components/ui/Toaster'
 import Button from '../components/ui/Button'
 
 function pct(n) {
+  if (n === null || n === undefined || n === '') return '—'
   const v = Number(n)
-  if (!Number.isFinite(v)) return '0%'
+  if (!Number.isFinite(v)) return '—'
   return `${Math.round(v * 100)}%`
 }
 
@@ -240,7 +241,7 @@ export default function ClientSaasIdpDiscovery() {
                             <Button variant="unstyled"
                               type="button"
                               onClick={() => copy(issuer)}
-                              className="px-3 py-1 text-xs bg-[var(--bg-4)] text-[var(--text-primary)] rounded hover:bg-[var(--bg-4)]"
+                              className="px-3 py-1 text-xs bg-[var(--bg-4)] text-[var(--text-primary)] rounded hover:opacity-80 transition-opacity"
                             >
                               {t('pages.clientSaasIdpDiscovery.copy_issuer')}
                             </Button>
@@ -249,7 +250,7 @@ export default function ClientSaasIdpDiscovery() {
                             <Button variant="unstyled"
                               type="button"
                               onClick={() => copy(finalHost)}
-                              className="px-3 py-1 text-xs bg-[var(--bg-4)] text-[var(--text-primary)] rounded hover:bg-[var(--bg-4)]"
+                              className="px-3 py-1 text-xs bg-[var(--bg-4)] text-[var(--text-primary)] rounded hover:opacity-80 transition-opacity"
                             >
                               {t('pages.clientSaasIdpDiscovery.copy_host')}
                             </Button>
@@ -300,8 +301,8 @@ export default function ClientSaasIdpDiscovery() {
                 <div key={s.name} className="p-4 bg-[var(--bg-1)]/40 border border-[var(--border-default)] rounded-lg">
                   <div className="text-[var(--text-primary)] font-semibold">{s.name}</div>
                   <div className="mt-2 text-xs text-[var(--text-secondary)] font-mono space-y-1">
-                    {(Array.isArray(s.evidence) ? s.evidence : []).slice(0, 10).map((e) => (
-                      <div key={e} className="break-all">{e}</div>
+                    {(Array.isArray(s.evidence) ? s.evidence : []).slice(0, 10).map((e, i) => (
+                      <div key={`${s.name}-${i}`} className="break-all">{e}</div>
                     ))}
                   </div>
                 </div>

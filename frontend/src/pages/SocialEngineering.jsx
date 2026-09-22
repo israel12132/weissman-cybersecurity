@@ -336,10 +336,11 @@ export default function SocialEngineering() {
               <select
                 value={scanClientId}
                 onChange={(e) => setScanClientId(e.target.value)}
+                aria-label={t('common.client')}
                 className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] px-3 py-2 text-xs text-[var(--text-primary)] font-mono"
               >
                 {clients.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
+                  <option key={c.id} value={c.id}>{c.name || `${t('common.client')} ${c.id}`}</option>
                 ))}
               </select>
               <Button variant="unstyled"

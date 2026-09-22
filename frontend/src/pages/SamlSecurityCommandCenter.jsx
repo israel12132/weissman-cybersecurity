@@ -27,6 +27,7 @@ const LABELS = {
     client: 'Client', selectClient: 'Select client…', selectClientFirst: 'Select a client first',
     target: 'Target (IdP/ADFS/SSO URL or domain root)', targetPh: 'https://adfs.corp.example.com  or  https://idp.okta.com',
     run: 'Run SAML federation assessment', scanning: 'Assessing…', queued: 'Assessment queued', scanFailed: 'Scan failed',
+    targetRequired: 'Enter an IdP/ADFS/SSO target to assess',
     intensity: 'Probe intensity', light: 'Light', normal: 'Normal', aggressive: 'Aggressive',
     presets: 'IdP presets', layers: 'Assessment layers',
     checkMetadata: 'SAML metadata discovery + X.509 parse',
@@ -60,6 +61,7 @@ const LABELS = {
     client: 'לקוח', selectClient: 'בחר לקוח…', selectClientFirst: 'בחר לקוח תחילה',
     target: 'יעד (IdP/ADFS/SSO URL או שורש דומיין)', targetPh: 'https://adfs.corp.example.com  או  https://idp.okta.com',
     run: 'הרץ הערכת SAML federation', scanning: 'מעריך…', queued: 'ההערכה בתור', scanFailed: 'הסריקה נכשלה',
+    targetRequired: 'הזן יעד IdP/ADFS/SSO להערכה',
     intensity: 'עוצמת בדיקה', light: 'קלה', normal: 'רגילה', aggressive: 'אגרסיבית',
     presets: 'תבניות IdP', layers: 'שכבות הערכה',
     checkMetadata: 'גילוי metadata SAML + ניתוח X.509',
@@ -213,7 +215,7 @@ export default function SamlSecurityCommandCenter() {
 
   const handleRun = useCallback(async () => {
     if (!clientId) { showToastMsg('error', L.selectClientFirst); return }
-    if (!target.trim()) { showToastMsg('error', L.target); return }
+    if (!target.trim()) { showToastMsg('error', L.targetRequired); return }
     setStatus('running')
     setFindings([])
     try {
@@ -408,7 +410,7 @@ export default function SamlSecurityCommandCenter() {
           className="rounded-2xl border border-amber-500/30 bg-amber-950/15 p-5 mb-6">
           <p className="text-[10px] font-mono text-amber-300/70 uppercase mb-1">{L.posture}</p>
           <p className="text-3xl font-bold font-mono text-amber-200">{posture.posture_score ?? posture.evidence?.score ?? '—'}<span className="text-lg text-[var(--text-disabled)]">/100</span></p>
-          <p className="text-xs font-mono text-[var(--text-tertiary)] mt-1">{L.grade}: {posture.grade ?? posture.evidence?.grade} · {L.vendor}: {posture.vendor ?? posture.evidence?.vendor}</p>
+          <p className="text-xs font-mono text-[var(--text-tertiary)] mt-1">{L.grade}: {posture.grade ?? posture.evidence?.grade ?? '—'} · {L.vendor}: {posture.vendor ?? posture.evidence?.vendor ?? '—'}</p>
         </motion.div>
       )}
 

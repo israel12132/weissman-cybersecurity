@@ -113,15 +113,19 @@ export default function FeedbackLoopVerification() {
     return steps.map((s, i) => {
       const ok = s?.ok === true || s?.success === true
       return {
-        title: s.name || s.step || s.id || `Step ${i + 1}`,
+        title: s.name || s.step || s.id || t('pages.feedbackLoopVerification.step_fallback', { n: i + 1, defaultValue: 'Step {{n}}' }),
         type: s.type || 'verification_step',
         severity: ok ? 'info' : 'high',
-        description: s.message || s.detail || s.error || (ok ? 'Step passed' : 'Step failed'),
+        description:
+          s.message || s.detail || s.error
+          || (ok
+            ? t('pages.feedbackLoopVerification.step_passed', { defaultValue: 'Step passed' })
+            : t('pages.feedbackLoopVerification.step_failed', { defaultValue: 'Step failed' })),
         remediation: s.status_code != null ? `HTTP ${s.status_code}` : '',
         component: s.matcher || s.extractor || '',
       }
     })
-  }, [result])
+  }, [result, t])
 
   const {
     filteredFindings,
@@ -178,6 +182,7 @@ export default function FeedbackLoopVerification() {
             <select
               value={selectedClientId ?? ''}
               onChange={(e) => setSelectedClientId(e.target.value || null)}
+              aria-label={t('pages.feedbackLoopVerification.client_label', { defaultValue: 'Client' })}
               className="w-full rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] focus:outline-none focus:border-violet-500/40"
             >
               <option value="">{t('pages.feedbackLoopVerification.select_client')}</option>
@@ -189,6 +194,7 @@ export default function FeedbackLoopVerification() {
             value={targetUrl}
             onChange={(e) => setTargetUrl(e.target.value)}
             placeholder={t('pages.feedbackLoopVerification.target_placeholder')}
+            aria-label={t('pages.feedbackLoopVerification.target_placeholder')}
             className="w-full rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-violet-500/40"
           />
 
@@ -197,6 +203,7 @@ export default function FeedbackLoopVerification() {
               value={templatesUnavailable ? '' : selectedId}
               onChange={(e) => setSelectedId(e.target.value)}
               disabled={loadingYaml}
+              aria-label={t('pages.feedbackLoopVerification.template_label', { defaultValue: 'Verification template' })}
               className="flex-1 min-w-[180px] rounded-xl bg-[var(--scrim)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] focus:outline-none focus:border-violet-500/40 disabled:opacity-50"
             >
               {templates.map((tpl) => (
@@ -267,6 +274,7 @@ export default function FeedbackLoopVerification() {
                 value={yaml}
                 onChange={(e) => setYaml(e.target.value)}
                 rows={14}
+                aria-label={t('pages.feedbackLoopVerification.template_editable')}
                 className="w-full rounded-xl bg-[var(--scrim)] border border-[var(--border-default)] px-3 py-2 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-violet-500/40"
               />
             )}

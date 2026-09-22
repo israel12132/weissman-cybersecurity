@@ -268,18 +268,18 @@ export default function ClientDetail() {
             <p className="font-medium text-sm">{scanResult.message}</p>
             {Array.isArray(scanResult.jobs) && scanResult.jobs.length > 0 && (
               <div className="mt-3 text-xs text-[var(--text-tertiary)] space-y-1 max-h-48 overflow-y-auto font-mono custom-scroll">
-                {scanResult.jobs.slice(0, 12).map((j) => (
-                  <div key={j.job_id} className="flex justify-between gap-3">
+                {scanResult.jobs.slice(0, 12).map((j, idx) => (
+                  <div key={j.job_id || idx} className="flex justify-between gap-3">
                     <span className="text-[var(--text-muted)] truncate" title={j.target}>
                       {j.engine} → {j.target}
                     </span>
                     <Link to="/jobs" className="text-cyan-300 hover:text-cyan-200 underline shrink-0">
-                      {j.job_id.slice(0, 8)}…
+                      {String(j.job_id || '').slice(0, 8)}…
                     </Link>
                   </div>
                 ))}
                 {scanResult.jobs.length > 12 && (
-                  <div className="text-[var(--text-muted)]">+{scanResult.jobs.length - 12} more queued</div>
+                  <div className="text-[var(--text-muted)]">{t('client_detail.more_queued', { count: scanResult.jobs.length - 12 })}</div>
                 )}
               </div>
             )}

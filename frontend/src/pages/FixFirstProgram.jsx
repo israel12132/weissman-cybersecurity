@@ -190,9 +190,10 @@ export default function FixFirstProgram() {
     <div className="bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
       <div className="px-4 pt-4">
         <EvidenceNotice>
-          Live remediation program from GET /api/remediation/priority/:clientId — backend-ranked,
-          root-cause deduplicated, with EPSS/KEV effective risk, attack-graph choke points and SLA
-          clocks. Nothing is recomputed in the browser; no fabricated remediation telemetry.
+          {t('pages.remediationHub.program_evidence_notice', {
+            defaultValue:
+              'Live remediation program from GET /api/remediation/priority/:clientId — backend-ranked, root-cause deduplicated, with EPSS/KEV effective risk, attack-graph choke points and SLA clocks. Nothing is recomputed in the browser; no fabricated remediation telemetry.',
+          })}
         </EvidenceNotice>
       </div>
       <div className="p-4 border-b border-[var(--border-default)] flex items-center justify-between gap-3 flex-wrap">
@@ -281,6 +282,7 @@ export default function FixFirstProgram() {
           <div className="divide-y divide-[var(--border-subtle)]">
             {filteredProgram.map((item) => {
               const risk = Number(item.max_effective_risk)
+              const score = Number(item.priority_score)
               return (
                 <div key={`${item.rank}-${item.title}-${item.asset}`} className="p-4 hover:bg-[var(--row-hover-bg)] transition-colors">
                   <div className="flex items-start gap-3">
@@ -310,7 +312,7 @@ export default function FixFirstProgram() {
                           <div className="h-full bg-gradient-to-r from-cyan-500 to-rose-500" style={{ width: `${scoreFraction(item.priority_score) * 100}%` }} />
                         </div>
                         <span className="text-[10px] font-mono text-[var(--text-muted)] whitespace-nowrap tabular-nums">
-                          {t('pages.remediationHub.program_score')} {Number(item.priority_score).toFixed(1)}
+                          {t('pages.remediationHub.program_score')} {Number.isFinite(score) ? score.toFixed(1) : '—'}
                           {Number.isFinite(risk) ? ` · ${t('pages.remediationHub.program_risk')} ${risk.toFixed(1)}` : ''}
                         </span>
                       </div>

@@ -365,15 +365,7 @@ export default function DarkWebMonitor() {
 
         {loading && findings.length === 0 ? (
           <SkeletonWidgetGrid count={5} />
-        ) : error ? (
-          <div data-testid="dark-web-unavailable">
-            <EmptyState
-              icon="alert"
-              title={t('pages.darkWebMonitor.unavailable_title')}
-              body={t('pages.darkWebMonitor.unavailable_body')}
-            />
-          </div>
-        ) : (
+        ) : error ? null : (
           <>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <KpiCard label={t('pages.darkWebMonitor.total_hits')} value={stats.total} />
@@ -409,12 +401,7 @@ export default function DarkWebMonitor() {
           </>
         )}
 
-        {error && (
-          <div className="p-4 rounded-xl border border-red-500/30 bg-red-900/20 text-red-300 text-sm">
-            {t('pages.darkWebMonitor.load_error', { error })}
-          </div>
-        )}
-
+        {!error && (
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-disabled)]" />
@@ -458,6 +445,7 @@ export default function DarkWebMonitor() {
             </select>
           )}
         </div>
+        )}
 
         <section className="bg-[var(--bg-2)] border border-[var(--border-default)] rounded-xl overflow-hidden">
           <div className="flex items-center justify-between p-4 border-b border-[var(--border-default)]">
@@ -476,7 +464,7 @@ export default function DarkWebMonitor() {
           {loading && findings.length === 0 ? (
             <div className="p-6"><SkeletonTable rows={6} cols={5} /></div>
           ) : error ? (
-            <div className="p-8">
+            <div className="p-8" data-testid="dark-web-unavailable">
               <EmptyState
                 icon="alert"
                 title={t('pages.darkWebMonitor.unavailable_title')}

@@ -230,8 +230,10 @@ export default function RemediationAnalytics() {
     >
       <div className="space-y-6">
         <EvidenceNotice>
-          Live auto-heal telemetry from GET /api/findings, GET /api/clients/:id/heal-stats and
-          /heal-requests. No fabricated heal outcomes.
+          {t('pages.remediationAnalytics.evidence_notice', {
+            defaultValue:
+              'Live auto-heal telemetry from GET /api/findings, GET /api/clients/:id/heal-stats and /heal-requests. No fabricated heal outcomes.',
+          })}
         </EvidenceNotice>
 
         <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -336,7 +338,14 @@ export default function RemediationAnalytics() {
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
                       {h.pr_url && (
-                        <a href={h.pr_url} target="_blank" rel="noreferrer" className="text-[var(--text-accent)] hover:text-[var(--text-accent)]">
+                        <a
+                          href={h.pr_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-label={t('pages.remediationAnalytics.open_pr', { defaultValue: 'Open pull request' })}
+                          title={t('pages.remediationAnalytics.open_pr', { defaultValue: 'Open pull request' })}
+                          className="text-[var(--text-accent)] hover:text-[var(--text-accent)]"
+                        >
                           <GitPullRequest className="w-3.5 h-3.5" />
                         </a>
                       )}

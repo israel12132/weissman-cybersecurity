@@ -29,8 +29,9 @@ const columnHelper = createColumnHelper()
 const SEV_KEYS = ['critical', 'high', 'medium', 'low', 'info']
 
 function gapColor(severity) {
-  if (severity === 'critical') return '#f43f5e'
-  if (severity === 'high') return '#f97316'
+  const s = normalizeSeverity(severity)
+  if (s === 'critical') return '#f43f5e'
+  if (s === 'high') return '#f97316'
   return '#94a3b8'
 }
 
@@ -145,9 +146,9 @@ export default function ScanFindingSpine() {
       actions={
         <ShellScanActions
           onRefresh={load}
-          onExport={() => downloadCsv(spineCsvRows(data || {}), SPINE_CSV_HEADER, 'weissman-scan-finding-spine')}
+          onExport={error ? undefined : () => downloadCsv(spineCsvRows(data || {}), SPINE_CSV_HEADER, 'weissman-scan-finding-spine')}
           refreshLoading={loading}
-          exportDisabled={!data}
+          exportDisabled={!!error || !data}
         />
       }
     >

@@ -99,7 +99,7 @@ export default function AdminManagement() {
           assigned_client_id: newRole === 'client' ? Number(newAssignedClientId) : null,
         },
       })
-      setSuccessMsg(`User ${newEmail} created successfully`)
+      setSuccessMsg(t('pages.adminManagement.user_created'))
       setNewEmail('')
       setNewPassword('')
       setNewRole('viewer')
@@ -135,7 +135,7 @@ export default function AdminManagement() {
           assigned_client_id: editRole === 'client' ? Number(editAssignedClientId) || null : null,
         },
       })
-      setSuccessMsg(`User ${editingUser.email} updated`)
+      setSuccessMsg(t('pages.adminManagement.user_updated'))
       setEditingUser(null)
       await loadUsers()
     } catch (err) {
@@ -163,7 +163,7 @@ export default function AdminManagement() {
       await apiFetch(`/api/admin/users/${userId}/deactivate`, {
         method: 'POST',
       })
-      setSuccessMsg(`User ${email} deactivated`)
+      setSuccessMsg(t('pages.adminManagement.user_deactivated'))
       await loadUsers()
     } catch (err) {
       if (err?.response) {
@@ -370,6 +370,7 @@ export default function AdminManagement() {
             <Button variant="unstyled"
               id="adminmgmt-dismiss-success-btn"
               type="button"
+              aria-label={t('common.dismiss')}
               onClick={() => setSuccessMsg(null)}
               className="text-emerald-400 hover:text-emerald-300 ml-4"
             >
@@ -386,6 +387,7 @@ export default function AdminManagement() {
             <Button variant="unstyled"
               id="adminmgmt-dismiss-error-btn"
               type="button"
+              aria-label={t('common.dismiss')}
               onClick={() => setError(null)}
               className="text-red-400 hover:text-red-300 ml-4"
             >

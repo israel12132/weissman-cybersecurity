@@ -127,10 +127,7 @@ export default function CompliancePosturePanel() {
   return (
     <div className="bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
       <div className="px-4 pt-4">
-        <EvidenceNotice>
-          Live posture from GET /api/compliance/posture/:clientId — open findings crossed against the
-          tenant-scoped CWE→control map. No fabricated control telemetry.
-        </EvidenceNotice>
+        <EvidenceNotice>{t('pages.complianceFrameworks.posture_evidence')}</EvidenceNotice>
       </div>
       <div className="p-4 border-b border-[var(--border-default)] flex items-center justify-between gap-3 flex-wrap">
         <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">

@@ -289,6 +289,7 @@ export default function OastDashboard() {
       <div className="flex items-center gap-2 mb-8">
         <span className="text-[11px] font-mono text-[var(--text-muted)]">{t('pages.oastDashboard.client')}</span>
         <select
+          aria-label={t('pages.oastDashboard.client')}
           value={selectedClientId ?? ''}
           onChange={(e) => setSelectedClientId(e.target.value || null)}
           className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40"
@@ -362,12 +363,14 @@ export default function OastDashboard() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input
               type="text"
+              aria-label={t('pages.oastDashboard.target_placeholder')}
               placeholder={t('pages.oastDashboard.target_placeholder')}
               value={mintTarget}
               onChange={(e) => setMintTarget(e.target.value)}
               className="rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
             />
             <select
+              aria-label={t('pages.oastDashboard.probe_type', 'Probe type')}
               value={mintProbeType}
               onChange={(e) => setMintProbeType(e.target.value)}
               className="rounded-xl bg-[var(--scrim)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] focus:outline-none focus:border-cyan-500/40"
@@ -377,6 +380,7 @@ export default function OastDashboard() {
             </select>
             <input
               type="text"
+              aria-label={t('pages.oastDashboard.label_optional')}
               placeholder={t('pages.oastDashboard.label_optional')}
               value={mintLabel}
               onChange={(e) => setMintLabel(e.target.value)}

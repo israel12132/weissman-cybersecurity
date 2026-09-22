@@ -82,10 +82,10 @@ export default function MsspPartnerPortal() {
       ) : (
         <div className="space-y-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <ExecutiveWidget label={t(`${NS}.kpi_clients`)} value={Number(data?.client_count) || 0} />
-            <ExecutiveWidget label={t(`${NS}.kpi_avg`)} value={Number(data?.average_score || 0).toFixed(0)} />
-            <ExecutiveWidget label={t(`${NS}.kpi_risk`)} value={Number(data?.clients_at_risk) || 0} />
-            <ExecutiveWidget label={t(`${NS}.kpi_kev`)} value={Number(fleet.kev_actions) || 0} />
+            <ExecutiveWidget label={t(`${NS}.kpi_clients`)} value={data?.client_count ?? '—'} />
+            <ExecutiveWidget label={t(`${NS}.kpi_avg`)} value={Number.isFinite(Number(data?.average_score)) ? Number(data.average_score).toFixed(0) : '—'} />
+            <ExecutiveWidget label={t(`${NS}.kpi_risk`)} value={data?.clients_at_risk ?? '—'} />
+            <ExecutiveWidget label={t(`${NS}.kpi_kev`)} value={fleet?.kev_actions ?? '—'} />
           </div>
           <div className="relative max-w-sm">
             <Search className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-2.5 top-1/2 -translate-y-1/2" />
@@ -121,7 +121,7 @@ export default function MsspPartnerPortal() {
                 {filtered.map((c) => (
                   <li key={c.client_id} className="flex justify-between text-sm border border-[var(--border-default)] rounded-lg px-3 py-2">
                     <span className="truncate">{c.name || c.client_id}</span>
-                    <span className="font-mono" style={{ color: gradeColor(c.grade) }}>{c.grade} · {c.score}</span>
+                    <span className="font-mono" style={{ color: gradeColor(c.grade) }}>{c.grade || '—'} · {Number.isFinite(Number(c.score)) ? c.score : '—'}</span>
                   </li>
                 ))}
               </ul>

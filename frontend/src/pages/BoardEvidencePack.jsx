@@ -266,21 +266,21 @@ export default function BoardEvidencePack() {
 
         {loading ? (
           <SkeletonWidgetGrid />
-        ) : (
+        ) : pack ? (
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
             <ExecutiveWidget label={t(`${NS}.kpi_total`)} value={totals.findings ?? findings.length} accent="#22d3ee" />
             <ExecutiveWidget
               label={t(`${NS}.kpi_critical`)}
-              value={critical}
+              value={totals.critical ?? '—'}
               accent="#f43f5e"
               className={critical > 0 ? 'animate-pulse' : ''}
             />
-            <ExecutiveWidget label={t(`${NS}.kpi_high`)} value={totals.high ?? 0} accent="#fb923c" />
-            <ExecutiveWidget label={t(`${NS}.kpi_verified`)} value={totals.verified ?? 0} accent="#34d399" />
-            <ExecutiveWidget label={t(`${NS}.kpi_adversary`)} value={totals.adversary_indexed ?? 0} accent="#a78bfa" />
-            <ExecutiveWidget label={t(`${NS}.kpi_remediation`)} value={totals.remediation_ready ?? 0} accent="#fbbf24" />
+            <ExecutiveWidget label={t(`${NS}.kpi_high`)} value={totals.high ?? '—'} accent="#fb923c" />
+            <ExecutiveWidget label={t(`${NS}.kpi_verified`)} value={totals.verified ?? '—'} accent="#34d399" />
+            <ExecutiveWidget label={t(`${NS}.kpi_adversary`)} value={totals.adversary_indexed ?? '—'} accent="#a78bfa" />
+            <ExecutiveWidget label={t(`${NS}.kpi_remediation`)} value={totals.remediation_ready ?? '—'} accent="#fbbf24" />
           </div>
-        )}
+        ) : null}
 
         <p className="text-[11px] font-mono text-[var(--text-muted)] leading-relaxed">
           {t(`${NS}.legal_note`)}
@@ -313,6 +313,7 @@ export default function BoardEvidencePack() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t(`${NS}.search_placeholder`)}
+            aria-label={t(`${NS}.search_placeholder`)}
             className="w-full pl-9 pr-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] text-sm text-[var(--text-primary)]"
           />
         </div>

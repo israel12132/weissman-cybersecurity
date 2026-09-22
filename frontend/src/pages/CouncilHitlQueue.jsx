@@ -171,6 +171,7 @@ function HitlItem({ item, onApprove, onReject, loading }) {
           <input
             type="text"
             placeholder={t('pages.councilHitlQueue.operator_note')}
+            aria-label={t('pages.councilHitlQueue.operator_note')}
             value={note}
             onChange={e => setNote(e.target.value)}
             className="flex-1 rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-1.5 text-[12px] text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"

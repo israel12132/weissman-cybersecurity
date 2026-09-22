@@ -54,10 +54,10 @@ export default function NgfwGate() {
     const q = searchQuery.trim().toLowerCase()
     const hay = [
       ...(findings || []),
-      { title: status?.note, source: 'dataplane', severity: status?.dataplane_live ? 'info' : 'high' },
+      ...(status?.note ? [{ title: status.note, source: 'dataplane', severity: status?.dataplane_live ? 'info' : 'high' }] : []),
     ]
     if (!q) return hay
-    return hay.filter((x) => `${x.title} ${x.source} ${x.note || ''}`.toLowerCase().includes(q))
+    return hay.filter((x) => `${x.title || ''} ${x.source || ''}`.toLowerCase().includes(q))
   }, [findings, searchQuery, status])
 
   const exportCsv = useCallback(() => {

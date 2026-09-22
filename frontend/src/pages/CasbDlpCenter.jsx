@@ -71,7 +71,7 @@ export default function CasbDlpCenter() {
     return findings.filter((f) => {
       if (sevFilter !== 'all' && normalizeSeverity(f.severity) !== sevFilter) return false
       if (!q) return true
-      return `${f.title} ${f.source} ${f.description}`.toLowerCase().includes(q)
+      return `${f.title || ''} ${f.source || ''} ${f.description || ''}`.toLowerCase().includes(q)
     })
   }, [findings, searchQuery, sevFilter])
 
@@ -157,10 +157,10 @@ export default function CasbDlpCenter() {
             <EmptyState title={t(`${NS}.empty_title`)} body={t(`${NS}.empty_body`)} />
           ) : (
             <ul className="space-y-2">
-              {filtered.map((f) => {
+              {filtered.map((f, i) => {
                 const s = normalizeSeverity(f.severity)
                 return (
-                  <li key={f.id || f.finding_id} className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] p-3">
+                  <li key={f.id || f.finding_id || i} className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] p-3">
                     <span className="text-[10px] font-mono uppercase tracking-wider" style={{ color: SEV_COLOR[s] || SEV_COLOR.info }}>{t(`severity.${s}`)}</span>
                     <span className="ml-2 text-xs font-mono text-[var(--text-muted)]">{f.source}</span>
                     <div className="text-sm mt-1 text-[var(--text-primary)]">{f.title}</div>

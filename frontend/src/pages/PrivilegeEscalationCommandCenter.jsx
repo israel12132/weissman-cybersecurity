@@ -42,6 +42,7 @@ const LABELS = {
     client: 'Client',
     selectClient: 'Select client…',
     selectClientFirst: 'Select a client first',
+    targetRequired: 'A target host or URL is required',
     target: 'Target (host / URL for remote Windows ports)',
     targetPh: 'dc01.corp.local  or  https://intranet.example',
     run: 'Run privilege & credential audit',
@@ -76,6 +77,7 @@ const LABELS = {
     client: 'לקוח',
     selectClient: 'בחר לקוח…',
     selectClientFirst: 'בחר לקוח תחילה',
+    targetRequired: 'נדרש מארח או כתובת URL של יעד',
     target: 'יעד (מארח / URL לפורטי Windows מרוחקים)',
     targetPh: 'dc01.corp.local  או  https://intranet.example',
     run: 'הרץ ביקורת הרשאות ואישורים',
@@ -160,6 +162,7 @@ export default function PrivilegeEscalationCommandCenter() {
   const set = (k, v) => setParams((p) => ({ ...p, [k]: v }))
 
   useEffect(() => {
+    // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
     apiFetch('/api/clients').then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
   }, [])
 
@@ -193,7 +196,7 @@ export default function PrivilegeEscalationCommandCenter() {
 
   const handleRun = useCallback(async () => {
     if (!clientId) { showToastMsg('error', L.selectClientFirst); return }
-    if (!target.trim()) { showToastMsg('error', L.target); return }
+    if (!target.trim()) { showToastMsg('error', L.targetRequired); return }
     setStatus('running')
     setFindings([])
     try {

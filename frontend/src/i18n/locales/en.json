@@ -371,7 +371,10 @@
     "guard_vector": "No raw vectors",
     "quota_remaining": "{{remaining}} of {{limit}} queries remaining today",
     "aggregate_hint": "Ask aggregate questions — counts, averages and group-bys — results stay tenant-scoped and read-only.",
-    "aggregate_badge": "{{fn}} by {{group}}"
+    "aggregate_badge": "{{fn}} by {{group}}",
+    "sample_count": "how many open findings per severity",
+    "sample_group": "group findings by engine over the last 30 days",
+    "sample_avg": "average EPSS score by asset criticality"
   },
   "playbooks": {
     "title": "SOAR Playbooks",
@@ -595,7 +598,8 @@
     "portfolio_worst_none": "No matching clients.",
     "scan_action": "Launch Scan",
     "portfolio_grade_filter": "Filter to grade {{grade}}",
-    "portfolio_clear_grade": "Clear grade filter"
+    "portfolio_clear_grade": "Clear grade filter",
+    "portfolio_evidence": "Live tenant-wide roll-up from GET /api/portfolio/posture — grade distribution and worst offenders computed across all clients. No fabricated posture telemetry."
   },
   "auth": {
     "tenant_slug": "Tenant slug",
@@ -1083,7 +1087,8 @@
     "integrations": "Integrations",
     "sector": "Sector",
     "download_pdf": "Download PDF",
-    "download_xlsx": "Download Excel"
+    "download_xlsx": "Download Excel",
+    "more_queued": "+{{count}} more queued"
   },
   "clients": {
     "title": "Clients",
@@ -2451,7 +2456,9 @@
       "search_placeholder": "Search heals…",
       "no_match": "No heals match your search.",
       "unavailable_title": "Remediation analytics unavailable",
-      "unavailable_body": "Heal telemetry could not be confirmed. Empty is not a quiet heal program."
+      "unavailable_body": "Heal telemetry could not be confirmed. Empty is not a quiet heal program.",
+      "evidence_notice": "Live auto-heal telemetry from GET /api/findings, GET /api/clients/:id/heal-stats and /heal-requests. No fabricated heal outcomes.",
+      "open_pr": "Open pull request"
     },
     "remediationHub": {
       "title": "Remediation Hub",
@@ -2595,7 +2602,11 @@
       "program_search": "Search remediation actions…",
       "unavailable_title": "Remediation backlog unavailable",
       "unavailable_body": "GET /api/findings could not be confirmed. Zero pending is not a clean backlog.",
-      "brief_unavailable": "Brief GET unavailable — leftover leftover-brief from another finding is not this finding."
+      "brief_unavailable": "Brief GET unavailable — leftover leftover-brief from another finding is not this finding.",
+      "posture_evidence": "Live posture from GET /api/posture/score/:clientId — score, sub-scores and drivers computed server-side from the tenant-scoped fix-first program. No fabricated metrics.",
+      "program_evidence_notice": "Live remediation program from GET /api/remediation/priority/:clientId — backend-ranked, root-cause deduplicated, with EPSS/KEV effective risk, attack-graph choke points and SLA clocks. Nothing is recomputed in the browser; no fabricated remediation telemetry.",
+      "forecast_evidence_notice": "Live forecast from GET /api/remediation/sla-forecast/:clientId — cumulative SLA-breach counts by horizon (KEV subset called out) for the selected tenant. No fabricated telemetry.",
+      "aging_evidence_notice": "Live backlog from GET /api/remediation/aging/:clientId — open findings bucketed by age from the tenant-scoped remediation store. No fabricated aging telemetry."
     },
     "alertRulesEngine": {
       "title": "Alert Rules Engine",
@@ -2682,7 +2693,8 @@
       "assigned_client": "Bound customer",
       "assigned_client_placeholder": "Select the customer this login belongs to",
       "assigned_client_required": "Customer-portal users must be bound to a client",
-      "users_unavailable": "User directory unavailable — store could not be confirmed."
+      "users_unavailable": "User directory unavailable — store could not be confirmed.",
+      "user_deactivated": "User deactivated successfully"
     },
     "complianceFrameworks": {
       "title": "Compliance Frameworks",
@@ -2765,7 +2777,8 @@
       "unavailable_title": "Compliance frameworks unavailable",
       "unavailable_body": "GET /api/compliance/frameworks could not be confirmed. Zero frameworks is not an unmapped tenant.",
       "controls_unavailable_title": "Compliance controls unavailable",
-      "controls_unavailable_body": "GET /api/compliance/frameworks/:id/controls could not be confirmed. Zero controls is not an empty framework."
+      "controls_unavailable_body": "GET /api/compliance/frameworks/:id/controls could not be confirmed. Zero controls is not an empty framework.",
+      "posture_evidence": "Live posture from GET /api/compliance/posture/:clientId — open findings crossed against the tenant-scoped CWE→control map. No fabricated control telemetry."
     },
     "clientNew": {
       "title": "Add New Client",
@@ -2835,7 +2848,12 @@
       "tenant_settings": "Tenant settings →",
       "back_client": "Back to client",
       "unavailable_title": "Integrations unavailable",
-      "unavailable_body": "GET /api/clients/:id/integrations could not be confirmed. Blank fields are not an unconfigured tenant — Save is locked."
+      "unavailable_body": "GET /api/clients/:id/integrations could not be confirmed. Blank fields are not an unconfigured tenant — Save is locked.",
+      "load_failed": "Failed to load integrations.",
+      "save_failed": "Save failed.",
+      "llm_url": "LLM endpoint URL",
+      "llm_model": "LLM model",
+      "llm_authorization": "LLM authorization header"
     },
     "clientOnboarding": {
       "subtitle": "Full onboarding — every engine and platform requirement before first scan",
@@ -3279,7 +3297,22 @@
       "queued": "{{label}}: queued {{jobId}}",
       "evidence_notice": "Cloud asset inventory, K8s posture panel, and multi-provider scans from POST /api/command-center/scan plus GET /api/clients scope. Kubernetes findings require in-scope cluster credentials or reachable API servers.",
       "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
-      "history_unavailable": "Engine history API unavailable — run-to-populate is not a quiet empty trail."
+      "history_unavailable": "Engine history API unavailable — run-to-populate is not a quiet empty trail.",
+      "easm_title": "Attack Surface Management (EASM)",
+      "easm_desc": "Discover internet-facing assets & score external exposure — assets, services, TLS/HTTP, cloud footprint, takeover risk.",
+      "cspm_title": "Cloud Posture Management (CSPM)",
+      "cspm_desc": "Agentless AWS inventory via cross-account role — IAM, S3, EC2, RDS, Lambda, CloudTrail, compliance grades & toxic-combination attack paths.",
+      "open_cross": "Open →",
+      "status_idle": "idle",
+      "status_running": "running",
+      "status_completed": "completed",
+      "status_error": "error",
+      "desc_aws_attack": "IAM privilege escalation, S3 bucket exposure, Lambda event injection, STS token abuse",
+      "desc_azure_attack": "Azure AD token abuse, Blob SAS exposure, Function App command injection, RBAC misconfig",
+      "desc_gcp_attack": "GCP service account key exposure, Cloud Run abuse, BigQuery public dataset scan",
+      "desc_k8s_container": "CNAPP-grade: 14 attack surfaces, CIS benchmark, CVE intel, attack paths, GitOps/observability, RBAC SSAR",
+      "desc_iac_misconfig": "Terraform/CloudFormation/Pulumi misconfiguration scan and drift detection",
+      "desc_serverless_attack": "Serverless event injection, function chaining exploitation, cold-start timing"
     },
     "socialEngineering": {
       "title": "Social Engineering Command Center",
@@ -3881,7 +3914,9 @@
       "score_explainer": "Composite score from live edge blocking, rate limits, defender telemetry in-page, CSP/cookie hardening, and exposed debug surfaces. Host EDR (AMSI/ETW) requires the endpoint agent.",
       "findings": "Findings",
       "empty_ready": "Configure probes and run a live assessment.",
-      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet detection-surface trail."
+      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet detection-surface trail.",
+      "extra_paths_label": "Extra paths to probe",
+      "intensity_label": "Probe intensity"
     },
     "wafBypass": {
       "title": "WAF Bypass Characterization Lab",
@@ -3902,7 +3937,8 @@
       "score_explainer": "Composite score from block rate, vendor detection, and observed bypass surfaces (encoding, headers, path normalization, verb gaps, JSON inspection). Every finding is from a live harmless probe.",
       "findings": "Findings",
       "empty_ready": "Select a client, configure probes, and run a live WAF assessment.",
-      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet WAF trail."
+      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet WAF trail.",
+      "intensity": "Bypass intensity"
     },
     "supplyChainHub": {
       "title": "Supply Chain Hub",
@@ -4543,7 +4579,8 @@
       "alert_body": "{{count}} components have known vulnerabilities. Update these packages to reduce supply chain risk.",
       "evidence_notice": "SBOM components and vulnerability matches from POST /api/command-center/scan (sbom_analyzer) and GET /api/findings filtered by supply-chain engines. CVE links resolve to NVD records.",
       "unavailable_title": "SBOM unavailable",
-      "unavailable_body": "GET /api/sbom/components could not be confirmed. Zero components is not a clean bill of materials."
+      "unavailable_body": "GET /api/sbom/components could not be confirmed. Zero components is not a clean bill of materials.",
+      "version_unknown": "unknown"
     },
     "containmentRulesBuilder": {
       "title": "Containment Rules Builder",
@@ -4581,7 +4618,10 @@
       "load_failed": "Failed to load containment rules",
       "rules_unavailable": "Containment rules store unavailable — the empty list is not confirmed.",
       "unavailable_title": "Containment rules unavailable",
-      "unavailable_body": "GET /api/containment/rules could not be confirmed. Zero rules is not an idle playbook."
+      "unavailable_body": "GET /api/containment/rules could not be confirmed. Zero rules is not an idle playbook.",
+      "kill_switch_confirm": "Activate the emergency kill switch? This arms every isolation rule immediately.",
+      "kill_switch_none": "No isolation rules to activate.",
+      "kill_switch_ok": "Emergency isolation armed — activated {{count}} rule(s)."
     },
     "templateEngineWorkbench": {
       "title": "Template Engine",
@@ -4615,7 +4655,8 @@
       "duration_ms": "{{ms}} ms",
       "templates_unavailable": "Template catalog unavailable",
       "templates_unavailable_body": "GET /api/template-engine/templates could not be confirmed. An empty picker is not a missing template — YAML can still be edited by hand.",
-      "yaml_unavailable_body": "GET /api/template-engine/templates/:id could not be confirmed. YAML from another template is not this template."
+      "yaml_unavailable_body": "GET /api/template-engine/templates/:id could not be confirmed. YAML from another template is not this template.",
+      "select_template_label": "Select template"
     },
     "ceoVault": {
       "title": "CEO Vault",
@@ -4655,7 +4696,10 @@
       "delete_title": "Delete secret",
       "load_failed": "Failed to load secrets",
       "unavailable_title": "CEO vault unavailable",
-      "unavailable_body": "GET /api/ceo/vault/secrets could not be confirmed. Zero secrets is not an empty vault."
+      "unavailable_body": "GET /api/ceo/vault/secrets could not be confirmed. Zero secrets is not an empty vault.",
+      "show_value": "Show secret value",
+      "hide_value": "Hide secret value",
+      "copy_failed": "Failed to copy to clipboard"
     },
     "identityContextManager": {
       "title": "Identity Context Manager",
@@ -4740,7 +4784,10 @@
       "close_success": "Engagement closed",
       "close_title": "Close engagement",
       "create_success": "Engagement created",
-      "unavailable": "Engagements API unavailable — empty is not confirmed."
+      "unavailable": "Engagements API unavailable — empty is not confirmed.",
+      "open_api_title": "Open engagement JSON from API",
+      "create_failed_http": "Create failed (HTTP {{status}})",
+      "close_failed_http": "Close failed (HTTP {{status}})"
     },
     "clientEvidenceVault": {
       "title": "Evidence Vault",
@@ -4784,7 +4831,9 @@
       "delete_success": "Evidence deleted",
       "delete_title": "Delete evidence",
       "download_failed": "Download failed — store could not be confirmed",
-      "unavailable": "Evidence vault API unavailable — empty is not confirmed."
+      "unavailable": "Evidence vault API unavailable — empty is not confirmed.",
+      "upload_failed_http": "Upload failed (HTTP {{status}})",
+      "delete_failed_http": "Delete failed (HTTP {{status}})"
     },
     "roeApprovals": {
       "title": "ROE Approvals",
@@ -4886,7 +4935,12 @@
       "templates_unavailable": "Template catalog unavailable",
       "templates_unavailable_body": "GET /api/template-engine/templates could not be confirmed. An empty picker is not a missing chain — YAML can still be edited by hand.",
       "yaml_unavailable_body": "GET /api/template-engine/templates/:id could not be confirmed. YAML from another template is not this template.",
-      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant."
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
+      "client_label": "Client",
+      "template_label": "Verification template",
+      "step_passed": "Step passed",
+      "step_failed": "Step failed",
+      "step_fallback": "Step {{n}}"
     },
     "mobileSecurity": {
       "title": "Mobile & App Security",
@@ -5008,7 +5062,8 @@
       "col_channel": "Channel",
       "col_source": "Source IP",
       "col_payload": "Payload",
-      "callbacks_unavailable": "Callback API unavailable — empty callbacks are not confirmed."
+      "callbacks_unavailable": "Callback API unavailable — empty callbacks are not confirmed.",
+      "probe_type_label": "Probe type"
     },
     "domainDiscovery": {
       "dashboard": "← Dashboard",
@@ -5227,7 +5282,8 @@
       "health_unavailable": "callback API unreachable — not proof the listener is off",
       "health_none": "none observed",
       "health_count": "{{count}} recent hits",
-      "clients_unavailable": "Clients API unavailable — the tenant list is not confirmed empty."
+      "clients_unavailable": "Clients API unavailable — the tenant list is not confirmed empty.",
+      "probe_type": "Probe type"
     },
     "osintEngineProfile": {
       "title": "OSINT Engine",
@@ -6551,7 +6607,8 @@
       "persisted": "{{n}} incidents persisted",
       "persisting": "Persisting…",
       "reached_objective": "Reached objective",
-      "target": "Target"
+      "target": "Target",
+      "no_incidents_body": "No multi-stage attack chains or cross-signal correlations were detected in this client's live findings."
     },
     "engineReliability": {
       "evidence_notice": "Engine SLO, error budgets, and circuit-breaker state from GET /api/engines/telemetry and GET /api/engines/capabilities. Counters reflect real worker execution — no uptime theater.",
@@ -6577,7 +6634,11 @@
       "total_runs": "Total Runs",
       "unconfirmed": "run history unconfirmed",
       "unavailable_title": "Engine catalog unavailable",
-      "unavailable_body": "Capability roster could not be confirmed. Empty is not a healthy fleet."
+      "unavailable_body": "Capability roster could not be confirmed. Empty is not a healthy fleet.",
+      "hint_remote_capable": "Engines that can detect from a remote scan without an agent",
+      "telemetry_hint": "telemetry…",
+      "title_remote_detection": "Remote detection",
+      "title_agent_required": "Agent required"
     },
     "nexusSovereignSwarm": {
       "evidence_notice": "Swarm deployments queue via POST /api/command-center/scan (nexus_sovereign_swarm). Live agent fleet status from GET /api/agents/status. WebSocket telemetry streams real worker events — never scripted hive animations.",
@@ -6696,7 +6757,17 @@
       "select_client_opt": "— Select —",
       "target": "Target",
       "target_required": "Target required",
-      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet transport trail."
+      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet transport trail.",
+      "run_scan": "▶ Run Transport Scan",
+      "scanning": "⟳ Scanning…",
+      "show_params": "▸ Params",
+      "hide_params": "▾ Params",
+      "tls_ports": "TLS ports",
+      "grpc_ports": "gRPC ports",
+      "sni_override": "SNI override",
+      "grpc_paths": "Custom gRPC paths",
+      "timeout_ms": "Timeout (ms)",
+      "last_run": "Last: {{time}}"
     },
     "msspPartnerPortal": {
       "title": "MSSP Partner Portal",
@@ -7118,7 +7189,8 @@
       "empty_body": "Run the credential-to-ransomware fusion scan against an authorized target. Matching leak, dark-web, and threat-intel findings appear here from GET /api/findings.",
       "last_updated": "Last synced {{time}}",
       "auto_on": "Live refresh ON",
-      "auto_off": "Live refresh OFF"
+      "auto_off": "Live refresh OFF",
+      "filter_severity": "Filter by severity"
     },
     "competitiveWinRoom": {
       "title": "Competitive Win Room",
@@ -7492,7 +7564,64 @@
       "scan_locked": "A C2 scan is already running for this target",
       "scan_failed": "Scan failed",
       "empty_ready_title": "Ready to scan",
-      "empty_ready_body": "Configure a target and run a scan to surface covert C2 and exfiltration findings."
+      "empty_ready_body": "Configure a target and run a scan to surface covert C2 and exfiltration findings.",
+      "scorecard_title": "Covert-channel posture",
+      "scorecard_desc": "Live fused assessment — beacon Z-score, DNS entropy, HTTP/3/WSS, NTP/ICMP feasibility, LSB stego, CDN/Tor fronting, ingress choke-points. No simulated findings.",
+      "status_idle": "idle",
+      "status_running": "running",
+      "status_completed": "completed",
+      "status_error": "error",
+      "toggle_check_beaconing": "Beacon jitter / health masquerade",
+      "toggle_check_beaconing_hint": "Z-score + Lomb–Scargle/FFT",
+      "toggle_check_dns_tunnel": "DNS TXT entropy / TTL / DoH",
+      "toggle_check_dns_tunnel_hint": "Live TXT + DoH path probes",
+      "toggle_check_http3_ws": "HTTP/3 Alt-Svc + WebSocket",
+      "toggle_check_http3_ws_hint": "QUIC advertisement and WSS upgrade",
+      "toggle_check_icmp_ntp": "ICMP echo + NTP UDP/123",
+      "toggle_check_icmp_ntp_hint": "Covert-channel feasibility, not an implant",
+      "toggle_check_steganography": "Public-image LSB / EXIF",
+      "toggle_check_steganography_hint": "Entropy + chi-square on origin media",
+      "toggle_check_proxy_tor": "CDN / Tor / domain-fronting",
+      "toggle_check_proxy_tor_hint": "Cloudflare, Fastly, onion references",
+      "toggle_check_ports": "Ingress C2 fallback ports",
+      "toggle_check_ports_hint": "53, 123, 4443, 9001, 8080…",
+      "toggle_attack_path_synthesis": "Choke-point / Dijkstra paths",
+      "toggle_attack_path_synthesis_hint": "Internet → unusual port → origin",
+      "toggle_posture_scoring": "Posture score",
+      "toggle_posture_scoring_hint": "0–100 covert-channel grade",
+      "toggle_fair_sle": "FAIR SLE pricing",
+      "toggle_fair_sle_hint": "asset_value × max(CVSS/10, 0.5)",
+      "toggle_emit_coverage_manifest": "Coverage manifest",
+      "toggle_emit_coverage_manifest_hint": "Audit trail of every live layer",
+      "toggle_include_agent_findings": "Honest agent-required notes",
+      "toggle_include_agent_findings_hint": "ICMP payload entropy needs NDR/agent",
+      "cat_posture_score": "Posture",
+      "cat_beacon_jitter": "Beacon jitter",
+      "cat_beacon_padding": "Beacon padding",
+      "cat_beacon_zscore": "Z-score adapt",
+      "cat_beacon_spectral": "Spectral beacon",
+      "cat_c2_masquerade": "C2 masquerade",
+      "cat_c2_hmac": "HMAC headers",
+      "cat_c2_ua_split": "UA split",
+      "cat_c2_path_surface": "C2 paths",
+      "cat_dns_entropy": "DNS entropy",
+      "cat_dns_txt_length": "DNS TXT",
+      "cat_dns_ttl": "DNS TTL",
+      "cat_doh_endpoint": "DoH",
+      "cat_http3_altsvc": "HTTP/3",
+      "cat_websocket_c2": "WebSocket",
+      "cat_ntp_udp": "NTP",
+      "cat_icmp_echo": "ICMP",
+      "cat_stego_lsb": "LSB stego",
+      "cat_stego_png_entropy": "PNG entropy",
+      "cat_cdn_fronting": "CDN fronting",
+      "cat_tor_reference": "Tor",
+      "cat_ingress_ports": "Ingress ports",
+      "cat_choke_point": "Choke-point",
+      "cat_fair_sle": "FAIR SLE",
+      "cat_coverage_manifest": "Coverage",
+      "cat_agent_required": "Agent",
+      "cat_other": "Other"
     },
     "honeyRouting": {
       "title": "Honey Routing Gateway",
@@ -7586,7 +7715,10 @@
       "col_score": "Score",
       "col_latency": "Latency",
       "col_excerpt": "Excerpt",
-      "empty_events": "No guard events yet."
+      "empty_events": "No guard events yet.",
+      "rag_metric_vectors": "vectors",
+      "rag_metric_outliers": "outliers",
+      "rag_metric_missing_hash": "no SHA-256"
     },
     "stealthyEvasion": {
       "title": "Stealthy Persistence & Evasion",
@@ -7613,7 +7745,9 @@
       "checks": "Checks",
       "catalog": "Evasion catalog",
       "search_checks": "Search checks…",
-      "empty_ready": "Ready to scan — select a client and run an evasion assessment."
+      "empty_ready": "Ready to scan — select a client and run an evasion assessment.",
+      "last_updated": "Updated {{time}}",
+      "intensity_label": "Scan intensity"
     }
   },
   "components": {

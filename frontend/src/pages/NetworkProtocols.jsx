@@ -38,7 +38,10 @@ export default function NetworkProtocols() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((d) => { if (Array.isArray(d)) setClients(d); setClientsUnavailable(false); })
+      .then((d) => {
+        if (Array.isArray(d)) { setClients(d); setClientsUnavailable(false); }
+        else setClientsUnavailable(true);
+      })
       .catch(() => { setClientsUnavailable(true); });
   }, []);
 
@@ -46,7 +49,9 @@ export default function NetworkProtocols() {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiFetch('/api/soc/network-protocols');
+      const data = selectedClientId
+        ? await apiFetch(`/api/soc/network-protocols?client_id=${encodeURIComponent(selectedClientId)}`)
+        : await apiFetch('/api/soc/network-protocols');
       const list = Array.isArray(data?.protocols) ? data.protocols : [];
       setProtocols(list);
       setDataSource('soc');
@@ -56,7 +61,7 @@ export default function NetworkProtocols() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedClientId]);
 
   useEffect(() => {
     // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
@@ -113,6 +118,7 @@ export default function NetworkProtocols() {
           <select
             value={selectedClientId}
             onChange={(e) => setSelectedClientId(e.target.value)}
+            aria-label={t('pages.networkProtocols.client_scope')}
             className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40"
           >
             <option value="">{t('pages.networkProtocols.all_clients')}</option>

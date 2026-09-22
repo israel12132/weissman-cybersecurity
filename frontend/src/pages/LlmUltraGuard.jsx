@@ -55,6 +55,10 @@ function VerdictBadge({ verdict }) {
   )
 }
 
+function fx2(n) {
+  return n != null && Number.isFinite(Number(n)) ? Number(n).toFixed(2) : '—'
+}
+
 function buildScanBody(engineId, params, clientId, target) {
   return {
     engine: engineId,
@@ -68,7 +72,7 @@ function buildScanBody(engineId, params, clientId, target) {
 export default function LlmUltraGuard() {
   const { t } = useTranslation()
   const [tab, setTab] = useState('injection')
-  const [params, setParams] = useState(DEFAULT_PARAMS)
+  const [params] = useState(DEFAULT_PARAMS)
   const hubTabParams = useMemo(() => params[tab] || {}, [params, tab])
   const engineId = ENGINES[tab]
   useSyncHubScanParams(engineId, hubTabParams)
@@ -124,6 +128,7 @@ export default function LlmUltraGuard() {
   useEffect(() => {
     apiFetch('/api/clients')
       .then((d) => { if (Array.isArray(d)) setClients(d) })
+      // eslint-disable-next-line no-restricted-syntax -- best-effort client list; the page still runs live scans without it
       .catch(() => {})
     loadLive()
   }, [loadLive])
@@ -173,13 +178,13 @@ export default function LlmUltraGuard() {
     }
   }
 
-  const events = status?.events || []
   const metrics = status?.metrics || {}
   const filteredEvents = useMemo(() => {
+    const events = status?.events || []
     const q = eventQuery.trim().toLowerCase()
     if (!q) return events
     return events.filter((ev) => JSON.stringify(ev).toLowerCase().includes(q))
-  }, [events, eventQuery])
+  }, [status, eventQuery])
 
   const exportEvents = () => {
     const header = ['id', 'engine_id', 'verdict', 'score', 'latency_us', 'fingerprint', 'excerpt', 'created_at']
@@ -291,6 +296,7 @@ export default function LlmUltraGuard() {
             value={inspectText}
             onChange={(e) => setInspectText(e.target.value)}
             placeholder={t('pages.llmUltraGuard.inspect_placeholder')}
+            aria-label={t('pages.llmUltraGuard.inspect_title')}
           />
           <div className="mt-3 flex gap-2">
             <Button type="button" onClick={onInspect} disabled={inspecting || !inspectText.trim()}>
@@ -319,12 +325,12 @@ export default function LlmUltraGuard() {
             <div className="mt-4 text-[11px] font-mono space-y-1">
               <div className="flex items-center gap-2">
                 <VerdictBadge verdict={inspectResult.report.verdict} />
-                <span>score {Number(inspectResult.report.score).toFixed(2)}</span>
-                <span className="text-[var(--text-muted)]">{inspectResult.report.latency_us}μs</span>
+                <span>score {fx2(inspectResult.report.score)}</span>
+                <span className="text-[var(--text-muted)]">{inspectResult.report.latency_us != null ? `${inspectResult.report.latency_us}μs` : '—'}</span>
               </div>
-              <p className="text-[var(--text-tertiary)]">fp {inspectResult.report.fingerprint}</p>
+              <p className="text-[var(--text-tertiary)]">fp {inspectResult.report.fingerprint ?? '—'}</p>
               <p>
-                inj {Number(inspectResult.report.injection_score).toFixed(2)} · jb {Number(inspectResult.report.jailbreak_score).toFixed(2)} · H {Number(inspectResult.report.entropy).toFixed(2)}
+                inj {fx2(inspectResult.report.injection_score)} · jb {fx2(inspectResult.report.jailbreak_score)} · H {fx2(inspectResult.report.entropy)}
               </p>
               {Array.isArray(inspectResult.report.techniques) && inspectResult.report.techniques.length > 0 && (
                 <p className="text-[var(--text-muted)]">
@@ -349,9 +355,9 @@ export default function LlmUltraGuard() {
           <h2 className="text-sm font-semibold mb-2">{t('pages.llmUltraGuard.rag_title')}</h2>
           <p className="text-[11px] text-[var(--text-muted)] mb-3">{t('pages.llmUltraGuard.rag_help')}</p>
           <div className="grid grid-cols-3 gap-2 mb-3">
-            <MetricCard label="vectors" value={integrity?.vectors ?? '—'} />
-            <MetricCard label="outliers" value={integrity?.outliers ?? '—'} color="text-amber-300" />
-            <MetricCard label="no SHA-256" value={integrity?.missing_integrity_hash ?? '—'} color="text-rose-300" />
+            <MetricCard label={t('pages.llmUltraGuard.rag_metric_vectors')} value={integrity?.vectors ?? '—'} />
+            <MetricCard label={t('pages.llmUltraGuard.rag_metric_outliers')} value={integrity?.outliers ?? '—'} color="text-amber-300" />
+            <MetricCard label={t('pages.llmUltraGuard.rag_metric_missing_hash')} value={integrity?.missing_integrity_hash ?? '—'} color="text-rose-300" />
           </div>
           <p className="text-[10px] font-mono text-[var(--text-disabled)]">
             HNSW m={integrity?.hnsw_m ?? 32} ef_search={integrity?.hnsw_ef_search ?? 64}
@@ -368,6 +374,7 @@ export default function LlmUltraGuard() {
           value={eventQuery}
           onChange={(e) => setEventQuery(e.target.value)}
           placeholder={t('pages.llmUltraGuard.search')}
+          aria-label={t('pages.llmUltraGuard.search')}
         />
         <Button type="button" variant="ghost" onClick={exportEvents}>{t('pages.llmUltraGuard.export')}</Button>
       </div>
@@ -394,9 +401,9 @@ export default function LlmUltraGuard() {
             {filteredEvents.map((ev) => (
               <tr key={ev.id} className="border-t border-[var(--border-default)]">
                 <td className="px-3 py-2"><VerdictBadge verdict={ev.verdict} /></td>
-                <td className="px-3 py-2">{ev.engine_id}</td>
-                <td className="px-3 py-2">{Number(ev.score).toFixed(2)}</td>
-                <td className="px-3 py-2">{ev.latency_us}μs</td>
+                <td className="px-3 py-2">{ev.engine_id ?? '—'}</td>
+                <td className="px-3 py-2">{ev.score != null ? Number(ev.score).toFixed(2) : '—'}</td>
+                <td className="px-3 py-2">{ev.latency_us != null ? `${ev.latency_us}μs` : '—'}</td>
                 <td className="px-3 py-2 text-[var(--text-tertiary)] truncate max-w-[28rem]">{ev.excerpt}</td>
               </tr>
             ))}

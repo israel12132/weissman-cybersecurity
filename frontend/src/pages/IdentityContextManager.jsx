@@ -292,7 +292,12 @@ export default function IdentityContextManager() {
                   onClick={() => setSelectedIdentity(identity)}
                   role="button"
                   tabIndex={0}
-                  onKeyDown={(e) => e.key === 'Enter' && setSelectedIdentity(identity)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      setSelectedIdentity(identity)
+                    }
+                  }}
                   aria-label={t('pages.identityContextManager.view_details', { username: identity.username })}
                 >
                   <div className="flex items-start justify-between">

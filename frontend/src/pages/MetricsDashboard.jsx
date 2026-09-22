@@ -184,7 +184,9 @@ export default function MetricsDashboard() {
                 {mttrHours != null && (
                   <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/10">
                     <div className="text-sm font-medium text-amber-300 mb-2">{t('pages.metricsDashboard.mttr_hours')}</div>
-                    <div className="text-3xl font-bold text-amber-200">{Number(mttrHours).toFixed(1)}h</div>
+                    <div className="text-3xl font-bold text-amber-200">
+                      {Number.isFinite(Number(mttrHours)) ? `${Number(mttrHours).toFixed(1)}h` : '—'}
+                    </div>
                   </div>
                 )}
                 {agentsRegistered != null && (

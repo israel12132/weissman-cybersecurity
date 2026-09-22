@@ -221,12 +221,14 @@ function TemplateEngineWorkbenchBody() {
               value={targetUrl}
               onChange={(e) => setTargetUrl(e.target.value)}
               placeholder={t(`${NS}.target_placeholder`)}
+              aria-label={t(`${NS}.target_placeholder`)}
               className="w-full rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500/40"
             />
             <div className="flex items-center gap-3 flex-wrap">
               <select
                 value={templatesUnavailable ? '' : selectedId}
                 onChange={(e) => setSelectedId(e.target.value)}
+                aria-label={t(`${NS}.select_template_label`)}
                 className="rounded-xl bg-[var(--scrim)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] focus:outline-none focus:border-blue-500/40"
               >
                 {(!templatesUnavailable ? visibleTemplates : []).map((tpl) => (
@@ -283,6 +285,7 @@ function TemplateEngineWorkbenchBody() {
                 value={yaml}
                 onChange={(e) => setYaml(e.target.value)}
                 rows={18}
+                aria-label={t(`${NS}.template_yaml`)}
                 className="w-full rounded-xl bg-[var(--scrim)] border border-[var(--border-default)] px-3 py-2 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-blue-500/40"
               />
             )}

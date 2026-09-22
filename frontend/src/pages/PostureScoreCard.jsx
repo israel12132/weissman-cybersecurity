@@ -78,15 +78,17 @@ export function scoreColor(value) {
 }
 
 function SubScore({ label, value }) {
-  const v = Number(value) || 0
+  const n = Number(value)
+  const known = Number.isFinite(n)
+  const v = known ? n : 0
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
         <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">{label}</span>
-        <span className="text-[11px] font-mono tabular-nums" style={{ color: scoreColor(v) }}>{v.toFixed(0)}</span>
+        <span className="text-[11px] font-mono tabular-nums" style={{ color: known ? scoreColor(v) : 'var(--text-muted)' }}>{known ? v.toFixed(0) : '—'}</span>
       </div>
       <div className="h-1.5 rounded-full bg-[var(--bg-2)] overflow-hidden">
-        <div className="h-full rounded-full" style={{ width: `${Math.max(0, Math.min(100, v))}%`, background: scoreColor(v) }} />
+        <div className="h-full rounded-full" style={{ width: `${known ? Math.max(0, Math.min(100, v)) : 0}%`, background: scoreColor(v) }} />
       </div>
     </div>
   )
@@ -140,10 +142,7 @@ export default function PostureScoreCard() {
   return (
     <div className="bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
       <div className="px-4 pt-4">
-        <EvidenceNotice>
-          Live posture from GET /api/posture/score/:clientId — score, sub-scores and drivers computed
-          server-side from the tenant-scoped fix-first program. No fabricated metrics.
-        </EvidenceNotice>
+        <EvidenceNotice>{t('pages.remediationHub.posture_evidence')}</EvidenceNotice>
       </div>
       <div className="p-4 border-b border-[var(--border-default)] flex items-center justify-between gap-3 flex-wrap">
         <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
@@ -184,7 +183,7 @@ export default function PostureScoreCard() {
           {/* Score + grade */}
           <div className="flex flex-col items-center justify-center px-2">
             <div className="text-5xl font-black tabular-nums leading-none" style={{ color: gradeColor(data.grade) }}>
-              {Number(data.score).toFixed(0)}
+              {Number.isFinite(Number(data.score)) ? Number(data.score).toFixed(0) : '—'}
             </div>
             <div className="mt-1 flex items-center gap-2">
               <span className="text-2xl font-black" style={{ color: gradeColor(data.grade) }}>{data.grade}</span>
@@ -233,7 +232,7 @@ export default function PostureScoreCard() {
                 </span>
                 <span className="text-[11px] text-[var(--text-muted)]">→</span>
                 <span className="text-sm font-bold tabular-nums" style={{ color: gradeColor(s.projected_grade) }}>
-                  {Number(s.projected_score).toFixed(0)} {s.projected_grade}
+                  {Number.isFinite(Number(s.projected_score)) ? Number(s.projected_score).toFixed(0) : '—'} {s.projected_grade}
                 </span>
                 {Number(s.delta) > 0 && (
                   <span className="text-[10px] font-mono text-emerald-300/80">+{Number(s.delta).toFixed(0)}</span>
