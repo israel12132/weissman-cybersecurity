@@ -1396,7 +1396,8 @@
     "confidence": "Risk confidence ×{{value}}",
     "export_json": "Export JSON",
     "unavailable_title": "Engine history unavailable",
-    "unavailable_body": "GET /api/engines/history could not be confirmed. Ready-to-scan is not a quiet empty trail."
+    "unavailable_body": "GET /api/engines/history could not be confirmed. Ready-to-scan is not a quiet empty trail.",
+    "finding_fallback": "Finding"
   },
   "nexusSwarm": {
     "save_preset_title": "Save preset",
@@ -7800,7 +7801,9 @@
       "section_credentials": "Credentials & Integrations",
       "section_advanced": "Advanced / Tuning",
       "secrets_hint": "Secrets prefilled from client integrations. Masked values (••••) are never sent back to the server.",
-      "filled": "set"
+      "filled": "set",
+      "secret_masked_hint": "Stored securely; masked values are not overwritten",
+      "toggle_params": "Toggle parameters"
     },
     "engineIntegrations": {
       "title": "Integration Readiness",
@@ -7809,7 +7812,8 @@
       "configure": "Configure →",
       "engine_detail": "Engine Detail →",
       "hint": "Missing integrations are hydrated server-side when configured; complete client setup for full live coverage.",
-      "unavailable": "GET /api/clients/:id/integrations could not be confirmed. Unconfirmed 0% is not idle coverage."
+      "unavailable": "GET /api/clients/:id/integrations could not be confirmed. Unconfirmed 0% is not idle coverage.",
+      "not_configured": "{{label}} — not configured"
     },
     "neuralEngineWeb": {
       "title": "Neural engine web",
@@ -7824,7 +7828,8 @@
       "engineRoomTab": {
         "connecting": "Connecting to Submarine…",
         "select_client": "Select a client from the sidebar to configure the Engine Room.",
-        "loading": "Loading data from Submarine…"
+        "loading": "Loading data from Submarine…",
+        "group_enabled": "{{enabled}}/{{total}} enabled"
       },
       "clientCockpit": {
         "loading_mission": "Loading mission control…",
@@ -7850,7 +7855,8 @@
         "placeholder_tech_stack": "Tech stack hints",
         "placeholder_aws_arn": "AWS role ARN",
         "placeholder_aws_external_id": "AWS external ID",
-        "placeholder_gcp_project": "GCP project ID"
+        "placeholder_gcp_project": "GCP project ID",
+        "client_list_unavailable": "Client list unavailable."
       },
       "liveActivityFeed": {
         "ariaLabel": "Live activity feed",
@@ -9233,6 +9239,10 @@
         "targetList": "target_list",
         "discoveredPaths": "discovered_paths",
         "updated": "updated"
+      },
+      "protectedRoute": {
+        "verifying": "Verifying CEO access",
+        "requiresRole": "CEO Command Center requires JWT role <1>ceo</1> or <2>is_superadmin</2> on your account. If an admin just upgraded you, sign in again so your cookies get a fresh token."
       }
     },
     "findingDrawer": {
@@ -9289,7 +9299,25 @@
       "statusFixed": "Fixed",
       "statusFalsePositive": "False Positive",
       "noRemediation": "No remediation guidance available.",
-      "cluster": "Cluster {{id}}"
+      "cluster": "Cluster {{id}}",
+      "tabMitre": "MITRE",
+      "tabPlaybook": "Playbook",
+      "tabCompliance": "Compliance",
+      "tabFinancial": "Financial",
+      "priority": "Priority {{score}}",
+      "seenTimes": "Seen {{n}}×",
+      "mitreAttack": "MITRE ATT&CK",
+      "technique": "Technique",
+      "openMitreTechnique": "Open MITRE technique",
+      "soarPlaybook": "SOAR / Playbook",
+      "engine": "Engine",
+      "playbookHint": "Playbook hint",
+      "playbookFireHint": "Fire from the Playbooks hub or POST /api/playbooks/fire with this finding id.",
+      "noComplianceTags": "No compliance tags on this finding.",
+      "financialImpact": "Financial impact",
+      "priorityScore": "Priority score",
+      "epss": "EPSS",
+      "blastRadius": "Blast radius"
     },
     "globalSearch": {
       "placeholder": "Search anything... (pages, engines, findings, clients)",
@@ -9510,7 +9538,8 @@
     "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet serverless trail."
   },
   "engineReality": {
-    "unavailable": "Engine capabilities API unavailable — 0 engines is not confirmed."
+    "unavailable": "Engine capabilities API unavailable — 0 engines is not confirmed.",
+    "summary": "{{total}} engines · {{remote}} remote"
   },
   "dual_control": {
     "title": "Dual-control approval required",
@@ -9521,5 +9550,14 @@
     "reason_optional": "Reason for action (optional)",
     "reason_placeholder": "Describe why this action is being performed",
     "remember_session": "Remember approval tokens for this session"
+  },
+  "not_found": {
+    "badge": "Route not found",
+    "description": "The page you requested doesn't exist or was moved. Use the links below to return to an active module.",
+    "dashboard_desc": "Command Center overview",
+    "findings_desc": "Vulnerability findings hub",
+    "engines_desc": "Scan engine matrix",
+    "go_back": "Go back",
+    "system_status": "System status"
   }
 }

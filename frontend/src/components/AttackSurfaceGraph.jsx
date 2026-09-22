@@ -27,7 +27,7 @@ function layoutNodes(apiNodes, apiEdges) {
 
   if (root) {
     nodes.push({
-      id: root.id,
+      id: String(root.id),
       type: 'asmNode',
       position: { x: CENTER_X - 40, y: CENTER_Y - 20 },
       data: { label: root.label, ...root },
@@ -37,7 +37,7 @@ function layoutNodes(apiNodes, apiEdges) {
   subdomains.forEach((n, i) => {
     const angle = (i / Math.max(subdomains.length, 1)) * 2 * Math.PI - Math.PI / 2
     nodes.push({
-      id: n.id,
+      id: String(n.id),
       type: 'asmNode',
       position: {
         x: CENTER_X + RADIUS_SUBDOMAIN * Math.cos(angle) - 50,
@@ -50,7 +50,7 @@ function layoutNodes(apiNodes, apiEdges) {
   clouds.forEach((n, i) => {
     const angle = (i / Math.max(clouds.length, 1)) * 2 * Math.PI
     nodes.push({
-      id: n.id,
+      id: String(n.id),
       type: 'asmNode',
       position: {
         x: CENTER_X + RADIUS_CLOUD * Math.cos(angle) - 60,
@@ -63,7 +63,7 @@ function layoutNodes(apiNodes, apiEdges) {
   exploits.forEach((n, i) => {
     const angle = (i / Math.max(exploits.length, 1)) * 2 * Math.PI + Math.PI / 4
     nodes.push({
-      id: n.id,
+      id: String(n.id),
       type: 'asmNode',
       position: {
         x: CENTER_X + RADIUS_EXPLOIT * Math.cos(angle) - 55,

@@ -86,7 +86,13 @@ export function useProductionEngines({ prefetch = false } = {}) {
   const { idSet: registryIdSet, byId: registryById } = registryIndex
 
   const isProduction = useMemo(
-    () => (id) => registryIdSet.has(id) || productionSet.has(id),
+    () =>
+      // The registry chunk holds the *full* catalog, so it can't be used to
+      // decide production status — every catalog engine is in it. Prefer the
+      // live /api/engines/production set; only when that set is unavailable do
+      // we fall back to the registry so the UI degrades to "all engines" rather
+      // than "zero live engines".
+      productionSet.size > 0 ? (id) => productionSet.has(id) : (id) => registryIdSet.has(id),
     [productionSet, registryIdSet],
   )
 

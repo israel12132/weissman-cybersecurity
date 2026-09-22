@@ -1396,7 +1396,8 @@
     "confidence": "ביטחון סיכון ×{{value}}",
     "export_json": "ייצוא JSON",
     "unavailable_title": "היסטוריית המנוע אינה זמינה",
-    "unavailable_body": "GET /api/engines/history לא אושר. מוכן-לסריקה אינו שביל ריק שקט."
+    "unavailable_body": "GET /api/engines/history לא אושר. מוכן-לסריקה אינו שביל ריק שקט.",
+    "finding_fallback": "ממצא"
   },
   "nexusSwarm": {
     "save_preset_title": "שמירת קונפיגורציה",
@@ -7800,7 +7801,9 @@
       "section_credentials": "הרשאות ואינטגרציות",
       "section_advanced": "מתקדם / כוונון",
       "secrets_hint": "סודות מולאו מאינטגרציות הלקוח. ערכים ממוסכים (••••) לא נשלחים חזרה לשרת.",
-      "filled": "מוגדר"
+      "filled": "מוגדר",
+      "secret_masked_hint": "מאוחסן בבטחה; ערכים ממוסכים אינם נדרסים",
+      "toggle_params": "הצג/הסתר פרמטרים"
     },
     "engineIntegrations": {
       "title": "מוכנות אינטגרציות",
@@ -7809,7 +7812,8 @@
       "configure": "הגדר →",
       "engine_detail": "פרטי מנוע →",
       "hint": "אינטגרציות חסרות ייטענו בשרת כשהוגדרו; השלם הגדרת לקוח לכיסוי לייב מלא.",
-      "unavailable": "GET /api/clients/:id/integrations לא אומת. 0% לא מאומת אינו כיסוי במנוחה."
+      "unavailable": "GET /api/clients/:id/integrations לא אומת. 0% לא מאומת אינו כיסוי במנוחה.",
+      "not_configured": "{{label}} — לא מוגדר"
     },
     "neuralEngineWeb": {
       "title": "רשת מנועים עצבית",
@@ -7824,7 +7828,8 @@
       "engineRoomTab": {
         "connecting": "מתחבר ל-Submarine…",
         "select_client": "בחר לקוח מהסרגל הצדדי כדי להגדיר את חדר המנועים.",
-        "loading": "טוען נתונים מ-Submarine…"
+        "loading": "טוען נתונים מ-Submarine…",
+        "group_enabled": "{{enabled}}/{{total}} מופעלים"
       },
       "clientCockpit": {
         "loading_mission": "טוען בקרת משימה…",
@@ -7850,7 +7855,8 @@
         "placeholder_tech_stack": "רמזי tech stack",
         "placeholder_aws_arn": "AWS role ARN",
         "placeholder_aws_external_id": "AWS external ID",
-        "placeholder_gcp_project": "GCP project ID"
+        "placeholder_gcp_project": "GCP project ID",
+        "client_list_unavailable": "רשימת הלקוחות אינה זמינה."
       },
       "liveActivityFeed": {
         "ariaLabel": "זרם פעילות חי",
@@ -9233,6 +9239,10 @@
         "targetList": "target_list",
         "discoveredPaths": "discovered_paths",
         "updated": "עודכן"
+      },
+      "protectedRoute": {
+        "verifying": "מאמת גישת מנכ\"ל",
+        "requiresRole": "מרכז הפיקוד של המנכ\"ל דורש תפקיד JWT <1>ceo</1> או <2>is_superadmin</2> בחשבונך. אם מנהל שדרג אותך זה עתה, היכנס שוב כדי שהעוגיות שלך יקבלו אסימון חדש."
       }
     },
     "findingDrawer": {
@@ -9289,7 +9299,25 @@
       "statusFixed": "תוקן",
       "statusFalsePositive": "False Positive",
       "noRemediation": "אין הנחיות תיקון זמינות.",
-      "cluster": "אשכול {{id}}"
+      "cluster": "אשכול {{id}}",
+      "tabMitre": "MITRE",
+      "tabPlaybook": "מדריך",
+      "tabCompliance": "רגולציה",
+      "tabFinancial": "פיננסי",
+      "priority": "עדיפות {{score}}",
+      "seenTimes": "נצפה {{n}}×",
+      "mitreAttack": "MITRE ATT&CK",
+      "technique": "טכניקה",
+      "openMitreTechnique": "פתח טכניקת MITRE",
+      "soarPlaybook": "SOAR / מדריך",
+      "engine": "מנוע",
+      "playbookHint": "רמז מדריך",
+      "playbookFireHint": "הפעל ממרכז המדריכים או שלח POST ל-/api/playbooks/fire עם מזהה הממצא.",
+      "noComplianceTags": "אין תגיות רגולציה בממצא זה.",
+      "financialImpact": "השפעה פיננסית",
+      "priorityScore": "ציון עדיפות",
+      "epss": "EPSS",
+      "blastRadius": "רדיוס פגיעה"
     },
     "globalSearch": {
       "placeholder": "חפש הכל... (דפים, מנועים, ממצאים, לקוחות)",
@@ -9510,7 +9538,8 @@
     "history_unavailable": "API היסטוריית המנוע אינו זמין — מוכן-לסריקה אינו שביל serverless שקט."
   },
   "engineReality": {
-    "unavailable": "API יכולות המנועים אינו זמין — 0 מנועים אינו מאושר."
+    "unavailable": "API יכולות המנועים אינו זמין — 0 מנועים אינו מאושר.",
+    "summary": "{{total}} מנועים · {{remote}} מרחוק"
   },
   "dual_control": {
     "title": "נדרש אישור בקרה כפולה",
@@ -9521,5 +9550,14 @@
     "reason_optional": "סיבת הפעולה (רשות)",
     "reason_placeholder": "תאר מדוע פעולה זו מבוצעת",
     "remember_session": "זכור את אסימוני האישור עבור מושב זה"
+  },
+  "not_found": {
+    "badge": "מסלול לא נמצא",
+    "description": "הדף שביקשת לא קיים או הועבר. השתמש בקישורים למטה כדי לחזור למודול פעיל.",
+    "dashboard_desc": "סקירת מרכז הפיקוד",
+    "findings_desc": "מרכז ממצאי הפגיעות",
+    "engines_desc": "מטריצת מנועי הסריקה",
+    "go_back": "חזרה",
+    "system_status": "סטטוס מערכת"
   }
 }

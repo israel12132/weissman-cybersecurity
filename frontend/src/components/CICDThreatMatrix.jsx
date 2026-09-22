@@ -61,7 +61,7 @@ export default function CICDThreatMatrix() {
       .finally(() => {
         if (!requestInit?.signal?.aborted) setLoading(false)
       })
-  }, [clientId])
+  }, [clientId, t])
 
   useEffect(() => {
     const ac = new AbortController()

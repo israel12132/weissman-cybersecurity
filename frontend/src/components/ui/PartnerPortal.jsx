@@ -2,7 +2,8 @@ import { Building2, ChevronRight } from 'lucide-react'
 import { cn } from '../../lib/cn'
 
 function postureTone(score) {
-  const s = Number(score) || 0
+  const s = Number(score)
+  if (!Number.isFinite(s)) return 'text-text-muted'
   if (s >= 80) return 'text-status-active'
   if (s >= 60) return 'text-severity-medium'
   return 'text-severity-critical'

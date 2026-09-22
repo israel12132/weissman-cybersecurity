@@ -131,13 +131,13 @@ export default function AssetHexGrid({ clientId: clientIdProp = null }) {
           className="grid gap-1.5 justify-items-center max-h-40 overflow-y-auto"
           style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}
         >
-          {nodes.slice(0, 24).map((node) => {
+          {nodes.slice(0, 24).map((node, i) => {
             const color = statusColor(node.status)
             const label = (node.label || node.id || '?').toString()
             const short = label.length > 8 ? `${label.slice(0, 7)}…` : label
             return (
               <div
-                key={node.id || label}
+                key={node.id ?? `${label}-${i}`}
                 title={`${label} (${node.node_type || 'asset'}) — ${node.status || 'unknown'}`}
                 className="hex-cell w-8 h-9 flex items-center justify-center rounded-sm border font-mono text-[9px] transition-all duration-300"
                 style={{

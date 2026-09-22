@@ -142,7 +142,7 @@ export function EngineRealitySummary({ className = '', compact = false }) {
     <div className={`flex flex-wrap items-center gap-2 text-[10px] font-mono ${className}`}>
       {!compact && (
         <span className="text-[var(--text-muted)] uppercase tracking-wider">
-          {total} engines · {remoteDetectionCount} remote
+          {t('engineReality.summary', { total, remote: remoteDetectionCount })}
         </span>
       )}
       {items.map(({ key, tone }) => (

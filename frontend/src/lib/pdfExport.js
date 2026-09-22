@@ -5,6 +5,15 @@ function escapePdfText(s) {
     .replace(/\)/g, '\\)')
 }
 
+// PDF /Length and xref offsets must be byte counts, not UTF-16 code-unit counts.
+// A JS string's `.length` diverges from the encoded byte length for any
+// non-ASCII character (e.g. ≥ · → in engine/finding text), which would emit a
+// wrong stream /Length and startxref and corrupt the file for strict parsers.
+const PDF_ENCODER = new TextEncoder()
+function byteLen(s) {
+  return PDF_ENCODER.encode(s).length
+}
+
 export function buildSimpleTextPdf(lines) {
   const safeLines = (Array.isArray(lines) ? lines : [String(lines || '')])
     .slice(0, 120)
@@ -23,15 +32,15 @@ export function buildSimpleTextPdf(lines) {
   objects.push('2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj')
   objects.push('3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj')
   objects.push('4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj')
-  objects.push(`5 0 obj << /Length ${stream.length} >> stream\n${stream}\nendstream endobj`)
+  objects.push(`5 0 obj << /Length ${byteLen(stream)} >> stream\n${stream}\nendstream endobj`)
 
   let pdf = '%PDF-1.4\n'
   const offsets = [0]
   for (const obj of objects) {
-    offsets.push(pdf.length)
+    offsets.push(byteLen(pdf))
     pdf += `${obj}\n`
   }
-  const xrefStart = pdf.length
+  const xrefStart = byteLen(pdf)
   pdf += `xref\n0 ${objects.length + 1}\n`
   pdf += '0000000000 65535 f \n'
   for (let i = 1; i < offsets.length; i += 1) {

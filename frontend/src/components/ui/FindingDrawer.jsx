@@ -124,20 +124,21 @@ export default function FindingDrawer({
   const [activeTab, setActiveTab] = useState('evidence')
   const dialogRef = useRef(null)
   const tabRefs = useRef([])
+  const statusTimerRef = useRef(null)
 
   // Keep Tab focus inside the modal drawer while it's open (a11y: role="dialog" aria-modal).
   useFocusTrap(dialogRef, Boolean(finding))
 
   const drawerTabs = useMemo(
     () => [
-      { id: 'evidence', label: 'Evidence' },
-      { id: 'mitre', label: 'MITRE' },
-      { id: 'remediation', label: 'Remediation' },
-      { id: 'playbook', label: 'Playbook' },
-      { id: 'compliance', label: 'Compliance' },
-      { id: 'financial', label: 'Financial' },
+      { id: 'evidence', label: t('components.findingDrawer.evidence') },
+      { id: 'mitre', label: t('components.findingDrawer.tabMitre') },
+      { id: 'remediation', label: t('components.findingDrawer.remediation') },
+      { id: 'playbook', label: t('components.findingDrawer.tabPlaybook') },
+      { id: 'compliance', label: t('components.findingDrawer.tabCompliance') },
+      { id: 'financial', label: t('components.findingDrawer.tabFinancial') },
     ],
-    [],
+    [t],
   )
 
   const onTabKeyDown = (e, index) => {
@@ -185,6 +186,14 @@ export default function FindingDrawer({
     }
   }, [finding, onClose])
 
+  // Clear any pending status-spinner timer when the drawer unmounts.
+  useEffect(
+    () => () => {
+      if (statusTimerRef.current) clearTimeout(statusTimerRef.current)
+    },
+    [],
+  )
+
   const references = useMemo(() => {
     const refs = finding?.references ?? finding?.refs ?? finding?.reference_urls ?? null
     if (!refs) return []
@@ -226,7 +235,8 @@ export default function FindingDrawer({
     if (!newStatus || newStatus === finding?.status) return
     setStatusUpdating(true)
     onStatusUpdate?.(finding?.raw_id ?? finding?.id, newStatus)
-    setTimeout(() => setStatusUpdating(false), 600)
+    if (statusTimerRef.current) clearTimeout(statusTimerRef.current)
+    statusTimerRef.current = setTimeout(() => setStatusUpdating(false), 600)
   }
 
   const meta = getSeverityMeta(finding?.severity)
@@ -289,12 +299,12 @@ export default function FindingDrawer({
                     <KevEpssBadge kev={kev} epss={epss} compact />
                     {priorityScore != null && (
                       <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-[var(--border-strong)] text-[var(--text-tertiary)]">
-                        Priority {Number(priorityScore).toFixed(1)}
+                        {t('components.findingDrawer.priority', { score: Number(priorityScore).toFixed(1) })}
                       </span>
                     )}
                     {seenCount > 1 && (
                       <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-amber-500/30 text-[var(--severity-medium)]">
-                        Seen {seenCount}×
+                        {t('components.findingDrawer.seenTimes', { n: seenCount })}
                       </span>
                     )}
                     {clusterId != null && (
@@ -694,9 +704,9 @@ export default function FindingDrawer({
               )}
 
               {activeTab === 'mitre' && (
-                <Section title="MITRE ATT&CK">
-                  <MetaRow label="Technique" value={finding.mitre_attack ?? finding.raw?.mitre_attack} copyable />
-                  <MetaRow label="CWE" value={finding.cwe_id ?? finding.cwe} copyable />
+                <Section title={t('components.findingDrawer.mitreAttack')}>
+                  <MetaRow label={t('components.findingDrawer.technique')} value={finding.mitre_attack ?? finding.raw?.mitre_attack} copyable />
+                  <MetaRow label={t('components.findingDrawer.cwe')} value={finding.cwe_id ?? finding.cwe} copyable />
                   {finding.mitre_attack && (
                     <a
                       href={`https://attack.mitre.org/techniques/${String(finding.mitre_attack).replace('.', '/')}`}
@@ -704,7 +714,7 @@ export default function FindingDrawer({
                       rel="noopener noreferrer"
                       className="text-[11px] text-[var(--text-accent)] hover:underline inline-flex items-center gap-1 mt-2"
                     >
-                      Open MITRE technique <ExternalLink className="w-3 h-3" />
+                      {t('components.findingDrawer.openMitreTechnique')} <ExternalLink className="w-3 h-3" />
                     </a>
                   )}
                 </Section>
@@ -719,11 +729,11 @@ export default function FindingDrawer({
               )}
 
               {activeTab === 'playbook' && (
-                <Section title="SOAR / Playbook">
-                  <MetaRow label="Engine" value={finding.source ?? finding.engine} />
-                  <MetaRow label="Playbook hint" value={finding.raw?.playbook_id ?? finding.playbook_id} />
+                <Section title={t('components.findingDrawer.soarPlaybook')}>
+                  <MetaRow label={t('components.findingDrawer.engine')} value={finding.source ?? finding.engine} />
+                  <MetaRow label={t('components.findingDrawer.playbookHint')} value={finding.raw?.playbook_id ?? finding.playbook_id} />
                   <p className="text-[11px] text-[var(--text-muted)] mt-2">
-                    Fire from Playbooks hub or POST /api/playbooks/fire with this finding id.
+                    {t('components.findingDrawer.playbookFireHint')}
                   </p>
                 </Section>
               )}
@@ -731,7 +741,7 @@ export default function FindingDrawer({
               {activeTab === 'compliance' && (
                 <Section title={t('components.findingDrawer.complianceImpact')}>
                   {compliance.length === 0 ? (
-                    <p className="text-[var(--text-muted)] text-[12px]">No compliance tags on this finding.</p>
+                    <p className="text-[var(--text-muted)] text-[12px]">{t('components.findingDrawer.noComplianceTags')}</p>
                   ) : (
                     <div className="flex flex-wrap gap-1.5">
                       {compliance.map((tag, i) => (
@@ -748,12 +758,12 @@ export default function FindingDrawer({
               )}
 
               {activeTab === 'financial' && (
-                <Section title="Financial impact">
-                  <MetaRow label="Priority score" value={priorityScore} />
-                  <MetaRow label="CVSS" value={finding.cvss_score ?? finding.score} />
-                  <MetaRow label="EPSS" value={epss} />
+                <Section title={t('components.findingDrawer.financialImpact')}>
+                  <MetaRow label={t('components.findingDrawer.priorityScore')} value={priorityScore} />
+                  <MetaRow label={t('components.findingDrawer.cvss')} value={finding.cvss_score ?? finding.score} />
+                  <MetaRow label={t('components.findingDrawer.epss')} value={epss} />
                   <MetaRow
-                    label="Blast radius"
+                    label={t('components.findingDrawer.blastRadius')}
                     value={finding.raw?.financial_blast_radius ?? finding.financial_blast_radius}
                   />
                 </Section>
