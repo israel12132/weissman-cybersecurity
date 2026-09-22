@@ -213,8 +213,13 @@ export default function DiscoveryLab() {
   }, [t])
 
   useEffect(() => {
+    // Initial load runs once on mount. loadAll closes over `t` (for a fallback
+    // error string), so keying this on [loadAll] would re-fire a full reload on
+    // every render whenever `t`'s identity churns — clobbering optimistic row
+    // updates (e.g. a just-validated candidate) with the server snapshot.
     loadAll()
-  }, [loadAll])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const activeRun = runs.find((r) => r.id === activeRunId)
   const runStatus = activeRun?.status
