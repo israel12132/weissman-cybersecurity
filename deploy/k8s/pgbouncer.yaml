@@ -1,6 +1,11 @@
-# PgBouncer transaction pooler in front of Postgres. Point the app's DATABASE_URL at the
-# `weissman-pgbouncer` service so bursts of short-lived connections don't exhaust Postgres.
-# Reads the upstream DB coordinates from the existing weissman-secrets.
+# PgBouncer transaction pooler in front of Postgres. The app/auth/worker/intel DSNs point here
+# (weissman-pgbouncer:6432); it multiplexes the fleet's short-lived connections onto a small
+# DEFAULT_POOL_SIZE of real backends on the CNPG primary (weissman-pg-rw), so the HPA scaling to
+# ~20 pods no longer exhausts Postgres max_connections=200.
+#
+# Multi-role auth: the runtime pools log in as five roles, so PgBouncer uses auth_query
+# (public.pgbouncer_get_auth, migration 20260922151000). The pooler logs in as weissman_pgbouncer;
+# provide its credentials in the weissman-secrets keys pgbouncer_auth_user / pgbouncer_auth_password.
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -34,36 +39,45 @@ spec:
         - name: pgbouncer
           image: edoburu/pgbouncer:1.23.1-p2
           ports:
-            - containerPort: 5432
+            - containerPort: 6432
           env:
-            # Upstream DB host/port/name/creds come from the same secret the app uses.
+            # Upstream = CNPG primary service (deploy/k8s/postgres-ha.yaml).
             - name: DB_HOST
-              valueFrom:
-                secretKeyRef:
-                  name: weissman-secrets
-                  key: db_host
+              value: weissman-pg-rw
             - name: DB_PORT
               value: "5432"
-            - name: DB_USER
-              valueFrom:
-                secretKeyRef:
-                  name: weissman-secrets
-                  key: db_user
-            - name: DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: weissman-secrets
-                  key: db_password
             - name: DB_NAME
               value: weissman
+            - name: LISTEN_PORT
+              value: "6432"
             - name: POOL_MODE
               value: transaction
             - name: MAX_CLIENT_CONN
-              value: "1000"
+              value: "2000"
             - name: DEFAULT_POOL_SIZE
               value: "25"
             - name: AUTH_TYPE
               value: scram-sha-256
+            # The pooler's own login (weissman_pgbouncer) + auth_query for every other role.
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: pgbouncer_auth_user
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: pgbouncer_auth_password
+            - name: AUTH_USER
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: pgbouncer_auth_user
+            - name: AUTH_QUERY
+              value: "SELECT rolname, rolpassword FROM public.pgbouncer_get_auth($1)"
+            - name: IGNORE_STARTUP_PARAMETERS
+              value: extra_float_digits
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: false
@@ -71,9 +85,14 @@ spec:
               drop: ["ALL"]
           readinessProbe:
             tcpSocket:
-              port: 5432
+              port: 6432
             initialDelaySeconds: 5
             periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 6432
+            initialDelaySeconds: 15
+            periodSeconds: 20
 ---
 apiVersion: v1
 kind: Service
@@ -85,8 +104,8 @@ spec:
     app: weissman-pgbouncer
   ports:
     - protocol: TCP
-      port: 5432
-      targetPort: 5432
+      port: 6432
+      targetPort: 6432
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget
@@ -98,3 +117,4 @@ spec:
   selector:
     matchLabels:
       app: weissman-pgbouncer
+

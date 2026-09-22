@@ -60,6 +60,10 @@ pub struct SamlBeginQuery {
 pub struct SamlAcsForm {
     #[serde(rename = "SAMLResponse")]
     pub saml_response: String,
+    // SAML 2.0 HTTP-POST binding delivers this as `RelayState` (exactly what `saml_begin` emits);
+    // without the rename serde_urlencoded drops the unknown key and relay_state is always None,
+    // so SP-initiated SSO can never complete.
+    #[serde(rename = "RelayState")]
     pub relay_state: Option<String>,
 }
 

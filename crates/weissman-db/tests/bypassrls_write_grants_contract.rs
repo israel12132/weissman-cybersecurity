@@ -51,6 +51,11 @@ const ALLOWED_BYPASSRLS_RLS_WRITES: &[(&str, &str)] = &[
     ("weissman_auth", "weissman_job_events"),
     ("weissman_auth", "weissman_job_forensic_dlq"),
     ("weissman_auth", "weissman_revoked_tokens"),
+    // SAML anti-replay: the ACS runs on the auth plane (weissman_auth, BYPASSRLS) before a tenant
+    // GUC is set, and records/GCs accepted assertion IDs by explicit tenant_id. The table is
+    // FORCE-RLS fail-closed as defense-in-depth; weissman_app holds no grant. See
+    // 20260922130000_saml_seen_assertions_replay_guard.sql.
+    ("weissman_auth", "saml_seen_assertions"),
     // weissman_worker: job-bus control plane (mirrors role_guard::WORKER_JOB_BUS_TABLES).
     ("weissman_worker", "weissman_async_jobs"),
     ("weissman_worker", "weissman_job_events"),

@@ -57,7 +57,7 @@ services:
       DEFAULT_POOL_SIZE: "25"
       AUTH_TYPE: scram-sha-256
       # auth_query resolves every runtime role's SCRAM verifier from pg_authid via the
-      # public.pgbouncer_get_auth() SECURITY DEFINER function (migration 20260922131000). The pooler
+      # public.pgbouncer_get_auth() SECURITY DEFINER function (migration 20260922151000). The pooler
       # itself logs in as weissman_pgbouncer.
       DB_USER: ${DB_PGBOUNCER_AUTH_USER:-weissman_pgbouncer}
       DB_PASSWORD: ${DB_PGBOUNCER_AUTH_PASSWORD:?set DB_PGBOUNCER_AUTH_PASSWORD for the pooler auth_user}
