@@ -23,7 +23,9 @@ export default function CrownJewelFlagPanel({
 }) {
   const { t } = useTranslation()
   const [nodes, setNodes] = useState([])
-  const [loading, setLoading] = useState(false)
+  // Start in the loading state when a client is present so the very first paint shows the
+  // loading hint rather than flashing the "no nodes" empty state before the fetch begins.
+  const [loading, setLoading] = useState(clientId != null)
   const [savingId, setSavingId] = useState(null)
   const [error, setError] = useState('')
   const [query, setQuery] = useState('')

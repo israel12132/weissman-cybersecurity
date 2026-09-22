@@ -242,6 +242,9 @@ export default function TopTierEngineProfile() {
       const status = String(d.status || '').toLowerCase()
       if (status === 'completed' || status === 'failed' || status === 'dead') {
         setRunState((prev) => ({ ...prev, running: false }))
+        // Terminal state reached — stop polling instead of hammering
+        // /api/jobs/:id every 2s indefinitely for a finished job.
+        clearInterval(iv)
       }
     }, 2000)
     return () => { cancelled = true; clearInterval(iv) }

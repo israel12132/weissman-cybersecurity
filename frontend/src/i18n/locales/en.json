@@ -330,7 +330,8 @@
     "supreme_brain": "Supreme Brain",
     "ceo": "CEO Command",
     "adversary_mirror": "Adversary Gap Mirror",
-    "cortex_bridge": "Cortex Proven Bridge"
+    "cortex_bridge": "Cortex Proven Bridge",
+    "scim_provisioning": "SCIM Provisioning"
   },
   "ask_weissman": {
     "title": "Ask Weissman",
@@ -367,7 +368,10 @@
     "guard_oracle": "No oracle leak",
     "guard_mask": "PII masked",
     "guard_depth": "Bounded depth",
-    "guard_vector": "No raw vectors"
+    "guard_vector": "No raw vectors",
+    "quota_remaining": "{{remaining}} of {{limit}} queries remaining today",
+    "aggregate_hint": "Ask aggregate questions — counts, averages and group-bys — results stay tenant-scoped and read-only.",
+    "aggregate_badge": "{{fn}} by {{group}}"
   },
   "playbooks": {
     "title": "SOAR Playbooks",
@@ -642,7 +646,26 @@
     "open_operator_cockpit": "Open operator cockpit",
     "brand_story_checking": "Correlate findings across the live engine roster, orchestrate SOAR playbooks, and prove compliance — from a single command center.",
     "trust_engines_live": "{{count}} production engines",
-    "trust_engines_checking": "Live engine roster"
+    "trust_engines_checking": "Live engine roster",
+    "tenant_back_to_list": "Back to list",
+    "tenant_directory_restricted": "This instance doesn't publish its workspace list. Enter your workspace slug.",
+    "tenant_directory_unavailable": "Workspace directory is unavailable. Enter your workspace slug manually.",
+    "tenant_loading": "Loading workspaces…",
+    "tenant_manual_hint": "Enter your exact workspace slug.",
+    "tenant_option_custom": "Other workspace…",
+    "tenant_retry": "Retry",
+    "tenant_select_hint": "Choose your workspace to sign in.",
+    "back_to_site": "Back to site",
+    "caps_lock": "Caps Lock is on",
+    "different_workspace": "Different workspace",
+    "email": "Email",
+    "entering_command_center": "Entering command center…",
+    "hide_workspace": "Hide workspace",
+    "language": "Language",
+    "password": "Password",
+    "signup_verified": "Your email is verified. Sign in to continue.",
+    "use_company_sso": "Use company SSO",
+    "workspace": "Workspace"
   },
   "notifications": {
     "title": "Notifications",
@@ -880,7 +903,9 @@
     "evidence_notice": "Production roster from GET /api/engines/production and capability matrix from GET /api/engines/capabilities. Per-engine history via GET /api/engines/history/:engineId. Scans queue through POST /api/command-center/scan and POST /api/scan/all-engines — no fabricated engine telemetry.",
     "config_unavailable": "Client engine-config API unavailable — zero enabled is not an unconfigured tenant.",
     "integrations_unavailable": "Integrations API unavailable — blank prefill is not an unconfigured tenant.",
-    "detail_history_unavailable": "—"
+    "detail_history_unavailable": "—",
+    "no_assigned_domain": "No assigned domain",
+    "workspace_locked": "Assigned workspace"
   },
   "findings": {
     "title": "Findings",
@@ -985,6 +1010,15 @@
       "ok": "Cortex accepted the finding",
       "blind_spot": "Pushed — XDR had no matching alert (blind spot)",
       "xdr_already": "Pushed — XDR already had a matching alert"
+    },
+    "proof": {
+      "run": "Run proof",
+      "running": "Running…",
+      "missing_id": "This finding has no verifiable ID.",
+      "failed": "Live proof failed.",
+      "timeout": "Live proof timed out.",
+      "no_artifacts": "No proof artifacts yet.",
+      "link_evidence": "View evidence"
     }
   },
   "vuln_intel": {
@@ -1121,7 +1155,17 @@
     "no_filter_title": "No agents match filter",
     "no_filter_body": "Try a different status filter.",
     "status_unavailable_title": "Agent fleet status unavailable",
-    "status_unavailable_body": "The Command Center could not reach GET /api/agents/status. This is not an empty fleet — retry before treating hosts as unenrolled."
+    "status_unavailable_body": "The Command Center could not reach GET /api/agents/status. This is not an empty fleet — retry before treating hosts as unenrolled.",
+    "kill_button": "Trigger kill-switch",
+    "kill_confirm": "Kill agent",
+    "kill_default_reason": "Operator-initiated kill-switch",
+    "kill_heading": "Kill switch",
+    "kill_hint": "Requires dual-control approval. Immediately halts the agent's scans and revokes its enrollment.",
+    "kill_live": "Kill-switch delivered to the live agent.",
+    "kill_message": "Send a remote kill-switch to {{host}}? The agent stops all running scans and shuts down immediately.",
+    "kill_queued": "Kill-switch queued — it will run when the agent next checks in.",
+    "kill_sending": "Sending…",
+    "kill_title": "Trigger kill-switch?"
   },
   "system_config": {
     "title": "System Configuration",
@@ -1552,7 +1596,18 @@
       "col_ale": "ALE",
       "crown_jewel": "Crown jewel",
       "no_contributors_title": "No contributors",
-      "no_contributors_body": "The snapshot has no ranked loss contributors yet."
+      "no_contributors_body": "The snapshot has no ranked loss contributors yet.",
+      "col_agent": "Agent",
+      "col_delay": "Delay/day",
+      "col_roi": "Patch ROI",
+      "kpi_agent": "Agent-Protected ALE",
+      "kpi_agent_hint": "ALE on agent-covered assets",
+      "kpi_concentration": "Risk Concentration",
+      "kpi_concentration_hint": "Share of ALE in the top asset",
+      "kpi_delay": "Delay Cost / Day",
+      "kpi_delay_hint": "Loss accrued each day unpatched",
+      "kpi_path_ale": "Attack-Path ALE",
+      "kpi_path_ale_hint": "Loss reachable via attack paths"
     },
     "dominionBoardPack": {
       "title": "Dominion Board Pack",
@@ -1684,7 +1739,17 @@
       "jewel_node_fallback": "node",
       "jewel_node_meta": "{{type}} · risk {{score}}",
       "toggle_crown_jewel": "Crown jewel",
-      "toggle_internet_exposed": "Internet-exposed"
+      "toggle_internet_exposed": "Internet-exposed",
+      "flags_body": "Mark internet-exposed entry points and crown-jewel assets so attack-path analysis has seeds to walk from and toward.",
+      "flags_empty_body": "Run a discovery scan to populate the risk graph, or adjust your search to widen the view.",
+      "flags_empty_title": "No matching nodes",
+      "flags_entries_chip": "{{count}} exposed",
+      "flags_heading": "Crown jewels & entry points",
+      "flags_jewels_chip": "{{count}} jewels",
+      "flags_load_failed": "Couldn't load the risk graph.",
+      "flags_loading": "Loading graph nodes…",
+      "flags_save_failed": "Couldn't save the flag change.",
+      "flags_search": "Search nodes by name, type, or ID"
     },
     "attackCoverage": {
       "title": "ATT&CK Coverage Matrix",
@@ -2562,7 +2627,26 @@
       "teams_honesty": "Microsoft Teams delivers Adaptive Cards via teams_webhook_url or WEISSMAN_TEAMS_WEBHOOK_URL. Slack incoming-webhook URLs are refused — they are not Teams.",
       "rules_unavailable": "Alert rules store unavailable — the empty list is not confirmed.",
       "unavailable_title": "Alert rules unavailable",
-      "unavailable_body": "GET /api/alerts/rules could not be confirmed. Zero rules is not an idle detector."
+      "unavailable_body": "GET /api/alerts/rules could not be confirmed. Zero rules is not an idle detector.",
+      "cond_cvss": "CVSS",
+      "cond_epss": "EPSS",
+      "cond_jewel": "Crown Jewel",
+      "cond_kev": "KEV",
+      "crown_jewel": "Crown-jewel asset on attack path",
+      "crown_jewel_hint": "Only alert when the finding sits on a validated attack path to a crown-jewel asset.",
+      "kev_only": "KEV only",
+      "kev_only_hint": "Restrict alerts to CVEs listed in CISA's Known Exploited Vulnerabilities (KEV) catalog.",
+      "min_epss": "Minimum EPSS",
+      "min_epss_hint": "Only alert when the EPSS exploitation-probability score is at or above this value (0–1).",
+      "require_oast": "Require OAST confirmation",
+      "require_oast_hint": "Only alert on findings confirmed by an out-of-band (OAST) interaction callback.",
+      "require_proof": "Require live proof",
+      "require_proof_hint": "Only alert on findings with a live, reproduced proof of exploitation.",
+      "template_kev": "KEV + Crown Jewel",
+      "template_kev_body": "Alert on KEV-listed CVEs that affect crown-jewel assets.",
+      "template_kev_hint": "KEV-listed, crown-jewel findings with EPSS ≥ 0.70 at critical or high severity.",
+      "template_oast": "OAST-Proven Exploits",
+      "template_oast_hint": "Alert only on critical or high findings confirmed via out-of-band (OAST) interaction."
     },
     "adminManagement": {
       "search_users": "Search users…",
@@ -4175,7 +4259,19 @@
       "no_match_title": "No controls match",
       "no_match_body": "Clear the search or pick another section.",
       "empty_title": "No controls returned",
-      "empty_body": "The status API returned an empty control list. Refresh after the backend is up."
+      "empty_body": "The status API returned an empty control list. Refresh after the backend is up.",
+      "palo_title": "Palo Alto bake-off",
+      "palo_companion": "Companion, not replacement",
+      "palo_notice": "Catalog counts and closed-loop flags are computed from this binary. Palo Alto SKU overlap and maturity are public market research — not live scans of those products. Weissman finds and prices evidence; PAN-OS owns the inline packet path.",
+      "palo_catalog_ids": "Catalog IDs",
+      "palo_catalog_distinct": "Distinct canonical",
+      "palo_catalog_aliases": "Alias IDs",
+      "palo_find_vs_block": "Find vs block",
+      "palo_finds": "Finds",
+      "palo_blocks": "Blocks inline",
+      "palo_no_inline": "No inline block",
+      "palo_no_ids": "No mapped IDs",
+      "palo_agent_required": "Agent-required"
     },
     "cemDago": {
       "title": "CEM-DAGO Mesh",
@@ -4352,7 +4448,13 @@
       "severity_medium": "Medium",
       "severity_low": "Low",
       "unavailable_title": "Risk graph unavailable",
-      "unavailable_body": "GET /api/risk/graph could not be confirmed. Zero assets is not an empty attack surface."
+      "unavailable_body": "GET /api/risk/graph could not be confirmed. Zero assets is not an empty attack surface.",
+      "mark_entry": "Mark as entry point",
+      "entry_on": "Entry point",
+      "mark_jewel": "Mark as crown jewel",
+      "jewel_on": "Crown jewel",
+      "flag_saved": "Node flags updated.",
+      "flag_failed": "Failed to update node flags."
     },
     "baselineAndDrift": {
       "title": "Baseline & Drift Detection",
@@ -5341,7 +5443,8 @@
       "command_center": "Command Center",
       "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
       "integrations_unavailable": "Integrations API unavailable — blank prefill is not an unconfigured tenant.",
-      "history_unavailable": "Engine history API unavailable — empty jobs are not a quiet trail."
+      "history_unavailable": "Engine history API unavailable — empty jobs are not a quiet trail.",
+      "audit_unavailable": "Engine audit API unavailable — canonical wiring and execution path unverified."
     },
     "ssoDashboard": {
       "title": "SSO & Identity Providers",
@@ -5462,7 +5565,34 @@
         }
       },
       "evidence_notice": "SSO/OIDC/SAML provider configuration from GET/PUT /api/sso-config. Metadata and redirect URIs are live tenant settings — test logins hit your configured IdP endpoints.",
-      "idps_unavailable": "IdP directory unavailable — store could not be confirmed."
+      "idps_unavailable": "IdP directory unavailable — store could not be confirmed.",
+      "scim_add_map": "＋ Add Mapping",
+      "scim_badge": "LIVE SCIM",
+      "scim_base": "SCIM Base URL",
+      "scim_detail": "Mint SCIM bearer tokens, map directory groups to roles, and revoke access instantly — revocation terminates active sessions.",
+      "scim_group_id": "Group External ID",
+      "scim_group_name": "Group Display Name",
+      "scim_kills_count": "{{count}} kill-switches · 7d",
+      "scim_load_failed": "Failed to load SCIM status: {{message}}",
+      "scim_maps": "Group Role Mappings",
+      "scim_maps_failed": "Failed to save group mappings: {{message}}",
+      "scim_maps_saved": "Group mappings saved.",
+      "scim_mint": "Mint Token",
+      "scim_no_events": "No provisioning events yet.",
+      "scim_no_tokens": "No SCIM tokens issued yet.",
+      "scim_revoke": "Revoke",
+      "scim_revoke_confirm": "Revoke this SCIM token? Provisioning from this connector will stop immediately.",
+      "scim_role": "Role",
+      "scim_save_maps": "Save Mappings",
+      "scim_sessions_revoked": "{{count}} sessions revoked",
+      "scim_tape": "Provisioning Activity",
+      "scim_title": "Identity Kill-Switch",
+      "scim_token_failed": "SCIM token action failed: {{message}}",
+      "scim_token_minted": "SCIM token minted.",
+      "scim_token_once": "Copy this token now — it will not be shown again.",
+      "scim_token_revoked": "SCIM token revoked.",
+      "scim_tokens": "SCIM Tokens",
+      "scim_tokens_count": "{{count}} active tokens"
     },
     "engineDetail": {
       "evidence_notice": "Run history from GET /api/engines/history/:engineId. Live scans via POST /api/command-center/scan with engine-specific params. Progress streams on GET /api/telemetry/stream?job_id=… — findings persist to your tenant only.",
@@ -5809,7 +5939,16 @@
       "first_seen_status_unknown": "unknown NVD status",
       "history_unavailable": "Engine history API unavailable — ready-to-map is not a quiet attack-surface trail.",
       "clients_unavailable": "Clients API unavailable — the tenant list is not confirmed empty.",
-      "corpus_unavailable": "Discovery corpus API unavailable — stored counts are not confirmed zero."
+      "corpus_unavailable": "Discovery corpus API unavailable — stored counts are not confirmed zero.",
+      "corpus_title": "Discovery knowledge corpus",
+      "corpus_unbounded": "Self-learning · no fixed wordlist",
+      "corpus_seed_paths": "Seed paths",
+      "corpus_seed_subs": "Seed subdomains",
+      "corpus_stored_paths": "Stored paths",
+      "corpus_stored_subs": "Stored subdomains",
+      "corpus_llm": "LLM-learned",
+      "corpus_confirmed": "Confirmed hits",
+      "field_max_subdomains_hint": "0 = unbounded (enumerate every discovered subdomain)"
     },
     "dnsDomainPosture": {
       "evidence_notice": "DNS, SPF, DMARC, and subdomain posture from POST /api/command-center/scan (email_dns_posture / dns engines). Records are resolved live against public resolvers for authorized domains.",
@@ -6797,7 +6936,29 @@
       "title": "SOAR HITL Queue",
       "pending_badge": "{{count}} pending",
       "unavailable_title": "HITL queue unavailable",
-      "unavailable_body": "GET /api/soar/executions could not be confirmed. An empty queue is not idle dual-control."
+      "unavailable_body": "GET /api/soar/executions could not be confirmed. An empty queue is not idle dual-control.",
+      "subtitle": "Human-in-the-loop approval gate for automated SOAR response actions",
+      "evidence_notice": "Live queue from GET /api/soar/executions. Every approval and denial is written to the immutable dual-control audit log — no simulated actions.",
+      "safety_title": "Human approval required",
+      "safety_body": "Approving releases a real automated response against production systems. Review the blast radius and confirm dual-control tokens before you approve or deny.",
+      "crown_jewel": "Crown Jewel",
+      "client_suffix": " · Client {{id}}",
+      "details": "Details",
+      "collapse": "Collapse",
+      "approve": "Approve",
+      "deny": "Deny",
+      "deny_reason": "Reason for denial (optional)",
+      "approved_toast": "Execution approved",
+      "denied_toast": "Execution denied",
+      "approval_failed": "Approval failed: {{message}}",
+      "deny_failed": "Denial failed: {{message}}",
+      "load_failed": "Failed to load queue: {{message}}",
+      "search_placeholder": "Search by ID, target, or action…",
+      "empty_title": "No executions",
+      "empty": "No SOAR executions match this view.",
+      "empty_search": "No executions match your search.",
+      "clear_search": "Clear search",
+      "refresh": "Refresh"
     },
     "adversaryCampaign": {
       "title": "Adversary Campaign Fabric",
@@ -7949,7 +8110,9 @@
           "no_crime_scene": "No crime scene report.",
           "bleed_preview": "Bleed preview (64-byte window):\n{{preview}}",
           "entropy_map": "Entropy map:\n{{map}}"
-        }
+        },
+        "generate_xlsx": "GENERATE XLSX",
+        "xlsx_download_failed": "Failed to download XLSX"
       },
       "identityMatrix": {
         "select_client": "Select a client to manage Identity Matrix.",
@@ -8982,7 +9145,8 @@
       "statusInProgress": "In Progress",
       "statusFixed": "Fixed",
       "statusFalsePositive": "False Positive",
-      "noRemediation": "No remediation guidance available."
+      "noRemediation": "No remediation guidance available.",
+      "cluster": "Cluster {{id}}"
     },
     "globalSearch": {
       "placeholder": "Search anything... (pages, engines, findings, clients)",

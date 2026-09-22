@@ -273,6 +273,7 @@ function IdpRow({ idp, onEdit, onDelete, onToggle, onTest, testing }) {
         </Button>
         <Button variant="unstyled"
           type="button"
+          aria-label={t('pages.ssoDashboard.delete')}
           onClick={() => onDelete(idp.id)}
           className="text-[11px] font-mono border border-rose-500/20 text-rose-400/50 hover:bg-rose-900/20 px-2.5 py-1 rounded-xl transition-all"
         >

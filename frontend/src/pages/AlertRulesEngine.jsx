@@ -103,7 +103,7 @@ export default function AlertRulesEngine() {
     try {
       const result = await api.post(`/api/alerts/rules/${ruleId}/test`);
       if (result.success) {
-        toast.success(t('pages.alertRulesEngine.test_success', { count: result.matched }));
+        toast.success(t('pages.alertRulesEngine.test_success', { count: result.matched ?? 0 }));
       } else {
         toast.warning(t('pages.alertRulesEngine.test_failed'));
       }
@@ -220,6 +220,7 @@ export default function AlertRulesEngine() {
               <Button variant="unstyled"
                 key={f}
                 onClick={() => setFilter(f)}
+                aria-pressed={filter === f}
                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                   filter === f
                     ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
@@ -256,7 +257,7 @@ export default function AlertRulesEngine() {
           </div>
 
           {loading ? (
-            <div className="p-8 text-center text-[var(--text-muted)]">
+            <div className="p-8 text-center text-[var(--text-muted)]" role="status" aria-live="polite">
               <div className="animate-spin w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full mx-auto mb-3" />
               Loading rules...
             </div>
@@ -619,9 +620,10 @@ function RuleModal({ rule, template, onClose, onSave }) {
                 min="1"
                 max="10"
                 value={formData.priority}
-                onChange={(e) =>
-                  setFormData({ ...formData, priority: parseInt(e.target.value) })
-                }
+                onChange={(e) => {
+                  const parsed = parseInt(e.target.value, 10)
+                  setFormData({ ...formData, priority: Number.isNaN(parsed) ? '' : parsed })
+                }}
                 className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               />
             </div>

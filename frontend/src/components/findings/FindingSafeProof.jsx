@@ -25,6 +25,7 @@ export default function FindingSafeProof({ finding, onProofComplete }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [artifacts, setArtifacts] = useState([])
+  const [artifactsLoaded, setArtifactsLoaded] = useState(false)
   const [reason, setReason] = useState('')
 
   const rawId = useMemo(() => findingVerifyId(finding), [finding])
@@ -33,15 +34,21 @@ export default function FindingSafeProof({ finding, onProofComplete }) {
   const loadArtifacts = useCallback(async () => {
     if (!rawId || !/^\d+$/.test(rawId)) {
       setArtifacts([])
+      setReason('')
+      setArtifactsLoaded(true)
       return
     }
     try {
       const d = await apiFetch(`/api/findings/${encodeURIComponent(rawId)}/proof`)
       if (d?.ok === false) return
       setArtifacts(Array.isArray(d?.artifacts) ? d.artifacts : [])
-      if (d?.reason) setReason(String(d.reason))
+      // Always reflect the current fetch — never leave a stale reason from a
+      // previous finding when the fresh proof carries none.
+      setReason(d?.reason ? String(d.reason) : '')
     } catch {
       setArtifacts([])
+    } finally {
+      setArtifactsLoaded(true)
     }
   }, [rawId])
 
@@ -115,7 +122,11 @@ export default function FindingSafeProof({ finding, onProofComplete }) {
         <p className="text-[12px] text-[var(--text-secondary)]">{reason}</p>
       )}
       {artifacts.length === 0 ? (
-        <p className="text-[12px] text-[var(--text-muted)]">{t('findings.proof.no_artifacts')}</p>
+        // Only assert "no artifacts" once the first fetch has resolved — a
+        // pending load is not evidence of absence.
+        artifactsLoaded ? (
+          <p className="text-[12px] text-[var(--text-muted)]">{t('findings.proof.no_artifacts')}</p>
+        ) : null
       ) : (
         <ul className="space-y-2">
           {artifacts.map((item, i) => {

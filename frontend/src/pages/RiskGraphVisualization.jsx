@@ -591,7 +591,8 @@ export default function RiskGraphVisualization() {
             <Button variant="unstyled"
               type="button"
               onClick={() => exportGraph('png')}
-              className="flex items-center gap-2 px-3 py-2 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg text-sm font-medium hover:bg-cyan-500/30 transition-colors"
+              disabled={searchFilteredNodes.length === 0}
+              className="flex items-center gap-2 px-3 py-2 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg text-sm font-medium hover:bg-cyan-500/30 transition-colors disabled:opacity-40"
             >
               <Download className="w-4 h-4" />
               {t('pages.riskGraphVisualization.export_png')}

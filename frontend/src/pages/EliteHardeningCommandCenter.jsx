@@ -23,6 +23,16 @@ import { exportRowsCsv, exportRowsPdf, rowMatchesQuery } from '../lib/pageExport
 const NS = 'pages.eliteHardening'
 const columnHelper = createColumnHelper()
 
+// Canonical section key for a control. The section pills, per-section counts, and
+// the active-section filter must all derive the key the same way, otherwise a
+// pill built from the "§<section>" fallback (control with no section_title) filters
+// to zero rows and shows a 0 count.
+function sectionKey(c) {
+  if (c?.section_title) return c.section_title
+  if (c?.section != null && c.section !== '') return `§${c.section}`
+  return ''
+}
+
 export const ELITE_CSV_HEADER = ['id', 'section', 'title', 'enforced', 'detail']
 
 export function eliteControlRows(controls) {
@@ -65,15 +75,15 @@ export default function EliteHardeningCommandCenter() {
   const sections = useMemo(() => {
     const seen = []
     for (const c of controls) {
-      const title = c.section_title || `§${c.section}`
-      if (!seen.includes(title)) seen.push(title)
+      const title = sectionKey(c)
+      if (title && !seen.includes(title)) seen.push(title)
     }
     return seen
   }, [controls])
 
   const filtered = useMemo(() => {
     return controls.filter((c) => {
-      if (sectionFilter !== 'all' && (c.section_title || '') !== sectionFilter) return false
+      if (sectionFilter !== 'all' && sectionKey(c) !== sectionFilter) return false
       return rowMatchesQuery(searchQuery, [c.id, c.section_title, c.title, c.detail, c.enforced ? 'live' : 'gap'])
     })
   }, [controls, searchQuery, sectionFilter])
@@ -85,7 +95,7 @@ export default function EliteHardeningCommandCenter() {
   const bySection = useMemo(() => {
     const m = {}
     for (const c of controls) {
-      const s = c.section_title || ''
+      const s = sectionKey(c)
       if (s) m[s] = (m[s] || 0) + 1
     }
     return m
@@ -365,6 +375,7 @@ export default function EliteHardeningCommandCenter() {
                   type="search"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  aria-label={t(`${NS}.search_placeholder`)}
                   placeholder={t(`${NS}.search_placeholder`)}
                   className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] pl-9 pr-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
                 />

@@ -329,6 +329,7 @@ export default function AgentManagement() {
             <select
               value={tokenClient}
               onChange={(e) => setTokenClient(e.target.value)}
+              aria-label={t('agents.select_client')}
               className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm font-mono text-[var(--text-primary)]"
             >
               <option value="">{t('agents.select_client')}</option>
@@ -344,6 +345,7 @@ export default function AgentManagement() {
               onChange={(e) => setTokenValidity(e.target.value)}
               className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm font-mono text-[var(--text-primary)]"
               placeholder={t('agents.validity_minutes')}
+              aria-label={t('agents.validity_minutes')}
             />
             <Button variant="unstyled"
               type="button"
@@ -456,7 +458,7 @@ export default function AgentManagement() {
                 </div>
                 <DetailRow label={t('agents.col_client')} value={clientName(selectedAgent.client_id)} />
                 <DetailRow label={t('agents.agent_id')} value={selectedAgent.agent_id} mono copy />
-                <DetailRow label={t('agents.col_os')} value={`${selectedAgent.os} / ${selectedAgent.arch}`} />
+                <DetailRow label={t('agents.col_os')} value={`${selectedAgent.os || '—'} / ${selectedAgent.arch || '—'}`} />
                 <DetailRow label={t('agents.version')} value={selectedAgent.agent_version || '—'} />
                 <DetailRow label={t('agents.last_seen')} value={timeAgo(selectedAgent.last_seen_at, t)} />
                 <div>

@@ -320,7 +320,8 @@
     "supreme_brain": "מוח עליון",
     "ceo": "פיקוד מנכ״ל",
     "adversary_mirror": "מראת יריב",
-    "cortex_bridge": "גשר Cortex לממצאים מוכחים"
+    "cortex_bridge": "גשר Cortex לממצאים מוכחים",
+    "scim_provisioning": "אספקת SCIM"
   },
   "ask_weissman": {
     "title": "שאל את Weissman",
@@ -357,7 +358,10 @@
     "guard_oracle": "ללא דליפת oracle",
     "guard_mask": "PII ממוסך",
     "guard_depth": "עומק חסום",
-    "guard_vector": "ללא וקטורים גולמיים"
+    "guard_vector": "ללא וקטורים גולמיים",
+    "quota_remaining": "נותרו {{remaining}} מתוך {{limit}} שאילתות היום",
+    "aggregate_hint": "שאל שאלות צבירה — ספירות, ממוצעים וקיבוץ — התוצאות נשארות מוגבלות ל-tenant ולקריאה בלבד.",
+    "aggregate_badge": "{{fn}} לפי {{group}}"
   },
   "playbooks": {
     "title": "מדריכי SOAR",
@@ -632,7 +636,26 @@
     "open_operator_cockpit": "פתח את תא הבקרה",
     "brand_story_checking": "קשר ממצאים מרשימת המנועים החיה, תזמר מדריכי SOAR והוכח עמידה ברגולציה — ממרכז פיקוד אחד.",
     "trust_engines_live": "{{count}} מנועי ייצור",
-    "trust_engines_checking": "רשימת מנועים חיה"
+    "trust_engines_checking": "רשימת מנועים חיה",
+    "tenant_back_to_list": "חזרה לרשימה",
+    "tenant_directory_restricted": "מופע זה אינו מפרסם את רשימת הארגונים. הזן את מזהה הארגון שלך.",
+    "tenant_directory_unavailable": "ספריית הארגונים אינה זמינה. הזן את מזהה הארגון ידנית.",
+    "tenant_loading": "טוען ארגונים…",
+    "tenant_manual_hint": "הזן את מזהה הארגון המדויק שלך.",
+    "tenant_option_custom": "ארגון אחר…",
+    "tenant_retry": "נסה שוב",
+    "tenant_select_hint": "בחר את הארגון שלך כדי להתחבר.",
+    "back_to_site": "חזרה לאתר",
+    "caps_lock": "מקש Caps Lock פעיל",
+    "different_workspace": "סביבת עבודה אחרת",
+    "email": "אימייל",
+    "entering_command_center": "נכנס למרכז הפיקוד…",
+    "hide_workspace": "הסתר סביבת עבודה",
+    "language": "שפה",
+    "password": "סיסמה",
+    "signup_verified": "האימייל שלך אומת. התחבר כדי להמשיך.",
+    "use_company_sso": "השתמש ב-SSO ארגוני",
+    "workspace": "סביבת עבודה"
   },
   "notifications": {
     "title": "התראות",
@@ -808,7 +831,9 @@
     "evidence_notice": "מנועי production מ-GET /api/engines/production ומטריצת יכולות מ-GET /api/engines/capabilities. היסטוריה לפי מנוע: GET /api/engines/history/:engineId. סריקות נשלחות לתור ב-POST /api/command-center/scan ו-POST /api/scan/all-engines — ללא טלמטריה מזויפת.",
     "config_unavailable": "API תצורת המנועים ללקוח אינו זמין — אפס מופעלים אינו tenant לא מוגדר.",
     "integrations_unavailable": "API האינטגרציות אינו זמין — מילוי ריק אינו tenant לא מוגדר.",
-    "detail_history_unavailable": "—"
+    "detail_history_unavailable": "—",
+    "no_assigned_domain": "אין דומיין מוקצה",
+    "workspace_locked": "סביבת עבודה מוקצית"
   },
   "findings": {
     "title": "ממצאים",
@@ -913,6 +938,15 @@
       "ok": "Cortex קיבל את הממצא",
       "blind_spot": "נדחף — ל-XDR לא היה התרעה תואמת (נקודת עיוורון)",
       "xdr_already": "נדחף — ל-XDR כבר הייתה התרעה תואמת"
+    },
+    "proof": {
+      "run": "הרץ הוכחה",
+      "running": "מריץ…",
+      "missing_id": "לממצא זה אין מזהה לאימות.",
+      "failed": "הוכחה חיה נכשלה.",
+      "timeout": "הוכחה חיה חרגה מפסק הזמן.",
+      "no_artifacts": "אין עדיין ארטיפקטים של הוכחה.",
+      "link_evidence": "צפה בראיה"
     }
   },
   "vuln_intel": {
@@ -1049,7 +1083,17 @@
     "no_filter_title": "אין סוכנים תואמים",
     "no_filter_body": "נסה מסנן סטטוס אחר.",
     "status_unavailable_title": "סטטוס צי הסוכנים אינו זמין",
-    "status_unavailable_body": "מרכז הפיקוד לא הצליח להגיע אל GET /api/agents/status. זה אינו צי ריק — נסה שוב לפני שמתייחסים למארחים כלא-רשומים."
+    "status_unavailable_body": "מרכז הפיקוד לא הצליח להגיע אל GET /api/agents/status. זה אינו צי ריק — נסה שוב לפני שמתייחסים למארחים כלא-רשומים.",
+    "kill_button": "הפעל מתג השבתה",
+    "kill_confirm": "השבת סוכן",
+    "kill_default_reason": "מתג השבתה ביוזמת מפעיל",
+    "kill_heading": "מתג השבתה",
+    "kill_hint": "דורש אישור בקרה כפולה. עוצר מיידית את סריקות הסוכן ומבטל את רישומו.",
+    "kill_live": "מתג ההשבתה נשלח לסוכן החי.",
+    "kill_message": "לשלוח מתג השבתה מרחוק אל {{host}}? הסוכן יעצור את כל הסריקות הפעילות וייכבה מיידית.",
+    "kill_queued": "מתג ההשבתה בתור — יופעל בבדיקת ההתקשרות הבאה של הסוכן.",
+    "kill_sending": "שולח…",
+    "kill_title": "להפעיל מתג השבתה?"
   },
   "system_config": {
     "title": "הגדרות מערכת",
@@ -1552,7 +1596,18 @@
       "col_ale": "ALE",
       "crown_jewel": "נכס כתר",
       "no_contributors_title": "אין תורמים",
-      "no_contributors_body": "לתמונה אין עדיין תורמי הפסד מדורגים."
+      "no_contributors_body": "לתמונה אין עדיין תורמי הפסד מדורגים.",
+      "col_agent": "סוכן",
+      "col_delay": "עיכוב/יום",
+      "col_roi": "ROI תיקון",
+      "kpi_agent": "ALE מוגן בסוכן",
+      "kpi_agent_hint": "ALE על נכסים המכוסים בסוכן",
+      "kpi_concentration": "ריכוז סיכון",
+      "kpi_concentration_hint": "חלק ה-ALE בנכס המוביל",
+      "kpi_delay": "עלות עיכוב ליום",
+      "kpi_delay_hint": "הפסד שנצבר בכל יום ללא תיקון",
+      "kpi_path_ale": "ALE של נתיב תקיפה",
+      "kpi_path_ale_hint": "הפסד הניתן להשגה דרך נתיבי תקיפה"
     },
     "dominionBoardPack": {
       "title": "חבילת דומיניון לדירקטוריון",
@@ -1684,7 +1739,17 @@
       "jewel_node_fallback": "צומת",
       "jewel_node_meta": "{{type}} · סיכון {{score}}",
       "toggle_crown_jewel": "נכס כתר",
-      "toggle_internet_exposed": "חשוף לאינטרנט"
+      "toggle_internet_exposed": "חשוף לאינטרנט",
+      "flags_body": "סמן נקודות כניסה החשופות לאינטרנט ונכסי כתר קריטיים, כדי שניתוח נתיבי התקיפה יקבל נקודות התחלה ויעד.",
+      "flags_empty_body": "הפעל סריקת גילוי כדי לאכלס את גרף הסיכון, או שנה את החיפוש כדי להרחיב את התצוגה.",
+      "flags_empty_title": "אין צמתים תואמים",
+      "flags_entries_chip": "{{count}} חשופים",
+      "flags_heading": "נכסי כתר ונקודות כניסה",
+      "flags_jewels_chip": "{{count}} נכסי כתר",
+      "flags_load_failed": "טעינת גרף הסיכון נכשלה.",
+      "flags_loading": "טוען צמתי גרף…",
+      "flags_save_failed": "שמירת שינוי הדגל נכשלה.",
+      "flags_search": "חפש צמתים לפי שם, סוג או מזהה"
     },
     "attackCoverage": {
       "title": "מטריצת כיסוי ATT&CK",
@@ -2562,7 +2627,26 @@
       "teams_honesty": "Microsoft Teams שולח Adaptive Card דרך teams_webhook_url או WEISSMAN_TEAMS_WEBHOOK_URL. כתובת Slack incoming-webhook אינה Teams ולא תישלח.",
       "rules_unavailable": "מאגר כללי ההתראה לא זמין — הרשימה הריקה אינה מאושרת.",
       "unavailable_title": "כללי התראה אינם זמינים",
-      "unavailable_body": "GET /api/alerts/rules לא אושר. אפס כללים אינו גלאי שקט."
+      "unavailable_body": "GET /api/alerts/rules לא אושר. אפס כללים אינו גלאי שקט.",
+      "cond_cvss": "CVSS",
+      "cond_epss": "EPSS",
+      "cond_jewel": "נכס קריטי",
+      "cond_kev": "KEV",
+      "crown_jewel": "נכס קריטי בנתיב תקיפה",
+      "crown_jewel_hint": "התראה רק כאשר הממצא נמצא על נתיב תקיפה מאומת אל נכס קריטי.",
+      "kev_only": "KEV בלבד",
+      "kev_only_hint": "הגבל התראות ל-CVE המופיעים בקטלוג KEV (Known Exploited Vulnerabilities) של CISA.",
+      "min_epss": "EPSS מינימלי",
+      "min_epss_hint": "התראה רק כאשר ציון ה-EPSS (הסתברות הניצול) שווה לערך זה או גבוה ממנו (0–1).",
+      "require_oast": "דרוש אישור OAST",
+      "require_oast_hint": "התראה רק על ממצאים שאושרו באמצעות callback חוץ-ערוצי (OAST).",
+      "require_proof": "דרוש הוכחה חיה",
+      "require_proof_hint": "התראה רק על ממצאים עם הוכחת ניצול חיה ומשוחזרת.",
+      "template_kev": "KEV + נכס קריטי",
+      "template_kev_body": "התראה על CVE מקטלוג KEV הפוגעים בנכסים קריטיים.",
+      "template_kev_hint": "ממצאי KEV בנכסים קריטיים עם EPSS ≥ 0.70 בחומרה קריטית או גבוהה.",
+      "template_oast": "ניצולים מוכחי OAST",
+      "template_oast_hint": "התראה רק על ממצאים קריטיים או גבוהים שאושרו באמצעות אינטראקציה חוץ-ערוצית (OAST)."
     },
     "adminManagement": {
       "search_users": "חיפוש משתמשים…",
@@ -3195,7 +3279,19 @@
       "no_match_title": "אין בקרות תואמות",
       "no_match_body": "נקה את החיפוש או בחר סעיף אחר.",
       "empty_title": "לא הוחזרו בקרות",
-      "empty_body": "ה-API החזיר רשימת בקרות ריקה. רענן אחרי שהשרת עולה."
+      "empty_body": "ה-API החזיר רשימת בקרות ריקה. רענן אחרי שהשרת עולה.",
+      "palo_title": "Bake-off מול Palo Alto",
+      "palo_companion": "משלים, לא תחליף",
+      "palo_notice": "ספירות הקטלוג ודגלי הלולאה הסגורה מחושבים מהבינארי הזה. חפיפת ה-SKU והבשלות של Palo Alto הן מחקר שוק ציבורי — לא סריקות חיות של המוצרים. וייסמן מאתר ומתמחר ראיות; PAN-OS מחזיק בנתיב החבילות ה-inline.",
+      "palo_catalog_ids": "מזהי קטלוג",
+      "palo_catalog_distinct": "קנוני ייחודי",
+      "palo_catalog_aliases": "מזהי alias",
+      "palo_find_vs_block": "איתור מול חסימה",
+      "palo_finds": "מאתר",
+      "palo_blocks": "חוסם inline",
+      "palo_no_inline": "ללא חסימת inline",
+      "palo_no_ids": "אין מזהים ממופים",
+      "palo_agent_required": "דורש סוכן"
     },
     "cemDago": {
       "title": "רשת CEM-DAGO",
@@ -4352,7 +4448,13 @@
       "severity_medium": "בינוני",
       "severity_low": "נמוך",
       "unavailable_title": "גרף הסיכון אינו זמין",
-      "unavailable_body": "לא ניתן לאשר את GET /api/risk/graph. אפס נכסים אינו משטח תקיפה ריק."
+      "unavailable_body": "לא ניתן לאשר את GET /api/risk/graph. אפס נכסים אינו משטח תקיפה ריק.",
+      "mark_entry": "סמן כנקודת כניסה",
+      "entry_on": "נקודת כניסה",
+      "mark_jewel": "סמן כנכס קריטי",
+      "jewel_on": "נכס קריטי",
+      "flag_saved": "דגלי הצומת עודכנו.",
+      "flag_failed": "עדכון דגלי הצומת נכשל."
     },
     "baselineAndDrift": {
       "title": "Baseline וזיהוי Drift",
@@ -5341,7 +5443,8 @@
       "command_center": "מרכז בקרה",
       "clients_unavailable": "API הלקוחות אינו זמין — בורר חסר אינו tenant חסר.",
       "integrations_unavailable": "API האינטגרציות אינו זמין — מילוי ריק אינו tenant לא מוגדר.",
-      "history_unavailable": "API היסטוריית המנוע אינו זמין — משימות ריקות אינן שביל שקט."
+      "history_unavailable": "API היסטוריית המנוע אינו זמין — משימות ריקות אינן שביל שקט.",
+      "audit_unavailable": "API ביקורת המנוע אינו זמין — חיווט קנוני ונתיב הרצה לא אומתו."
     },
     "ssoDashboard": {
       "title": "SSO וספקי זהות",
@@ -5462,7 +5565,34 @@
         }
       },
       "evidence_notice": "הגדרות ספק SSO/OIDC/SAML מ-GET/PUT /api/sso-config. metadata ו-redirect URIs הם הגדרות tenant חיות — login בדיקה פוגע ב-IdP endpoints שהוגדרו.",
-      "idps_unavailable": "ספריית IdP אינה זמינה — לא ניתן לאשר את המחסן."
+      "idps_unavailable": "ספריית IdP אינה זמינה — לא ניתן לאשר את המחסן.",
+      "scim_add_map": "＋ הוסף מיפוי",
+      "scim_badge": "SCIM חי",
+      "scim_base": "כתובת בסיס SCIM",
+      "scim_detail": "הנפק אסימוני SCIM, מפה קבוצות ספרייה לתפקידים ובטל גישה מיידית — ביטול מסיים סשנים פעילים.",
+      "scim_group_id": "מזהה קבוצה חיצוני",
+      "scim_group_name": "שם תצוגה של קבוצה",
+      "scim_kills_count": "{{count}} מתגי חירום · 7 ימים",
+      "scim_load_failed": "טעינת מצב SCIM נכשלה: {{message}}",
+      "scim_maps": "מיפוי קבוצות לתפקידים",
+      "scim_maps_failed": "שמירת מיפויי הקבוצות נכשלה: {{message}}",
+      "scim_maps_saved": "מיפויי הקבוצות נשמרו.",
+      "scim_mint": "הנפק אסימון",
+      "scim_no_events": "אין אירועי אספקה עדיין.",
+      "scim_no_tokens": "לא הונפקו אסימוני SCIM עדיין.",
+      "scim_revoke": "בטל",
+      "scim_revoke_confirm": "לבטל את אסימון ה-SCIM הזה? האספקה מהמחבר הזה תיפסק מיידית.",
+      "scim_role": "תפקיד",
+      "scim_save_maps": "שמור מיפויים",
+      "scim_sessions_revoked": "{{count}} סשנים בוטלו",
+      "scim_tape": "פעילות אספקה",
+      "scim_title": "מתג חירום לזהויות",
+      "scim_token_failed": "פעולת אסימון SCIM נכשלה: {{message}}",
+      "scim_token_minted": "אסימון SCIM הונפק.",
+      "scim_token_once": "העתק את האסימון עכשיו — הוא לא יוצג שוב.",
+      "scim_token_revoked": "אסימון SCIM בוטל.",
+      "scim_tokens": "אסימוני SCIM",
+      "scim_tokens_count": "{{count}} אסימונים פעילים"
     },
     "engineDetail": {
       "evidence_notice": "היסטוריית ריצות מ-GET /api/engines/history/:engineId. סריקות חיות ב-POST /api/command-center/scan עם פרמטרים לפי מנוע. התקדמות בזמן אמת: GET /api/telemetry/stream?job_id=… — ממצאים נשמרים רק ב-tenant שלך.",
@@ -5809,7 +5939,16 @@
       "first_seen_status_unknown": "סטטוס NVD לא ידוע",
       "history_unavailable": "API היסטוריית המנוע אינו זמין — מוכן-למיפוי אינו שביל משטח-תקיפה שקט.",
       "clients_unavailable": "API הלקוחות אינו זמין — אין זו רשימה ריקה מאושרת.",
-      "corpus_unavailable": "API מאגר הגילוי אינו זמין — ספירות מאוחסנות אינן אפס מאושר."
+      "corpus_unavailable": "API מאגר הגילוי אינו זמין — ספירות מאוחסנות אינן אפס מאושר.",
+      "corpus_title": "מאגר ידע הגילוי",
+      "corpus_unbounded": "לומד מעצמו · ללא רשימת מילים קבועה",
+      "corpus_seed_paths": "נתיבי seed",
+      "corpus_seed_subs": "תת-דומיינים seed",
+      "corpus_stored_paths": "נתיבים מאוחסנים",
+      "corpus_stored_subs": "תת-דומיינים מאוחסנים",
+      "corpus_llm": "נלמד ע\"י LLM",
+      "corpus_confirmed": "פגיעות שאושרו",
+      "field_max_subdomains_hint": "0 = ללא הגבלה (מונה כל תת-דומיין שהתגלה)"
     },
     "dnsDomainPosture": {
       "evidence_notice": "DNS, SPF, DMARC ו-posture תת-דומיינים מ-POST /api/command-center/scan (מנועי email_dns_posture / dns). רשומות נפתרות חי מול resolvers ציבוריים לדומיינים מורשים.",
@@ -6797,7 +6936,29 @@
       "title": "תור HITL SOAR",
       "pending_badge": "{{count}} ממתינים",
       "unavailable_title": "תור HITL אינו זמין",
-      "unavailable_body": "לא ניתן לאשר את GET /api/soar/executions. תור ריק אינו dual-control פנוי."
+      "unavailable_body": "לא ניתן לאשר את GET /api/soar/executions. תור ריק אינו dual-control פנוי.",
+      "subtitle": "שער אישור אדם-בלולאה לפעולות תגובה אוטומטיות של SOAR",
+      "evidence_notice": "תור חי מ-GET /api/soar/executions. כל אישור ודחייה נכתבים ליומן הביקורת של בקרה כפולה שאינו ניתן לשינוי — ללא פעולות מדומות.",
+      "safety_title": "נדרש אישור אנושי",
+      "safety_body": "אישור משחרר תגובה אוטומטית אמיתית מול מערכות ייצור. בדוק את רדיוס הפגיעה ואשר את אסימוני הבקרה הכפולה לפני אישור או דחייה.",
+      "crown_jewel": "נכס כתר",
+      "client_suffix": " · לקוח {{id}}",
+      "details": "פרטים",
+      "collapse": "כווץ",
+      "approve": "אשר",
+      "deny": "דחה",
+      "deny_reason": "סיבת הדחייה (רשות)",
+      "approved_toast": "הביצוע אושר",
+      "denied_toast": "הביצוע נדחה",
+      "approval_failed": "האישור נכשל: {{message}}",
+      "deny_failed": "הדחייה נכשלה: {{message}}",
+      "load_failed": "טעינת התור נכשלה: {{message}}",
+      "search_placeholder": "חיפוש לפי מזהה, יעד או פעולה…",
+      "empty_title": "אין ביצועים",
+      "empty": "אין ביצועי SOAR התואמים לתצוגה זו.",
+      "empty_search": "אין ביצועים התואמים לחיפוש שלך.",
+      "clear_search": "נקה חיפוש",
+      "refresh": "רענון"
     },
     "adversaryCampaign": {
       "title": "מארג מסעות היריב",
@@ -7949,7 +8110,9 @@
           "no_crime_scene": "אין דוח זירת פשע.",
           "bleed_preview": "תצוגת bleed (חלון 64 בתים):\n{{preview}}",
           "entropy_map": "מפת entropy:\n{{map}}"
-        }
+        },
+        "generate_xlsx": "יצירת XLSX",
+        "xlsx_download_failed": "הורדת XLSX נכשלה"
       },
       "identityMatrix": {
         "select_client": "בחר לקוח לניהול מטריצת זהות.",
@@ -8982,7 +9145,8 @@
       "statusInProgress": "בטיפול",
       "statusFixed": "תוקן",
       "statusFalsePositive": "False Positive",
-      "noRemediation": "אין הנחיות תיקון זמינות."
+      "noRemediation": "אין הנחיות תיקון זמינות.",
+      "cluster": "אשכול {{id}}"
     },
     "globalSearch": {
       "placeholder": "חפש הכל... (דפים, מנועים, ממצאים, לקוחות)",
