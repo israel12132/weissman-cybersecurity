@@ -2133,7 +2133,9 @@ mod tests {
         let legacy = build_client_report_pdf("Client Org", &findings, None, None).expect("pdf");
         let legacy_text = String::from_utf8_lossy(&legacy);
         assert!(legacy_text.contains("WEISSMAN CYBERSECURITY"));
-        assert!(legacy_text.contains("(c) Weissman Cybersecurity — Confidential."));
+        // The footer goes through pdf_escape, which escapes `(`/`)` to `\(`/`\)` for a valid PDF
+        // literal string, so match the paren-free substring rather than the literal "(c) …".
+        assert!(legacy_text.contains("Weissman Cybersecurity — Confidential."));
     }
 
     #[test]

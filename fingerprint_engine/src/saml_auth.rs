@@ -302,7 +302,12 @@ fn parse_saml_response(xml: &str) -> Result<ParsedSaml, String> {
                 );
             }
             Ok(Event::Text(t)) => {
-                let txt = t.unescape().unwrap_or_default().into_owned();
+                // quick-xml 0.41: BytesText has `decode()` (charset), not `unescape()`; resolve XML
+                // entities with the same manual helper used by get_attr.
+                let txt = match t.decode() {
+                    Ok(c) => xml_unescape(c.as_ref()),
+                    Err(_) => String::new(),
+                };
                 let txt = txt.trim().to_string();
                 if !txt.is_empty() {
                     match stack.last().map(|s| s.as_str()) {
