@@ -29,12 +29,12 @@ import TopMoversPanel from './TopMoversPanel'
 import SeverityTrendChart from './SeverityTrendChart'
 
 const GLASS_CARD =
-  'rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 transition-all duration-300 hover:border-white/20 hover:shadow-[0_0_30px_rgba(0,0,0,0.3)]'
+  'rounded-2xl bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] p-5 transition-all duration-300 hover:border-[var(--border-strong)] hover:shadow-[0_0_30px_rgba(0,0,0,0.3)]'
 
 function SparklineOrEmpty({ data, color, emptyLabel }) {
   if (!Array.isArray(data) || data.length < 2) {
     return (
-      <p className="text-[10px] text-white/30 font-mono mt-2 uppercase tracking-wider">
+      <p className="text-[10px] text-[var(--text-muted)] font-mono mt-2 uppercase tracking-wider">
         {emptyLabel}
       </p>
     )
@@ -152,6 +152,7 @@ export default function OverviewTab() {
   const [trendSpark, setTrendSpark] = useState([])
   const [resolvedSpark, setResolvedSpark] = useState([])
   const [loading, setLoading] = useState(true)
+  const [statsError, setStatsError] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -167,6 +168,7 @@ export default function OverviewTab() {
           apiFetch('/api/soc/incidents').catch(() => null),
         ])
         if (cancelled) return
+        setStatsError(!statsData)
         if (statsData) {
           const d = statsData
           setStats({
@@ -207,6 +209,7 @@ export default function OverviewTab() {
         }
       } catch (_) {
         if (!cancelled) {
+          setStatsError(true)
           setFindings([])
           setIncidentCount(0)
         }
@@ -263,10 +266,10 @@ export default function OverviewTab() {
     return (
       <div className="p-8 flex items-center justify-center min-h-[400px]">
         <div className={`${GLASS_CARD} max-w-md text-center py-12`}>
-          <p className="text-white/80 text-sm uppercase tracking-widest mb-2">
+          <p className="text-[var(--text-secondary)] text-sm uppercase tracking-widest mb-2">
             {t('components.cockpitTabs.overview.no_client')}
           </p>
-          <p className="text-white/50 text-xs">{t('components.cockpitTabs.overview.select_sidebar')}</p>
+          <p className="text-[var(--text-muted)] text-xs">{t('components.cockpitTabs.overview.select_sidebar')}</p>
         </div>
       </div>
     )
@@ -315,7 +318,7 @@ export default function OverviewTab() {
             <p className="text-xs font-semibold text-[#22d3ee] uppercase tracking-wider">
               {t('components.cockpitTabs.overview.ai_suggestion')}
             </p>
-            <p className="text-sm text-white/90 mt-0.5">{suggestedWidget.message}</p>
+            <p className="text-sm text-[var(--text-secondary)] mt-0.5">{suggestedWidget.message}</p>
           </div>
         </motion.div>
       )}
@@ -324,12 +327,12 @@ export default function OverviewTab() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <div className={GLASS_CARD}>
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-white/50 uppercase tracking-widest">
+            <span className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-widest">
               {t('components.cockpitTabs.overview.active_incidents')}
             </span>
             <AlertTriangle className="w-4 h-4 text-amber-400/80" />
           </div>
-          <p className="text-2xl font-bold text-white mt-1 tabular-nums">
+          <p className="text-2xl font-bold text-[var(--text-primary)] mt-1 tabular-nums">
             {loading ? '—' : incidentCount}
           </p>
           <SparklineOrEmpty
@@ -340,13 +343,13 @@ export default function OverviewTab() {
         </div>
         <div className={GLASS_CARD}>
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-white/50 uppercase tracking-widest">
+            <span className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-widest">
               {t('components.cockpitTabs.overview.threat_exposure')}
             </span>
             <ShieldAlert className="w-4 h-4 text-[#22d3ee]/80" />
           </div>
           <p className="text-2xl font-bold text-[#22d3ee] mt-1 tabular-nums">
-            {loading ? '—' : stats.total_vulnerabilities}
+            {loading || statsError ? '—' : stats.total_vulnerabilities}
           </p>
           <SparklineOrEmpty
             data={trendSpark}
@@ -356,7 +359,7 @@ export default function OverviewTab() {
         </div>
         <div className={GLASS_CARD}>
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-white/50 uppercase tracking-widest">
+            <span className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-widest">
               {t('components.cockpitTabs.overview.zero_day_risk')}
             </span>
             <Zap className="w-4 h-4 text-[#a855f7]/80" />
@@ -372,15 +375,15 @@ export default function OverviewTab() {
         </div>
         <div className={GLASS_CARD}>
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-white/50 uppercase tracking-widest">
+            <span className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-widest">
               {t('components.cockpitTabs.overview.system_health')}
             </span>
             <Activity className="w-4 h-4 text-emerald-400/80" />
           </div>
           <p className="text-2xl font-bold mt-1 tabular-nums" style={{
-            color: score >= 70 ? '#4ade80' : score >= 40 ? '#fbbf24' : '#ef4444',
+            color: statsError ? 'var(--text-muted)' : score >= 70 ? '#4ade80' : score >= 40 ? '#fbbf24' : '#ef4444',
           }}>
-            {loading ? '—' : `${score}%`}
+            {loading || statsError ? '—' : `${score}%`}
           </p>
           <SparklineOrEmpty
             data={resolvedSpark}
@@ -393,13 +396,19 @@ export default function OverviewTab() {
       {/* Center: Gauge + Bar chart */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className={`${GLASS_CARD} flex flex-col items-center justify-center min-h-[320px]`}>
-          <h3 className="text-xs font-semibold text-white/50 uppercase tracking-widest mb-4">
+          <h3 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-widest mb-4">
             {t('components.cockpitTabs.overview.security_risk_grade')}
           </h3>
-          <RiskGauge score={score} />
+          {statsError ? (
+            <p className="text-sm text-[var(--text-muted)]">
+              {t('components.cockpitTabs.overview.stats_unavailable')}
+            </p>
+          ) : (
+            <RiskGauge score={score} />
+          )}
         </div>
         <div className={`${GLASS_CARD} min-h-[320px]`}>
-          <h3 className="text-xs font-semibold text-white/50 uppercase tracking-widest mb-4">
+          <h3 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-widest mb-4">
             {t('components.cockpitTabs.overview.vulnerabilities_by_severity')}
           </h3>
           {severityBarData.length > 0 ? (
@@ -425,7 +434,7 @@ export default function OverviewTab() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="h-64 flex items-center justify-center text-white/30 text-sm">
+            <div className="h-64 flex items-center justify-center text-[var(--text-muted)] text-sm">
               {t('components.cockpitTabs.overview.no_severity_data')}
             </div>
           )}
@@ -434,26 +443,26 @@ export default function OverviewTab() {
 
       {/* Bottom: Attack Surface Growth (OSINT → ASM → path wordlist) */}
       <div className={GLASS_CARD}>
-        <h3 className="text-xs font-semibold text-white/50 uppercase tracking-widest mb-6">
+        <h3 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-widest mb-6">
           {t('components.cockpitTabs.overview.attack_surface_growth')}
         </h3>
         <div className="space-y-5">
           {attackSurfaceData.length === 0 && !loading && (
-            <p className="text-sm text-white/30 text-center py-4">
+            <p className="text-sm text-[var(--text-muted)] text-center py-4">
               {t('components.cockpitTabs.overview.no_attack_surface')}
             </p>
           )}
           {attackSurfaceData.map(({ labelKey, label, value, color }) => (
             <div key={labelKey}>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-white/80 flex items-center gap-2">
+                <span className="text-sm text-[var(--text-secondary)] flex items-center gap-2">
                   {labelKey.includes('target') && <Globe className="w-4 h-4 text-[#22d3ee]/80" />}
                   {labelKey.includes('path') && <Cloud className="w-4 h-4 text-[#a855f7]/80" />}
                   {label}
                 </span>
-                <span className="text-xs font-mono text-white/50 tabular-nums">{value}</span>
+                <span className="text-xs font-mono text-[var(--text-muted)] tabular-nums">{value}</span>
               </div>
-              <div className="h-3 rounded-full bg-white/5 overflow-hidden">
+              <div className="h-3 rounded-full bg-[var(--bg-2)] overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-500"
                   style={{

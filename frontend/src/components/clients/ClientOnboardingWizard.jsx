@@ -30,18 +30,18 @@ function Field({ label, required, hint, children }) {
   const fieldId = isValidElement(children) && children.props.id ? children.props.id : autoId
   return (
     <div>
-      <label htmlFor={fieldId} className="block text-sm font-medium text-white/70 mb-2">
+      <label htmlFor={fieldId} className="block text-sm font-medium text-[var(--text-tertiary)] mb-2">
         {label}
-        {required && <span className="text-red-400 ms-1">*</span>}
+        {required && <span className="text-[var(--severity-critical)] ms-1">*</span>}
       </label>
       {isValidElement(children) ? cloneElement(children, { id: fieldId }) : children}
-      {hint && <p className="mt-1 text-xs text-white/35">{hint}</p>}
+      {hint && <p className="mt-1 text-xs text-[var(--text-muted)]">{hint}</p>}
     </div>
   )
 }
 
 const inputCls =
-  'w-full px-4 py-2 bg-black/50 border border-white/10 rounded-lg text-white placeholder-white/30 focus:outline-none focus:border-cyan-500/40'
+  'w-full px-4 py-2 bg-[var(--table-surface)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40'
 const textareaCls = `${inputCls} font-mono text-sm`
 
 export default function ClientOnboardingWizard({ onSubmit, submitting, error: externalError, filterQuery = '' }) {
@@ -163,7 +163,7 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
 
   if (loading) {
     return (
-      <div className="rounded-xl border border-white/10 bg-black/40 p-8 text-center text-white/50 text-sm">
+      <div className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] p-8 text-center text-[var(--text-muted)] text-sm">
         {t('pages.clientOnboarding.loading_catalog')}
       </div>
     )
@@ -172,25 +172,25 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {(externalError || localError || loadError) && (
-        <div className="p-4 bg-red-900/20 border border-red-500/30 rounded-lg text-red-400 text-sm">
+        <div className="p-4 bg-red-900/20 border border-red-500/30 rounded-lg text-[var(--severity-critical)] text-sm">
           {externalError || localError || loadError}
         </div>
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-cyan-500/20 bg-cyan-950/20 px-4 py-3">
         <div>
-          <div className="text-[10px] font-mono uppercase tracking-wider text-cyan-400/80">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-accent)]">
             {t('pages.clientOnboarding.readiness')}
           </div>
-          <div className="text-lg font-semibold text-white">{catalogUnavailable ? '—' : `${readiness.percent}%`}</div>
+          <div className="text-lg font-semibold text-[var(--text-primary)]">{catalogUnavailable ? '—' : `${readiness.percent}%`}</div>
         </div>
-        <div className="flex-1 min-w-[120px] max-w-xs h-2 rounded-full bg-white/10 overflow-hidden">
+        <div className="flex-1 min-w-[120px] max-w-xs h-2 rounded-full bg-[var(--bg-2)] overflow-hidden">
           <div
             className="h-full bg-gradient-to-r from-cyan-600 to-emerald-500 transition-all duration-300"
             style={{ width: catalogUnavailable ? '0%' : `${readiness.percent}%` }}
           />
         </div>
-        <div className="text-xs text-white/45">
+        <div className="text-xs text-[var(--text-muted)]">
           {catalogUnavailable ? '—' : `${readiness.satisfied}/${readiness.total} ${t('pages.clientOnboarding.requirements_met')}`}
         </div>
       </div>
@@ -215,8 +215,8 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
             onClick={() => setStep(i)}
             className={`px-3 py-1.5 rounded-lg text-[11px] font-mono border transition-colors ${
               i === step
-                ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-200'
-                : 'border-white/10 text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                ? 'border-cyan-500/50 bg-cyan-500/10 text-[var(--text-accent)]'
+                : 'border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
             }`}
           >
             {i + 1}. {stepLabel}
@@ -225,13 +225,13 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
         })}
       </div>
 
-      <div className="rounded-xl border border-white/10 bg-black/40 p-6 space-y-5">
-        <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-          {step === 0 && <FileCheck className="w-5 h-5 text-cyan-400" />}
-          {step === 2 && <Globe className="w-5 h-5 text-cyan-400" />}
-          {step === 3 && <Cpu className="w-5 h-5 text-cyan-400" />}
-          {step === 4 && <Cloud className="w-5 h-5 text-cyan-400" />}
-          {step === 5 && <Shield className="w-5 h-5 text-cyan-400" />}
+      <div className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] p-6 space-y-5">
+        <h3 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
+          {step === 0 && <FileCheck className="w-5 h-5 text-[var(--text-accent)]" />}
+          {step === 2 && <Globe className="w-5 h-5 text-[var(--text-accent)]" />}
+          {step === 3 && <Cpu className="w-5 h-5 text-[var(--text-accent)]" />}
+          {step === 4 && <Cloud className="w-5 h-5 text-[var(--text-accent)]" />}
+          {step === 5 && <Shield className="w-5 h-5 text-[var(--text-accent)]" />}
           {stepTitle}
         </h3>
 
@@ -244,7 +244,7 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
                 onChange={(e) => patch({ msa_acknowledged: e.target.checked })}
                 className="mt-1 w-4 h-4"
               />
-              <span className="text-sm text-white/80">{t('pages.clientOnboarding.msa_ack')}</span>
+              <span className="text-sm text-[var(--text-secondary)]">{t('pages.clientOnboarding.msa_ack')}</span>
             </label>
             <Field label={t('pages.clientOnboarding.emergency_name')} required>
               <input
@@ -314,7 +314,7 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
             </Field>
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={form.auto_detect_tech_stack} onChange={(e) => patch({ auto_detect_tech_stack: e.target.checked })} />
-              <span className="text-sm text-white/70">{t('pages.clientNew.auto_detect')}</span>
+              <span className="text-sm text-[var(--text-tertiary)]">{t('pages.clientNew.auto_detect')}</span>
             </label>
             <Field label={t('pages.clientNew.known_tech')}>
               <textarea className={textareaCls} rows={2} value={form.tech_stack} onChange={(e) => patch({ tech_stack: e.target.value })} />
@@ -324,7 +324,7 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
 
         {step === 3 && catalog?.modules && (
           <>
-            <p className="text-sm text-white/45">{t('pages.clientOnboarding.modules_body')}</p>
+            <p className="text-sm text-[var(--text-muted)]">{t('pages.clientOnboarding.modules_body')}</p>
             <div className="grid sm:grid-cols-2 gap-3">
               {Object.entries(catalog.modules).map(([id, mod]) => {
                 const selected = form.engagement_modules.includes(id)
@@ -337,12 +337,15 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
                     className={`text-start p-4 rounded-xl border transition-all ${
                       selected
                         ? 'border-cyan-500/40 bg-cyan-500/10 shadow-[0_0_20px_rgba(34,211,238,0.08)]'
-                        : 'border-white/10 bg-black/30 hover:border-white/20'
+                        : 'border-[var(--border-default)] bg-[var(--table-surface)] hover:border-[var(--border-strong)]'
                     }`}
                   >
-                    <div className="font-medium text-white text-sm">{modLabel}</div>
-                    <div className="text-[11px] text-white/40 mt-1 font-mono">
-                      {mod.engine_count} engines · {mod.requirements?.length} reqs
+                    <div className="font-medium text-[var(--text-primary)] text-sm">{modLabel}</div>
+                    <div className="text-[11px] text-[var(--text-muted)] mt-1 font-mono">
+                      {t('pages.clientOnboarding.module_meta', {
+                        engines: mod.engine_count,
+                        reqs: mod.requirements?.length ?? 0,
+                      })}
                     </div>
                   </Button>
                 )
@@ -354,8 +357,8 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
         {step === 4 && (
           <>
             {(needs.aws || needs.gcp || needs.azure) && (
-              <div className="space-y-4 pb-4 border-b border-white/10">
-                <h4 className="text-sm font-semibold text-white/80 flex items-center gap-2">
+              <div className="space-y-4 pb-4 border-b border-[var(--border-default)]">
+                <h4 className="text-sm font-semibold text-[var(--text-secondary)] flex items-center gap-2">
                   <Cloud className="w-4 h-4" /> {t('pages.clientOnboarding.cloud_section')}
                 </h4>
                 {needs.aws && (
@@ -363,7 +366,7 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
                     <Field label={label(catalog?.requirements?.aws_cross_account)} required>
                       <input className={inputCls} value={form.aws_cross_account_role_arn} onChange={(e) => patch({ aws_cross_account_role_arn: e.target.value })} placeholder="arn:aws:iam::123456789012:role/WeissmanAudit" />
                     </Field>
-                    <Field label="AWS External ID" required>
+                    <Field label={t('pages.clientOnboarding.aws_external_id')} required>
                       <input type="password" autoComplete="off" className={inputCls} value={form.aws_external_id} onChange={(e) => patch({ aws_external_id: e.target.value })} />
                     </Field>
                   </>
@@ -378,7 +381,7 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
                     <Field label={label(catalog?.requirements?.azure_subscription)} required>
                       <input className={inputCls} value={form.azure_subscription_id} onChange={(e) => patch({ azure_subscription_id: e.target.value })} placeholder="subscription-id" />
                     </Field>
-                    <Field label="Azure Tenant ID" required>
+                    <Field label={t('pages.clientOnboarding.azure_tenant_id')} required>
                       <input className={inputCls} value={form.azure_tenant_id} onChange={(e) => patch({ azure_tenant_id: e.target.value })} />
                     </Field>
                   </>
@@ -400,7 +403,7 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
 
             {needs.agent && (
               <div>
-                <div className="text-sm font-medium text-white/70 mb-2">{label(catalog?.requirements?.endpoint_agent)} *</div>
+                <div className="text-sm font-medium text-[var(--text-tertiary)] mb-2">{label(catalog?.requirements?.endpoint_agent)} *</div>
                 <div className="flex flex-wrap gap-2">
                   {AGENT_PLATFORMS.map((p) => (
                     <Button variant="unstyled"
@@ -409,22 +412,22 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
                       onClick={() => togglePlatform(p)}
                       className={`px-3 py-2 rounded-lg text-xs font-mono border ${
                         form.agent_platforms.includes(p)
-                          ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-200'
-                          : 'border-white/10 text-white/50'
+                          ? 'border-emerald-500/50 bg-emerald-500/10 text-[var(--severity-low)]'
+                          : 'border-[var(--border-default)] text-[var(--text-muted)]'
                       }`}
                     >
                       {p}
                     </Button>
                   ))}
                 </div>
-                <p className="mt-2 text-xs text-white/35">{hint(catalog?.requirements?.endpoint_agent)}</p>
+                <p className="mt-2 text-xs text-[var(--text-muted)]">{hint(catalog?.requirements?.endpoint_agent)}</p>
               </div>
             )}
 
             {needs.ot && (
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={form.industrial_ot_enabled} onChange={(e) => patch({ industrial_ot_enabled: e.target.checked })} />
-                <span className="text-sm text-white/70">{label(catalog?.requirements?.industrial_ot)}</span>
+                <span className="text-sm text-[var(--text-tertiary)]">{label(catalog?.requirements?.industrial_ot)}</span>
               </label>
             )}
 
@@ -435,8 +438,8 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
             )}
 
             {/* Optional eBPF runtime probe — SSH host/user for kernel-level telemetry. */}
-            <div className="space-y-3 pt-2 border-t border-white/10">
-              <h4 className="text-sm font-semibold text-white/80 flex items-center gap-2">
+            <div className="space-y-3 pt-2 border-t border-[var(--border-default)]">
+              <h4 className="text-sm font-semibold text-[var(--text-secondary)] flex items-center gap-2">
                 <Server className="w-4 h-4" /> {t('pages.clientOnboarding.ebpf_section')}
               </h4>
               <div className="grid sm:grid-cols-2 gap-3">
@@ -450,12 +453,12 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
             </div>
 
             {(needs.ai || needs.oast) && tenantStatus && (
-              <div className="rounded-lg border border-white/10 bg-black/30 p-4 space-y-2 text-sm">
-                <div className="text-[10px] font-mono uppercase text-white/40">{t('pages.clientOnboarding.tenant_status')}</div>
+              <div className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] p-4 space-y-2 text-sm">
+                <div className="text-[10px] font-mono uppercase text-[var(--text-muted)]">{t('pages.clientOnboarding.tenant_status')}</div>
                 <StatusRow ok={tenantStatus.llm_configured} label={label(catalog?.requirements?.tenant_llm)} />
                 <StatusRow ok={tenantStatus.oast_configured} label={label(catalog?.requirements?.tenant_oast)} />
                 <StatusRow ok={tenantStatus.ai_heavy_entitled === true} label={label(catalog?.requirements?.tenant_ai_entitlement)} />
-                <Link to="/system-core" className="text-xs text-cyan-400 hover:text-cyan-300 mt-2 inline-block">
+                <Link to="/system-core" className="text-xs text-[var(--text-accent)] hover:text-[var(--text-accent)] mt-2 inline-block">
                   {t('pages.clientOnboarding.configure_tenant')}
                 </Link>
               </div>
@@ -468,28 +471,33 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
             <div className="grid sm:grid-cols-2 gap-3 text-sm">
               <SummaryItem label={t('pages.clientNew.client_name')} value={form.name} />
               <SummaryItem label={t('pages.clientNew.contact_email')} value={form.contact_email} />
-              <SummaryItem label={t('pages.clientNew.authorized_domains')} value={form.domains.split(/[\n,]+/).filter(Boolean).length + ' domains'} />
+              <SummaryItem
+                label={t('pages.clientNew.authorized_domains')}
+                value={t('pages.clientOnboarding.domains_count', {
+                  n: form.domains.split(/[\n,]+/).filter(Boolean).length,
+                })}
+              />
               <SummaryItem label={t('pages.clientOnboarding.modules')} value={form.engagement_modules.join(', ')} />
             </div>
             <div className="space-y-2 mt-4">
               {readiness.items.filter((i) => i.hard).map((item) => (
                 <div key={item.id} className="flex items-center gap-2 text-sm">
                   {item.satisfied ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <CheckCircle2 className="w-4 h-4 text-[var(--severity-low)] shrink-0" />
                   ) : (
-                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                    <AlertTriangle className="w-4 h-4 text-[var(--severity-medium)] shrink-0" />
                   )}
-                  <span className={item.satisfied ? 'text-white/70' : 'text-amber-200/90'}>
+                  <span className={item.satisfied ? 'text-[var(--text-tertiary)]' : 'text-[var(--severity-medium)]'}>
                     {label(item.def)}
                     {item.scope === 'tenant' && (
-                      <span className="ms-1 text-[10px] font-mono text-white/30">(tenant)</span>
+                      <span className="ms-1 text-[10px] font-mono text-[var(--text-muted)]">{t('pages.clientOnboarding.scope_tenant_tag')}</span>
                     )}
                   </span>
                 </div>
               ))}
             </div>
             {!readiness.ready && (
-              <p className="text-amber-300/90 text-sm flex items-center gap-2 mt-4">
+              <p className="text-[var(--severity-medium)] text-sm flex items-center gap-2 mt-4">
                 <Server className="w-4 h-4" />
                 {t('pages.clientOnboarding.complete_missing')}
               </p>
@@ -503,7 +511,7 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
           type="button"
           disabled={step === 0 || submitting}
           onClick={() => setStep((s) => Math.max(0, s - 1))}
-          className="px-4 py-2 flex items-center gap-1 border border-white/15 text-[var(--text-secondary)] rounded-lg hover:bg-white/5 disabled:opacity-40"
+          className="px-4 py-2 flex items-center gap-1 border border-[var(--border-strong)] text-[var(--text-tertiary)] rounded-lg hover:bg-[var(--row-hover-bg)] disabled:opacity-40"
         >
           <ChevronLeft className="w-4 h-4" />
           {t('pages.clientOnboarding.back')}
@@ -535,17 +543,17 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
 function StatusRow({ ok, label }) {
   return (
     <div className="flex items-center gap-2">
-      {ok ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <AlertTriangle className="w-4 h-4 text-amber-400" />}
-      <span className={ok ? 'text-white/60' : 'text-amber-200/80'}>{label}</span>
+      {ok ? <CheckCircle2 className="w-4 h-4 text-[var(--severity-low)]" /> : <AlertTriangle className="w-4 h-4 text-[var(--severity-medium)]" />}
+      <span className={ok ? 'text-[var(--text-tertiary)]' : 'text-[var(--severity-medium)]'}>{label}</span>
     </div>
   )
 }
 
 function SummaryItem({ label, value }) {
   return (
-    <div className="rounded-lg border border-white/10 bg-black/30 px-3 py-2">
-      <div className="text-[10px] font-mono uppercase text-white/35">{label}</div>
-      <div className="text-white/80 truncate">{value || '—'}</div>
+    <div className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2">
+      <div className="text-[10px] font-mono uppercase text-[var(--text-muted)]">{label}</div>
+      <div className="text-[var(--text-secondary)] truncate">{value || '—'}</div>
     </div>
   )
 }

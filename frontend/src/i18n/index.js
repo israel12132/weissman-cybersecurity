@@ -50,7 +50,9 @@ i18n.on('languageChanged', (lng) => {
   if (code !== 'en') prefetchLocale(code)
 })
 
-i18n.on('languageChanged', applyDir)
+// Apply the initial <html dir>/<html lang> for the language detected at init time
+// (the languageChanged handler above covers every subsequent switch — a second
+// `i18n.on('languageChanged', applyDir)` here only double-stamps the same attributes).
 applyDir(i18n.language || 'en')
 
 export default i18n

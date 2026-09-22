@@ -240,6 +240,11 @@ export async function apiFetch(url, options = {}) {
       // silently credited to the breaker as a success — route it through retryOrThrow
       // with an HTTP-shaped error so callers can classify it and retries can fire.
       const err = new Error('Malformed JSON response')
+      // Deliberately leave err.status UNSET. retryOrThrow keys both the breaker and the
+      // retry decision off `status`: a 2xx here would be counted as a breaker SUCCESS and
+      // treated as non-retryable — the exact opposite of the intent above. An undefined
+      // status routes this through the transient-failure branch (counts against the
+      // breaker, retryable). The real HTTP status stays reachable via err.response.status.
       err.cause = parseError
       err.response = response
       return retryOrThrow(err)

@@ -235,6 +235,7 @@ export default function MobileSecurity() {
             <select
               value={selectedClientId ?? ''}
               onChange={(e) => setSelectedClientId(e.target.value || null)}
+              aria-label={t('pages.mobileSecurity.client_label')}
               className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40"
             >
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -307,7 +308,8 @@ export default function MobileSecurity() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder={t('pages.mobileSecurity.search_placeholder')}
-              className="w-full pl-10 pr-4 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-sm text-[var(--text-primary)] placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
+              aria-label={t('pages.mobileSecurity.search_placeholder')}
+              className="w-full pl-10 pr-4 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
             />
           </div>
           <div className="flex items-center gap-1 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg p-1">

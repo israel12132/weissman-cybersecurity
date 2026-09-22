@@ -155,22 +155,22 @@ export function UndergroundWarRoom({
         </Button>
       </div>
       <div className="flex flex-wrap gap-4 mb-3">
-        <div className="rounded-lg border border-white/[0.07] bg-black/30 px-3 py-2">
+        <div className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2">
           <p className="text-[9px] font-mono uppercase tracking-wider text-[var(--text-muted)]">
             {t('pages.darkWebMonitor.war_current')}
           </p>
           <span className="text-xl font-bold tabular-nums text-cyan-300">{parsed.current_count}</span>
         </div>
-        <div className="rounded-lg border border-white/[0.07] bg-black/30 px-3 py-2">
+        <div className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2">
           <p className="text-[9px] font-mono uppercase tracking-wider text-[var(--text-muted)]">
             {t('pages.darkWebMonitor.war_previous')}
           </p>
-          <span className="text-xl font-bold tabular-nums text-white/70">{parsed.previous_count}</span>
+          <span className="text-xl font-bold tabular-nums text-[var(--text-tertiary)]">{parsed.previous_count}</span>
         </div>
       </div>
       <ul className="flex flex-wrap gap-2 mb-3">
         {sources.map((id) => (
-          <li key={id} className="text-[10px] font-mono px-2 py-1 rounded-lg border border-white/[0.08] bg-black/30">
+          <li key={id} className="text-[10px] font-mono px-2 py-1 rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)]">
             {String(id).toUpperCase()} <span>{chipLabel(sourceChipState(id, parsed))}</span>
           </li>
         ))}
@@ -365,15 +365,7 @@ export default function DarkWebMonitor() {
 
         {loading && findings.length === 0 ? (
           <SkeletonWidgetGrid count={5} />
-        ) : error ? (
-          <div data-testid="dark-web-unavailable">
-            <EmptyState
-              icon="alert"
-              title={t('pages.darkWebMonitor.unavailable_title')}
-              body={t('pages.darkWebMonitor.unavailable_body')}
-            />
-          </div>
-        ) : (
+        ) : error ? null : (
           <>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <KpiCard label={t('pages.darkWebMonitor.total_hits')} value={stats.total} />
@@ -409,12 +401,7 @@ export default function DarkWebMonitor() {
           </>
         )}
 
-        {error && (
-          <div className="p-4 rounded-xl border border-red-500/30 bg-red-900/20 text-red-300 text-sm">
-            {t('pages.darkWebMonitor.load_error', { error })}
-          </div>
-        )}
-
+        {!error && (
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-disabled)]" />
@@ -433,13 +420,15 @@ export default function DarkWebMonitor() {
                 key={s}
                 type="button"
                 onClick={() => setSeverityFilter(s)}
+                aria-pressed={severityFilter === s}
                 className={`px-2.5 py-1 rounded-md text-[10px] font-mono uppercase transition-all ${
                   severityFilter === s
                     ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
                     : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                 }`}
               >
-                {s === 'all' ? t('pages.darkWebMonitor.filter_all') : s}
+                {s === 'all' ? t('pages.darkWebMonitor.filter_all') : s}{' '}
+                <span className="opacity-70 tabular-nums">{s === 'all' ? stats.total : (stats[s] || 0)}</span>
               </Button>
             ))}
           </div>
@@ -447,7 +436,7 @@ export default function DarkWebMonitor() {
             <select
               value={sourceFilter}
               onChange={(e) => setSourceFilter(e.target.value)}
-              className="px-3 py-2 rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] text-xs text-white font-mono"
+              className="px-3 py-2 rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] text-xs text-[var(--text-primary)] font-mono"
             >
               <option value="all">{t('pages.darkWebMonitor.all_sources')}</option>
               {sources.map((s) => (
@@ -456,10 +445,11 @@ export default function DarkWebMonitor() {
             </select>
           )}
         </div>
+        )}
 
         <section className="bg-[var(--bg-2)] border border-[var(--border-default)] rounded-xl overflow-hidden">
           <div className="flex items-center justify-between p-4 border-b border-[var(--border-default)]">
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
               <Filter className="w-4 h-4 text-rose-400" />
               {t('pages.darkWebMonitor.findings_heading')}
               {!error && (
@@ -474,7 +464,7 @@ export default function DarkWebMonitor() {
           {loading && findings.length === 0 ? (
             <div className="p-6"><SkeletonTable rows={6} cols={5} /></div>
           ) : error ? (
-            <div className="p-8">
+            <div className="p-8" data-testid="dark-web-unavailable">
               <EmptyState
                 icon="alert"
                 title={t('pages.darkWebMonitor.unavailable_title')}

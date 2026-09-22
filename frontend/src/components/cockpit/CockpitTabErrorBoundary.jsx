@@ -39,17 +39,17 @@ export default class CockpitTabErrorBoundary extends React.Component {
       return (
         <div className="p-8 max-w-2xl mx-auto">
           <h2 className="text-sm font-semibold text-red-400 mb-2">{i18n.t(`${NS}.title`)}</h2>
-          <p className="text-xs text-white/50 mb-3">
+          <p className="text-xs text-[var(--text-muted)] mb-3">
             {this.props.tabLabel
               ? i18n.t(`${NS}.tabFailed`, { label: this.props.tabLabel })
               : i18n.t(`${NS}.viewFailed`)}{' '}
             {i18n.t(`${NS}.switchHint`)}
           </p>
-          <p className="text-[11px] font-mono text-white/40 break-words mb-4">{msg}</p>
+          <p className="text-[11px] font-mono text-[var(--text-muted)] break-words mb-4">{msg}</p>
           <Button variant="unstyled"
             type="button"
             onClick={this.handleRetry}
-            className="px-4 py-2 rounded-lg border border-white/20 text-sm text-white/80 hover:bg-white/10"
+            className="px-4 py-2 rounded-lg border border-[var(--border-strong)] text-sm text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)]"
           >
             {i18n.t(`${NS}.retry`)}
           </Button>

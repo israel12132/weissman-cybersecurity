@@ -21,6 +21,17 @@ import RouteLoader from './components/ui/RouteLoader'
 import { predictChainFromRoute } from './boot/intentPrefetch'
 import {
   Cockpit,
+  CommandCenter,
+  WarRoom,
+  EngineRoomPage,
+  AutoHealPage,
+  DeceptionPage,
+  SwarmMindPage,
+  AiModelRiskPage,
+  EdgeSwarmPage,
+  NeuralWebPage,
+  IdentityMatrixPage,
+  PulsePage,
   Login,
   App,
   SystemCore,
@@ -71,6 +82,7 @@ import {
   SelfImprovementConsole,
   RoeApprovals,
   SsoDashboard,
+  ScimProvisioning,
   NexusSovereignSwarm,
   RiskSuperpositionCollapse,
   SovereignDefenseMatrix,
@@ -224,8 +236,19 @@ export default function TacticalApp() {
           }
         />
         <Route path="/" element={<ProtectedRoute><ProtectedOutlet /></ProtectedRoute>}>
-          <Route index element={<CeoProtectedRoute><Cockpit ceoIntegrated /></CeoProtectedRoute>} />
+          <Route index element={<CeoProtectedRoute><CommandCenter /></CeoProtectedRoute>} />
+          <Route path="war-room" element={<CeoProtectedRoute><WarRoom /></CeoProtectedRoute>} />
+          <Route path="engine-room" element={<EngineRoomPage />} />
+          <Route path="auto-heal" element={<AutoHealPage />} />
+          <Route path="deception" element={<DeceptionPage />} />
+          <Route path="swarm-mind" element={<SwarmMindPage />} />
+          <Route path="ai-model-risk" element={<AiModelRiskPage />} />
+          <Route path="edge-swarm" element={<EdgeSwarmPage />} />
+          <Route path="neural-web" element={<NeuralWebPage />} />
+          <Route path="identity-matrix" element={<IdentityMatrixPage />} />
+          <Route path="pulse" element={<PulsePage />} />
           <Route path="operations" element={<Cockpit />} />
+          <Route path="cockpit-legacy" element={<CeoProtectedRoute><Cockpit ceoIntegrated /></CeoProtectedRoute>} />
           <Route path="system-core" element={<SystemCore />} />
           <Route path="design-system" element={<DesignSystemGallery />} />
           <Route path="design-system/advanced" element={<RequireRole min="admin"><AdvancedShowcase /></RequireRole>} />
@@ -283,6 +306,7 @@ export default function TacticalApp() {
           <Route path="self-improve" element={<SelfImprovementConsole />} />
           <Route path="roe-approvals" element={<RoeApprovals />} />
           <Route path="sso-config" element={<RequireStaff><SsoDashboard /></RequireStaff>} />
+          <Route path="scim-provisioning" element={<RequireStaff><ScimProvisioning /></RequireStaff>} />
           <Route path="digital-twin" element={<DigitalTwinSimulator />} />
           <Route path="digital-twin/:clientId" element={<DigitalTwinSimulator />} />
           <Route path="nexus-swarm" element={<NexusSovereignSwarm />} />

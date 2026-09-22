@@ -1,4 +1,5 @@
 import { memo, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { List } from 'react-window'
 import CopyButton from '../../components/ui/CopyButton'
 import { capAstMutations, prefetchAstCapWasm } from '../astCapWasm'
@@ -37,6 +38,7 @@ export default function AstTreeViewer({
   emptyBody = 'Run preview to populate the mutation tree.',
   className = '',
 }) {
+  const { t } = useTranslation()
   const [capped, setCapped] = useState([])
   const rawCount = Array.isArray(nodes) ? nodes.length : 0
 
@@ -52,9 +54,15 @@ export default function AstTreeViewer({
       ? Math.min(maxNodes, 5_000)
       : maxNodes
 
-    capAstMutations(list, budget, MAX_BYTES_ESTIMATE).then((result) => {
-      if (!cancelled) setCapped(result)
-    })
+    capAstMutations(list, budget, MAX_BYTES_ESTIMATE)
+      .then((result) => {
+        if (!cancelled) setCapped(Array.isArray(result) ? result : [])
+      })
+      .catch(() => {
+        // WASM/fallback capping should never reject, but a rejection here must
+        // not surface as an unhandled promise rejection — degrade to empty.
+        if (!cancelled) setCapped([])
+      })
     return () => {
       cancelled = true
     }
@@ -93,11 +101,11 @@ export default function AstTreeViewer({
     <div className={`rounded-xl border border-amber-500/20 bg-black/40 overflow-hidden ${className}`}>
       <div className="px-3 py-2 border-b border-white/10 flex items-center justify-between">
         <span className="text-[10px] font-mono uppercase tracking-widest text-amber-200/70">
-          AST tree · {capped.length.toLocaleString()} nodes
+          {t('engineC2.ast_tree_count', { count: capped.length.toLocaleString() })}
         </span>
         {capped.length < rawCount && (
           <span className="text-[9px] font-mono text-rose-300/80">
-            truncated for safety
+            {t('engineC2.truncated_for_safety')}
           </span>
         )}
       </div>

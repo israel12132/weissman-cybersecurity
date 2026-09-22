@@ -94,7 +94,7 @@ const TONE_CLASS = {
   danger: 'text-rose-300 bg-rose-500/10 border-rose-500/30',
   warn: 'text-amber-300 bg-amber-500/10 border-amber-500/30',
   ok: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30',
-  muted: 'text-white/40 bg-white/5 border-white/10',
+  muted: 'text-[var(--text-muted)] bg-[var(--bg-2)] border-[var(--border-default)]',
 }
 
 function SlaBadge({ sla, t }) {
@@ -128,8 +128,8 @@ function Chip({ color, children, title }) {
 
 function SummaryStat({ label, value, color }) {
   return (
-    <div className="bg-black/40 border border-white/10 rounded-lg px-3 py-2">
-      <div className="text-[10px] uppercase tracking-wider text-white/40">{label}</div>
+    <div className="bg-[var(--table-surface)] border border-[var(--border-default)] rounded-lg px-3 py-2">
+      <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">{label}</div>
       <div className="text-lg font-bold tabular-nums" style={color ? { color } : { color: '#fff' }}>{value}</div>
     </div>
   )
@@ -187,21 +187,22 @@ export default function FixFirstProgram() {
   }, [error, filteredProgram])
 
   return (
-    <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
+    <div className="bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
       <div className="px-4 pt-4">
         <EvidenceNotice>
-          Live remediation program from GET /api/remediation/priority/:clientId — backend-ranked,
-          root-cause deduplicated, with EPSS/KEV effective risk, attack-graph choke points and SLA
-          clocks. Nothing is recomputed in the browser; no fabricated remediation telemetry.
+          {t('pages.remediationHub.program_evidence_notice', {
+            defaultValue:
+              'Live remediation program from GET /api/remediation/priority/:clientId — backend-ranked, root-cause deduplicated, with EPSS/KEV effective risk, attack-graph choke points and SLA clocks. Nothing is recomputed in the browser; no fabricated remediation telemetry.',
+          })}
         </EvidenceNotice>
       </div>
-      <div className="p-4 border-b border-white/10 flex items-center justify-between gap-3 flex-wrap">
-        <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+      <div className="p-4 border-b border-[var(--border-default)] flex items-center justify-between gap-3 flex-wrap">
+        <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
           <Target className="w-4 h-4 text-cyan-400" />
           {t('pages.remediationHub.program_heading')}
         </h3>
         <div className="flex items-center gap-3">
-          <span className="text-[10px] text-white/35 font-mono hidden sm:inline">
+          <span className="text-[10px] text-[var(--text-muted)] font-mono hidden sm:inline">
             {t('pages.remediationHub.program_caption')}
           </span>
           <ShellScanActions
@@ -217,7 +218,7 @@ export default function FixFirstProgram() {
             onClick={exportPdf}
             disabled={!!error || !filteredProgram.length}
             title={t('common.export_pdf')}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-white/15 text-white/70 hover:bg-white/10 disabled:opacity-40 transition-colors"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] disabled:opacity-40 transition-colors"
           >
             <FileText className="w-3.5 h-3.5" />
             {t('common.export_pdf')}
@@ -243,7 +244,7 @@ export default function FixFirstProgram() {
         </div>
       ) : (
         <>
-          <div className="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 border-b border-white/5">
+          <div className="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 border-b border-[var(--border-subtle)]">
             <SummaryStat label={t('pages.remediationHub.program_stat_actions')} value={data.remediation_actions ?? program.length} />
             <SummaryStat label={t('pages.remediationHub.program_stat_overdue')} value={data.overdue_actions ?? 0} color="#f43f5e" />
             <SummaryStat label={t('pages.remediationHub.program_stat_due_soon')} value={data.due_soon_actions ?? 0} color="#fbbf24" />
@@ -253,41 +254,42 @@ export default function FixFirstProgram() {
           </div>
 
           {frameworks.length > 0 && (
-            <div className="px-4 py-2 border-b border-white/5 flex items-center gap-2 flex-wrap">
-              <span className="text-[10px] uppercase tracking-wider text-white/35">{t('pages.remediationHub.program_frameworks')}</span>
+            <div className="px-4 py-2 border-b border-[var(--border-subtle)] flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">{t('pages.remediationHub.program_frameworks')}</span>
               {frameworks.map((fw) => <Chip key={fw} color="#22d3ee">{fw}</Chip>)}
             </div>
           )}
 
-          <div className="px-4 py-2 border-b border-white/5 flex items-center gap-2">
+          <div className="px-4 py-2 border-b border-[var(--border-subtle)] flex items-center gap-2">
             <div className="relative flex-1 max-w-xs">
-              <Search className="w-3 h-3 text-white/30 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <Search className="w-3 h-3 text-[var(--text-muted)] absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={t('pages.remediationHub.program_search')}
                 aria-label={t('pages.remediationHub.program_search')}
-                className="w-full pl-6 pr-2 py-1 rounded-md text-[11px] bg-black/40 border border-white/10 text-white/80 placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+                className="w-full pl-6 pr-2 py-1 rounded-md text-[11px] bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
               />
             </div>
           </div>
 
           {filteredProgram.length === 0 ? (
-            <div className="p-4 text-[11px] text-white/35">
+            <div className="p-4 text-[11px] text-[var(--text-muted)]">
               {t('pages.remediationHub.program_no_match')}
             </div>
           ) : (
-          <div className="divide-y divide-white/5">
+          <div className="divide-y divide-[var(--border-subtle)]">
             {filteredProgram.map((item) => {
               const risk = Number(item.max_effective_risk)
+              const score = Number(item.priority_score)
               return (
-                <div key={`${item.rank}-${item.title}-${item.asset}`} className="p-4 hover:bg-white/5 transition-colors">
+                <div key={`${item.rank}-${item.title}-${item.asset}`} className="p-4 hover:bg-[var(--row-hover-bg)] transition-colors">
                   <div className="flex items-start gap-3">
-                    <div className="text-lg font-bold tabular-nums text-white/30 w-8 shrink-0 text-right">{item.rank}</div>
+                    <div className="text-lg font-bold tabular-nums text-[var(--text-muted)] w-8 shrink-0 text-right">{item.rank}</div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <h4 className="text-sm font-semibold text-white truncate">{item.title || item.cwe || t('pages.remediationHub.program_untitled')}</h4>
+                        <h4 className="text-sm font-semibold text-[var(--text-primary)] truncate">{item.title || item.cwe || t('pages.remediationHub.program_untitled')}</h4>
                         <SlaBadge sla={item.sla} t={t} />
                         {item.kev_ransomware ? (
                           <Chip color="#f43f5e" title="Ransomware-associated KEV"><Flame className="w-3 h-3" />{t('pages.remediationHub.program_ransomware')}</Chip>
@@ -304,13 +306,13 @@ export default function FixFirstProgram() {
                           <Chip color="#f0abfc" title="Estimated financial blast radius">{formatUsd(item.business_value_usd)}</Chip>
                         )}
                       </div>
-                      {item.asset && <div className="text-[11px] font-mono text-white/45 truncate mb-1.5">{item.asset}</div>}
+                      {item.asset && <div className="text-[11px] font-mono text-[var(--text-muted)] truncate mb-1.5">{item.asset}</div>}
                       <div className="flex items-center gap-2 mb-1.5">
-                        <div className="h-1.5 w-full max-w-[220px] rounded-full bg-white/5 overflow-hidden">
+                        <div className="h-1.5 w-full max-w-[220px] rounded-full bg-[var(--bg-2)] overflow-hidden">
                           <div className="h-full bg-gradient-to-r from-cyan-500 to-rose-500" style={{ width: `${scoreFraction(item.priority_score) * 100}%` }} />
                         </div>
-                        <span className="text-[10px] font-mono text-white/40 whitespace-nowrap tabular-nums">
-                          {t('pages.remediationHub.program_score')} {Number(item.priority_score).toFixed(1)}
+                        <span className="text-[10px] font-mono text-[var(--text-muted)] whitespace-nowrap tabular-nums">
+                          {t('pages.remediationHub.program_score')} {Number.isFinite(score) ? score.toFixed(1) : '—'}
                           {Number.isFinite(risk) ? ` · ${t('pages.remediationHub.program_risk')} ${risk.toFixed(1)}` : ''}
                         </span>
                       </div>
@@ -326,7 +328,7 @@ export default function FixFirstProgram() {
                           ))}
                         </div>
                       )}
-                      {item.rationale && <div className="text-[11px] text-white/35 mt-1.5 italic">{item.rationale}</div>}
+                      {item.rationale && <div className="text-[11px] text-[var(--text-muted)] mt-1.5 italic">{item.rationale}</div>}
                     </div>
                   </div>
                 </div>

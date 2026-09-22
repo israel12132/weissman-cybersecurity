@@ -115,7 +115,7 @@ export default function AdminManagement() {
             roleCanScope(newRole) && newAssignedClientId ? Number(newAssignedClientId) : null,
         },
       })
-      setSuccessMsg(`User ${newEmail} created successfully`)
+      setSuccessMsg(t('pages.adminManagement.user_created'))
       setNewEmail('')
       setNewPassword('')
       setNewRole('viewer')
@@ -154,7 +154,7 @@ export default function AdminManagement() {
               : null,
         },
       })
-      setSuccessMsg(`User ${editingUser.email} updated`)
+      setSuccessMsg(t('pages.adminManagement.user_updated'))
       setEditingUser(null)
       await loadUsers()
     } catch (err) {
@@ -182,7 +182,7 @@ export default function AdminManagement() {
       await apiFetch(`/api/admin/users/${userId}/deactivate`, {
         method: 'POST',
       })
-      setSuccessMsg(`User ${email} deactivated`)
+      setSuccessMsg(t('pages.adminManagement.user_deactivated'))
       await loadUsers()
     } catch (err) {
       if (err?.response) {
@@ -391,6 +391,7 @@ export default function AdminManagement() {
             <Button variant="unstyled"
               id="adminmgmt-dismiss-success-btn"
               type="button"
+              aria-label={t('common.dismiss')}
               onClick={() => setSuccessMsg(null)}
               className="text-emerald-400 hover:text-emerald-300 ml-4"
             >
@@ -407,6 +408,7 @@ export default function AdminManagement() {
             <Button variant="unstyled"
               id="adminmgmt-dismiss-error-btn"
               type="button"
+              aria-label={t('common.dismiss')}
               onClick={() => setError(null)}
               className="text-red-400 hover:text-red-300 ml-4"
             >
@@ -435,7 +437,7 @@ export default function AdminManagement() {
                 onChange={(e) => setNewEmail(e.target.value)}
                 placeholder="user@example.com"
                 required
-                className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-white placeholder:text-[var(--text-muted)] focus:border-cyan-500/50 focus:outline-none text-sm"
+                className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-cyan-500/50 focus:outline-none text-sm"
               />
             </div>
             <div>
@@ -452,7 +454,7 @@ export default function AdminManagement() {
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="••••••••"
                 required
-                className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-white placeholder:text-[var(--text-muted)] focus:border-cyan-500/50 focus:outline-none text-sm"
+                className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-cyan-500/50 focus:outline-none text-sm"
               />
             </div>
             <div>
@@ -466,7 +468,7 @@ export default function AdminManagement() {
                 id="adminmgmt-new-role"
                 value={newRole}
                 onChange={(e) => setNewRole(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-white focus:border-cyan-500/50 focus:outline-none text-sm"
+                className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-[var(--text-primary)] focus:border-cyan-500/50 focus:outline-none text-sm"
               >
                 <option value="viewer">Viewer</option>
                 <option value="analyst">Analyst</option>
@@ -495,7 +497,7 @@ export default function AdminManagement() {
                 value={newAssignedClientId}
                 onChange={(e) => setNewAssignedClientId(e.target.value)}
                 required={roleRequiresClient(newRole)}
-                className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-white focus:border-cyan-500/50 focus:outline-none text-sm"
+                className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-[var(--text-primary)] focus:border-cyan-500/50 focus:outline-none text-sm"
               >
                 <option value="">{t('pages.adminManagement.assigned_client_placeholder')}</option>
                 {clients.map((c) => (
@@ -604,7 +606,7 @@ export default function AdminManagement() {
                     id="adminmgmt-edit-role"
                     value={editRole}
                     onChange={(e) => setEditRole(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-white focus:border-cyan-500/50 focus:outline-none text-sm"
+                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-[var(--text-primary)] focus:border-cyan-500/50 focus:outline-none text-sm"
                   >
                     <option value="viewer">Viewer</option>
                     <option value="analyst">Analyst</option>
@@ -634,7 +636,7 @@ export default function AdminManagement() {
                     id="adminmgmt-edit-client"
                     value={editAssignedClientId}
                     onChange={(e) => setEditAssignedClientId(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-white focus:border-cyan-500/50 focus:outline-none text-sm"
+                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-[var(--text-primary)] focus:border-cyan-500/50 focus:outline-none text-sm"
                   >
                     <option value="">{t('pages.adminManagement.assigned_client_placeholder')}</option>
                     {clients.map((c) => (

@@ -1,10 +1,11 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useId, useState, useCallback } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { apiFetch } from '../../utils/apiFetch'
 import Button from '../ui/Button'
 
 export default function CeoGenesisPanel() {
   const { t } = useTranslation()
+  const uid = useId()
   const [strategyLoading, setStrategyLoading] = useState(true)
   const [strategyErr, setStrategyErr] = useState('')
   const [ramMb, setRamMb] = useState(4096)
@@ -48,7 +49,8 @@ export default function CeoGenesisPanel() {
       const d = await apiFetch('/api/ceo/hpc/policy')
       setHpcView(d)
       const des = d.desired || {}
-      setResearchPct(Number(des.research_core_share_percent) || 50)
+      const share = Number(des.research_core_share_percent)
+      setResearchPct(Number.isFinite(share) ? share : 50)
       setResearchAff(des.research_cpu_affinity || '0-15')
       setClientAff(des.client_scan_cpu_affinity || '16-31')
       setRoutingNote(des.routing_note || '')
@@ -116,7 +118,7 @@ export default function CeoGenesisPanel() {
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
-      <form onSubmit={saveStrategy} className="rounded-lg border border-white/10 bg-black/35 p-4 space-y-4">
+      <form onSubmit={saveStrategy} className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] p-4 space-y-4">
         <h2 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-widest">
           {t('components.ceo.genesisPanel.title')}
         </h2>
@@ -135,38 +137,41 @@ export default function CeoGenesisPanel() {
           {t('components.ceo.genesisPanel.globalKillSwitch')}
         </label>
         <div>
-          <label className="block text-[10px] uppercase text-[var(--text-muted)] mb-1 font-mono">
+          <label htmlFor={`${uid}-ram`} className="block text-[10px] uppercase text-[var(--text-muted)] mb-1 font-mono">
             {t('components.ceo.genesisPanel.ramBudget')}
           </label>
           <input
+            id={`${uid}-ram`}
             type="number"
             min={64}
             max={262144}
             value={ramMb}
             onChange={(e) => setRamMb(e.target.value)}
-            className="w-full font-mono text-sm bg-[var(--bg-0)] border border-white/15 rounded px-3 py-2 text-[var(--text-primary)]"
+            className="w-full font-mono text-sm bg-[var(--bg-0)] border border-[var(--border-strong)] rounded px-3 py-2 text-[var(--text-primary)]"
           />
         </div>
         <div>
-          <label className="block text-[10px] uppercase text-[var(--text-muted)] mb-1 font-mono">
+          <label htmlFor={`${uid}-seed-repos`} className="block text-[10px] uppercase text-[var(--text-muted)] mb-1 font-mono">
             {t('components.ceo.genesisPanel.seedRepos')}
           </label>
           <textarea
+            id={`${uid}-seed-repos`}
             value={seedsRepos}
             onChange={(e) => setSeedsRepos(e.target.value)}
             rows={4}
-            className="w-full font-mono text-xs bg-[var(--bg-0)] border border-white/15 rounded px-3 py-2 text-[var(--text-primary)]"
+            className="w-full font-mono text-xs bg-[var(--bg-0)] border border-[var(--border-strong)] rounded px-3 py-2 text-[var(--text-primary)]"
           />
         </div>
         <div>
-          <label className="block text-[10px] uppercase text-[var(--text-muted)] mb-1 font-mono">
+          <label htmlFor={`${uid}-seed-npm`} className="block text-[10px] uppercase text-[var(--text-muted)] mb-1 font-mono">
             {t('components.ceo.genesisPanel.seedNpm')}
           </label>
           <textarea
+            id={`${uid}-seed-npm`}
             value={seedsNpm}
             onChange={(e) => setSeedsNpm(e.target.value)}
             rows={3}
-            className="w-full font-mono text-xs bg-[var(--bg-0)] border border-white/15 rounded px-3 py-2 text-[var(--text-primary)]"
+            className="w-full font-mono text-xs bg-[var(--bg-0)] border border-[var(--border-strong)] rounded px-3 py-2 text-[var(--text-primary)]"
           />
         </div>
         <Button variant="unstyled"
@@ -187,7 +192,7 @@ export default function CeoGenesisPanel() {
         </h2>
         <div
           role="alert"
-          className="text-[11px] font-mono text-amber-200/90 bg-black/40 border border-amber-500/30 rounded p-3 leading-snug"
+          className="text-[11px] font-mono text-amber-200/90 bg-[var(--table-surface)] border border-amber-500/30 rounded p-3 leading-snug"
         >
           <Trans
             i18nKey="components.ceo.genesisPanel.hpcNotice"
@@ -201,10 +206,11 @@ export default function CeoGenesisPanel() {
         {!hpcErr && (
         <>
         <div>
-          <label className="block text-[10px] uppercase text-[var(--text-muted)] mb-1 font-mono">
+          <label htmlFor={`${uid}-research-share`} className="block text-[10px] uppercase text-[var(--text-muted)] mb-1 font-mono">
             {t('components.ceo.genesisPanel.researchCoreShare', { pct: researchPct })}
           </label>
           <input
+            id={`${uid}-research-share`}
             type="range"
             min={0}
             max={100}
@@ -214,33 +220,36 @@ export default function CeoGenesisPanel() {
           />
         </div>
         <div>
-          <label className="block text-[10px] uppercase text-[var(--text-muted)] mb-1 font-mono">
+          <label htmlFor={`${uid}-research-aff`} className="block text-[10px] uppercase text-[var(--text-muted)] mb-1 font-mono">
             {t('components.ceo.genesisPanel.researchCpuAffinity')}
           </label>
           <input
+            id={`${uid}-research-aff`}
             value={researchAff}
             onChange={(e) => setResearchAff(e.target.value)}
-            className="w-full font-mono text-sm bg-[var(--bg-0)] border border-white/15 rounded px-3 py-2 text-[var(--text-primary)]"
+            className="w-full font-mono text-sm bg-[var(--bg-0)] border border-[var(--border-strong)] rounded px-3 py-2 text-[var(--text-primary)]"
           />
         </div>
         <div>
-          <label className="block text-[10px] uppercase text-[var(--text-muted)] mb-1 font-mono">
+          <label htmlFor={`${uid}-client-aff`} className="block text-[10px] uppercase text-[var(--text-muted)] mb-1 font-mono">
             {t('components.ceo.genesisPanel.clientScanCpuAffinity')}
           </label>
           <input
+            id={`${uid}-client-aff`}
             value={clientAff}
             onChange={(e) => setClientAff(e.target.value)}
-            className="w-full font-mono text-sm bg-[var(--bg-0)] border border-white/15 rounded px-3 py-2 text-[var(--text-primary)]"
+            className="w-full font-mono text-sm bg-[var(--bg-0)] border border-[var(--border-strong)] rounded px-3 py-2 text-[var(--text-primary)]"
           />
         </div>
         <div>
-          <label className="block text-[10px] uppercase text-[var(--text-muted)] mb-1 font-mono">
+          <label htmlFor={`${uid}-routing-note`} className="block text-[10px] uppercase text-[var(--text-muted)] mb-1 font-mono">
             {t('components.ceo.genesisPanel.routingNote')}
           </label>
           <input
+            id={`${uid}-routing-note`}
             value={routingNote}
             onChange={(e) => setRoutingNote(e.target.value)}
-            className="w-full font-mono text-sm bg-[var(--bg-0)] border border-white/15 rounded px-3 py-2 text-[var(--text-primary)]"
+            className="w-full font-mono text-sm bg-[var(--bg-0)] border border-[var(--border-strong)] rounded px-3 py-2 text-[var(--text-primary)]"
           />
         </div>
         <Button variant="unstyled"
@@ -252,7 +261,7 @@ export default function CeoGenesisPanel() {
           {hpcSaving ? t('components.ceo.genesisPanel.saving') : t('components.ceo.genesisPanel.applyHpcPolicy')}
         </Button>
         {eff && !hpcErr && (
-          <div className="text-[10px] font-mono text-[var(--text-tertiary)] space-y-1 border-t border-white/10 pt-3 mt-2">
+          <div className="text-[10px] font-mono text-[var(--text-tertiary)] space-y-1 border-t border-[var(--border-default)] pt-3 mt-2">
             <div>
               {t('components.ceo.genesisPanel.workerPoolEnv')}{' '}
               <span className="text-cyan-300">{eff.worker_pool_env || '—'}</span>

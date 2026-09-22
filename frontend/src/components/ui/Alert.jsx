@@ -1,4 +1,5 @@
 import { forwardRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { AlertTriangle, CheckCircle2, Info, X, XCircle } from 'lucide-react'
 import { cn } from '../../lib/cn'
 
@@ -49,6 +50,7 @@ const Alert = forwardRef(function Alert(
   },
   ref,
 ) {
+  const { t } = useTranslation()
   const { Icon, classes } = VARIANTS[variant] ?? VARIANTS.info
   const role = variant === 'danger' || variant === 'warning' ? 'alert' : 'status'
 
@@ -88,7 +90,7 @@ const Alert = forwardRef(function Alert(
         <button
           type="button"
           onClick={onDismiss}
-          aria-label="Dismiss"
+          aria-label={t('components.alert.dismiss', 'Dismiss')}
           className={cn(
             '-me-1 -mt-1 inline-flex shrink-0 items-center justify-center rounded-md p-1',
             'text-current opacity-70 transition-all duration-fast ease-out-expo',

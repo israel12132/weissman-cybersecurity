@@ -43,7 +43,7 @@ export function maxBucketTotal(buckets) {
 function SeverityBar({ bucket, width }) {
   const total = Number(bucket?.total) || 0
   return (
-    <div className="h-3 rounded bg-white/5 overflow-hidden" style={{ width: `${width}%`, minWidth: total ? '4px' : '0' }}>
+    <div className="h-3 rounded bg-[var(--bg-2)] overflow-hidden" style={{ width: `${width}%`, minWidth: total ? '4px' : '0' }}>
       <div className="flex h-full w-full">
         {SEV_ORDER.map((k) => {
           const v = Number(bucket[k]) || 0
@@ -105,15 +105,17 @@ export default function BacklogAgingPanel() {
   const agedHighs = Number(data?.aged_highs) || 0
 
   return (
-    <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
+    <div className="bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
       <div className="px-4 pt-4">
         <EvidenceNotice>
-          Live backlog from GET /api/remediation/aging/:clientId — open findings bucketed by age
-          from the tenant-scoped remediation store. No fabricated aging telemetry.
+          {t('pages.remediationHub.aging_evidence_notice', {
+            defaultValue:
+              'Live backlog from GET /api/remediation/aging/:clientId — open findings bucketed by age from the tenant-scoped remediation store. No fabricated aging telemetry.',
+          })}
         </EvidenceNotice>
       </div>
-      <div className="p-4 border-b border-white/10 flex items-center justify-between gap-3 flex-wrap">
-        <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+      <div className="p-4 border-b border-[var(--border-default)] flex items-center justify-between gap-3 flex-wrap">
+        <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
           <Hourglass className="w-4 h-4 text-amber-400" />
           {t('pages.remediationHub.aging_heading')}
         </h3>
@@ -139,7 +141,7 @@ export default function BacklogAgingPanel() {
             onClick={exportPdf}
             disabled={!buckets.length}
             title={t('common.export_pdf')}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-white/15 text-white/70 hover:bg-white/10 disabled:opacity-40 transition-colors"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:bg-[var(--row-hover-bg)] disabled:opacity-40 transition-colors"
           >
             <FileText className="w-3.5 h-3.5" />
             {t('common.export_pdf')}
@@ -150,15 +152,15 @@ export default function BacklogAgingPanel() {
       <div className="p-4 space-y-2">
         {buckets.map((b) => (
           <div key={b.label} className="flex items-center gap-3">
-            <div className="w-16 shrink-0 text-[11px] font-mono text-white/50">{b.label}</div>
+            <div className="w-16 shrink-0 text-[11px] font-mono text-[var(--text-muted)]">{b.label}</div>
             <div className="flex-1">
               <SeverityBar bucket={b} width={((Number(b.total) || 0) / barMax) * 100} />
             </div>
-            <div className="w-8 shrink-0 text-right text-xs font-bold tabular-nums text-white">{b.total}</div>
+            <div className="w-8 shrink-0 text-right text-xs font-bold tabular-nums text-[var(--text-primary)]">{Number(b.total) || 0}</div>
           </div>
         ))}
         {Number(data?.unknown_age) > 0 && (
-          <div className="text-[10px] text-white/35 font-mono pt-1">
+          <div className="text-[10px] text-[var(--text-muted)] font-mono pt-1">
             {t('pages.remediationHub.aging_unknown', { count: data.unknown_age })}
           </div>
         )}

@@ -9,8 +9,8 @@ export default function CommanderIntentHUD({
   onWargame,
   wargaming,
   stripsChain,
-  nodeCount,
-  edgeCount,
+  nodeCount = 0,
+  edgeCount = 0,
 }) {
   const { t } = useTranslation()
 
@@ -28,8 +28,8 @@ export default function CommanderIntentHUD({
             <p className="text-sm font-semibold text-white truncate">{focusNode.label || focusNode.graph_key}</p>
             <p className="text-[10px] font-mono text-white/45 mt-0.5">
               {focusNode.node_type}
-              {focusNode.crown_jewel ? ' · crown jewel' : ''}
-              {focusNode.internet_exposed ? ' · perimeter' : ''}
+              {focusNode.crown_jewel ? ` · ${t('battlespace.tag_crown_jewel')}` : ''}
+              {focusNode.internet_exposed ? ` · ${t('battlespace.tag_perimeter')}` : ''}
             </p>
             {intentActive && (
               <p className="text-[10px] text-cyan-300/70 mt-2">
@@ -65,11 +65,19 @@ export default function CommanderIntentHUD({
       <div className="pointer-events-auto rounded-xl border border-white/10 bg-black/60 backdrop-blur-md px-3 py-2 text-[10px] font-mono text-white/50">
         <div className="flex items-center gap-2">
           <Shield className="w-3.5 h-3.5 text-cyan-400/80" />
-          <span>{nodeCount.toLocaleString()} nodes · {edgeCount.toLocaleString()} edges</span>
+          <span>
+            {t('battlespace.graph_counts', {
+              nodes: nodeCount.toLocaleString(),
+              edges: edgeCount.toLocaleString(),
+            })}
+          </span>
         </div>
         {stripsChain?.reached_goal && (
           <p className="text-emerald-400/80 mt-1">
-            STRIPS: {stripsChain.steps?.length ?? 0} steps → {stripsChain.goal}
+            {t('battlespace.strips_summary', {
+              steps: stripsChain.steps?.length ?? 0,
+              goal: stripsChain.goal ?? '—',
+            })}
           </p>
         )}
       </div>

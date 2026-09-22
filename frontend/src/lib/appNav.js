@@ -66,10 +66,26 @@ export const INTEL_MAP_QUICKNAV = [
 /** @type {NavGroup[]} */
 export const NAV_GROUPS = [
   {
+    id: 'modules',
+    labelKey: 'nav.groups.modules',
+    items: [
+      { to: '/engine-room', labelKey: 'nav.engine_room', icon: '⬡' },
+      { to: '/auto-heal', labelKey: 'nav.auto_heal', icon: '🩺' },
+      { to: '/deception', labelKey: 'nav.deception', icon: '🕸' },
+      { to: '/swarm-mind', labelKey: 'nav.swarm_mind', icon: '🧠' },
+      { to: '/ai-model-risk', labelKey: 'nav.ai_model_risk', icon: '⚠' },
+      { to: '/edge-swarm', labelKey: 'nav.edge_swarm', icon: '🌐' },
+      { to: '/neural-web', labelKey: 'nav.neural_web', icon: '◈' },
+      { to: '/identity-matrix', labelKey: 'nav.identity_matrix', icon: '🔑' },
+      { to: '/pulse', labelKey: 'nav.pulse', icon: '📈' },
+    ],
+  },
+  {
     id: 'command',
     labelKey: 'nav.groups.command',
     items: [
       { to: '/', labelKey: 'nav.cockpit', icon: '◈', exact: true },
+      { to: '/war-room', labelKey: 'nav.war_room', icon: '⚔', minRole: 'ceo' },
       { to: '/overview', labelKey: 'nav.overview', icon: '▤' },
       { to: '/live-feed', labelKey: 'nav.live_feed', icon: '📡' },
       { to: '/findings', labelKey: 'nav.findings', icon: '◉' },
@@ -114,7 +130,6 @@ export const NAV_GROUPS = [
       { to: '/ai-analysis', labelKey: 'nav.ai_analysis', icon: '🧠' },
       { to: '/exploit-lab', labelKey: 'nav.exploit_lab', icon: '🧪' },
       { to: '/council-queue', labelKey: 'nav.council_queue', icon: '⚖' },
-      { to: '/soar-hitl', labelKey: 'nav.soar_hitl', icon: '🛡' },
       { to: '/self-improve', labelKey: 'nav.self_improve', icon: '🧠' },
       { to: '/roe-approvals', labelKey: 'nav.roe_approvals', icon: '📜' },
       { to: '/remediation', labelKey: 'nav.remediation', icon: '🔧' },
@@ -339,6 +354,7 @@ function dedupeCrumbs(crumbs) {
  * @type {Record<string, string>}
  */
 export const NAV_MIN_ROLE = {
+  '/war-room': 'ceo',
   '/admin': 'ceo',
   '/ceo-vault': 'ceo',
   '/ceo': 'ceo',

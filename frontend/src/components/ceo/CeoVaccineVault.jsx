@@ -91,15 +91,15 @@ export default function CeoVaccineVault() {
   }
 
   return (
-    <div className="rounded-lg border border-white/10 bg-black/35 overflow-hidden">
-      <div className="px-4 py-3 border-b border-white/10 flex flex-wrap justify-between gap-2 items-center">
+    <div className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] overflow-hidden">
+      <div className="px-4 py-3 border-b border-[var(--border-default)] flex flex-wrap justify-between gap-2 items-center">
         <h2 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-widest">
           {t('components.ceo.vaccineVault.title')}
         </h2>
         <div className="flex gap-2">
           <a
             href={apiUrl('/api/ceo/vault/export/criticals')}
-            className="text-xs font-mono px-3 py-1.5 rounded border border-white/20 text-[var(--text-secondary)] hover:bg-white/5"
+            className="text-xs font-mono px-3 py-1.5 rounded border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)]"
             download
           >
             {t('components.ceo.vaccineVault.exportCriticals')}
@@ -132,7 +132,7 @@ export default function CeoVaccineVault() {
       )}
 
       {selected && !err && (
-        <div className="border-t border-white/10 bg-[var(--bg-0)]/80 p-4 space-y-3">
+        <div className="border-t border-[var(--border-default)] bg-[var(--bg-0)]/80 p-4 space-y-3">
           <div className="flex flex-wrap gap-2 items-center justify-between">
             <span className="text-xs font-mono text-[var(--text-tertiary)]">
               {t('components.ceo.vaccineVault.rowLabel', { id: selected.id })}
@@ -149,11 +149,11 @@ export default function CeoVaccineVault() {
             </Button>
           </div>
           {matchMsg && (
-            <pre className="text-[10px] font-mono text-[var(--text-tertiary)] whitespace-pre-wrap break-words max-h-40 overflow-y-auto border border-white/10 rounded p-2">
+            <pre className="text-[10px] font-mono text-[var(--text-tertiary)] whitespace-pre-wrap break-words max-h-40 overflow-y-auto border border-[var(--border-default)] rounded p-2">
               {matchMsg}
             </pre>
           )}
-          <div className="flex gap-1 border-b border-white/10 pb-2">
+          <div className="flex gap-1 border-b border-[var(--border-default)] pb-2">
             {tabs.map((tabItem) => (
               <Button variant="unstyled"
                 key={tabItem.id}
@@ -161,7 +161,7 @@ export default function CeoVaccineVault() {
                 onClick={() => setTab(tabItem.id)}
                 className={
                   'text-[10px] font-mono uppercase px-3 py-1 rounded-t ' +
-                  (tab === tabItem.id ? 'bg-white/10 text-cyan-200' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]')
+                  (tab === tabItem.id ? 'bg-[var(--bg-2)] text-cyan-200' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]')
                 }
               >
                 {tabItem.label}
@@ -180,12 +180,12 @@ export default function CeoVaccineVault() {
               </pre>
             )}
             {tab === 'patch' && (
-              <pre className="whitespace-pre-wrap break-words text-emerald-200/90 bg-black/50 p-3 rounded border border-emerald-500/20">
+              <pre className="whitespace-pre-wrap break-words text-emerald-200/90 bg-[var(--table-surface)] p-3 rounded border border-emerald-500/20">
                 {selected.remediation_patch || '—'}
               </pre>
             )}
             {tab === 'sig' && (
-              <pre className="whitespace-pre-wrap break-words text-amber-200/90 bg-black/50 p-3 rounded border border-amber-500/20">
+              <pre className="whitespace-pre-wrap break-words text-amber-200/90 bg-[var(--table-surface)] p-3 rounded border border-amber-500/20">
                 {selected.detection_signature || '—'}
               </pre>
             )}

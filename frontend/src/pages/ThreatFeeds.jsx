@@ -166,6 +166,15 @@ export default function ThreatFeeds() {
     [indicators],
   )
 
+  const byType = useMemo(() => {
+    const m = {}
+    for (const i of indicators) {
+      const ty = (i.type || '').toLowerCase()
+      if (ty) m[ty] = (m[ty] || 0) + 1
+    }
+    return m
+  }, [indicators])
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return indicators.filter((i) => {
@@ -191,19 +200,21 @@ export default function ThreatFeeds() {
 
   const typePills = useMemo(
     () => [
-      { id: 'all', label: t(`${NS}.all_types`), active: typeFilter === 'all', onClick: () => setTypeFilter('all') },
-      ...types.map((ty) => ({ id: ty, label: ty, active: typeFilter === ty, onClick: () => setTypeFilter(ty) })),
+      { id: 'all', label: t(`${NS}.all_types`), count: indicators.length, active: typeFilter === 'all', onClick: () => setTypeFilter('all') },
+      ...types.map((ty) => ({ id: ty, label: ty, count: byType[ty] || 0, active: typeFilter === ty, onClick: () => setTypeFilter(ty) })),
     ],
-    [types, typeFilter, t],
+    [types, typeFilter, t, indicators.length, byType],
   )
 
   const exportCsv = useCallback(() => {
+    // Never dump a stale indicator snapshot after a failed refresh.
+    if (error) return
     const header = ['type', 'value', 'source', 'severity', 'confidence', 'effective_confidence', 'tlp', 'last_seen']
     const data = filtered.map((r) => [
       r.type, r.value, r.source, r.severity, r.confidence, r.effective_confidence, r.tlp, r.last_seen,
     ])
     downloadCsv(data, header, 'weissman-ioc-indicators')
-  }, [filtered])
+  }, [filtered, error])
 
   const columns = useMemo(
     () => [
@@ -290,9 +301,9 @@ export default function ThreatFeeds() {
       actions={
         <ShellScanActions
           onRefresh={load}
-          onExport={exportCsv}
+          onExport={error ? undefined : exportCsv}
           refreshLoading={loading}
-          exportDisabled={!filtered.length}
+          exportDisabled={!!error || !filtered.length}
         />
       }
     >
@@ -416,7 +427,7 @@ export default function ThreatFeeds() {
                     <li key={idx} className="flex items-center gap-2">
                       <span className={r.status === 'ok' ? 'text-emerald-400' : r.status === 'error' ? 'text-rose-400' : 'text-amber-400'}>●</span>
                       <span className="w-20 truncate">{r.source}</span>
-                      <span>{t(`${NS}.run_line`, { inserted: r.inserted, updated: r.updated })}</span>
+                      <span>{t(`${NS}.run_line`, { inserted: r.inserted ?? 0, updated: r.updated ?? 0 })}</span>
                       <span className="text-[var(--text-muted)]">{r.started_at ? new Date(r.started_at).toLocaleString() : ''}</span>
                     </li>
                   ))}

@@ -162,7 +162,7 @@ export default function AutoHealTab() {
 
   if (!selectedClientId) {
     return (
-      <div className="p-8 rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 text-center text-white/70">
+      <div className="p-8 rounded-2xl bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] text-center text-[var(--text-tertiary)]">
         {t(`${NS}.selectClient`)}
       </div>
     )
@@ -172,7 +172,7 @@ export default function AutoHealTab() {
     <div className="space-y-6">
       <div className="flex items-center gap-2">
         <Shield className="w-5 h-5 text-[#10b981]" />
-        <h2 className="text-lg font-semibold text-white">{t(`${NS}.title`)}</h2>
+        <h2 className="text-lg font-semibold text-[var(--text-primary)]">{t(`${NS}.title`)}</h2>
       </div>
 
       {actionError && (
@@ -185,38 +185,38 @@ export default function AutoHealTab() {
         </p>
       )}
 
-      <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-4">
-        <h3 className="text-sm font-medium text-white/90 mb-3">{t(`${NS}.formTitle`)}</h3>
+      <div className="rounded-2xl bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] p-4">
+        <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-3">{t(`${NS}.formTitle`)}</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <input
             type="text"
             placeholder={t(`${NS}.findingId`)}
             value={healForm.finding_id}
             onChange={e => setHealForm(f => ({ ...f, finding_id: e.target.value }))}
-            className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white placeholder-white/40 text-sm"
+            className="px-3 py-2 rounded-lg bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-primary)] placeholder-[var(--text-muted)] text-sm"
           />
           <input
             type="text"
             placeholder={t(`${NS}.repoSlug`)}
             value={healForm.repo_slug}
             onChange={e => setHealForm(f => ({ ...f, repo_slug: e.target.value }))}
-            className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white placeholder-white/40 text-sm"
+            className="px-3 py-2 rounded-lg bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-primary)] placeholder-[var(--text-muted)] text-sm"
           />
           <input
             type="password"
             placeholder={t(`${NS}.gitToken`)}
             value={healForm.git_token}
             onChange={e => setHealForm(f => ({ ...f, git_token: e.target.value }))}
-            className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white placeholder-white/40 text-sm"
+            className="px-3 py-2 rounded-lg bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-primary)] placeholder-[var(--text-muted)] text-sm"
           />
           <input
             type="text"
             placeholder={t(`${NS}.baseBranch`)}
             value={healForm.base_branch}
             onChange={e => setHealForm(f => ({ ...f, base_branch: e.target.value }))}
-            className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white placeholder-white/40 text-sm"
+            className="px-3 py-2 rounded-lg bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-primary)] placeholder-[var(--text-muted)] text-sm"
           />
-          <div className="md:col-span-2 flex items-center gap-2 text-white/50 text-xs">
+          <div className="md:col-span-2 flex items-center gap-2 text-[var(--text-muted)] text-xs">
             <Container className="w-4 h-4 shrink-0" />
             <span>{t(`${NS}.ephemeralSandbox`)}</span>
           </div>
@@ -225,24 +225,24 @@ export default function AutoHealTab() {
             placeholder={t(`${NS}.dockerSocket`)}
             value={healForm.docker_socket}
             onChange={e => setHealForm(f => ({ ...f, docker_socket: e.target.value }))}
-            className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white placeholder-white/40 text-sm font-mono text-xs"
+            className="px-3 py-2 rounded-lg bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-primary)] placeholder-[var(--text-muted)] text-sm font-mono text-xs"
           />
           <input
             type="text"
             placeholder={t(`${NS}.image`)}
             value={healForm.image}
             onChange={e => setHealForm(f => ({ ...f, image: e.target.value }))}
-            className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white placeholder-white/40 text-sm"
+            className="px-3 py-2 rounded-lg bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-primary)] placeholder-[var(--text-muted)] text-sm"
           />
           <input
             type="text"
             placeholder={t(`${NS}.containerPort`)}
             value={healForm.container_port}
             onChange={e => setHealForm(f => ({ ...f, container_port: e.target.value }))}
-            className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white placeholder-white/40 text-sm"
+            className="px-3 py-2 rounded-lg bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-primary)] placeholder-[var(--text-muted)] text-sm"
           />
         </div>
-        <p className="mt-2 text-[10px] text-white/40">
+        <p className="mt-2 text-[10px] text-[var(--text-muted)]">
           {t(`${NS}.skipSandboxHint`)}
         </p>
         <Button variant="unstyled"
@@ -257,18 +257,18 @@ export default function AutoHealTab() {
       </div>
 
       {(verifyJobId || verifySteps.length > 0) && (
-        <div className="rounded-2xl bg-black/50 border border-[#22d3ee]/30 p-4">
+        <div className="rounded-2xl bg-[var(--table-surface)] border border-[#22d3ee]/30 p-4">
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm font-medium text-[#22d3ee]">{t(`${NS}.sandboxVerificationLive`)}</span>
             {verifyJobId && (
-              <span className="text-[10px] font-mono text-white/40 truncate max-w-[200px]" title={verifyJobId}>
+              <span className="text-[10px] font-mono text-[var(--text-muted)] truncate max-w-[200px]" title={verifyJobId}>
                 {t(`${NS}.jobPrefix`, { id: verifyJobId.slice(0, 8) })}
               </span>
             )}
           </div>
           <ul className="space-y-2 max-h-64 overflow-y-auto">
             {verifySteps.length === 0 && (
-              <li className="text-xs text-white/50 flex items-center gap-2">
+              <li className="text-xs text-[var(--text-muted)] flex items-center gap-2">
                 <Loader2 className="w-3 h-3 animate-spin" /> {t(`${NS}.waitingSteps`)}
               </li>
             )}
@@ -280,26 +280,26 @@ export default function AutoHealTab() {
                     ? 'border-[#10b981]/40 bg-[#10b981]/5'
                     : terminalStep(st.step) === 'fail'
                       ? 'border-red-500/40 bg-red-500/5'
-                      : 'border-white/10 bg-black/40'
+                      : 'border-[var(--border-default)] bg-[var(--table-surface)]'
                 }`}
               >
                 <div className="font-mono text-[#a5f3fc]">{st.step}</div>
-                {st.detail && <div className="mt-1 text-white/60 break-all">{st.detail}</div>}
+                {st.detail && <div className="mt-1 text-[var(--text-tertiary)] break-all">{st.detail}</div>}
               </li>
             ))}
           </ul>
         </div>
       )}
 
-      <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 overflow-hidden">
-        <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
-          <span className="text-sm font-medium text-white/90">{t(`${NS}.healRequests`)}</span>
+      <div className="rounded-2xl bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] overflow-hidden">
+        <div className="px-4 py-3 border-b border-[var(--border-default)] flex items-center justify-between">
+          <span className="text-sm font-medium text-[var(--text-secondary)]">{t(`${NS}.healRequests`)}</span>
           <Button variant="unstyled" type="button" onClick={fetchRequests} className="text-xs text-[#22d3ee] hover:underline">
             {t(`${NS}.refresh`)}
           </Button>
         </div>
         {loading ? (
-          <div className="p-6 text-center text-white/50 text-sm">{t(`${NS}.loading`)}</div>
+          <div className="p-6 text-center text-[var(--text-muted)] text-sm">{t(`${NS}.loading`)}</div>
         ) : loadError ? (
           <div
             className="p-6 text-center text-red-300 text-sm"
@@ -309,23 +309,23 @@ export default function AutoHealTab() {
             {t(`${NS}.unavailable`)}
           </div>
         ) : requests.length === 0 ? (
-          <div className="p-6 text-center text-white/50 text-sm">{t(`${NS}.noRequests`)}</div>
+          <div className="p-6 text-center text-[var(--text-muted)] text-sm">{t(`${NS}.noRequests`)}</div>
         ) : (
           <>
           {listTruncated && (
             <p
-              className="px-4 py-2 text-xs text-amber-200/80 border-b border-white/10"
+              className="px-4 py-2 text-xs text-amber-200/80 border-b border-[var(--border-default)]"
               data-testid="auto-heal-truncated"
               role="status"
             >
               {t(`${NS}.truncated`)}
             </p>
           )}
-          <ul className="divide-y divide-white/10">
+          <ul className="divide-y divide-[var(--border-default)]">
             {requests.map(req => (
-              <li key={req.id} className="p-4 hover:bg-white/5">
+              <li key={req.id} className="p-4 hover:bg-[var(--row-hover-bg)]">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-white font-mono text-sm">{req.finding_id}</span>
+                  <span className="text-[var(--text-primary)] font-mono text-sm">{req.finding_id}</span>
                   {String(req.verification_status || '').includes('verified') && (
                     <CheckCircle className="w-4 h-4 text-[#10b981]" />
                   )}
@@ -339,16 +339,16 @@ export default function AutoHealTab() {
                     )}
                 </div>
                 {req.verification_job_id ? (
-                  <div className="mt-1 text-[10px] text-white/40 font-mono">
+                  <div className="mt-1 text-[10px] text-[var(--text-muted)] font-mono">
                     {t(`${NS}.verifyJobPrefix`, { id: req.verification_job_id })}
                   </div>
                 ) : null}
                 {req.diff_summary && (
-                  <pre className="mt-2 p-2 rounded-lg bg-black/60 border border-white/10 text-[10px] text-[#4ade80] font-mono overflow-x-auto max-h-24 overflow-y-auto">
+                  <pre className="mt-2 p-2 rounded-lg bg-[var(--table-surface)] border border-[var(--border-default)] text-[10px] text-[#4ade80] font-mono overflow-x-auto max-h-24 overflow-y-auto">
                     {req.diff_summary}
                   </pre>
                 )}
-                <div className="mt-1 text-[10px] text-white/50">{req.verification_status}</div>
+                <div className="mt-1 text-[10px] text-[var(--text-muted)]">{req.verification_status}</div>
                 {req.pr_url && (
                   <a
                     href={req.pr_url}

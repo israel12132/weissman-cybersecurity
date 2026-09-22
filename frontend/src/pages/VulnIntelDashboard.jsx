@@ -142,8 +142,10 @@ export default function VulnIntelDashboard() {
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
+    // Always fetch the full window and filter by severity client-side: a
+    // server-side severity filter would make the KPI cards and severity pills
+    // report 0 for every other severity, which reads as fabricated data.
     const qs = new URLSearchParams({ limit: '1000' })
-    if (severityFilter !== 'all') qs.set('severity', severityFilter)
     try {
       const data = await apiFetch(`/api/findings?${qs.toString()}`)
       const arr = Array.isArray(data) ? data : Array.isArray(data?.findings) ? data.findings : []
@@ -155,7 +157,7 @@ export default function VulnIntelDashboard() {
     } finally {
       setLoading(false)
     }
-  }, [severityFilter])
+  }, [])
 
   useEffect(() => {
     // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
@@ -268,7 +270,13 @@ export default function VulnIntelDashboard() {
         </PremiumPageHeader>
 
         {!error && (
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+          <ExecutiveWidget
+            label={t('vuln_intel.kev')}
+            value={loading || error ? '—' : kevCount.toLocaleString()}
+            hint={t('vuln_intel.kev_hint')}
+            accent="#fb7185"
+          />
           <ExecutiveWidget
             label={t('vuln_intel.critical')}
             value={loading || error ? '—' : summary.by.critical.toLocaleString()}

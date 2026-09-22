@@ -352,7 +352,7 @@ export default function AskWeissman() {
                         className="flex flex-wrap gap-2 text-[10px] font-mono text-[var(--text-tertiary)]"
                       >
                         <li className="px-1.5 py-0.5 rounded border border-emerald-500/30 text-emerald-200">
-                          {turn.exec_role} · {turn.statement_timeout_ms}ms · LIMIT {turn.row_cap}
+                          {turn.exec_role} · {turn.statement_timeout_ms ?? '—'}ms · LIMIT {turn.row_cap ?? '—'}
                         </li>
                         {turn.plan_sealed && (
                           <li className="px-1.5 py-0.5 rounded border border-violet-500/30 text-violet-200">
@@ -404,7 +404,7 @@ export default function AskWeissman() {
                             {turn.rows.slice(0, 50).map((row, ri) => (
                               <tr key={ri} className="text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)]">
                                 {Object.values(row).map((v, ci) => (
-                                  <td key={ci} className="px-2 py-1 border-b border-white/[0.04] whitespace-nowrap number-cell">
+                                  <td key={ci} className="px-2 py-1 border-b border-[var(--border-subtle)] whitespace-nowrap number-cell">
                                     {fmtCell(v)}
                                   </td>
                                 ))}

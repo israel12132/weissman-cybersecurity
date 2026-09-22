@@ -61,7 +61,7 @@ export default function CICDThreatMatrix() {
       .finally(() => {
         if (!requestInit?.signal?.aborted) setLoading(false)
       })
-  }, [clientId])
+  }, [clientId, t])
 
   useEffect(() => {
     const ac = new AbortController()
@@ -181,7 +181,7 @@ export default function CICDThreatMatrix() {
         {modalFinding && !findingsError && (
           // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- modal backdrop click-to-dismiss; contains interactive children
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--table-surface)] p-4"
             onClick={() => setModalFinding(null)}
           >
             {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- stopPropagation guard on the dialog panel; Escape + close button provide the keyboard path */}

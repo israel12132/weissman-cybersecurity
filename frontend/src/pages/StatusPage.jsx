@@ -50,8 +50,8 @@ const STATUS = {
     badge: 'bg-rose-500/15 text-rose-200 border-rose-500/30',
   },
   unknown: {
-    dot: 'bg-white/30',
-    ring: 'ring-white/10',
+    dot: 'bg-[var(--bg-2)]',
+    ring: 'ring-[var(--border-default)]',
     glow: '',
     labelKey: 'status.checking',
     icon: Activity,

@@ -78,23 +78,23 @@ export default function MitreCoverageHeatmap({ className = '', maxHeight = 320 }
 
   if (loading && !data) {
     return (
-      <section className={`rounded-2xl border border-white/10 bg-black/35 backdrop-blur-md p-3 ${className}`}>
-        <div className="h-44 rounded bg-white/[0.025] animate-pulse" />
+      <section className={`rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] backdrop-blur-md p-3 ${className}`}>
+        <div className="h-44 rounded bg-[var(--bg-2)] animate-pulse" />
       </section>
     )
   }
 
   return (
     <section
-      className={`rounded-2xl border border-white/10 bg-black/35 backdrop-blur-md ${className}`}
+      className={`rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] backdrop-blur-md ${className}`}
       aria-label={t(`${NS}.ariaLabel`)}
     >
-      <header className="flex items-center justify-between gap-2 px-3 py-2 border-b border-white/[0.06]">
+      <header className="flex items-center justify-between gap-2 px-3 py-2 border-b border-[var(--border-subtle)]">
         <div className="min-w-0">
-          <h3 className="text-[11px] font-mono uppercase tracking-[0.18em] text-white/75">
+          <h3 className="text-[11px] font-mono uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
             {t(`${NS}.title`)}
           </h3>
-          <p className="text-[10px] font-mono text-white/40 mt-0.5">
+          <p className="text-[10px] font-mono text-[var(--text-muted)] mt-0.5">
             {err ? '—' : t(`${NS}.summary`, { techniques: totalTechniques, hits: totalHits })}
           </p>
         </div>
@@ -120,20 +120,20 @@ export default function MitreCoverageHeatmap({ className = '', maxHeight = 320 }
             const tacticLabel = t(`${NS}.tactics.${tac.id}`)
             return (
               <div key={tac.id} className="flex flex-col gap-1 min-w-[88px]">
-                <header className="text-center px-1 py-1 bg-white/[0.04] rounded border border-white/[0.06]">
+                <header className="text-center px-1 py-1 bg-[var(--bg-2)] rounded border border-[var(--border-subtle)]">
                   <div className="text-[10px] font-mono text-cyan-300/80 leading-tight" aria-hidden="true">
                     {tac.icon}
                   </div>
-                  <div className="text-[9px] font-mono uppercase tracking-widest text-white/65 truncate">
+                  <div className="text-[9px] font-mono uppercase tracking-widest text-[var(--text-tertiary)] truncate">
                     {tacticLabel}
                   </div>
-                  <div className="text-[9px] font-mono text-white/30 mt-0.5">
+                  <div className="text-[9px] font-mono text-[var(--text-muted)] mt-0.5">
                     {techniques.length || 0}
                   </div>
                 </header>
                 {techniques.length === 0 ? (
                   <div
-                    className="text-center text-[9px] font-mono py-3 rounded border border-dashed border-white/[0.06] text-white/25"
+                    className="text-center text-[9px] font-mono py-3 rounded border border-dashed border-[var(--border-subtle)] text-[var(--text-disabled)]"
                     aria-label={t(`${NS}.noFindings`, { tactic: tacticLabel })}
                   >
                     —

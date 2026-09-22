@@ -238,21 +238,21 @@ export default function SupremeBrain() {
 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               <ExecutiveWidget label={t(`${NS}.kpi_paths`)} value={paths.length} hint={t(`${NS}.kpi_paths_hint`)} accent="#f97316" />
-              <ExecutiveWidget label={t(`${NS}.kpi_score`)} value={pathsSnap?.max_path_score ?? 0} hint={t(`${NS}.kpi_score_hint`)} accent="#ef4444" />
-              <ExecutiveWidget label={t(`${NS}.kpi_path_ale`)} value={fmtUsd(pathsSnap?.total_path_ale_usd)} hint={t(`${NS}.kpi_path_ale_hint`)} accent="#f59e0b" />
-              <ExecutiveWidget label={t(`${NS}.kpi_chokes`)} value={(pathsSnap?.choke_points || []).length} hint={t(`${NS}.kpi_chokes_hint`)} accent="#22d3ee" />
+              <ExecutiveWidget label={t(`${NS}.kpi_score`)} value={pathsSnap ? (pathsSnap.max_path_score ?? '—') : '—'} hint={t(`${NS}.kpi_score_hint`)} accent="#ef4444" />
+              <ExecutiveWidget label={t(`${NS}.kpi_path_ale`)} value={pathsSnap ? fmtUsd(pathsSnap.total_path_ale_usd) : '—'} hint={t(`${NS}.kpi_path_ale_hint`)} accent="#f59e0b" />
+              <ExecutiveWidget label={t(`${NS}.kpi_chokes`)} value={pathsSnap ? (pathsSnap.choke_points || []).length : '—'} hint={t(`${NS}.kpi_chokes_hint`)} accent="#22d3ee" />
             </div>
 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <ExecutiveWidget label={t(`${NS}.kpi_ale`)} value={fmtUsd(financial?.ale_annualised_usd)} hint={t(`${NS}.kpi_ale_hint`)} accent="#ef4444" />
-              <ExecutiveWidget label={t(`${NS}.kpi_concentration`)} value={`${financial?.concentration_pct ?? 0}%`} hint={t(`${NS}.kpi_concentration_hint`)} accent="#a78bfa" />
-              <ExecutiveWidget label={t(`${NS}.kpi_delay`)} value={fmtUsd(financial?.delay_cost_usd_per_day)} hint={t(`${NS}.kpi_delay_hint`)} accent="#f97316" />
-              <ExecutiveWidget label={t(`${NS}.kpi_memory`)} value={memory?.winning_paths ?? 0} hint={t(`${NS}.kpi_memory_hint`)} accent="#22d3ee" />
+              <ExecutiveWidget label={t(`${NS}.kpi_ale`)} value={financial ? fmtUsd(financial.ale_annualised_usd) : '—'} hint={t(`${NS}.kpi_ale_hint`)} accent="#ef4444" />
+              <ExecutiveWidget label={t(`${NS}.kpi_concentration`)} value={financial ? `${financial.concentration_pct ?? 0}%` : '—'} hint={t(`${NS}.kpi_concentration_hint`)} accent="#a78bfa" />
+              <ExecutiveWidget label={t(`${NS}.kpi_delay`)} value={financial ? fmtUsd(financial.delay_cost_usd_per_day) : '—'} hint={t(`${NS}.kpi_delay_hint`)} accent="#f97316" />
+              <ExecutiveWidget label={t(`${NS}.kpi_memory`)} value={memory ? (memory.winning_paths ?? 0) : '—'} hint={t(`${NS}.kpi_memory_hint`)} accent="#22d3ee" />
             </div>
 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <ExecutiveWidget label={t(`${NS}.kpi_hit_rate`)} value={`${hitPct}%`} hint={t(`${NS}.kpi_hit_rate_hint`)} accent="#4ade80" />
-              <ExecutiveWidget label={t(`${NS}.kpi_engines`)} value={memory?.engines ?? 0} hint={t(`${NS}.kpi_engines_hint`)} accent="#38bdf8" />
+              <ExecutiveWidget label={t(`${NS}.kpi_hit_rate`)} value={memory ? `${hitPct}%` : '—'} hint={t(`${NS}.kpi_hit_rate_hint`)} accent="#4ade80" />
+              <ExecutiveWidget label={t(`${NS}.kpi_engines`)} value={memory ? (memory.engines ?? 0) : '—'} hint={t(`${NS}.kpi_engines_hint`)} accent="#38bdf8" />
             </div>
 
             {computedAt && (

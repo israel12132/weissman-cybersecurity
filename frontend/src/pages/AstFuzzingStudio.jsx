@@ -163,6 +163,7 @@ function AstFuzzingStudioBody() {
             onChange={(e) => setPayload(e.target.value)}
             rows={12}
             spellCheck={false}
+            aria-label={t('pages.astFuzzingStudio.input')}
             className="w-full rounded-xl bg-[var(--scrim)] border border-[var(--border-default)] px-3 py-2 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-amber-500/40 ltr-only"
           />
 

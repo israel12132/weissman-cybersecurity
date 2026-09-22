@@ -85,7 +85,7 @@ function SubScoreBar({ label, value }) {
         <span className="text-[10px] font-mono text-[var(--text-tertiary)]">{label}</span>
         <span className="text-[10px] font-mono" style={{ color }}>{hasScore ? v : '—'}</span>
       </div>
-      <div className="h-1.5 rounded-full bg-white/8 overflow-hidden">
+      <div className="h-1.5 rounded-full bg-[var(--bg-2)] overflow-hidden">
         <div className="h-full rounded-full transition-all duration-500" style={{ width: hasScore ? `${v}%` : '0%', backgroundColor: color }} />
       </div>
     </div>
@@ -539,7 +539,11 @@ export default function DigitalTwinSimulator() {
       <EvidenceNotice className="mb-6">{t('pages.digitalTwinSimulator.evidence_notice')}</EvidenceNotice>
 
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-[#8b5cf6]/30 text-[#8b5cf6]'}`}>
+        <div
+          role={toast.sev === 'error' ? 'alert' : 'status'}
+          aria-live={toast.sev === 'error' ? 'assertive' : 'polite'}
+          className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-[#8b5cf6]/30 text-[#8b5cf6]'}`}
+        >
           {toast.msg}
         </div>
       )}

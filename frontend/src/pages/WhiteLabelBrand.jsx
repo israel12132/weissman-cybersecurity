@@ -105,7 +105,7 @@ export default function WhiteLabelBrand() {
         onChange={(e) => setSearchQuery(e.target.value)}
         placeholder={t(`${NS}.search_placeholder`)}
         aria-label={t(`${NS}.search_placeholder`)}
-        className="mb-4 w-full max-w-sm px-3 py-2 rounded-lg text-sm bg-black/40 border border-white/10 text-white"
+        className="mb-4 w-full max-w-sm px-3 py-2 rounded-lg text-sm bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-primary)]"
       />
       <WhiteLabelStudio
         brand={brand}

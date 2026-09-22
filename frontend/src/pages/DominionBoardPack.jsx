@@ -45,7 +45,7 @@ const LEAK_SOURCES = new Set([
 ])
 
 export function isLeakFinding(f) {
-  return LEAK_SOURCES.has(String(f?.source || f.type || f.osint_source || '').toLowerCase())
+  return LEAK_SOURCES.has(String(f?.source || f?.type || f?.osint_source || '').toLowerCase())
 }
 
 export function filterPackFindings(findings, search) {
@@ -130,7 +130,12 @@ function DominionBoardPackBody() {
     try {
       const d = await apiFetch(`/api/clients/${selectedClientId}/dominion-pack`, { signal })
       if (ac.signal.aborted) return
-      setPack(d && d.ok !== false ? d : null)
+      if (d && d.ok === false) {
+        setError(d.detail || d.error || t(`${NS}.load_failed`))
+        setPack(null)
+      } else {
+        setPack(d || null)
+      }
     } catch (e) {
       if (ac.signal.aborted || e?.name === 'AbortError') return
       setError(e.message || t(`${NS}.load_failed`))

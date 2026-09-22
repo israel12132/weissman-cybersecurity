@@ -142,6 +142,7 @@ export default function RateLimitAnalytics() {
           <Button variant="unstyled"
             key={range}
             type="button"
+            aria-pressed={timeRange === range}
             onClick={() => setTimeRange(range)}
             className={`px-2.5 py-1 rounded-md text-[11px] font-mono transition-all ${
               timeRange === range
@@ -279,7 +280,7 @@ export default function RateLimitAnalytics() {
                   <div className="flex items-center gap-3 min-w-0">
                     <Clock className="w-4 h-4 text-rose-400 shrink-0" />
                     <div className="min-w-0">
-                      <div className="text-sm text-white truncate">{violation.endpoint || violation.type}</div>
+                      <div className="text-sm text-[var(--text-primary)] truncate">{violation.endpoint || violation.type}</div>
                       <div className="text-xs text-[var(--text-tertiary)] font-mono">{violation.time}</div>
                     </div>
                   </div>

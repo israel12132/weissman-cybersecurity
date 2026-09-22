@@ -80,20 +80,21 @@ export default function IocFeed() {
       const s = (i.severity || '').toLowerCase()
       if (s === 'critical' || s === 'high') critHigh += 1
     }
-    return { total: iocs.length, types: Object.keys(byType).length, critHigh }
+    return { total: iocs.length, types: Object.keys(byType).length, critHigh, byType }
   }, [iocs])
 
   const typePills = useMemo(
     () => [
-      { id: 'all', label: t(`${NS}.all_types`), active: typeFilter === 'all', onClick: () => setTypeFilter('all') },
+      { id: 'all', label: t(`${NS}.all_types`), count: iocs.length, active: typeFilter === 'all', onClick: () => setTypeFilter('all') },
       ...types.map((ty) => ({
         id: ty,
         label: ty,
+        count: stats.byType[ty] || 0,
         active: typeFilter === ty,
         onClick: () => setTypeFilter(ty),
       })),
     ],
-    [types, typeFilter, t],
+    [types, typeFilter, t, iocs.length, stats.byType],
   )
 
   const handleExportCsv = useCallback(() => {

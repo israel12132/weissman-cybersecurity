@@ -85,10 +85,10 @@ export default function RateLimitStatus({ compact = false }) {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'critical': return 'text-red-400 bg-red-500/10 border-red-500/30';
-      case 'warning': return 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30';
-      case 'healthy': return 'text-green-400 bg-green-500/10 border-green-500/30';
-      default: return 'text-amber-200 bg-amber-500/10 border-amber-500/30';
+      case 'critical': return 'text-[var(--severity-critical)] bg-red-500/10 border-red-500/30';
+      case 'warning': return 'text-[var(--severity-medium)] bg-yellow-500/10 border-yellow-500/30';
+      case 'healthy': return 'text-[var(--severity-low)] bg-green-500/10 border-green-500/30';
+      default: return 'text-[var(--severity-medium)] bg-amber-500/10 border-amber-500/30';
     }
   };
 
@@ -102,9 +102,11 @@ export default function RateLimitStatus({ compact = false }) {
   };
 
   const formatResetTime = (seconds) => {
-    if (seconds <= 0) return t(`${NS}.resetNow`);
-    if (seconds < 60) return `${seconds}s`;
-    return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+    const s = Number(seconds);
+    if (!Number.isFinite(s)) return '—';
+    if (s <= 0) return t(`${NS}.resetNow`);
+    if (s < 60) return `${s}s`;
+    return `${Math.floor(s / 60)}m ${s % 60}s`;
   };
 
   if (loading && !limits) {
@@ -114,7 +116,7 @@ export default function RateLimitStatus({ compact = false }) {
         <span>{t(`${NS}.loading`)}</span>
       </div>
     ) : (
-      <div className="h-32 rounded-xl border border-white/10 bg-black/40 animate-pulse" />
+      <div className="h-32 rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] animate-pulse" />
     );
   }
 
@@ -122,8 +124,8 @@ export default function RateLimitStatus({ compact = false }) {
     return (
       <p
         className={compact
-          ? 'flex items-center gap-2 px-3 py-1.5 rounded-lg border text-amber-200 bg-amber-500/10 border-amber-500/30 text-xs'
-          : 'text-sm text-amber-200/90'}
+          ? 'flex items-center gap-2 px-3 py-1.5 rounded-lg border text-[var(--severity-medium)] bg-amber-500/10 border-amber-500/30 text-xs'
+          : 'text-sm text-[var(--severity-medium)]'}
         data-testid="rate-limit-unavailable"
         role="alert"
       >
@@ -139,7 +141,7 @@ export default function RateLimitStatus({ compact = false }) {
         <span>{t(`${NS}.loading`)}</span>
       </div>
     ) : (
-      <div className="h-32 rounded-xl border border-white/10 bg-black/40 animate-pulse" />
+      <div className="h-32 rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] animate-pulse" />
     );
   }
 
@@ -158,9 +160,9 @@ export default function RateLimitStatus({ compact = false }) {
   }
 
   return (
-    <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+    <div className="bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
           <Activity className="w-4 h-4 text-cyan-400" />
           {t(`${NS}.title`)}
         </h3>

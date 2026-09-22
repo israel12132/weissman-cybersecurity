@@ -42,9 +42,9 @@ function CopyableBlock({ label, value, disableCopy, awaitingText }) {
     })
   }
   return (
-    <div className="rounded-lg border border-white/10 bg-black/60 overflow-hidden">
-      <div className="flex items-center justify-between px-2 py-1 border-b border-white/10">
-        <span className="text-[10px] uppercase tracking-wider text-white/50 font-mono">{label}</span>
+    <div className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] overflow-hidden">
+      <div className="flex items-center justify-between px-2 py-1 border-b border-[var(--border-default)]">
+        <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-mono">{label}</span>
         {!disableCopy && !isAwaiting && text.trim() ? (
           <Button variant="unstyled" type="button" onClick={copy} className="text-xs text-[#22d3ee] hover:text-[#67e8f9]">
             {copied ? t(`${NS}.copied`) : t(`${NS}.copy`)}
@@ -173,7 +173,7 @@ export default function DigitalEvidenceHUD({ clientId, finding, onClose, onVerif
         transition={{ duration: 0.2 }}
       >
         <div
-          className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+          className="absolute inset-0 bg-[var(--table-surface)] backdrop-blur-sm"
           onClick={onClose}
           aria-hidden
         />
@@ -185,7 +185,7 @@ export default function DigitalEvidenceHUD({ clientId, finding, onClose, onVerif
           transition={{ type: 'spring', damping: 25, stiffness: 300 }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-black/40">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-default)] bg-[var(--table-surface)]">
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-mono text-[#22d3ee] uppercase tracking-widest">
                 {t(`${NS}.title`)}
@@ -201,7 +201,7 @@ export default function DigitalEvidenceHUD({ clientId, finding, onClose, onVerif
             <Button variant="unstyled"
               type="button"
               onClick={onClose}
-              className="text-white/60 hover:text-[var(--text-primary)] text-lg leading-none px-2 py-1"
+              className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] text-lg leading-none px-2 py-1"
               aria-label={t(`${NS}.close`)}
             >
               ×
@@ -237,7 +237,7 @@ export default function DigitalEvidenceHUD({ clientId, finding, onClose, onVerif
                     <h3 className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wider mb-1">
                       {t(`${NS}.commitmentTitle`)}
                     </h3>
-                    <pre className="text-[10px] font-mono text-emerald-400/80 break-all bg-black/50 p-2 rounded border border-white/10 m-0">
+                    <pre className="text-[10px] font-mono text-emerald-400/80 break-all bg-[var(--table-surface)] p-2 rounded border border-[var(--border-default)] m-0">
                       {finding.poc_commitment_sha256}
                     </pre>
                   </div>
@@ -279,7 +279,7 @@ export default function DigitalEvidenceHUD({ clientId, finding, onClose, onVerif
                   >
                     {finding.severity || '—'}
                   </span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-mono text-[var(--text-muted)] bg-white/10">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono text-[var(--text-tertiary)] bg-[var(--bg-2)]">
                     {finding.source || '—'}
                   </span>
                 </div>
@@ -289,7 +289,7 @@ export default function DigitalEvidenceHUD({ clientId, finding, onClose, onVerif
                   <h3 className="text-[10px] font-mono text-[#22d3ee] uppercase tracking-wider mb-1">
                     {t(`${NS}.forensicEvidence`)}
                   </h3>
-                  <pre className="rounded-lg bg-black/60 p-3 font-mono text-[11px] text-white/80 whitespace-pre-wrap break-all max-h-28 overflow-y-auto m-0">
+                  <pre className="rounded-lg bg-[var(--table-surface)] p-3 font-mono text-[11px] text-[var(--text-secondary)] whitespace-pre-wrap break-all max-h-28 overflow-y-auto m-0">
                     {forensicText}
                   </pre>
                 </div>

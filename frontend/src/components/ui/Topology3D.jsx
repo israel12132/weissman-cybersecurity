@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import * as THREE from 'three'
 import { cn } from '../../lib/cn'
 
@@ -49,6 +50,7 @@ export default function Topology3D({
   className,
   ...props
 }) {
+  const { t } = useTranslation()
   const mountRef = useRef(null)
   const [webglFailed, setWebglFailed] = useState(false)
 
@@ -83,17 +85,23 @@ export default function Topology3D({
     const radius = 22
     const posById = new Map()
     const sphereGeo = new THREE.SphereGeometry(1.1, 16, 16)
+    // Track every GPU resource allocated in this effect so the cleanup can
+    // dispose them all (three.js does not free geometries/materials on GC).
+    const disposables = [sphereGeo]
     nodes.forEach((n, i) => {
       const [x, y, z] = spherePos(i, nodes.length, radius)
       posById.set(n.id, [x, y, z])
       const color = SEVERITY_HEX[n.severity] ?? SEVERITY_HEX.default
-      const mesh = new THREE.Mesh(sphereGeo, new THREE.MeshBasicMaterial({ color }))
+      const material = new THREE.MeshBasicMaterial({ color })
+      disposables.push(material)
+      const mesh = new THREE.Mesh(sphereGeo, material)
       mesh.position.set(x, y, z)
       group.add(mesh)
     })
 
     if (links.length) {
       const linkMat = new THREE.LineBasicMaterial({ color: 0x334155, transparent: true, opacity: 0.5 })
+      disposables.push(linkMat)
       const points = []
       links.forEach((l) => {
         const a = posById.get(l.source)
@@ -104,6 +112,7 @@ export default function Topology3D({
       })
       if (points.length) {
         const geo = new THREE.BufferGeometry().setFromPoints(points)
+        disposables.push(geo)
         scene.add(new THREE.LineSegments(geo, linkMat))
       }
     }
@@ -131,7 +140,9 @@ export default function Topology3D({
     return () => {
       if (frame && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(frame)
       if (typeof window !== 'undefined') window.removeEventListener('resize', onResize)
-      sphereGeo.dispose()
+      disposables.forEach((d) => {
+        if (d && typeof d.dispose === 'function') d.dispose()
+      })
       try {
         renderer.dispose()
       } catch {
@@ -148,7 +159,7 @@ export default function Topology3D({
       <div
         ref={mountRef}
         role="img"
-        aria-label="3D network topology"
+        aria-label={t('components.topology3d.regionLabel', '3D network topology')}
         className={cn(
           'relative overflow-hidden rounded-xl border border-border-default bg-bg-1',
           webglFailed && 'flex items-center justify-center',
@@ -157,13 +168,16 @@ export default function Topology3D({
       >
         {webglFailed && (
           <span className="text-xs text-text-muted">
-            3D rendering unavailable — see the node list below.
+            {t(
+              'components.topology3d.webglUnavailable',
+              '3D rendering unavailable — see the node list below.',
+            )}
           </span>
         )}
       </div>
 
       {/* Accessible + keyboard-selectable node list (also the WebGL fallback). */}
-      <ul className="flex flex-wrap gap-1.5" aria-label="Topology nodes">
+      <ul className="flex flex-wrap gap-1.5" aria-label={t('components.topology3d.nodesLabel', 'Topology nodes')}>
         {nodes.map((n) => {
           const sev = SEVERITY_CSS[n.severity] ?? SEVERITY_CSS.default
           const label = n.label || n.id

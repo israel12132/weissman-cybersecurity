@@ -193,7 +193,7 @@ function EngineRow({ engine, status, selected, onSelect, onRun, runDisabled, isP
       initial={{ opacity: 0, x: -6 }}
       animate={{ opacity: 1, x: 0 }}
       className={`flex items-start gap-3 px-3 py-2.5 rounded-lg border transition-all cursor-pointer ${
-        selected ? 'border-[var(--border-strong)] bg-[var(--row-hover-bg)]' : 'border-transparent hover:border-[var(--border-default)] hover:bg-white/3'
+        selected ? 'border-[var(--border-strong)] bg-[var(--row-hover-bg)]' : 'border-transparent hover:border-[var(--border-default)] hover:bg-[var(--row-hover-bg)]'
       }`}
       onClick={() => onSelect(engine.id)}
     >
@@ -644,11 +644,11 @@ export default function EngineClientCatalog() {
       <div className="rounded-xl border border-cyan-500/20 bg-cyan-950/20 px-4 py-3 text-xs text-cyan-100/70 mb-4 leading-relaxed">
         {t('engines.catalog_lens_notice', {
           production: productionCount,
-          capabilities: capSummary?.production ?? capLoading ? '…' : Object.keys(capabilityById).length,
+          capabilities: capSummary?.production ?? (capLoading ? '…' : Object.keys(capabilityById).length),
         })}
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-6 p-4 rounded-2xl border border-white/[0.08] bg-gradient-to-r from-black/40 to-black/20">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6 p-4 rounded-2xl border border-[var(--border-default)] bg-gradient-to-r from-black/40 to-black/20">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[11px] font-mono text-[var(--text-muted)]">{t('engines.client_label')}:</span>
           <select
@@ -707,6 +707,8 @@ export default function EngineClientCatalog() {
         {toast && (
           <motion.div
             key={toast.id}
+            role={toast.severity === 'error' ? 'alert' : 'status'}
+            aria-live={toast.severity === 'error' ? 'assertive' : 'polite'}
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
@@ -803,19 +805,20 @@ export default function EngineClientCatalog() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t('engines.catalog_search_placeholder')}
-                className="w-full bg-[var(--bg-2)] border border-white/[0.08] rounded-xl px-4 py-2.5 text-xs text-[var(--text-primary)] placeholder-white/25 font-mono focus:outline-none focus:border-cyan-500/35 focus:ring-1 focus:ring-cyan-500/15"
+                className="w-full bg-[var(--bg-2)] border border-[var(--border-default)] rounded-xl px-4 py-2.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] font-mono focus:outline-none focus:border-cyan-500/35 focus:ring-1 focus:ring-cyan-500/15"
               />
               {search && (
                 <Button variant="unstyled"
                   type="button"
                   onClick={() => setSearch('')}
+                  aria-label={t('common.clear', 'Clear search')}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] text-xs"
                 >
                   ✕
                 </Button>
               )}
             </div>
-            <span className="text-[10px] font-mono text-[var(--text-muted)] whitespace-nowrap px-2 py-1 rounded-md bg-[var(--row-hover-bg)] border border-white/[0.06]">
+            <span className="text-[10px] font-mono text-[var(--text-muted)] whitespace-nowrap px-2 py-1 rounded-md bg-[var(--row-hover-bg)] border border-[var(--border-subtle)]">
               {t('engines.catalog_shown', { shown: filteredEngines.length, total: totalProfileEngines, selected: totalSelected })}
             </span>
             <Button variant="unstyled"
@@ -834,6 +837,7 @@ export default function EngineClientCatalog() {
             </Button>
             <Button variant="unstyled"
               type="button"
+              aria-pressed={productionOnly}
               onClick={() => setProductionOnly((v) => !v)}
               className={`px-2.5 py-1 rounded-lg text-[10px] font-mono border transition-colors ${
                 productionOnly ? 'border-emerald-500/40 text-emerald-300 bg-emerald-500/10' : 'border-[var(--border-default)] text-[var(--text-muted)]'
@@ -843,6 +847,7 @@ export default function EngineClientCatalog() {
             </Button>
             <Button variant="unstyled"
               type="button"
+              aria-pressed={remoteOnly}
               onClick={() => setRemoteOnly((v) => !v)}
               className={`px-2.5 py-1 rounded-lg text-[10px] font-mono border transition-colors ${
                 remoteOnly ? 'border-cyan-500/40 text-cyan-300 bg-cyan-500/10' : 'border-[var(--border-default)] text-[var(--text-muted)]'

@@ -160,8 +160,8 @@ export default function FindingsTab() {
   if (!selectedClient) {
     return (
       <div className="p-8">
-        <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-8 text-center">
-          <p className="text-sm text-white/70">{t('components.cockpitTabs.findings.select_client')}</p>
+        <div className="rounded-2xl bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] p-8 text-center">
+          <p className="text-sm text-[var(--text-tertiary)]">{t('components.cockpitTabs.findings.select_client')}</p>
         </div>
       </div>
     )

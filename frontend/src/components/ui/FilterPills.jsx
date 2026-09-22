@@ -21,6 +21,7 @@ export default function FilterPills({ pills = [], className = '', label }) {
               id={pill.id}
               type="button"
               onClick={pill.onClick}
+              aria-pressed={active}
               className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-[11px] font-mono transition-all duration-150 hover:scale-[1.02] active:scale-100"
               style={{
                 borderColor: active ? `${color}70` : 'rgba(255,255,255,0.1)',

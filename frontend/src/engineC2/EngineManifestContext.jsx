@@ -25,6 +25,9 @@ export function EngineManifestProvider({ children }) {
 
   useEffect(() => {
     let cancelled = false
+    const markReady = () => {
+      if (!cancelled) setReady(true)
+    }
     loadEngineManifests(false)
       .then(async () => {
         if (cancelled) return
@@ -35,9 +38,9 @@ export function EngineManifestProvider({ children }) {
           if (c.requires_template_runner) prefetchCapability('registry')
         }
       })
-      .finally(() => {
-        if (!cancelled) setReady(true)
-      })
+      // Best-effort prefetch: settle readiness on success OR failure so a failed
+      // dynamic import never surfaces as an unhandled promise rejection.
+      .then(markReady, markReady)
     return () => {
       cancelled = true
     }

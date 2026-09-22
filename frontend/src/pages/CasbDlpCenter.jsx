@@ -8,16 +8,18 @@ import PageShell from './PageShell'
 import EmptyState from '../components/ui/EmptyState'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
+import FilterPills from '../components/ui/FilterPills'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import Button from '../components/ui/Button'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch } from '../utils/apiFetch'
 import { downloadCsv } from '../lib/exportFindingsCsv'
 import { useToast } from '../components/ui/Toaster'
-import { SEV_COLOR } from '../lib/severity'
+import { SEV_COLOR, normalizeSeverity } from '../lib/severity'
 
 const NS = 'pages.casbDlpCenter'
 const ENGINES = ['casb_saas_posture', 'dlp_content_scan', 'cnapp_continuous', 'ai_casb_saas']
+const SEV_KEYS = ['critical', 'high', 'medium', 'low', 'info']
 
 export default function CasbDlpCenter() {
   const { t } = useTranslation()
@@ -26,6 +28,7 @@ export default function CasbDlpCenter() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [sevFilter, setSevFilter] = useState('all')
   const [refreshing, setRefreshing] = useState(false)
   const abortRef = useRef(null)
 
@@ -57,11 +60,34 @@ export default function CasbDlpCenter() {
     return () => abortRef.current?.abort()
   }, [load])
 
+  const sevCounts = useMemo(() => {
+    const c = { all: findings.length, critical: 0, high: 0, medium: 0, low: 0, info: 0 }
+    for (const f of findings) c[normalizeSeverity(f.severity)] += 1
+    return c
+  }, [findings])
+
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
-    if (!q) return findings
-    return findings.filter((f) => `${f.title} ${f.source} ${f.description}`.toLowerCase().includes(q))
-  }, [findings, searchQuery])
+    return findings.filter((f) => {
+      if (sevFilter !== 'all' && normalizeSeverity(f.severity) !== sevFilter) return false
+      if (!q) return true
+      return `${f.title || ''} ${f.source || ''} ${f.description || ''}`.toLowerCase().includes(q)
+    })
+  }, [findings, searchQuery, sevFilter])
+
+  const sevPills = useMemo(
+    () =>
+      [
+        { id: 'all', label: t('common.all'), count: sevCounts.all, color: '#22d3ee' },
+        ...SEV_KEYS.filter((s) => sevCounts[s] > 0).map((s) => ({
+          id: s,
+          label: t(`severity.${s}`),
+          count: sevCounts[s],
+          color: SEV_COLOR[s] || SEV_COLOR.info,
+        })),
+      ].map((p) => ({ ...p, active: sevFilter === p.id, onClick: () => setSevFilter(p.id) })),
+    [sevCounts, sevFilter, t],
+  )
 
   const liveEngineCount = useMemo(
     () => new Set(findings.map((f) => f.source || f.engine || f.type).filter(Boolean)).size,
@@ -116,25 +142,28 @@ export default function CasbDlpCenter() {
           <Button type="button" onClick={refreshGraph} disabled={refreshing}>
             {refreshing ? t(`${NS}.refreshing`) : t(`${NS}.refresh_graph`)}
           </Button>
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={t(`${NS}.search_placeholder`)}
-            aria-label={t(`${NS}.search_placeholder`)}
-            className="w-full max-w-sm px-3 py-2 rounded-lg text-sm bg-black/40 border border-white/10 text-white"
-          />
+          <div className="flex flex-wrap items-end gap-4">
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t(`${NS}.search_placeholder`)}
+              aria-label={t(`${NS}.search_placeholder`)}
+              className="w-full max-w-sm px-3 py-2 rounded-lg text-sm bg-[var(--bg-3)] border border-[var(--border-default)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
+            />
+            {findings.length > 0 && <FilterPills pills={sevPills} />}
+          </div>
           {!filtered.length ? (
             <EmptyState title={t(`${NS}.empty_title`)} body={t(`${NS}.empty_body`)} />
           ) : (
             <ul className="space-y-2">
-              {filtered.map((f) => {
-                const s = (f.severity || 'info').toLowerCase()
+              {filtered.map((f, i) => {
+                const s = normalizeSeverity(f.severity)
                 return (
-                  <li key={f.id || f.finding_id} className="rounded-lg border border-white/10 p-3">
-                    <span className="text-[10px] font-mono uppercase" style={{ color: SEV_COLOR[s] || SEV_COLOR.info }}>{s}</span>
+                  <li key={f.id || f.finding_id || i} className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] p-3">
+                    <span className="text-[10px] font-mono uppercase tracking-wider" style={{ color: SEV_COLOR[s] || SEV_COLOR.info }}>{t(`severity.${s}`)}</span>
                     <span className="ml-2 text-xs font-mono text-[var(--text-muted)]">{f.source}</span>
-                    <div className="text-sm mt-1">{f.title}</div>
+                    <div className="text-sm mt-1 text-[var(--text-primary)]">{f.title}</div>
                   </li>
                 )
               })}

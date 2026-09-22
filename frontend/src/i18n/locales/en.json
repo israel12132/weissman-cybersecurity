@@ -135,7 +135,16 @@
     "edges": "EDGES",
     "evidence_unavailable": "Findings API unavailable — empty evidence is not confirmed.",
     "clients_unavailable": "Clients API unavailable — the tenant list is not confirmed empty.",
-    "evidence_truncated": "Open findings page is truncated — this node may have evidence outside the loaded window."
+    "evidence_truncated": "Open findings page is truncated — this node may have evidence outside the loaded window.",
+    "canvas_label": "Interactive battlespace topology graph — click a node to inspect",
+    "tag_crown_jewel": "crown jewel",
+    "tag_perimeter": "perimeter",
+    "graph_counts": "{{nodes}} nodes · {{edges}} edges",
+    "strips_summary": "STRIPS: {{steps}} steps → {{goal}}",
+    "sha256_integrity": "SHA-256 integrity",
+    "pcap_ref": "PCAP ref",
+    "stack_trace": "Stack trace",
+    "finding_fallback": "Finding"
   },
   "engineC2": {
     "kill_switch_region": "Emergency kill switch",
@@ -145,7 +154,9 @@
     "emergency_stop": "⏹ Emergency Stop",
     "telemetry_strip": "Live engine telemetry",
     "memory_telemetry": "Memory / AST telemetry",
-    "live_telemetry": "Live telemetry"
+    "live_telemetry": "Live telemetry",
+    "ast_tree_count": "AST tree · {{count}} nodes",
+    "truncated_for_safety": "truncated for safety"
   },
   "nav": {
     "cockpit": "Cockpit",
@@ -200,7 +211,8 @@
       "operations": "Operations",
       "engines": "Engine Labs",
       "governance": "Governance",
-      "administration": "Administration"
+      "administration": "Administration",
+      "modules": "Cockpit Modules"
     },
     "engine_matrix": "Engine Matrix",
     "client_new": "New Client",
@@ -314,7 +326,28 @@
     "ceo": "CEO Command",
     "adversary_mirror": "Adversary Gap Mirror",
     "cortex_bridge": "Cortex Proven Bridge",
-    "scim_provisioning": "SCIM Provisioning"
+    "scim_provisioning": "SCIM Provisioning",
+    "war_room": "War Room",
+    "engine_room": "Engine Room",
+    "auto_heal": "Auto-Heal",
+    "deception": "Deception Grid",
+    "swarm_mind": "Swarm-Mind",
+    "ai_model_risk": "AI-Model-Risk",
+    "edge_swarm": "Global Edge Swarm",
+    "neural_web": "Neural Engine Web",
+    "identity_matrix": "Identity Matrix",
+    "pulse": "System Pulse",
+    "widget_subtitle": "Promoted from the cockpit · live",
+    "widget_evidence": "Live evidence surface — streamed from production engines; no mock payloads.",
+    "search_placeholder": "Search every screen…",
+    "search_aria": "Search navigation",
+    "favorites": "Favorites",
+    "recent": "Recent",
+    "results": "Results",
+    "no_results": "No matching screens",
+    "add_favorite": "Add to favorites",
+    "remove_favorite": "Remove from favorites",
+    "screens_count": "{{n}} screens"
   },
   "ask_weissman": {
     "title": "Ask Weissman",
@@ -560,7 +593,22 @@
     "evidence_notice": "Client roster from GET /api/clients. FAIR blast-radius from GET /api/financial-risk/:clientId (recompute via ?recompute=1). Baseline scans queue via POST /api/clients/:id/scan/run-all — tenant-scoped live records only.",
     "fleet_attack_none": "No fleet attack techniques observed.",
     "portfolio_worst_none": "No matching clients.",
-    "scan_action": "Launch Scan"
+    "scan_action": "Launch Scan",
+    "filter_all": "All",
+    "filter_at_risk": "At risk",
+    "filter_unscanned": "Unscored",
+    "sort_by": "Sort",
+    "sort_worst": "Worst-case loss",
+    "sort_name": "Name (A–Z)",
+    "sort_newest": "Newest",
+    "sev_critical": "Critical",
+    "sev_high": "High",
+    "sev_medium": "Medium",
+    "sev_low": "Low",
+    "sev_none": "Unscored",
+    "portfolio_grade_filter": "Filter to grade {{grade}}",
+    "portfolio_clear_grade": "Clear grade filter",
+    "portfolio_evidence": "Live tenant-wide roll-up from GET /api/portfolio/posture — grade distribution and worst offenders computed across all clients. No fabricated posture telemetry."
   },
   "auth": {
     "tenant_slug": "Tenant slug",
@@ -866,7 +914,11 @@
     "integrations_unavailable": "Integrations API unavailable — blank prefill is not an unconfigured tenant.",
     "detail_history_unavailable": "—",
     "workspace_locked": "Assigned workspace",
-    "no_assigned_domain": "No domain assigned to this workspace"
+    "no_assigned_domain": "No domain assigned to this workspace",
+    "fleet_live": "Live engines",
+    "fleet_enabled": "Enabled",
+    "fleet_runnable": "Runnable",
+    "fleet_running": "Running now"
   },
   "findings": {
     "title": "Findings",
@@ -1004,7 +1056,9 @@
     "evidence_notice": "CVE-correlated rows are loaded live from GET /api/findings — no seeded vulnerability catalog.",
     "export_csv": "Export CSV",
     "unavailable_title": "Vulnerability intelligence unavailable",
-    "unavailable_body": "GET /api/findings could not be confirmed. Zero critical is not a clean CVE surface."
+    "unavailable_body": "GET /api/findings could not be confirmed. Zero critical is not a clean CVE surface.",
+    "kev": "KEV — exploited",
+    "kev_hint": "On CISA's Known Exploited list — patch first"
   },
   "client_detail": {
     "title": "Client Details",
@@ -1044,7 +1098,8 @@
     "change_logo": "Change logo",
     "logo_failed": "Logo upload failed",
     "download_pdf": "Download PDF",
-    "download_xlsx": "Download Excel"
+    "download_xlsx": "Download Excel",
+    "more_queued": "+{{count}} more queued"
   },
   "clients": {
     "title": "Clients",
@@ -1352,7 +1407,8 @@
     "confidence": "Risk confidence ×{{value}}",
     "export_json": "Export JSON",
     "unavailable_title": "Engine history unavailable",
-    "unavailable_body": "GET /api/engines/history could not be confirmed. Ready-to-scan is not a quiet empty trail."
+    "unavailable_body": "GET /api/engines/history could not be confirmed. Ready-to-scan is not a quiet empty trail.",
+    "finding_fallback": "Finding"
   },
   "nexusSwarm": {
     "save_preset_title": "Save preset",
@@ -1446,7 +1502,12 @@
       "pq_ready": "PQ-Ready",
       "pq_check": "Verify",
       "financial_unavailable": "Financial-risk snapshot unavailable",
-      "attack_unavailable": "Attack-path snapshot unavailable"
+      "attack_unavailable": "Attack-path snapshot unavailable",
+      "attention_some": "{{count}} area(s) need attention",
+      "attention_none": "All monitored areas are healthy",
+      "flag_posture": "Security posture",
+      "flag_ueba": "{{count}} high-risk identities",
+      "flag_crypto": "Post-quantum readiness"
     },
     "liveFeed": {
       "title": "Live Findings Feed",
@@ -1486,7 +1547,10 @@
       "empty_title": "No reports generated",
       "empty_body": "Report runs appear here once reports are generated from the compliance or executive surfaces.",
       "no_match_title": "No matches",
-      "no_match_body": "No run matches your filter."
+      "no_match_body": "No run matches your filter.",
+      "filter_all": "All runs",
+      "filter_with": "With artifact",
+      "filter_without": "No artifact"
     },
     "boardPack": {
       "title": "Threat-Informed Board Pack",
@@ -1736,7 +1800,9 @@
       "kpi_agent_required": "Agent-required engines",
       "kpi_agent_required_hint": "Host-resident catalog size",
       "planner_wired": "STRIPS planner wired",
-      "thin_tactic": "{{tactic}}: {{count}} curated techniques"
+      "thin_tactic": "{{tactic}}: {{count}} curated techniques",
+      "filter_all": "All tactics",
+      "filter_gaps": "Coverage gaps"
     },
     "scanFindingSpine": {
       "title": "Scan-Finding Truth Spine",
@@ -1769,7 +1835,8 @@
       "col_evidence": "Evidence",
       "col_proven": "Proven",
       "col_unverified": "Unverified C/H",
-      "col_mitre": "MITRE"
+      "col_mitre": "MITRE",
+      "no_gaps_for_filter": "No coverage gaps at this severity."
     },
     "securityPosture": {
       "title": "Platform Security Posture",
@@ -1946,7 +2013,10 @@
       "col_z": "Modified Z",
       "median": "median",
       "peers_empty_title": "No peer outliers",
-      "peers_empty_body": "Hosts deviating from their cohort baseline appear here once baselines are learned."
+      "peers_empty_body": "Hosts deviating from their cohort baseline appear here once baselines are learned.",
+      "search_placeholder": "Search entity id or type…",
+      "no_match_title": "No entities match",
+      "no_match_body": "No entities match the current severity or search filter."
     },
     "findingSuppressions": {
       "title": "Finding Suppressions",
@@ -2134,7 +2204,9 @@
       "evidence_notice": "Scheduled scan definitions from GET/POST /api/scan-schedules. Cron fires enqueue real POST /api/command-center/scan jobs — empty calendar means no schedules configured yet.",
       "delete_failed": "Failed to delete schedule",
       "delete_success": "Schedule deleted",
-      "delete_title": "Delete schedule"
+      "delete_title": "Delete schedule",
+      "pause_schedule": "Pause schedule",
+      "enable_schedule": "Enable schedule"
     },
     "systemConfiguration": {
       "title": "System Configuration",
@@ -2400,7 +2472,9 @@
       "search_placeholder": "Search heals…",
       "no_match": "No heals match your search.",
       "unavailable_title": "Remediation analytics unavailable",
-      "unavailable_body": "Heal telemetry could not be confirmed. Empty is not a quiet heal program."
+      "unavailable_body": "Heal telemetry could not be confirmed. Empty is not a quiet heal program.",
+      "evidence_notice": "Live auto-heal telemetry from GET /api/findings, GET /api/clients/:id/heal-stats and /heal-requests. No fabricated heal outcomes.",
+      "open_pr": "Open pull request"
     },
     "remediationHub": {
       "title": "Remediation Hub",
@@ -2544,7 +2618,16 @@
       "program_search": "Search remediation actions…",
       "unavailable_title": "Remediation backlog unavailable",
       "unavailable_body": "GET /api/findings could not be confirmed. Zero pending is not a clean backlog.",
-      "brief_unavailable": "Brief GET unavailable — leftover leftover-brief from another finding is not this finding."
+      "brief_unavailable": "Brief GET unavailable — leftover leftover-brief from another finding is not this finding.",
+      "posture_evidence": "Live posture from GET /api/posture/score/:clientId — score, sub-scores and drivers computed server-side from the tenant-scoped fix-first program. No fabricated metrics.",
+      "program_evidence_notice": "Live remediation program from GET /api/remediation/priority/:clientId — backend-ranked, root-cause deduplicated, with EPSS/KEV effective risk, attack-graph choke points and SLA clocks. Nothing is recomputed in the browser; no fabricated remediation telemetry.",
+      "forecast_evidence_notice": "Live forecast from GET /api/remediation/sla-forecast/:clientId — cumulative SLA-breach counts by horizon (KEV subset called out) for the selected tenant. No fabricated telemetry.",
+      "aging_evidence_notice": "Live backlog from GET /api/remediation/aging/:clientId — open findings bucketed by age from the tenant-scoped remediation store. No fabricated aging telemetry.",
+      "batch_heal_failed": "Batch heal failed",
+      "heal_failed": "Heal failed",
+      "revert_failed": "Revert failed",
+      "runs": "runs",
+      "verdict_distribution": "Verdict distribution"
     },
     "alertRulesEngine": {
       "title": "Alert Rules Engine",
@@ -2654,7 +2737,8 @@
       "assigned_client_optional": "optional — with none assigned the user sees nothing",
       "assigned_client_placeholder": "Select the customer this login belongs to",
       "assigned_client_required": "Customer-portal users must be bound to a client",
-      "users_unavailable": "User directory unavailable — store could not be confirmed."
+      "users_unavailable": "User directory unavailable — store could not be confirmed.",
+      "user_deactivated": "User deactivated successfully"
     },
     "complianceFrameworks": {
       "title": "Compliance Frameworks",
@@ -2737,7 +2821,8 @@
       "unavailable_title": "Compliance frameworks unavailable",
       "unavailable_body": "GET /api/compliance/frameworks could not be confirmed. Zero frameworks is not an unmapped tenant.",
       "controls_unavailable_title": "Compliance controls unavailable",
-      "controls_unavailable_body": "GET /api/compliance/frameworks/:id/controls could not be confirmed. Zero controls is not an empty framework."
+      "controls_unavailable_body": "GET /api/compliance/frameworks/:id/controls could not be confirmed. Zero controls is not an empty framework.",
+      "posture_evidence": "Live posture from GET /api/compliance/posture/:clientId — open findings crossed against the tenant-scoped CWE→control map. No fabricated control telemetry."
     },
     "clientNew": {
       "title": "Add New Client",
@@ -2807,7 +2892,12 @@
       "tenant_settings": "Tenant settings →",
       "back_client": "Back to client",
       "unavailable_title": "Integrations unavailable",
-      "unavailable_body": "GET /api/clients/:id/integrations could not be confirmed. Blank fields are not an unconfigured tenant — Save is locked."
+      "unavailable_body": "GET /api/clients/:id/integrations could not be confirmed. Blank fields are not an unconfigured tenant — Save is locked.",
+      "load_failed": "Failed to load integrations.",
+      "save_failed": "Save failed.",
+      "llm_url": "LLM endpoint URL",
+      "llm_model": "LLM model",
+      "llm_authorization": "LLM authorization header"
     },
     "clientOnboarding": {
       "subtitle": "Full onboarding — every engine and platform requirement before first scan",
@@ -2857,7 +2947,11 @@
       "configure_tenant": "Configure tenant",
       "catalog_unavailable_title": "Engine requirements catalog unavailable",
       "catalog_unavailable_body": "GET /api/engines/requirements and GET /api/onboarding/tenant-status could not be confirmed. 0% is not an unready client.",
-      "readiness_unavailable": "Readiness GET unavailable — leftover leftover-percent is not this client."
+      "readiness_unavailable": "Readiness GET unavailable — leftover leftover-percent is not this client.",
+      "module_meta": "{{engines}} engines · {{reqs}} reqs",
+      "azure_tenant_id": "Azure Tenant ID",
+      "domains_count": "{{n}} domains",
+      "scope_tenant_tag": "(tenant)"
     },
     "threatIntelHub": {
       "title": "Threat Intelligence Hub",
@@ -2933,7 +3027,8 @@
       "sev_info": "Info",
       "link_findings": "Findings Command Center",
       "link_findings_desc": "Triage every open finding",
-      "evidence_notice": "CVE feed from GET /api/threat-intel/feed (NVD-sourced). Environment correlation overlays your tenant severity counts from GET /api/dashboard/exec-kpis — not a standalone threat theater."
+      "evidence_notice": "CVE feed from GET /api/threat-intel/feed (NVD-sourced). Environment correlation overlays your tenant severity counts from GET /api/dashboard/exec-kpis — not a standalone threat theater.",
+      "clear_search": "Clear search"
     },
     "incidentResponseCenter": {
       "title": "Incident Response Center",
@@ -3250,7 +3345,22 @@
       "queued": "{{label}}: queued {{jobId}}",
       "evidence_notice": "Cloud asset inventory, K8s posture panel, and multi-provider scans from POST /api/command-center/scan plus GET /api/clients scope. Kubernetes findings require in-scope cluster credentials or reachable API servers.",
       "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
-      "history_unavailable": "Engine history API unavailable — run-to-populate is not a quiet empty trail."
+      "history_unavailable": "Engine history API unavailable — run-to-populate is not a quiet empty trail.",
+      "easm_title": "Attack Surface Management (EASM)",
+      "easm_desc": "Discover internet-facing assets & score external exposure — assets, services, TLS/HTTP, cloud footprint, takeover risk.",
+      "cspm_title": "Cloud Posture Management (CSPM)",
+      "cspm_desc": "Agentless AWS inventory via cross-account role — IAM, S3, EC2, RDS, Lambda, CloudTrail, compliance grades & toxic-combination attack paths.",
+      "open_cross": "Open →",
+      "status_idle": "idle",
+      "status_running": "running",
+      "status_completed": "completed",
+      "status_error": "error",
+      "desc_aws_attack": "IAM privilege escalation, S3 bucket exposure, Lambda event injection, STS token abuse",
+      "desc_azure_attack": "Azure AD token abuse, Blob SAS exposure, Function App command injection, RBAC misconfig",
+      "desc_gcp_attack": "GCP service account key exposure, Cloud Run abuse, BigQuery public dataset scan",
+      "desc_k8s_container": "CNAPP-grade: 14 attack surfaces, CIS benchmark, CVE intel, attack paths, GitOps/observability, RBAC SSAR",
+      "desc_iac_misconfig": "Terraform/CloudFormation/Pulumi misconfiguration scan and drift detection",
+      "desc_serverless_attack": "Serverless event injection, function chaining exploitation, cold-start timing"
     },
     "socialEngineering": {
       "title": "Social Engineering Command Center",
@@ -3342,7 +3452,9 @@
       "evidence_notice": "Engine roster and tenant enablement from GET /api/ceo/god-mode/snapshot. Snapshot failure stays unavailable — GET /api/health is not a catalog. Toggles persist via PUT /api/ceo/tenant/engines; config via PUT /api/system/config.",
       "export_csv": "Export CSV",
       "unavailable_title": "Engine catalog unavailable",
-      "unavailable_body": "Live engine roster could not be confirmed. Empty is not a catalog."
+      "unavailable_body": "Live engine roster could not be confirmed. Empty is not a catalog.",
+      "toggle_aria": "Toggle engine {{name}}",
+      "configure_aria": "Configure engine {{name}}"
     },
     "strategicEngineProgram": {
       "back_matrix": "Back to Engine Matrix",
@@ -3632,7 +3744,8 @@
         }
       },
       "unavailable_title": "Kill-chain view unavailable",
-      "unavailable_body": "Kill-chain and findings telemetry could not be confirmed. Zero chains is not a quiet ATT&CK surface."
+      "unavailable_body": "Kill-chain and findings telemetry could not be confirmed. Zero chains is not a quiet ATT&CK surface.",
+      "filter_severity_aria": "Filter chains by severity"
     },
     "rateLimitAnalytics": {
       "title": "Rate Limit Analytics",
@@ -3730,7 +3843,9 @@
       "detected": "Detected",
       "evidence_notice": "AI pattern synthesis from GET /api/soc/ai-patterns with fallback to GET /api/findings/clusters — models summarize live tenant evidence only.",
       "unavailable_title": "AI analysis intel unavailable",
-      "unavailable_body": "GET /api/findings could not be confirmed. Zero patterns is not a quiet threat landscape."
+      "unavailable_body": "GET /api/findings could not be confirmed. Zero patterns is not a quiet threat landscape.",
+      "filter_category_aria": "Filter by category",
+      "filter_severity_aria": "Filter by severity"
     },
     "askWeissman": {
       "evidence_notice": "Natural-language answers compiled via POST /api/ask only — read-only SQL against tenant-scoped data with audit logging. Transcript is session-local until you export it.",
@@ -3847,7 +3962,9 @@
       "score_explainer": "Composite score from live edge blocking, rate limits, defender telemetry in-page, CSP/cookie hardening, and exposed debug surfaces. Host EDR (AMSI/ETW) requires the endpoint agent.",
       "findings": "Findings",
       "empty_ready": "Configure probes and run a live assessment.",
-      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet detection-surface trail."
+      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet detection-surface trail.",
+      "extra_paths_label": "Extra paths to probe",
+      "intensity_label": "Probe intensity"
     },
     "wafBypass": {
       "title": "WAF Bypass Characterization Lab",
@@ -3868,7 +3985,8 @@
       "score_explainer": "Composite score from block rate, vendor detection, and observed bypass surfaces (encoding, headers, path normalization, verb gaps, JSON inspection). Every finding is from a live harmless probe.",
       "findings": "Findings",
       "empty_ready": "Select a client, configure probes, and run a live WAF assessment.",
-      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet WAF trail."
+      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet WAF trail.",
+      "intensity": "Bypass intensity"
     },
     "supplyChainHub": {
       "title": "Supply Chain Hub",
@@ -4509,7 +4627,8 @@
       "alert_body": "{{count}} components have known vulnerabilities. Update these packages to reduce supply chain risk.",
       "evidence_notice": "SBOM components and vulnerability matches from POST /api/command-center/scan (sbom_analyzer) and GET /api/findings filtered by supply-chain engines. CVE links resolve to NVD records.",
       "unavailable_title": "SBOM unavailable",
-      "unavailable_body": "GET /api/sbom/components could not be confirmed. Zero components is not a clean bill of materials."
+      "unavailable_body": "GET /api/sbom/components could not be confirmed. Zero components is not a clean bill of materials.",
+      "version_unknown": "unknown"
     },
     "containmentRulesBuilder": {
       "title": "Containment Rules Builder",
@@ -4550,7 +4669,9 @@
       "load_failed": "Failed to load containment rules",
       "rules_unavailable": "Containment rules store unavailable — the empty list is not confirmed.",
       "unavailable_title": "Containment rules unavailable",
-      "unavailable_body": "GET /api/containment/rules could not be confirmed. Zero rules is not an idle playbook."
+      "unavailable_body": "GET /api/containment/rules could not be confirmed. Zero rules is not an idle playbook.",
+      "kill_switch_none": "No isolation rules to activate.",
+      "kill_switch_ok": "Emergency isolation armed — activated {{count}} rule(s)."
     },
     "templateEngineWorkbench": {
       "title": "Template Engine",
@@ -4584,7 +4705,8 @@
       "duration_ms": "{{ms}} ms",
       "templates_unavailable": "Template catalog unavailable",
       "templates_unavailable_body": "GET /api/template-engine/templates could not be confirmed. An empty picker is not a missing template — YAML can still be edited by hand.",
-      "yaml_unavailable_body": "GET /api/template-engine/templates/:id could not be confirmed. YAML from another template is not this template."
+      "yaml_unavailable_body": "GET /api/template-engine/templates/:id could not be confirmed. YAML from another template is not this template.",
+      "select_template_label": "Select template"
     },
     "ceoVault": {
       "title": "CEO Vault",
@@ -4624,7 +4746,10 @@
       "delete_title": "Delete secret",
       "load_failed": "Failed to load secrets",
       "unavailable_title": "CEO vault unavailable",
-      "unavailable_body": "GET /api/ceo/vault/secrets could not be confirmed. Zero secrets is not an empty vault."
+      "unavailable_body": "GET /api/ceo/vault/secrets could not be confirmed. Zero secrets is not an empty vault.",
+      "show_value": "Show secret value",
+      "hide_value": "Hide secret value",
+      "copy_failed": "Failed to copy to clipboard"
     },
     "identityContextManager": {
       "title": "Identity Context Manager",
@@ -4709,7 +4834,10 @@
       "close_success": "Engagement closed",
       "close_title": "Close engagement",
       "create_success": "Engagement created",
-      "unavailable": "Engagements API unavailable — empty is not confirmed."
+      "unavailable": "Engagements API unavailable — empty is not confirmed.",
+      "open_api_title": "Open engagement JSON from API",
+      "create_failed_http": "Create failed (HTTP {{status}})",
+      "close_failed_http": "Close failed (HTTP {{status}})"
     },
     "clientEvidenceVault": {
       "title": "Evidence Vault",
@@ -4753,7 +4881,9 @@
       "delete_success": "Evidence deleted",
       "delete_title": "Delete evidence",
       "download_failed": "Download failed — store could not be confirmed",
-      "unavailable": "Evidence vault API unavailable — empty is not confirmed."
+      "unavailable": "Evidence vault API unavailable — empty is not confirmed.",
+      "upload_failed_http": "Upload failed (HTTP {{status}})",
+      "delete_failed_http": "Delete failed (HTTP {{status}})"
     },
     "roeApprovals": {
       "title": "ROE Approvals",
@@ -4855,7 +4985,12 @@
       "templates_unavailable": "Template catalog unavailable",
       "templates_unavailable_body": "GET /api/template-engine/templates could not be confirmed. An empty picker is not a missing chain — YAML can still be edited by hand.",
       "yaml_unavailable_body": "GET /api/template-engine/templates/:id could not be confirmed. YAML from another template is not this template.",
-      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant."
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
+      "client_label": "Client",
+      "template_label": "Verification template",
+      "step_passed": "Step passed",
+      "step_failed": "Step failed",
+      "step_fallback": "Step {{n}}"
     },
     "mobileSecurity": {
       "title": "Mobile & App Security",
@@ -4977,7 +5112,8 @@
       "col_channel": "Channel",
       "col_source": "Source IP",
       "col_payload": "Payload",
-      "callbacks_unavailable": "Callback API unavailable — empty callbacks are not confirmed."
+      "callbacks_unavailable": "Callback API unavailable — empty callbacks are not confirmed.",
+      "probe_type_label": "Probe type"
     },
     "domainDiscovery": {
       "dashboard": "← Dashboard",
@@ -5038,7 +5174,8 @@
       "stage_whois": "WHOIS Lookup",
       "stage_email": "Email Records",
       "stage_pattern": "Pattern Generation",
-      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant."
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
+      "select_domain_aria": "Select {{domain}}"
     },
     "topTierEngineHub": {
       "back_matrix": "← Engine Matrix",
@@ -5073,7 +5210,10 @@
       "showing_count": "{{count}} of {{total}} engines",
       "no_search_results": "No engines match your search.",
       "audit_unavailable": "Top-tier audit API unavailable — 0 connected is not a disconnected fleet.",
-      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant."
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
+      "probe_pass": "Pass",
+      "probe_fail": "Fail",
+      "probe_pending": "Pending"
     },
     "clientSaasIdpDiscovery": {
       "title": "SaaS / IdP Discovery",
@@ -5192,7 +5332,8 @@
       "health_unavailable": "callback API unreachable — not proof the listener is off",
       "health_none": "none observed",
       "health_count": "{{count}} recent hits",
-      "clients_unavailable": "Clients API unavailable — the tenant list is not confirmed empty."
+      "clients_unavailable": "Clients API unavailable — the tenant list is not confirmed empty.",
+      "probe_type": "Probe type"
     },
     "osintEngineProfile": {
       "title": "OSINT Engine",
@@ -6522,7 +6663,8 @@
       "persisted": "{{n}} incidents persisted",
       "persisting": "Persisting…",
       "reached_objective": "Reached objective",
-      "target": "Target"
+      "target": "Target",
+      "no_incidents_body": "No multi-stage attack chains or cross-signal correlations were detected in this client's live findings."
     },
     "engineReliability": {
       "evidence_notice": "Engine SLO, error budgets, and circuit-breaker state from GET /api/engines/telemetry and GET /api/engines/capabilities. Counters reflect real worker execution — no uptime theater.",
@@ -6548,7 +6690,11 @@
       "total_runs": "Total Runs",
       "unconfirmed": "run history unconfirmed",
       "unavailable_title": "Engine catalog unavailable",
-      "unavailable_body": "Capability roster could not be confirmed. Empty is not a healthy fleet."
+      "unavailable_body": "Capability roster could not be confirmed. Empty is not a healthy fleet.",
+      "hint_remote_capable": "Engines that can detect from a remote scan without an agent",
+      "telemetry_hint": "telemetry…",
+      "title_remote_detection": "Remote detection",
+      "title_agent_required": "Agent required"
     },
     "nexusSovereignSwarm": {
       "evidence_notice": "Swarm deployments queue via POST /api/command-center/scan (nexus_sovereign_swarm). Live agent fleet status from GET /api/agents/status. WebSocket telemetry streams real worker events — never scripted hive animations.",
@@ -6667,7 +6813,17 @@
       "select_client_opt": "— Select —",
       "target": "Target",
       "target_required": "Target required",
-      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet transport trail."
+      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet transport trail.",
+      "run_scan": "▶ Run Transport Scan",
+      "scanning": "⟳ Scanning…",
+      "show_params": "▸ Params",
+      "hide_params": "▾ Params",
+      "tls_ports": "TLS ports",
+      "grpc_ports": "gRPC ports",
+      "sni_override": "SNI override",
+      "grpc_paths": "Custom gRPC paths",
+      "timeout_ms": "Timeout (ms)",
+      "last_run": "Last: {{time}}"
     },
     "msspPartnerPortal": {
       "title": "MSSP Partner Portal",
@@ -6726,7 +6882,10 @@
       "pull_unconfigured": "{{provider}} has no stored token — save connectors first.",
       "none_armed": "none",
       "empty_unconfigured_title": "No IdP connectors armed",
-      "empty_unconfigured_body": "Save Entra/Okta/Google tokens under System Config → ITDR connectors, then Pull. The catalog has three providers; none are live until a token is stored."
+      "empty_unconfigured_body": "Save Entra/Okta/Google tokens under System Config → ITDR connectors, then Pull. The catalog has three providers; none are live until a token is stored.",
+      "filter_failed": "Failed",
+      "filter_success": "Success",
+      "filter_mfa": "MFA-prompted"
     },
     "casbDlpCenter": {
       "title": "CASB / DLP / CNAPP",
@@ -6786,7 +6945,12 @@
       "status": "Status",
       "search_placeholder": "Filter agents and findings…",
       "empty_title": "No agents or host findings",
-      "empty_body": "Install the agent (Linux/macOS/Windows package) and enroll it. Isolation requires CAP_NET_ADMIN / admin on the host."
+      "empty_body": "Install the agent (Linux/macOS/Windows package) and enroll it. Isolation requires CAP_NET_ADMIN / admin on the host.",
+      "filter_all": "All",
+      "filter_agents": "Agents",
+      "filter_findings": "Findings",
+      "kind_agent": "Agent",
+      "kind_finding": "Finding"
     },
     "adversaryMirror": {
       "title": "Adversary Gap Mirror",
@@ -6859,7 +7023,10 @@
       "empty_scan": "Open engine matrix",
       "all_clients": "All clients",
       "scoped_to": "Scoped to {{name}}",
-      "grid_capped": "Table shows the {{shown}} most recent findings in this scope. KPIs and the Excel workbook include all {{total}} (capped at {{exportCap}}). Search covers the preview only — use Findings C2 or the workbook for the rest."
+      "grid_capped": "Table shows the {{shown}} most recent findings in this scope. KPIs and the Excel workbook include all {{total}} (capped at {{exportCap}}). Search covers the preview only — use Findings C2 or the workbook for the rest.",
+      "filter_severity": "Filter preview by severity",
+      "no_match": "No preview rows match this filter. The workbook and KPI totals still include all {{total}} rows.",
+      "clear_filters": "Clear filters"
     },
     "cortexProvenBridge": {
       "title": "Cortex proven-finding bridge",
@@ -7066,7 +7233,20 @@
       "profile_supply_chain_adjacent_name": "Supply-chain adjacent",
       "profile_supply_chain_adjacent_blurb": "Harvests exposed manifests and SBOMs on the authorized target, then chains an evidenced exploit. Does not poison registries or emulate a SolarWinds-style implant.",
       "profile_ot_curious_name": "OT curious",
-      "profile_ot_curious_blurb": "Passive OT/ICS protocol and banner fingerprinting toward internal access. Does not run SIS or any process-disruption probe; deeper OT requires industrial_ot_enabled."
+      "profile_ot_curious_blurb": "Passive OT/ICS protocol and banner fingerprinting toward internal access. Does not run SIS or any process-disruption probe; deeper OT requires industrial_ot_enabled.",
+      "no_status_match": "No campaigns match this filter.",
+      "status_queued": "Queued",
+      "status_pending": "Pending",
+      "step_running": "Running",
+      "step_completed": "Completed",
+      "step_pending": "Pending",
+      "step_blocked": "Blocked",
+      "step_proven": "Proven",
+      "stage_running": "Running",
+      "stage_completed": "Completed",
+      "stage_failed": "Failed",
+      "stage_planned": "Planned",
+      "stage_skipped": "Skipped"
     },
     "adversaryDominance": {
       "title": "Adversary Dominance",
@@ -7104,7 +7284,8 @@
       "empty_body": "Run fusion against a client with an authorized domain, or clear the search and severity filters. Rows come from live feeds only — no fabricated leaks or actor names.",
       "last_updated": "Last synced {{time}}",
       "auto_on": "Live refresh ON",
-      "auto_off": "Live refresh OFF"
+      "auto_off": "Live refresh OFF",
+      "filter_severity": "Filter by severity"
     },
     "c2CovertExfil": {
       "title": "C2 & covert exfiltration",
@@ -7128,7 +7309,64 @@
       "scan_failed": "Scan failed. Check the target and try again.",
       "queued": "Scan queued — job {{id}}.",
       "empty_ready_title": "Ready to assess",
-      "empty_ready_body": "Select a client and run a scan to surface beaconing, DNS tunneling, HTTP/3 and WebSocket C2, ICMP/NTP covert channels, LSB stego and CDN/Tor fronting from live probes."
+      "empty_ready_body": "Select a client and run a scan to surface beaconing, DNS tunneling, HTTP/3 and WebSocket C2, ICMP/NTP covert channels, LSB stego and CDN/Tor fronting from live probes.",
+      "scorecard_title": "Covert-channel posture",
+      "scorecard_desc": "Live fused assessment — beacon Z-score, DNS entropy, HTTP/3/WSS, NTP/ICMP feasibility, LSB stego, CDN/Tor fronting, ingress choke-points. No simulated findings.",
+      "status_idle": "idle",
+      "status_running": "running",
+      "status_completed": "completed",
+      "status_error": "error",
+      "toggle_check_beaconing": "Beacon jitter / health masquerade",
+      "toggle_check_beaconing_hint": "Z-score + Lomb–Scargle/FFT",
+      "toggle_check_dns_tunnel": "DNS TXT entropy / TTL / DoH",
+      "toggle_check_dns_tunnel_hint": "Live TXT + DoH path probes",
+      "toggle_check_http3_ws": "HTTP/3 Alt-Svc + WebSocket",
+      "toggle_check_http3_ws_hint": "QUIC advertisement and WSS upgrade",
+      "toggle_check_icmp_ntp": "ICMP echo + NTP UDP/123",
+      "toggle_check_icmp_ntp_hint": "Covert-channel feasibility, not an implant",
+      "toggle_check_steganography": "Public-image LSB / EXIF",
+      "toggle_check_steganography_hint": "Entropy + chi-square on origin media",
+      "toggle_check_proxy_tor": "CDN / Tor / domain-fronting",
+      "toggle_check_proxy_tor_hint": "Cloudflare, Fastly, onion references",
+      "toggle_check_ports": "Ingress C2 fallback ports",
+      "toggle_check_ports_hint": "53, 123, 4443, 9001, 8080…",
+      "toggle_attack_path_synthesis": "Choke-point / Dijkstra paths",
+      "toggle_attack_path_synthesis_hint": "Internet → unusual port → origin",
+      "toggle_posture_scoring": "Posture score",
+      "toggle_posture_scoring_hint": "0–100 covert-channel grade",
+      "toggle_fair_sle": "FAIR SLE pricing",
+      "toggle_fair_sle_hint": "asset_value × max(CVSS/10, 0.5)",
+      "toggle_emit_coverage_manifest": "Coverage manifest",
+      "toggle_emit_coverage_manifest_hint": "Audit trail of every live layer",
+      "toggle_include_agent_findings": "Honest agent-required notes",
+      "toggle_include_agent_findings_hint": "ICMP payload entropy needs NDR/agent",
+      "cat_posture_score": "Posture",
+      "cat_beacon_jitter": "Beacon jitter",
+      "cat_beacon_padding": "Beacon padding",
+      "cat_beacon_zscore": "Z-score adapt",
+      "cat_beacon_spectral": "Spectral beacon",
+      "cat_c2_masquerade": "C2 masquerade",
+      "cat_c2_hmac": "HMAC headers",
+      "cat_c2_ua_split": "UA split",
+      "cat_c2_path_surface": "C2 paths",
+      "cat_dns_entropy": "DNS entropy",
+      "cat_dns_txt_length": "DNS TXT",
+      "cat_dns_ttl": "DNS TTL",
+      "cat_doh_endpoint": "DoH",
+      "cat_http3_altsvc": "HTTP/3",
+      "cat_websocket_c2": "WebSocket",
+      "cat_ntp_udp": "NTP",
+      "cat_icmp_echo": "ICMP",
+      "cat_stego_lsb": "LSB stego",
+      "cat_stego_png_entropy": "PNG entropy",
+      "cat_cdn_fronting": "CDN fronting",
+      "cat_tor_reference": "Tor",
+      "cat_ingress_ports": "Ingress ports",
+      "cat_choke_point": "Choke-point",
+      "cat_fair_sle": "FAIR SLE",
+      "cat_coverage_manifest": "Coverage",
+      "cat_agent_required": "Agent",
+      "cat_other": "Other"
     },
     "competitiveWinRoom": {
       "title": "Competitive Win Room",
@@ -7394,7 +7632,10 @@
       "col_excerpt": "Prompt excerpt",
       "search": "Search events…",
       "export": "Export events",
-      "empty_events": "No guard events to show"
+      "empty_events": "No guard events to show",
+      "rag_metric_vectors": "vectors",
+      "rag_metric_outliers": "outliers",
+      "rag_metric_missing_hash": "no SHA-256"
     },
     "panwDisplacement": {
       "title": "PANW displacement map",
@@ -7556,7 +7797,9 @@
       "checks": "Checks",
       "catalog": "Check catalog",
       "search_checks": "Search checks…",
-      "empty_ready": "Run a scan to assess persistence and defense-evasion posture."
+      "empty_ready": "Run a scan to assess persistence and defense-evasion posture.",
+      "last_updated": "Updated {{time}}",
+      "intensity_label": "Scan intensity"
     },
     "supremeBrain": {
       "title": "Supreme Brain",
@@ -7655,7 +7898,9 @@
       "section_credentials": "Credentials & Integrations",
       "section_advanced": "Advanced / Tuning",
       "secrets_hint": "Secrets prefilled from client integrations. Masked values (••••) are never sent back to the server.",
-      "filled": "set"
+      "filled": "set",
+      "secret_masked_hint": "Stored securely; masked values are not overwritten",
+      "toggle_params": "Toggle parameters"
     },
     "engineIntegrations": {
       "title": "Integration Readiness",
@@ -7664,13 +7909,15 @@
       "configure": "Configure →",
       "engine_detail": "Engine Detail →",
       "hint": "Missing integrations are hydrated server-side when configured; complete client setup for full live coverage.",
-      "unavailable": "GET /api/clients/:id/integrations could not be confirmed. Unconfirmed 0% is not idle coverage."
+      "unavailable": "GET /api/clients/:id/integrations could not be confirmed. Unconfirmed 0% is not idle coverage.",
+      "not_configured": "{{label}} — not configured"
     },
     "neuralEngineWeb": {
       "title": "Neural engine web",
       "no_clients": "No clients yet",
       "no_engines": "No engines active",
-      "idle": "Idle — awaiting engine activity"
+      "idle": "Idle — awaiting engine activity",
+      "client_fallback": "Client {{id}}"
     },
     "cockpitWidgets": {
       "protectedRoute": {
@@ -7679,7 +7926,8 @@
       "engineRoomTab": {
         "connecting": "Connecting to Submarine…",
         "select_client": "Select a client from the sidebar to configure the Engine Room.",
-        "loading": "Loading data from Submarine…"
+        "loading": "Loading data from Submarine…",
+        "group_enabled": "{{enabled}}/{{total}} enabled"
       },
       "clientCockpit": {
         "loading_mission": "Loading mission control…",
@@ -7705,7 +7953,8 @@
         "placeholder_tech_stack": "Tech stack hints",
         "placeholder_aws_arn": "AWS role ARN",
         "placeholder_aws_external_id": "AWS external ID",
-        "placeholder_gcp_project": "GCP project ID"
+        "placeholder_gcp_project": "GCP project ID",
+        "client_list_unavailable": "Client list unavailable."
       },
       "liveActivityFeed": {
         "ariaLabel": "Live activity feed",
@@ -7964,7 +8213,8 @@
           "medium": "medium",
           "low": "low",
           "info": "info"
-        }
+        },
+        "unavailable": "Score unavailable — awaiting live posture data."
       },
       "attackLifecycleTicker": {
         "waiting": "Attack Lifecycle Ticker — Waiting for activity..."
@@ -8055,7 +8305,8 @@
         },
         "no_attack_surface": "No attack surface data yet.",
         "no_trend": "No trend data",
-        "no_zero_day": "No zero-day activity"
+        "no_zero_day": "No zero-day activity",
+        "stats_unavailable": "Dashboard metrics unavailable — live data could not be loaded."
       },
       "execKpiStrip": {
         "no_change_vs_24h": "No change vs. 24h",
@@ -8518,7 +8769,8 @@
       "logout": "Logout",
       "connection_lost": "CONNECTION LOST",
       "scanning": "Scanning...",
-      "title": "WEISSMAN | ADVANCED OFFENSIVE INTELLIGENCE"
+      "title": "WEISSMAN | ADVANCED OFFENSIVE INTELLIGENCE",
+      "soar_hitl": "SOAR HITL"
     },
     "commandBar": {
       "target_placeholder": "Target URL or domain",
@@ -9105,6 +9357,10 @@
         "targetList": "target_list",
         "discoveredPaths": "discovered_paths",
         "updated": "updated"
+      },
+      "protectedRoute": {
+        "verifying": "Verifying CEO access",
+        "requiresRole": "CEO Command Center requires JWT role <1>ceo</1> or <2>is_superadmin</2> on your account. If an admin just upgraded you, sign in again so your cookies get a fresh token."
       }
     },
     "findingDrawer": {
@@ -9161,7 +9417,25 @@
       "statusFixed": "Fixed",
       "statusFalsePositive": "False Positive",
       "noRemediation": "No remediation guidance available.",
-      "cluster": "Cluster #{{id}}"
+      "cluster": "Cluster #{{id}}",
+      "tabMitre": "MITRE",
+      "tabPlaybook": "Playbook",
+      "tabCompliance": "Compliance",
+      "tabFinancial": "Financial",
+      "priority": "Priority {{score}}",
+      "seenTimes": "Seen {{n}}×",
+      "mitreAttack": "MITRE ATT&CK",
+      "technique": "Technique",
+      "openMitreTechnique": "Open MITRE technique",
+      "soarPlaybook": "SOAR / Playbook",
+      "engine": "Engine",
+      "playbookHint": "Playbook hint",
+      "playbookFireHint": "Fire from the Playbooks hub or POST /api/playbooks/fire with this finding id.",
+      "noComplianceTags": "No compliance tags on this finding.",
+      "financialImpact": "Financial impact",
+      "priorityScore": "Priority score",
+      "epss": "EPSS",
+      "blastRadius": "Blast radius"
     },
     "globalSearch": {
       "placeholder": "Search anything... (pages, engines, findings, clients)",
@@ -9208,6 +9482,142 @@
       "retry_in": "Retry in",
       "min_abbr": "min",
       "close": "Close"
+    },
+    "playbookGraph": {
+      "when_severity": "WHEN severity: {{severity}}",
+      "severity_any": "any",
+      "kev_suffix": " · KEV",
+      "action_fallback": "action",
+      "dry_run": "Dry-run playbook"
+    },
+    "accessPolicyEditor": {
+      "effect": "Effect",
+      "allow": "Allow",
+      "deny": "Deny",
+      "subject": "Subject",
+      "subjectPlaceholder": "Subject (role/attr)",
+      "action": "Action",
+      "resource": "Resource",
+      "condition": "Condition",
+      "conditionPlaceholder": "Condition (e.g. env == 'prod')",
+      "removeRule": "Remove rule",
+      "emptyHint": "No rules yet — every request is denied by default.",
+      "addRule": "Add rule"
+    },
+    "alert": {
+      "dismiss": "Dismiss"
+    },
+    "approvalWorkflow": {
+      "awaiting": "Awaiting",
+      "reject": "Reject",
+      "approve": "Approve",
+      "rejected": "Approval rejected.",
+      "allComplete": "All approvals complete.",
+      "noStages": "No approval stages."
+    },
+    "aiCommandConsole": {
+      "title": "Ask Weissman",
+      "conversation": "Conversation",
+      "emptyState": "Ask a question or issue a command in natural language. I can run scans, launch playbooks, and pull up findings.",
+      "thinking": "Assistant is thinking",
+      "stopVoice": "Stop voice input",
+      "startVoice": "Start voice input",
+      "send": "Send"
+    },
+    "auditTrailExport": {
+      "filter": "Filter",
+      "filterPlaceholder": "actor, action or target…",
+      "result": "Result",
+      "allResults": "All results",
+      "success": "Success",
+      "failure": "Failure",
+      "exportCsv": "Export CSV",
+      "exportJson": "Export JSON"
+    },
+    "blastRadius": {
+      "sle": "Single loss (SLE)",
+      "ale": "Annualized loss (ALE)",
+      "crownJewels": "Crown jewels",
+      "noCrownJewels": "No crown jewels mapped"
+    },
+    "blastRadiusSimulator": {
+      "mitigationCoverage": "Mitigation coverage",
+      "threatLikelihood": "Threat likelihood",
+      "likelihood": {
+        "low": "Low",
+        "expected": "Expected",
+        "high": "High"
+      },
+      "projectedExposure": "Projected exposure",
+      "savingsVsBaseline": "Annualized savings vs baseline"
+    },
+    "commentThread": {
+      "comments": "Comments",
+      "unknown": "Unknown",
+      "addComment": "Add a comment",
+      "postComment": "Post comment"
+    },
+    "complianceMatrix": {
+      "control": "Control",
+      "status": {
+        "covered": "Covered",
+        "partial": "Partial",
+        "gap": "Gap",
+        "na": "N/A"
+      }
+    },
+    "copyButton": {
+      "copied": "Copied"
+    },
+    "dataTable": {
+      "noData": "No data",
+      "noDataBody": "Nothing to display yet.",
+      "switchComfortable": "Switch to comfortable rows",
+      "switchCompact": "Switch to compact rows",
+      "densityCompact": "Compact",
+      "densityCozy": "Cozy",
+      "columns": "Columns",
+      "close": "Close",
+      "csv": "CSV",
+      "rowsLabel": "Rows:",
+      "rowsPerPage": "Rows per page",
+      "firstPage": "First page",
+      "prevPage": "Previous page",
+      "nextPage": "Next page",
+      "lastPage": "Last page"
+    },
+    "smartFilterBar": {
+      "newViewName": "New view name",
+      "viewNamePlaceholder": "View name",
+      "confirmViewName": "Confirm view name",
+      "cancelSaveView": "Cancel saving view"
+    },
+    "usageMeter": {
+      "overLimit": "over limit",
+      "ariaLabel": "Usage"
+    },
+    "topology3d": {
+      "regionLabel": "3D network topology",
+      "webglUnavailable": "3D rendering unavailable — see the node list below.",
+      "nodesLabel": "Topology nodes"
+    },
+    "whiteLabelStudio": {
+      "brandName": "Brand name",
+      "brandNamePlaceholder": "Acme Security",
+      "logoUrl": "Logo URL",
+      "palette": "Palette",
+      "colorWord": "color",
+      "labelPrimary": "Primary",
+      "labelGradientMid": "Gradient mid",
+      "labelSecondary": "Secondary",
+      "resetPalette": "Reset to default palette",
+      "preview": "Preview",
+      "primaryAction": "Primary action",
+      "premium": "Premium"
+    },
+    "toaster": {
+      "regionLabel": "Notifications",
+      "dismiss": "Dismiss notification"
     }
   },
   "supremeNerveCenter": {
@@ -9382,7 +9792,8 @@
     "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet serverless trail."
   },
   "engineReality": {
-    "unavailable": "Engine capabilities API unavailable — 0 engines is not confirmed."
+    "unavailable": "Engine capabilities API unavailable — 0 engines is not confirmed.",
+    "summary": "{{total}} engines · {{remote}} remote"
   },
   "dual_control": {
     "title": "Dual control",
@@ -9393,5 +9804,44 @@
     "reason_optional": "Reason (optional)",
     "reason_placeholder": "Ticket number or justification for this action…",
     "remember_session": "Remember tokens for this session"
+  },
+  "severity": {
+    "critical": "Critical",
+    "high": "High",
+    "medium": "Medium",
+    "low": "Low",
+    "info": "Info"
+  },
+  "not_found": {
+    "badge": "Route not found",
+    "description": "The page you requested doesn't exist or was moved. Use the links below to return to an active module.",
+    "dashboard_desc": "Command Center overview",
+    "findings_desc": "Vulnerability findings hub",
+    "engines_desc": "Scan engine matrix",
+    "go_back": "Go back",
+    "system_status": "System status"
+  },
+  "forensic": {
+    "unknown_engine": "unknown",
+    "tamper_label": "FORENSIC TAMPER",
+    "provenance_error_label": "PROVENANCE ERROR",
+    "verifying_label": "VERIFYING…",
+    "remote_label": "REMOTE",
+    "local_label": "LOCAL",
+    "remote_detail": "Detects remotely without an agent",
+    "local_detail": "Not remotely detectable",
+    "wasm_verified_detail": "Cryptographic manifest verified in isolated worker",
+    "resolves_to": "Resolves to {{canonical}}",
+    "same_engine_as": "Same engine as {{canonical}}",
+    "canonical_title": "Canonical: {{canonical}}",
+    "aria_tamper": "Forensic tamper detected for engine {{engineId}}",
+    "aria_badge": "Engine reality badge {{engineId}} {{label}}",
+    "detail_awaiting": "awaiting WASM provenance verification",
+    "detail_api_unavailable": "capabilities API unavailable — cannot verify",
+    "detail_manifest_empty": "capabilities manifest empty — cannot verify",
+    "detail_missing_provenance": "capabilities response missing cryptographic provenance manifest",
+    "detail_verified": "manifest verified",
+    "detail_tamper_failed": "FORENSIC TAMPER — provenance verification failed",
+    "detail_worker_failure": "WASM provenance worker failure"
   }
 }

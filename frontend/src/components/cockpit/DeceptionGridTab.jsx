@@ -136,7 +136,7 @@ export default function DeceptionGridTab() {
 
   if (!selectedClientId) {
     return (
-      <div className="p-8 rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 text-center text-white/70">
+      <div className="p-8 rounded-2xl bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] text-center text-[var(--text-tertiary)]">
         {t(`${NS}.selectClient`)}
       </div>
     )
@@ -149,7 +149,7 @@ export default function DeceptionGridTab() {
     <div className="space-y-6">
       <div className="flex items-center gap-2">
         <ShieldAlert className="w-5 h-5 text-amber-400" />
-        <h2 className="text-lg font-semibold text-white">{t(`${NS}.title`)}</h2>
+        <h2 className="text-lg font-semibold text-[var(--text-primary)]">{t(`${NS}.title`)}</h2>
       </div>
 
       {!assetsUnavailable && triggered.length > 0 && (
@@ -159,9 +159,9 @@ export default function DeceptionGridTab() {
         </div>
       )}
 
-      <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-4">
-        <h3 className="text-sm font-medium text-white/90 mb-3">{t(`${NS}.cloudInjectionTitle`)}</h3>
-        <p className="text-[11px] text-white/50 mb-3">
+      <div className="rounded-2xl bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] p-4">
+        <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-3">{t(`${NS}.cloudInjectionTitle`)}</h3>
+        <p className="text-[11px] text-[var(--text-muted)] mb-3">
           {t(`${NS}.cloudInjectionHintBeforeAwsKey`)}
           <code className="text-[#22d3ee]">{t(`${NS}.cloudInjectionHintAwsKey`)}</code>
           {t(`${NS}.cloudInjectionHintMiddle`)}
@@ -182,35 +182,35 @@ export default function DeceptionGridTab() {
             placeholder={t(`${NS}.assetIds`)}
             value={deployForm.asset_ids}
             onChange={e => setDeployForm(f => ({ ...f, asset_ids: e.target.value }))}
-            className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white placeholder-white/40 text-sm md:col-span-2"
+            className="px-3 py-2 rounded-lg bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-primary)] placeholder-[var(--text-muted)] text-sm md:col-span-2"
           />
           <input
             type="text"
             placeholder={t(`${NS}.s3Bucket`)}
             value={deployForm.s3_bucket}
             onChange={e => setDeployForm(f => ({ ...f, s3_bucket: e.target.value }))}
-            className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white placeholder-white/40 text-sm"
+            className="px-3 py-2 rounded-lg bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-primary)] placeholder-[var(--text-muted)] text-sm"
           />
           <input
             type="text"
             placeholder={t(`${NS}.s3ObjectKey`)}
             value={deployForm.s3_object_key}
             onChange={e => setDeployForm(f => ({ ...f, s3_object_key: e.target.value }))}
-            className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white placeholder-white/40 text-sm"
+            className="px-3 py-2 rounded-lg bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-primary)] placeholder-[var(--text-muted)] text-sm"
           />
           <input
             type="text"
             placeholder={t(`${NS}.s3Region`)}
             value={deployForm.s3_region}
             onChange={e => setDeployForm(f => ({ ...f, s3_region: e.target.value }))}
-            className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white placeholder-white/40 text-sm"
+            className="px-3 py-2 rounded-lg bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-primary)] placeholder-[var(--text-muted)] text-sm"
           />
           <input
             type="text"
             placeholder={t(`${NS}.ssmParameterPath`)}
             value={deployForm.ssm_parameter_path}
             onChange={e => setDeployForm(f => ({ ...f, ssm_parameter_path: e.target.value }))}
-            className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white placeholder-white/40 text-sm"
+            className="px-3 py-2 rounded-lg bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-primary)] placeholder-[var(--text-muted)] text-sm"
           />
         </div>
         <Button variant="unstyled"
@@ -232,7 +232,7 @@ export default function DeceptionGridTab() {
           <h4 className="text-xs font-medium text-sky-300 mb-2 flex items-center gap-2">
             <MapPin className="w-4 h-4" /> {t(`${NS}.cloudInjectionMap`)}
           </h4>
-          <ul className="space-y-1 text-[11px] font-mono text-white/70">
+          <ul className="space-y-1 text-[11px] font-mono text-[var(--text-tertiary)]">
             {injected.map(a => (
               <li key={a.id} className="truncate" title={a.cloud_injection_uri}>
                 #{a.id} {a.asset_type}: {a.cloud_injection_uri}
@@ -242,8 +242,8 @@ export default function DeceptionGridTab() {
         </div>
       )}
 
-      <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-4">
-        <h3 className="text-sm font-medium text-white/90 mb-3">{t(`${NS}.generateHoneytokens`)}</h3>
+      <div className="rounded-2xl bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] p-4">
+        <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-3">{t(`${NS}.generateHoneytokens`)}</h3>
         <div className="flex flex-wrap gap-2 mb-3">
           {assetTypes.map(({ value, label }) => (
             <label key={value} className="flex items-center gap-2 cursor-pointer">
@@ -254,9 +254,9 @@ export default function DeceptionGridTab() {
                   if (e.target.checked) setTypesToGenerate(prev => [...prev, value])
                   else setTypesToGenerate(prev => prev.filter(x => x !== value))
                 }}
-                className="rounded border-white/20"
+                className="rounded border-[var(--border-strong)]"
               />
-              <span className="text-sm text-white/80">{label}</span>
+              <span className="text-sm text-[var(--text-secondary)]">{label}</span>
             </label>
           ))}
         </div>
@@ -271,15 +271,15 @@ export default function DeceptionGridTab() {
         </Button>
       </div>
 
-      <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 overflow-hidden">
-        <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
-          <span className="text-sm font-medium text-white/90">{t(`${NS}.honeytokenInventory`)}</span>
+      <div className="rounded-2xl bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] overflow-hidden">
+        <div className="px-4 py-3 border-b border-[var(--border-default)] flex items-center justify-between">
+          <span className="text-sm font-medium text-[var(--text-secondary)]">{t(`${NS}.honeytokenInventory`)}</span>
           <Button variant="unstyled" type="button" onClick={fetchAssets} className="text-xs text-[#22d3ee] hover:underline">
             {t(`${NS}.refresh`)}
           </Button>
         </div>
         {loading ? (
-          <div className="p-6 text-center text-white/50 text-sm">{t(`${NS}.loading`)}</div>
+          <div className="p-6 text-center text-[var(--text-muted)] text-sm">{t(`${NS}.loading`)}</div>
         ) : assetsUnavailable ? (
           <div
             data-testid="deception-grid-unavailable"
@@ -288,19 +288,19 @@ export default function DeceptionGridTab() {
             {t(`${NS}.assetsUnavailable`)}
           </div>
         ) : assets.length === 0 ? (
-          <div className="p-6 text-center text-white/50 text-sm">{t(`${NS}.noAssets`)}</div>
+          <div className="p-6 text-center text-[var(--text-muted)] text-sm">{t(`${NS}.noAssets`)}</div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
             {assets.map(a => (
               <div
                 key={a.id}
                 className={`rounded-xl border p-3 ${
-                  a.status === 'triggered' ? 'border-red-500/50 bg-red-500/10' : 'border-white/10 bg-black/30'
+                  a.status === 'triggered' ? 'border-red-500/50 bg-red-500/10' : 'border-[var(--border-default)] bg-[var(--table-surface)]'
                 }`}
               >
                 <div className="flex items-center gap-2">
                   <Key className="w-4 h-4 text-amber-400" />
-                  <span className="text-xs font-medium text-white/90">
+                  <span className="text-xs font-medium text-[var(--text-secondary)]">
                     #{a.id} {a.asset_type}
                   </span>
                   {a.live_aws_canary && (
@@ -315,7 +315,7 @@ export default function DeceptionGridTab() {
                   )}
                   {a.status === 'triggered' && <AlertTriangle className="w-4 h-4 text-red-400 ml-auto" />}
                 </div>
-                <div className="mt-1 font-mono text-[10px] text-white/60 truncate" title={a.token_value_masked}>
+                <div className="mt-1 font-mono text-[10px] text-[var(--text-tertiary)] truncate" title={a.token_value_masked}>
                   {a.token_value_masked || '••••'}
                 </div>
                 {a.canary_access_key_id ? (
@@ -324,7 +324,7 @@ export default function DeceptionGridTab() {
                   </div>
                 ) : null}
                 {a.deployment_location && (
-                  <div className="mt-1 flex items-center gap-1 text-[10px] text-white/50">
+                  <div className="mt-1 flex items-center gap-1 text-[10px] text-[var(--text-muted)]">
                     <MapPin className="w-3 h-3 shrink-0" />
                     <span className="truncate">{a.deployment_location}</span>
                   </div>

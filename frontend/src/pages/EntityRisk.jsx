@@ -9,20 +9,22 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createColumnHelper } from '@tanstack/react-table'
-import { Activity, Users } from 'lucide-react'
+import { Activity, Search, Users } from 'lucide-react'
 import PageShell from './PageShell'
 import EmptyState from '../components/ui/EmptyState'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
+import FilterPills from '../components/ui/FilterPills'
 import DataTable from '../components/ui/DataTable'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { apiFetch } from '../utils/apiFetch'
-import { SEV_ORDER, SEV_COLOR } from '../lib/severity'
+import { SEV_ORDER, SEV_COLOR, normalizeSeverity } from '../lib/severity'
 import { downloadCsv } from '../lib/exportFindingsCsv'
 
 const NS = 'pages.entityRisk'
 const columnHelper = createColumnHelper()
+const SEV_KEYS = ['critical', 'high', 'medium', 'low', 'info']
 
 export default function EntityRisk() {
   const { t } = useTranslation()
@@ -30,6 +32,8 @@ export default function EntityRisk() {
   const [outliers, setOutliers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [sevFilter, setSevFilter] = useState('all')
+  const [search, setSearch] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -40,7 +44,7 @@ export default function EntityRisk() {
         apiFetch('/api/ueba/peer-anomalies?limit=100').catch(() => ({ outliers: [] })),
       ])
       if (er?.ok === false) throw new Error(er.detail || 'load failed')
-      setEntities(Array.isArray(er.entities) ? er.entities : [])
+      setEntities(Array.isArray(er?.entities) ? er.entities : [])
       setOutliers(Array.isArray(pa?.outliers) ? pa.outliers : [])
     } catch (e) {
       setError(e.message || t(`${NS}.load_failed`))
@@ -63,6 +67,35 @@ export default function EntityRisk() {
     }
     return { total: entities.length, critHigh, maxScore, outliers: outliers.length }
   }, [entities, outliers])
+
+  const sevCounts = useMemo(() => {
+    const c = { all: entities.length, critical: 0, high: 0, medium: 0, low: 0, info: 0 }
+    for (const e of entities) c[normalizeSeverity(e.severity)] += 1
+    return c
+  }, [entities])
+
+  const displayEntities = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return entities.filter((e) => {
+      if (sevFilter !== 'all' && normalizeSeverity(e.severity) !== sevFilter) return false
+      if (!q) return true
+      return `${e.entity_id || ''} ${e.entity_type || ''}`.toLowerCase().includes(q)
+    })
+  }, [entities, sevFilter, search])
+
+  const sevPills = useMemo(
+    () =>
+      [
+        { id: 'all', label: t('common.all'), count: sevCounts.all, color: '#06b6d4' },
+        ...SEV_KEYS.filter((s) => sevCounts[s] > 0).map((s) => ({
+          id: s,
+          label: t(`severity.${s}`),
+          count: sevCounts[s],
+          color: SEV_COLOR[s] || SEV_COLOR.info,
+        })),
+      ].map((p) => ({ ...p, active: sevFilter === p.id, onClick: () => setSevFilter(p.id) })),
+    [sevCounts, sevFilter, t],
+  )
 
   const exportCsv = useCallback(() => {
     const header = ['entity_type', 'entity_id', 'risk_score', 'peak_score', 'severity', 'event_count', 'last_event_at']
@@ -228,14 +261,34 @@ export default function EntityRisk() {
               {entities.length === 0 ? (
                 <EmptyState icon="chart" title={t(`${NS}.empty_title`)} body={t(`${NS}.empty_body`)} />
               ) : (
-                <DataTable
-                  id="entity-risk-table"
-                  columns={entityColumns}
-                  data={entities}
-                  animateRows={false}
-                  getRowId={(e) => `${e.entity_type}:${e.entity_id}`}
-                  getRowAccentColor={(e) => SEV_COLOR[(e.severity || 'info').toLowerCase()]}
-                />
+                <>
+                  <div className="flex flex-wrap items-end gap-4 mb-3">
+                    <div className="relative flex-1 min-w-[220px] max-w-sm">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-muted)] pointer-events-none" />
+                      <input
+                        type="search"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        aria-label={t(`${NS}.search_placeholder`)}
+                        placeholder={t(`${NS}.search_placeholder`)}
+                        className="w-full pl-9 pr-3 py-2 rounded-lg text-sm bg-[var(--bg-3)] border border-[var(--border-default)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
+                      />
+                    </div>
+                    <FilterPills pills={sevPills} />
+                  </div>
+                  {displayEntities.length === 0 ? (
+                    <EmptyState icon="search-x" title={t(`${NS}.no_match_title`)} body={t(`${NS}.no_match_body`)} />
+                  ) : (
+                    <DataTable
+                      id="entity-risk-table"
+                      columns={entityColumns}
+                      data={displayEntities}
+                      animateRows={false}
+                      getRowId={(e) => `${e.entity_type}:${e.entity_id}`}
+                      getRowAccentColor={(e) => SEV_COLOR[(e.severity || 'info').toLowerCase()]}
+                    />
+                  )}
+                </>
               )}
             </section>
 

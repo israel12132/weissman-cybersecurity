@@ -9,7 +9,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
 import { apiFetch } from '../utils/apiFetch'
-import { useJobPoll, resolveJobFindings, extractFindingsFromJob, uiJobStatus } from '../lib/useJobPoll'
+import { useJobPoll, resolveJobFindings, extractFindingsFromJob } from '../lib/useJobPoll'
 import Button from '../components/ui/Button'
 
 const ENGINE = 'edr_evasion'
@@ -75,7 +75,7 @@ function Toggle({ label, hint, checked, onChange }) {
         <span className="block text-[12px] font-mono text-[var(--text-primary)] truncate">{label}</span>
         {hint && <span className="block text-[10px] font-mono text-[var(--text-muted)] truncate">{hint}</span>}
       </span>
-      <span className={`shrink-0 w-9 h-5 rounded-full relative transition-colors ${checked ? 'bg-violet-500/70' : 'bg-white/15'}`}>
+      <span className={`shrink-0 w-9 h-5 rounded-full relative transition-colors ${checked ? 'bg-violet-500/70' : 'bg-[var(--bg-2)]'}`}>
         <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${checked ? 'left-[18px]' : 'left-0.5'}`} />
       </span>
     </Button>
@@ -208,7 +208,10 @@ export default function EdDetectionSurface() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId, target, params])
 
-  const jobStatus = uiJobStatus(pendingJobId, scanning)
+  // While a job is in flight (pendingJobId set), surface an honest, translated
+  // "running" hint. The old call passed a job id as the status arg, so it always
+  // resolved to a bare untranslated "idle".
+  const jobStatus = pendingJobId ? t('common.running') : ''
 
   return (
     <PageShell
@@ -228,11 +231,11 @@ export default function EdDetectionSurface() {
       )}
     >
       <div className="flex flex-wrap items-center gap-3 mb-6">
-        <select value={selectedClientId ?? ''} onChange={(e) => setSelectedClientId(e.target.value || null)} className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs font-mono text-[var(--text-secondary)]">
+        <select aria-label={t('pages.edDetection.select_client')} value={selectedClientId ?? ''} onChange={(e) => setSelectedClientId(e.target.value || null)} className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs font-mono text-[var(--text-secondary)]">
           <option value="">{t('pages.edDetection.select_client')}</option>
           {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <input type="text" value={target} onChange={(e) => setTarget(e.target.value)} placeholder={t('pages.edDetection.target_placeholder')} className="flex-1 min-w-[200px] bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs font-mono text-[var(--text-primary)]" />
+        <input type="text" aria-label={t('pages.edDetection.target_placeholder')} value={target} onChange={(e) => setTarget(e.target.value)} placeholder={t('pages.edDetection.target_placeholder')} className="flex-1 min-w-[200px] bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs font-mono text-[var(--text-primary)]" />
         <Button variant="unstyled" type="button" onClick={handleScan} disabled={scanning || !selectedClientId} className="px-5 py-2 rounded-xl font-mono text-sm border border-violet-500/40 text-violet-300 bg-violet-500/10 hover:bg-violet-500/20 disabled:opacity-40">
           {scanning ? t('pages.edDetection.scanning') : t('pages.edDetection.run_scan')}
         </Button>
@@ -242,7 +245,7 @@ export default function EdDetectionSurface() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-5 space-y-4 max-h-[85vh] overflow-y-auto">
           <h3 className="text-xs font-mono text-[var(--text-tertiary)] uppercase tracking-widest">{t('pages.edDetection.control_panel')}</h3>
-          <select value={params.intensity} onChange={(e) => setParam('intensity', e.target.value)} className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-md px-2 py-1.5 text-[11px] font-mono text-[var(--text-secondary)]">
+          <select aria-label={t('pages.edDetection.intensity_label')} value={params.intensity} onChange={(e) => setParam('intensity', e.target.value)} className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-md px-2 py-1.5 text-[11px] font-mono text-[var(--text-secondary)]">
             <option value="light">{t('pages.edDetection.intensity_light')}</option>
             <option value="normal">{t('pages.edDetection.intensity_normal')}</option>
             <option value="aggressive">{t('pages.edDetection.intensity_aggressive')}</option>
@@ -255,7 +258,7 @@ export default function EdDetectionSurface() {
               <input type="number" min={3} max={40} value={params.rate_burst_count} onChange={(e) => setParam('rate_burst_count', Number(e.target.value))} className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-md px-2 py-1 text-[11px] font-mono text-[var(--text-secondary)]" />
             </label>
           </div>
-          <input type="text" value={params.extra_paths} onChange={(e) => setParam('extra_paths', e.target.value)} placeholder="/admin,/internal" className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-md px-2 py-1.5 text-[11px] font-mono text-[var(--text-secondary)]" />
+          <input type="text" aria-label={t('pages.edDetection.extra_paths_label')} value={params.extra_paths} onChange={(e) => setParam('extra_paths', e.target.value)} placeholder="/admin,/internal" className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-md px-2 py-1.5 text-[11px] font-mono text-[var(--text-secondary)]" />
           <div className="space-y-2 pt-2 border-t border-[var(--border-subtle)]">
             {PROBE_TOGGLES.map((tog) => (
               <Toggle key={tog.key} label={tog.label} hint={tog.hint} checked={Boolean(params[tog.key])} onChange={(v) => setParam(tog.key, v)} />

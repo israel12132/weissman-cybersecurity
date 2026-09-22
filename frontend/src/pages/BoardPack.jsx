@@ -34,7 +34,7 @@ async function downloadBinary(path, toast, okKey, t) {
   const r = await apiFetch(path, { raw: true })
   const disposition = r.headers.get('content-disposition') || ''
   const match = disposition.match(/filename="?([^";\s]+)"?/)
-  const filename = match?.[1] ?? path.split('/').pop()
+  const filename = match?.[1] ?? path.split('?')[0].split('/').pop()
   const blob = await r.blob()
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -179,10 +179,11 @@ export default function BoardPack() {
         <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>
 
         <div className="flex flex-wrap items-center gap-3">
-          <label className="text-xs uppercase tracking-wider text-[var(--text-muted)]">
+          <label htmlFor="board-pack-client" className="text-xs uppercase tracking-wider text-[var(--text-muted)]">
             {t(`${NS}.select_client`)}
           </label>
           <select
+            id="board-pack-client"
             value={selectedClientId ?? ''}
             onChange={(e) => setSelectedClientId(e.target.value ? Number(e.target.value) : null)}
             className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl px-3 py-2 text-sm text-[var(--text-primary)]"
@@ -224,9 +225,11 @@ export default function BoardPack() {
               />
             </div>
 
-            <p className="text-xs font-mono text-[var(--text-tertiary)]">
-              {pack.fair_note} · {pack.paths_message} · {pack.first_mover_message}
-            </p>
+            {[pack.fair_note, pack.paths_message, pack.first_mover_message].filter(Boolean).length > 0 && (
+              <p className="text-xs font-mono text-[var(--text-tertiary)]">
+                {[pack.fair_note, pack.paths_message, pack.first_mover_message].filter(Boolean).join(' · ')}
+              </p>
+            )}
 
             {p0.length > 0 && (
               <div className="rounded-xl border border-rose-500/30 bg-rose-950/10 px-4 py-3">
@@ -234,8 +237,8 @@ export default function BoardPack() {
                   {t(`${NS}.p0_banner`)}
                 </div>
                 <ul className="space-y-1 text-sm">
-                  {p0.map((f) => (
-                    <li key={f.id} className="font-mono text-[12px] text-[var(--text-primary)]">
+                  {p0.map((f, i) => (
+                    <li key={f.id ?? `p0-${i}`} className="font-mono text-[12px] text-[var(--text-primary)]">
                       [{f.severity}] {f.title} {f.cve ? `· ${f.cve}` : ''}
                     </li>
                   ))}

@@ -55,7 +55,7 @@ export default function EngineRealityBadge({
     if (loading && engineId) {
       return (
         <span
-          className={`inline-block rounded-md border border-white/10 bg-white/5 animate-pulse ${SIZE_CLASSES[size] ?? SIZE_CLASSES.xs} ${className}`}
+          className={`inline-block rounded-md border border-[var(--border-default)] bg-[var(--bg-2)] animate-pulse ${SIZE_CLASSES[size] ?? SIZE_CLASSES.xs} ${className}`}
           aria-hidden
         >
           &nbsp;&nbsp;&nbsp;
@@ -113,7 +113,7 @@ export function EngineRealitySummary({ className = '', compact = false }) {
     return (
       <div className={`flex gap-2 ${className}`}>
         {[1, 2, 3, 4].map((i) => (
-          <span key={i} className="h-5 w-16 rounded bg-white/5 animate-pulse" />
+          <span key={i} className="h-5 w-16 rounded bg-[var(--bg-2)] animate-pulse" />
         ))}
       </div>
     )
@@ -142,7 +142,7 @@ export function EngineRealitySummary({ className = '', compact = false }) {
     <div className={`flex flex-wrap items-center gap-2 text-[10px] font-mono ${className}`}>
       {!compact && (
         <span className="text-[var(--text-muted)] uppercase tracking-wider">
-          {total} engines · {remoteDetectionCount} remote
+          {t('engineReality.summary', { total, remote: remoteDetectionCount })}
         </span>
       )}
       {items.map(({ key, tone }) => (

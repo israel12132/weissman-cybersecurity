@@ -139,7 +139,7 @@ export default function IdentityContextManager() {
                 <Shield className="w-5 h-5 text-cyan-400" />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-white mb-1">
+                <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1">
                   {t('pages.identityContextManager.oauth_hub_title')}
                 </h3>
                 <p className="text-xs text-[var(--text-tertiary)] max-w-xl">
@@ -292,7 +292,12 @@ export default function IdentityContextManager() {
                   onClick={() => setSelectedIdentity(identity)}
                   role="button"
                   tabIndex={0}
-                  onKeyDown={(e) => e.key === 'Enter' && setSelectedIdentity(identity)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      setSelectedIdentity(identity)
+                    }
+                  }}
                   aria-label={t('pages.identityContextManager.view_details', { username: identity.username })}
                 >
                   <div className="flex items-start justify-between">
@@ -358,7 +363,7 @@ export default function IdentityContextManager() {
           >
             <div className="flex items-center gap-2 mb-2">
               <AlertTriangle className="w-5 h-5 text-red-400" />
-              <h3 className="text-sm font-semibold text-white">{t('pages.identityContextManager.high_risk_title')}</h3>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('pages.identityContextManager.high_risk_title')}</h3>
             </div>
             <p className="text-sm text-[var(--text-secondary)]">
               {t('pages.identityContextManager.high_risk_body', { count: stats.highRisk })}
@@ -446,7 +451,7 @@ function IdentityDetailModal({ identity, onClose }) {
                 transition={{ delay: 0.15 }}
               >
                 <span className="text-xs text-[var(--text-tertiary)] block mb-1">{t('pages.identityContextManager.risk_score_label')}</span>
-                <div className="text-sm font-semibold text-white">{identity.risk_score}</div>
+                <div className="text-sm font-semibold text-[var(--text-primary)]">{identity.risk_score}</div>
               </motion.div>
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
@@ -454,7 +459,7 @@ function IdentityDetailModal({ identity, onClose }) {
                 transition={{ delay: 0.2 }}
               >
                 <span className="text-xs text-[var(--text-tertiary)] block mb-1">{t('pages.identityContextManager.last_login_label')}</span>
-                <div className="text-sm text-white">
+                <div className="text-sm text-[var(--text-primary)]">
                   {identity.last_login ? new Date(identity.last_login).toLocaleString() : t('pages.identityContextManager.never')}
                 </div>
               </motion.div>
@@ -464,7 +469,7 @@ function IdentityDetailModal({ identity, onClose }) {
                 transition={{ delay: 0.25 }}
               >
                 <span className="text-xs text-[var(--text-tertiary)] block mb-1">{t('pages.identityContextManager.anomalies_label')}</span>
-                <div className="text-sm text-white">{identity.anomaly_count || 0}</div>
+                <div className="text-sm text-[var(--text-primary)]">{identity.anomaly_count || 0}</div>
               </motion.div>
             </div>
           </div>

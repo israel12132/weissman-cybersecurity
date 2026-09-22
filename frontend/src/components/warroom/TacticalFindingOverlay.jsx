@@ -22,7 +22,7 @@ export default function TacticalFindingOverlay() {
     high: 'text-orange-400 border-orange-500/50 bg-orange-950/20',
     medium: 'text-amber-400 border-amber-500/50 bg-amber-950/20',
     low: 'text-cyan-400 border-cyan-500/50 bg-cyan-950/20',
-  }[lastFinding.severity?.toLowerCase()] || 'text-white/80 border-white/20 bg-black/40'
+  }[lastFinding.severity?.toLowerCase()] || 'text-[var(--text-secondary)] border-[var(--border-strong)] bg-[var(--table-surface)]'
 
   const pocSealed =
     lastFinding.poc_sealed ||
@@ -50,15 +50,15 @@ export default function TacticalFindingOverlay() {
         exit={{ opacity: 0, y: -10 }}
         className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] w-full max-w-xl px-4"
       >
-        <div className="rounded-xl border bg-[var(--bg-0)]/95 backdrop-blur-md shadow-2xl overflow-hidden border-white/10">
-          <div className="flex items-center justify-between px-4 py-2 border-b border-white/10 bg-black/30">
-            <span className="text-[10px] font-mono text-white/50 uppercase tracking-wider">
+        <div className="rounded-xl border bg-[var(--bg-0)]/95 backdrop-blur-md shadow-2xl overflow-hidden border-[var(--border-default)]">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--border-default)] bg-[var(--table-surface)]">
+            <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wider">
               {t(`${NS}.header`)}
             </span>
             <Button variant="unstyled"
               type="button"
               onClick={() => setLastFinding(null)}
-              className="p-1.5 rounded-lg text-white/60 hover:text-[var(--text-primary)] hover:bg-white/10 transition-colors"
+              className="p-1.5 rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)] transition-colors"
               aria-label={t(`${NS}.dismiss`)}
             >
               <X className="w-4 h-4" />
@@ -70,16 +70,16 @@ export default function TacticalFindingOverlay() {
                 {lastFinding.severity || '—'}
               </span>
               {cve && (
-                <span className="px-2 py-0.5 rounded text-[10px] font-mono text-white/70 bg-white/10">
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono text-[var(--text-tertiary)] bg-[var(--bg-2)]">
                   {cve}
                 </span>
               )}
             </div>
-            <p className="text-sm font-medium text-white">
+            <p className="text-sm font-medium text-[var(--text-primary)]">
               {lastFinding.title || t(`${NS}.findingFallback`)}
             </p>
             {lastFinding.poc_exploit && (
-              <div className="rounded-lg bg-black/60 border border-white/10 p-3">
+              <div className="rounded-lg bg-[var(--table-surface)] border border-[var(--border-default)] p-3">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[10px] font-mono text-[#22d3ee] uppercase tracking-wider">
                     {t(`${NS}.proofTitle`)}
@@ -88,7 +88,7 @@ export default function TacticalFindingOverlay() {
                     <Button variant="unstyled"
                       type="button"
                       onClick={copyProof}
-                      className="flex items-center gap-1 text-[10px] font-mono text-white/60 hover:text-[#22d3ee] transition-colors"
+                      className="flex items-center gap-1 text-[10px] font-mono text-[var(--text-tertiary)] hover:text-[#22d3ee] transition-colors"
                     >
                       {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                       {copied ? t(`${NS}.copied`) : t(`${NS}.copy`)}

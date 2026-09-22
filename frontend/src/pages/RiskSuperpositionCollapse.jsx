@@ -144,7 +144,7 @@ function CollapseChainCard({ finding }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[11px] font-mono text-violet-300/80 uppercase tracking-wider">STRIPS collapse</p>
-          <h4 className="text-sm font-semibold text-white mt-1">{finding.title}</h4>
+          <h4 className="text-sm font-semibold text-[var(--text-primary)] mt-1">{finding.title}</h4>
         </div>
         <span className="text-xs font-mono px-2 py-1 rounded-md bg-violet-500/20 text-violet-200 border border-violet-500/30">
           {Math.round((finding.confidence || 0) * 100)}%
@@ -178,6 +178,7 @@ function ParamSection({ title, children, defaultOpen = true }) {
     <div className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] overflow-hidden">
       <Button variant="unstyled"
         type="button"
+        aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
         className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-[var(--row-hover-bg)] transition-colors"
       >
@@ -416,7 +417,7 @@ export default function RiskSuperpositionCollapse() {
     // Guard against a tick that resolves after unmount / after `running` flips —
     // no setState on a torn-down effect, and no chained second fetch either.
     return () => { cancelled = true; clearInterval(iv) }
-  }, [jobId, runState.running, loadClusters, t])
+  }, [jobId, runState.running, loadClusters, setHistoryUnavailable, t])
 
   return (
     <PageShell
@@ -431,7 +432,7 @@ export default function RiskSuperpositionCollapse() {
       syncAt={historyUnavailable ? null : lastUpdated}
       evidence={t('pages.superpositionCollapse.evidence_notice')}
       breadcrumbs={[
-        { label: t('nav.engines'), to: '/engine-matrix' },
+        { label: t('nav.engines'), to: '/engines' },
         { label: engine?.label || ENGINE_ID, to: `/engines/${ENGINE_ID}` },
         { label: t('pages.superpositionCollapse.breadcrumb') },
       ]}
@@ -621,6 +622,7 @@ export default function RiskSuperpositionCollapse() {
             <div className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] overflow-hidden">
               <Button variant="unstyled"
                 type="button"
+                aria-expanded={showPayload}
                 onClick={() => setShowPayload((s) => !s)}
                 className="w-full px-4 py-2 text-left text-[10px] font-mono text-[var(--text-tertiary)] hover:bg-[var(--row-hover-bg)]"
               >
@@ -684,7 +686,7 @@ export default function RiskSuperpositionCollapse() {
 
           <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] p-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-white">{t('pages.superpositionCollapse.cluster_feed')}</h3>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('pages.superpositionCollapse.cluster_feed')}</h3>
               <Button variant="unstyled" type="button" onClick={loadClusters} disabled={clustersLoading}
                 className="text-[10px] font-mono text-cyan-400 hover:underline disabled:opacity-50">
                 {clustersLoading ? '…' : t('pages.superpositionCollapse.refresh_clusters')}

@@ -1,4 +1,5 @@
 import { forwardRef, useId, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { BookmarkPlus, Check, X } from 'lucide-react'
 import { cn } from '../../lib/cn'
 
@@ -42,6 +43,7 @@ const SmartFilterBar = forwardRef(function SmartFilterBar(
   },
   ref,
 ) {
+  const { t } = useTranslation()
   const inputId = useId()
   const [naming, setNaming] = useState(false)
   const [draftName, setDraftName] = useState('')
@@ -73,7 +75,7 @@ const SmartFilterBar = forwardRef(function SmartFilterBar(
     <div
       ref={ref}
       role="group"
-      aria-label="Filters"
+      aria-label={t('audit.filters', 'Filters')}
       className={cn('flex flex-wrap items-center gap-2', className)}
       {...props}
     >
@@ -118,7 +120,7 @@ const SmartFilterBar = forwardRef(function SmartFilterBar(
             FOCUS_RING,
           )}
         >
-          Clear all
+          {t('notifications.clear_all', 'Clear all')}
         </button>
       )}
 
@@ -152,8 +154,8 @@ const SmartFilterBar = forwardRef(function SmartFilterBar(
             value={draftName}
             onChange={(event) => setDraftName(event.target.value)}
             onKeyDown={handleKeyDown}
-            aria-label="New view name"
-            placeholder="View name"
+            aria-label={t('components.smartFilterBar.newViewName', 'New view name')}
+            placeholder={t('components.smartFilterBar.viewNamePlaceholder', 'View name')}
             className={cn(
               'h-7 w-32 rounded-md border border-border-default bg-bg-1 px-2 text-xs',
               'text-text-primary placeholder:text-text-muted',
@@ -164,7 +166,7 @@ const SmartFilterBar = forwardRef(function SmartFilterBar(
           <button
             type="button"
             onClick={confirmSave}
-            aria-label="Confirm view name"
+            aria-label={t('components.smartFilterBar.confirmViewName', 'Confirm view name')}
             className={cn(
               'inline-flex size-7 shrink-0 items-center justify-center rounded-md border',
               'border-accent-cyan/40 bg-accent-cyan/10 text-accent-cyan',
@@ -177,7 +179,7 @@ const SmartFilterBar = forwardRef(function SmartFilterBar(
           <button
             type="button"
             onClick={cancelSave}
-            aria-label="Cancel saving view"
+            aria-label={t('components.smartFilterBar.cancelSaveView', 'Cancel saving view')}
             className={cn(
               'inline-flex size-7 shrink-0 items-center justify-center rounded-md',
               'text-text-muted transition-colors duration-fast',
@@ -200,7 +202,7 @@ const SmartFilterBar = forwardRef(function SmartFilterBar(
           )}
         >
           <BookmarkPlus className="size-3.5" aria-hidden="true" />
-          Save view
+          {t('findings.view_save', 'Save view')}
         </button>
       )}
     </div>

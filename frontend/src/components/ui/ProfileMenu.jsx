@@ -205,7 +205,7 @@ export default function ProfileMenu({ variant = 'header' }) {
                     onClick={() => i18n.changeLanguage(l.code)}
                     className={`flex-1 px-2 py-1 rounded text-[11px] font-mono ${
                       active
-                        ? 'bg-cyan-500/20 text-cyan-200 border border-cyan-500/40'
+                        ? 'bg-cyan-500/20 text-[var(--text-accent)] border border-cyan-500/40'
                         : 'text-[var(--text-tertiary)] border border-transparent hover:border-[var(--border-default)]'
                     }`}
                     aria-pressed={active}
@@ -263,7 +263,7 @@ export default function ProfileMenu({ variant = 'header' }) {
             <Button variant="unstyled"
               type="button"
               onClick={() => { setOpen(false); logout() }}
-              className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-[12px] font-mono text-rose-300 hover:bg-rose-500/10"
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-[12px] font-mono text-[var(--severity-critical)] hover:bg-rose-500/10"
             >
               <LogOut className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
               {t('common.logout')}

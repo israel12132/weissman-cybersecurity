@@ -51,7 +51,7 @@ export default function AIRedteamArena() {
         setClient(null)
         setError(e?.message || t(`${NS}.unavailable`))
       })
-  }, [clientId])
+  }, [clientId, t])
 
   useEffect(() => {
     fetchClient()

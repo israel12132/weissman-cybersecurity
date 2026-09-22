@@ -53,7 +53,7 @@ export default function NeuralEngineWeb({ width = 400, height = 300 }) {
         out.push({
           id: `${client.id}-${engineId}`,
           engineId,
-          clientName: client.name || `Client ${client.id}`,
+          clientName: client.name || t('components.neuralEngineWeb.client_fallback', { id: client.id }),
           color,
           from: hub,
           to,
@@ -64,7 +64,7 @@ export default function NeuralEngineWeb({ width = 400, height = 300 }) {
       })
     })
     return out
-  }, [clients, selectedClientId, enabledEngines, width, height, activity])
+  }, [clients, selectedClientId, enabledEngines, width, height, activity, t])
 
   const hasClients = (selectedClientId ? clients.filter((c) => String(c.id) === String(selectedClientId)) : clients).length > 0
   const showEmpty = !hasClients || enabledEngines.length === 0
@@ -74,7 +74,7 @@ export default function NeuralEngineWeb({ width = 400, height = 300 }) {
     <div className="relative" style={{ width, height }}>
       {showEmpty && (
         <div className="absolute inset-0 flex items-center justify-center text-center px-4">
-          <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">
+          <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest">
             {!hasClients
               ? t('components.neuralEngineWeb.no_clients')
               : t('components.neuralEngineWeb.no_engines')}
@@ -83,7 +83,7 @@ export default function NeuralEngineWeb({ width = 400, height = 300 }) {
       )}
       {showIdle && (
         <div className="absolute inset-0 flex items-center justify-center text-center px-4">
-          <p className="text-[10px] font-mono text-white/35 uppercase tracking-widest">
+          <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest">
             {t('components.neuralEngineWeb.idle')}
           </p>
         </div>

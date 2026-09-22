@@ -122,9 +122,10 @@ function HitlItem({ item, onApprove, onDeny, loading }) {
           <input
             type="text"
             placeholder={t('pages.soarHitlQueue.deny_reason')}
+            aria-label={t('pages.soarHitlQueue.deny_reason')}
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            className="flex-1 rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-1.5 text-[12px] text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
+            className="flex-1 rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-1.5 text-[12px] text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
           />
           <Button
             variant="unstyled"
@@ -213,7 +214,7 @@ export default function SoarHitlQueue() {
     } finally {
       setActionLoading(false)
     }
-  }, [fetchQueue, headersForAction, showToast, t])
+  }, [fetchQueue, headersForAction, confirm, dual, showToast, t])
 
   const handleDeny = useCallback(async (id, note) => {
     setActionLoading(true)
@@ -230,7 +231,7 @@ export default function SoarHitlQueue() {
     } finally {
       setActionLoading(false)
     }
-  }, [fetchQueue, headersForAction, showToast, t])
+  }, [fetchQueue, headersForAction, confirm, dual, showToast, t])
 
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -338,7 +339,7 @@ export default function SoarHitlQueue() {
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t('pages.soarHitlQueue.search_placeholder')}
             aria-label={t('pages.soarHitlQueue.search_placeholder')}
-            className="w-full rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] ps-10 pe-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
+            className="w-full rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] ps-10 pe-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
           />
         </div>
 
@@ -387,6 +388,8 @@ export default function SoarHitlQueue() {
       <AnimatePresence>
         {toast && (
           <motion.div
+            role={toast.ok ? 'status' : 'alert'}
+            aria-live={toast.ok ? 'polite' : 'assertive'}
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 16 }}

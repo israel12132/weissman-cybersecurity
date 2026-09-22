@@ -68,7 +68,7 @@ export default function ReportView() {
       cancelled = true
       ac.abort()
     }
-  }, [clientId])
+  }, [clientId, t])
 
   if (loading) {
     return (

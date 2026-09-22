@@ -486,7 +486,7 @@ export default function OsintEngineProfile() {
                 onChange={(e) => setTarget(e.target.value)}
                 placeholder={t('pages.osintEngineProfile.target_placeholder')}
                 disabled={running}
-                className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40 disabled:opacity-50"
+                className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40 disabled:opacity-50"
               />
             </div>
             <EngineScanParamsPanel

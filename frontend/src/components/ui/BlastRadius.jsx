@@ -1,4 +1,5 @@
 import { forwardRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Crosshair } from 'lucide-react'
 import { cn } from '../../lib/cn'
 
@@ -46,6 +47,7 @@ const BlastRadius = forwardRef(function BlastRadius(
   },
   ref,
 ) {
+  const { t } = useTranslation()
   const fmt = makeFormatter(currency)
   const jewels = Array.isArray(crownJewels) ? crownJewels : []
   const values = jewels.map((j) => toNumber(j?.value))
@@ -71,13 +73,13 @@ const BlastRadius = forwardRef(function BlastRadius(
 
       <dl className="grid grid-cols-2 gap-4">
         <div className="flex flex-col gap-1">
-          <dt className={CAPTION}>Single loss (SLE)</dt>
+          <dt className={CAPTION}>{t('components.blastRadius.sle', 'Single loss (SLE)')}</dt>
           <dd className="font-display text-2xl font-semibold leading-none tabular-nums text-text-primary">
             {fmt.format(toNumber(sle))}
           </dd>
         </div>
         <div className="flex flex-col gap-1">
-          <dt className={CAPTION}>Annualized loss (ALE)</dt>
+          <dt className={CAPTION}>{t('components.blastRadius.ale', 'Annualized loss (ALE)')}</dt>
           <dd className="font-display text-2xl font-semibold leading-none tabular-nums text-severity-critical">
             {fmt.format(toNumber(ale))}
           </dd>
@@ -85,9 +87,9 @@ const BlastRadius = forwardRef(function BlastRadius(
       </dl>
 
       <div className="flex flex-col gap-2 border-t border-border-subtle pt-4">
-        <p className={CAPTION}>Crown jewels</p>
+        <p className={CAPTION}>{t('components.blastRadius.crownJewels', 'Crown jewels')}</p>
         {jewels.length === 0 ? (
-          <p className="text-sm text-text-muted">No crown jewels mapped</p>
+          <p className="text-sm text-text-muted">{t('components.blastRadius.noCrownJewels', 'No crown jewels mapped')}</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {jewels.map((jewel, i) => {

@@ -101,7 +101,7 @@ function StatusBadge({ status, t }) {
 function SeverityBar({ severities, total }) {
   if (!total) return null
   return (
-    <div className="flex h-1.5 w-full max-w-[220px] rounded-full overflow-hidden bg-white/5">
+    <div className="flex h-1.5 w-full max-w-[220px] rounded-full overflow-hidden bg-[var(--bg-2)]">
       {SEVERITY_KEYS.map((k) => {
         const v = severities[k]
         if (!v) return null
@@ -188,6 +188,24 @@ export default function RemediationHub() {
     return list
   }, [findings, sevFilter, statusFilter, search])
 
+  const sevCounts = useMemo(() => {
+    const m = {}
+    for (const f of findings) {
+      const s = normSev(f.severity)
+      if (s) m[s] = (m[s] || 0) + 1
+    }
+    return m
+  }, [findings])
+
+  const statusCounts = useMemo(() => {
+    const m = {}
+    for (const f of findings) {
+      const s = STATUS_FROM_FINDING(f.status)
+      if (s) m[s] = (m[s] || 0) + 1
+    }
+    return m
+  }, [findings])
+
   const workflows = useMemo(() => summarizeFamilies(filteredFindings), [filteredFindings])
 
   const totals = useMemo(() => {
@@ -227,7 +245,7 @@ export default function RemediationHub() {
       )}
     >
       <div className="space-y-6">
-        <p className="text-xs text-white/45 font-mono">{t('pages.remediationHub.intro')}</p>
+        <p className="text-xs text-[var(--text-muted)] font-mono">{t('pages.remediationHub.intro')}</p>
 
         {/* Board-level posture score, distilled from the same fix-first program below. */}
         <PostureScoreCard />
@@ -288,14 +306,14 @@ export default function RemediationHub() {
         {/* Filters */}
         <div className="flex flex-col lg:flex-row lg:items-center gap-3">
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/25" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-disabled)]" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t('pages.remediationHub.search_placeholder')}
               aria-label={t('pages.remediationHub.search_placeholder')}
-              className="w-full bg-black/40 border border-white/10 rounded-lg pl-9 pr-8 py-2 text-xs text-white/80 placeholder-white/25 font-mono focus:outline-none focus:border-cyan-500/40"
+              className="w-full bg-[var(--table-surface)] border border-[var(--border-default)] rounded-lg pl-9 pr-8 py-2 text-xs text-[var(--text-secondary)] placeholder-[var(--text-muted)] font-mono focus:outline-none focus:border-cyan-500/40"
             />
             {search && (
               <Button
@@ -304,40 +322,40 @@ export default function RemediationHub() {
                 onClick={() => setSearch('')}
                 aria-label={t('common.clear')}
                 title={t('common.clear')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
               >
                 <X className="w-3.5 h-3.5" />
               </Button>
             )}
           </div>
           <div className="flex items-center gap-1 flex-wrap">
-            <Pill active={sevFilter === 'all'} onClick={() => setSevFilter('all')}>{t('pages.remediationHub.filter_all')}</Pill>
+            <Pill active={sevFilter === 'all'} onClick={() => setSevFilter('all')}>{t('pages.remediationHub.filter_all')} <span className="opacity-60 tabular-nums">{findings.length}</span></Pill>
             {['critical', 'high', 'medium', 'low'].map((k) => (
               <Pill key={k} active={sevFilter === k} color={SEV_META[k].color} onClick={() => setSevFilter((p) => (p === k ? 'all' : k))}>
-                {t(`pages.remediationHub.sev_${k}`)}
+                {t(`pages.remediationHub.sev_${k}`)} <span className="opacity-60 tabular-nums">{sevCounts[k] || 0}</span>
               </Pill>
             ))}
           </div>
           <div className="flex items-center gap-1 flex-wrap">
-            <Pill active={statusFilter === 'all'} onClick={() => setStatusFilter('all')}>{t('pages.remediationHub.filter_all')}</Pill>
+            <Pill active={statusFilter === 'all'} onClick={() => setStatusFilter('all')}>{t('pages.remediationHub.filter_all')} <span className="opacity-60 tabular-nums">{findings.length}</span></Pill>
             {['pending', 'running', 'completed'].map((k) => (
               <Pill key={k} active={statusFilter === k} onClick={() => setStatusFilter((p) => (p === k ? 'all' : k))}>
-                {t(`pages.remediationHub.status_${k}`)}
+                {t(`pages.remediationHub.status_${k}`)} <span className="opacity-60 tabular-nums">{statusCounts[k] || 0}</span>
               </Pill>
             ))}
           </div>
         </div>
 
-        <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-white/10 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+        <div className="bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-[var(--border-default)] flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
               <Zap className="w-4 h-4 text-cyan-400" />
               {t('pages.remediationHub.families_heading', { count: error ? '—' : workflows.length })}
             </h3>
             <Link to="/findings" className="text-xs text-cyan-300 hover:text-cyan-200">{t('pages.remediationHub.open_findings')}</Link>
           </div>
 
-          <div className="divide-y divide-white/5">
+          <div className="divide-y divide-[var(--border-subtle)]">
             {loading ? (
               <div className="p-4"><SkeletonTable rows={5} cols={3} /></div>
             ) : error ? (
@@ -362,22 +380,22 @@ export default function RemediationHub() {
               workflows.map((w) => {
                 const isOpen = !!expanded[w.id]
                 return (
-                <div key={w.id} className="hover:bg-white/[0.03] transition-colors">
+                <div key={w.id} className="hover:bg-[var(--bg-2)] transition-colors">
                   <div className="p-4 flex items-center justify-between gap-3">
                     <Button
                       variant="unstyled"
                       onClick={() => setExpanded((e) => ({ ...e, [w.id]: !e[w.id] }))}
                       className="flex-1 min-w-0 text-left flex items-start gap-2"
                     >
-                      {isOpen ? <ChevronDown className="w-4 h-4 text-white/40 mt-0.5 shrink-0" /> : <ChevronRight className="w-4 h-4 text-white/40 mt-0.5 shrink-0" />}
+                      {isOpen ? <ChevronDown className="w-4 h-4 text-[var(--text-muted)] mt-0.5 shrink-0" /> : <ChevronRight className="w-4 h-4 text-[var(--text-muted)] mt-0.5 shrink-0" />}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-3 mb-1.5 flex-wrap">
-                          <h4 className="text-sm font-semibold text-white truncate">{w.label}</h4>
+                          <h4 className="text-sm font-semibold text-[var(--text-primary)] truncate">{w.label}</h4>
                           <StatusBadge status={w.status} t={t} />
                         </div>
                         <div className="flex items-center gap-3 mb-2">
                           <SeverityBar severities={w.severities} total={w.total} />
-                          <span className="text-[10px] font-mono text-white/35 whitespace-nowrap">
+                          <span className="text-[10px] font-mono text-[var(--text-muted)] whitespace-nowrap">
                             {SEVERITY_KEYS.filter((k) => w.severities[k] > 0).map((k) => `${t(`pages.remediationHub.sev_${k}`)} ${w.severities[k]}`).join(' · ')}
                           </span>
                         </div>
@@ -395,7 +413,7 @@ export default function RemediationHub() {
                     </Button>
                     <Link
                       to={`/findings?q=${encodeURIComponent(w.label)}`}
-                      className="px-3 py-1.5 bg-white/5 text-white/60 border border-white/10 rounded-lg text-xs font-medium hover:bg-white/10 transition-colors shrink-0"
+                      className="px-3 py-1.5 bg-[var(--bg-2)] text-[var(--text-tertiary)] border border-[var(--border-default)] rounded-lg text-xs font-medium hover:bg-[var(--row-hover-bg)] transition-colors shrink-0"
                     >
                       {t('pages.remediationHub.view_findings')}
                     </Link>
@@ -418,11 +436,11 @@ export default function RemediationHub() {
                           )}
                         </div>
                       )}
-                      {w.items.slice(0, 50).map((f) => (
-                        <div key={f.raw_id || f.finding_id} className="flex items-center justify-between gap-3 p-2 rounded-lg border border-white/5 bg-black/20">
+                      {w.items.slice(0, 50).map((f, i) => (
+                        <div key={f.raw_id || f.finding_id || `${w.id}-${i}`} className="flex items-center justify-between gap-3 p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--table-surface)]">
                           <div className="min-w-0 flex items-center gap-2">
                             <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: SEV_META[normSev(f.severity)].color }} />
-                            <span className="text-xs text-white/75 truncate">{f.title || f.finding_id}</span>
+                            <span className="text-xs text-[var(--text-secondary)] truncate">{f.title || f.finding_id}</span>
                             {f.has_patch && <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 shrink-0">FIX</span>}
                           </div>
                           <Button
@@ -437,7 +455,7 @@ export default function RemediationHub() {
                         </div>
                       ))}
                       {w.items.length > 50 && (
-                        <div className="text-[10px] text-white/30 font-mono pl-2">+{w.items.length - 50} more…</div>
+                        <div className="text-[10px] text-[var(--text-muted)] font-mono pl-2">+{w.items.length - 50} more…</div>
                       )}
                     </div>
                   )}
@@ -478,14 +496,14 @@ function HealStat({ label, value, color }) {
   return (
     <span className="inline-flex items-baseline gap-1.5">
       <span className="text-sm font-bold tabular-nums" style={color ? { color } : { color: '#e2e8f0' }}>{value}</span>
-      <span className="text-[10px] text-white/40 uppercase tracking-wide">{label}</span>
+      <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
     </span>
   )
 }
 
 function StatCard({ label, value, icon, color, loading }) {
   return (
-    <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+    <div className="bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs text-text-tertiary">{label}</span>
         {icon}

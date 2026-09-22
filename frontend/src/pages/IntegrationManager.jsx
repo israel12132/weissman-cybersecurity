@@ -373,6 +373,8 @@ export default function IntegrationManager() {
                     <Button variant="unstyled"
                       type="button"
                       onClick={() => deleteIntegration(integration.id)}
+                      title={t('common.delete')}
+                      aria-label={t('common.delete')}
                       className="p-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -399,7 +401,7 @@ export default function IntegrationManager() {
                 >
                   <span className="text-2xl">{integration.icon}</span>
                   <div>
-                    <div className="text-sm font-medium text-white">{integration.name}</div>
+                    <div className="text-sm font-medium text-[var(--text-primary)]">{integration.name}</div>
                     <div className="text-xs text-[var(--text-tertiary)]">{integration.category}</div>
                   </div>
                 </Button>
@@ -522,7 +524,9 @@ function AddIntegrationModal({ integration, existing = null, onClose, onSave }) 
               : t('pages.integrationManager.add_integration_modal')}
           </h3>
           <Button variant="unstyled"
+            type="button"
             onClick={onClose}
+            aria-label={t('common.close')}
             className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
           >
             ✕
@@ -539,7 +543,7 @@ function AddIntegrationModal({ integration, existing = null, onClose, onSave }) 
               type="text"
               value={formData.type}
               disabled
-              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none"
             />
           </div>
 
@@ -552,7 +556,7 @@ function AddIntegrationModal({ integration, existing = null, onClose, onSave }) 
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               placeholder="Production Splunk"
             />
           </div>
@@ -571,7 +575,7 @@ function AddIntegrationModal({ integration, existing = null, onClose, onSave }) 
                     config: { ...formData.config, [field]: e.target.value },
                   })
                 }
-                className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               />
             </div>
           ))}

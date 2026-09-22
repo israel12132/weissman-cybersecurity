@@ -74,6 +74,15 @@ export default function FindingClusters() {
     return { total, critical, cross, multi }
   }, [rows])
 
+  const bySev = useMemo(() => {
+    const m = {}
+    for (const r of rows) {
+      const s = String(r.max_severity || '').toLowerCase()
+      if (s) m[s] = (m[s] || 0) + 1
+    }
+    return m
+  }, [rows])
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return rows.filter((r) => {
@@ -248,6 +257,7 @@ export default function FindingClusters() {
                 pills={['all', 'critical', 'high', 'medium', 'low', 'info'].map((s) => ({
                   id: `cluster-sev-${s}`,
                   label: s === 'all' ? t(`${NS}.filter_all`) : s,
+                  count: s === 'all' ? rows.length : (bySev[s] || 0),
                   active: sevFilter === s,
                   color: s === 'critical' ? '#f43f5e' : '#94a3b8',
                   onClick: () => setSevFilter(s),

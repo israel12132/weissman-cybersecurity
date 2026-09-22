@@ -505,7 +505,7 @@ export default function WebSocketSecurityCommandCenter() {
       )}
     >
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-cyan-500/30 text-cyan-200'}`}>
+        <div role={toast.sev === 'error' ? 'alert' : 'status'} aria-live={toast.sev === 'error' ? 'assertive' : 'polite'} className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-cyan-500/30 text-cyan-200'}`}>
           {toast.msg}
         </div>
       )}
@@ -542,7 +542,7 @@ export default function WebSocketSecurityCommandCenter() {
             className="px-5 py-2 rounded-xl font-mono text-sm border border-cyan-500/40 text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20 transition-all disabled:opacity-40">
             {status === 'running' ? t('pages.websocketSecurity.scanning', '⟳ Scanning…') : t('pages.websocketSecurity.run_scan', '▶ Run WebSocket Scan')}
           </Button>
-          <Button variant="unstyled" type="button" onClick={() => setShowParams((s) => !s)}
+          <Button variant="unstyled" type="button" aria-expanded={showParams} onClick={() => setShowParams((s) => !s)}
             className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]">
             {showParams ? '▾' : '▸'} {t('pages.websocketSecurity.params', 'Parameters')}
           </Button>

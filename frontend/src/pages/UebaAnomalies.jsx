@@ -110,17 +110,27 @@ export default function UebaAnomalies() {
     return { total: anomalies.length, agents: agents.size, critHigh, maxZ }
   }, [anomalies])
 
+  const bySev = useMemo(() => {
+    const m = {}
+    for (const a of anomalies) {
+      const s = (a.severity || '').toLowerCase()
+      if (s) m[s] = (m[s] || 0) + 1
+    }
+    return m
+  }, [anomalies])
+
   const sevPills = useMemo(
     () => [
-      { id: 'all', label: t(`${NS}.all_severities`), active: sevFilter === 'all', onClick: () => setSevFilter('all') },
+      { id: 'all', label: t(`${NS}.all_severities`), count: anomalies.length, active: sevFilter === 'all', onClick: () => setSevFilter('all') },
       ...severities.map((s) => ({
         id: s,
         label: s,
+        count: bySev[s] || 0,
         active: sevFilter === s,
         onClick: () => setSevFilter(s),
       })),
     ],
-    [severities, sevFilter, t],
+    [severities, sevFilter, t, anomalies.length, bySev],
   )
 
   // Resolve an anomaly's client id → name for at-a-glance tenant context.

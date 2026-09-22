@@ -49,6 +49,12 @@ function scoreColor(score) {
   return '#fb7185'
 }
 
+// Render a backend timestamp as local time; fall back to the raw value if unparseable.
+function formatTs(ts) {
+  const d = new Date(ts)
+  return Number.isNaN(d.getTime()) ? String(ts) : d.toLocaleTimeString()
+}
+
 export default function StealthyPersistenceEvasion() {
   const { t } = useTranslation()
   const [clients, setClients] = useState([])
@@ -73,10 +79,10 @@ export default function StealthyPersistenceEvasion() {
       if (!Array.isArray(d)) return
       setClients(d)
       if (d.length) setSelectedClientId((cur) => cur || String(d[0].id))
-    }).catch(() => {})
+    }).catch(() => { /* best-effort: client picker stays empty, page still renders */ })
     apiFetch('/api/stealthy-persistence-evasion/catalog')
       .then((d) => { if (d?.checks) setCatalog(d) })
-      .catch(() => {})
+      .catch(() => { /* best-effort: catalog panel shows the loaded count (0) until reachable */ })
   }, [])
 
   const loadStatus = useCallback(async () => {
@@ -244,6 +250,7 @@ export default function StealthyPersistenceEvasion() {
         <select
           value={selectedClientId ?? ''}
           onChange={(e) => setSelectedClientId(e.target.value || null)}
+          aria-label={t('pages.stealthyEvasion.select_client')}
           className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs font-mono text-[var(--text-secondary)]"
         >
           <option value="">{t('pages.stealthyEvasion.select_client')}</option>
@@ -254,11 +261,13 @@ export default function StealthyPersistenceEvasion() {
           value={target}
           onChange={(e) => setTarget(e.target.value)}
           placeholder={t('pages.stealthyEvasion.target_placeholder')}
+          aria-label={t('pages.stealthyEvasion.target_placeholder')}
           className="flex-1 min-w-[200px] bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs font-mono text-[var(--text-primary)]"
         />
         <select
           value={params.intensity}
           onChange={(e) => setParams((p) => ({ ...p, intensity: e.target.value }))}
+          aria-label={t('pages.stealthyEvasion.intensity_label')}
           className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs font-mono text-[var(--text-secondary)]"
         >
           <option value="light">{t('pages.stealthyEvasion.intensity_light')}</option>
@@ -302,7 +311,11 @@ export default function StealthyPersistenceEvasion() {
           {busyAction === 'deception' ? t('pages.stealthyEvasion.planting') : t('pages.stealthyEvasion.plant_deception')}
         </Button>
         {jobStatus && <span className="text-[10px] font-mono text-[var(--text-muted)]">{jobStatus}</span>}
-        {lastUpdated && <span className="text-[10px] font-mono text-[var(--text-muted)]">{lastUpdated}</span>}
+        {lastUpdated && (
+          <span className="text-[10px] font-mono text-[var(--text-muted)]">
+            {t('pages.stealthyEvasion.last_updated', { time: formatTs(lastUpdated) })}
+          </span>
+        )}
       </div>
 
       {statusErr && (
@@ -368,6 +381,7 @@ export default function StealthyPersistenceEvasion() {
             value={catalogQuery}
             onChange={(e) => setCatalogQuery(e.target.value)}
             placeholder={t('pages.stealthyEvasion.search_checks')}
+            aria-label={t('pages.stealthyEvasion.search_checks')}
             className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-md px-2 py-1.5 text-[11px] font-mono text-[var(--text-secondary)]"
           />
           <div className="text-[10px] font-mono text-[var(--text-muted)]">

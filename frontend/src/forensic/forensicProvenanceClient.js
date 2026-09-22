@@ -40,6 +40,22 @@ function getWorker() {
     }
     worker = null
   }
+  // A message that fails structured-clone deserialization fires onmessageerror,
+  // never onmessage — without this, its pending request would hang until the
+  // timeout. Reject outstanding work and drop the instance so a fresh one is
+  // spun up on the next request.
+  worker.onmessageerror = () => {
+    for (const [, entry] of pending) {
+      entry.reject(new Error('forensic worker message deserialization failed'))
+    }
+    pending.clear()
+    try {
+      worker?.terminate()
+    } catch {
+      /* worker already gone */
+    }
+    worker = null
+  }
   return worker
 }
 

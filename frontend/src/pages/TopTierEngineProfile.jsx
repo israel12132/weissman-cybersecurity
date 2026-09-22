@@ -242,6 +242,9 @@ export default function TopTierEngineProfile() {
       const status = String(d.status || '').toLowerCase()
       if (status === 'completed' || status === 'failed' || status === 'dead') {
         setRunState((prev) => ({ ...prev, running: false }))
+        // Terminal state reached — stop polling instead of hammering
+        // /api/jobs/:id every 2s indefinitely for a finished job.
+        clearInterval(iv)
       }
     }, 2000)
     return () => { cancelled = true; clearInterval(iv) }
@@ -533,7 +536,7 @@ export default function TopTierEngineProfile() {
         </section>
 
         <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 space-y-3">
-          <h2 className="text-sm font-semibold text-white">{t('pages.topTierEngineProfile.recent_jobs')}</h2>
+          <h2 className="text-sm font-semibold text-[var(--text-primary)]">{t('pages.topTierEngineProfile.recent_jobs')}</h2>
           {!historyUnavailable && jobs.length > 0 && (
             <WeissmanListToolbar
               searchQuery={searchQuery}

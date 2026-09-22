@@ -275,7 +275,8 @@ export default function SBOMBrowser() {
                 <select
                   value={ecosystemFilter}
                   onChange={(e) => setEcosystemFilter(e.target.value)}
-                  className="px-3 py-2 bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                  aria-label={t('pages.sbomBrowser.ecosystems')}
+                  className="px-3 py-2 bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
                 >
                   <option value="all">{t('pages.sbomBrowser.all_ecosystems')}</option>
                   {ecosystems.map((eco) => (
@@ -341,7 +342,7 @@ export default function SBOMBrowser() {
                   const vulns = component.vulnerabilities || [];
                   return (
                     <div
-                      key={component.id}
+                      key={String(component.id || component.purl || component.name)}
                       className="p-4 hover:bg-[var(--row-hover-bg)] transition-colors"
                     >
                       <div className="flex items-start gap-3">
@@ -354,7 +355,7 @@ export default function SBOMBrowser() {
                               {component.name || component.package_name}
                             </h4>
                             <span className="text-xs text-[var(--text-tertiary)] font-mono">
-                              v{component.version || component.version_spec || 'unknown'}
+                              v{component.version || component.version_spec || t('pages.sbomBrowser.version_unknown')}
                             </span>
                             {component.type && (
                               <span
@@ -453,7 +454,7 @@ export default function SBOMBrowser() {
           <div className="bg-red-500/10 backdrop-blur-md border border-red-500/30 rounded-xl p-6">
             <div className="flex items-center gap-2 mb-3">
               <AlertTriangle className="w-5 h-5 text-red-400" />
-              <h3 className="text-sm font-semibold text-white">{t('pages.sbomBrowser.alert_title')}</h3>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('pages.sbomBrowser.alert_title')}</h3>
             </div>
             <p className="text-sm text-[var(--text-secondary)]">
               {t('pages.sbomBrowser.alert_body', { count: stats.vulnerable })}

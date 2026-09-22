@@ -104,6 +104,7 @@ export default function TargetScopePanel({ ceoIntegrated = false }) {
               type="button"
               disabled={configLoading}
               role="switch"
+              aria-label={t(`${NS}.otTitle`)}
               aria-checked={!!clientConfig.industrial_ot_enabled}
               onClick={() => patchConfig(selectedClientId, { industrial_ot_enabled: !clientConfig.industrial_ot_enabled })}
               className={`relative shrink-0 w-11 h-6 rounded-full transition-colors ${clientConfig.industrial_ot_enabled ? 'bg-amber-500/80' : 'bg-[var(--border-strong)]'} ${configLoading ? 'opacity-50' : ''}`}

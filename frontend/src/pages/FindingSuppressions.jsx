@@ -287,7 +287,10 @@ export default function FindingSuppressions() {
                         : 'text-[var(--text-muted)] border-[var(--border-default)] hover:text-[var(--text-secondary)]',
                     ].join(' ')}
                   >
-                    {t(`${NS}.filter_${f}`)}
+                    {t(`${NS}.filter_${f}`)}{' '}
+                    <span className="opacity-70 tabular-nums">
+                      {f === 'all' ? stats.total : f === 'active' ? stats.active : (stats.total - stats.active)}
+                    </span>
                   </Button>
                 ))}
               </div>

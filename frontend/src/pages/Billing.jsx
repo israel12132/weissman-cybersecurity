@@ -408,7 +408,14 @@ function UsageMeter({ icon: Icon, label, used, max }) {
           <span className="text-[var(--text-muted)]"> / {max > 0 ? max : '—'}</span>
         </span>
       </div>
-      <div className="h-2 rounded-full bg-[var(--bg-2)] overflow-hidden border border-[var(--border-subtle)]">
+      <div
+        role="progressbar"
+        aria-label={label}
+        aria-valuenow={Math.round(pct)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        className="h-2 rounded-full bg-[var(--bg-2)] overflow-hidden border border-[var(--border-subtle)]"
+      >
         <div
           className={`h-full transition-all duration-500 ${
             pct >= 90 ? 'bg-rose-500' : pct >= 70 ? 'bg-amber-400' : 'bg-cyan-500'

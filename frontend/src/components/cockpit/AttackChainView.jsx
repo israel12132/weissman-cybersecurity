@@ -76,7 +76,7 @@ export default function AttackChainView() {
         if (!cancelled) setLoading(false)
       })
     return () => { cancelled = true }
-  }, [clientId])
+  }, [clientId, t])
 
   const steps = useMemo(() => (Array.isArray(data?.steps) ? data.steps : []), [data])
   const runId = data?.run_id
@@ -84,7 +84,7 @@ export default function AttackChainView() {
   if (!clientId) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#09090b]">
-        <p className="text-white/60">{t(`${NS}.no_client`)}</p>
+        <p className="text-[var(--text-tertiary)]">{t(`${NS}.no_client`)}</p>
       </div>
     )
   }
@@ -117,11 +117,11 @@ export default function AttackChainView() {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="rounded-xl border border-white/10 bg-black/40 backdrop-blur-sm p-8 text-center"
+            className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] backdrop-blur-sm p-8 text-center"
           >
-            <ListOrdered className="w-12 h-12 mx-auto mb-3 text-white/30" />
-            <p className="text-white/60">{t(`${NS}.no_chain`)}</p>
-            <p className="text-sm text-white/40 mt-1">{t(`${NS}.no_chain_hint`)}</p>
+            <ListOrdered className="w-12 h-12 mx-auto mb-3 text-[var(--text-muted)]" />
+            <p className="text-[var(--text-tertiary)]">{t(`${NS}.no_chain`)}</p>
+            <p className="text-sm text-[var(--text-muted)] mt-1">{t(`${NS}.no_chain_hint`)}</p>
           </motion.div>
         ) : (
           <div className="space-y-0">
@@ -155,10 +155,10 @@ export default function AttackChainView() {
                     )}
                   </div>
                   <div className="pb-8 flex-1">
-                    <div className="rounded-lg border border-white/10 bg-black/40 backdrop-blur-sm p-4">
-                      <p className="text-white/95 font-medium leading-snug">{label}</p>
+                    <div className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] backdrop-blur-sm p-4">
+                      <p className="text-[var(--text-secondary)] font-medium leading-snug">{label}</p>
                       {payload ? (
-                        <pre className="mt-2 text-xs text-white/60 whitespace-pre-wrap break-words font-mono">
+                        <pre className="mt-2 text-xs text-[var(--text-tertiary)] whitespace-pre-wrap break-words font-mono">
                           {payload}
                         </pre>
                       ) : null}

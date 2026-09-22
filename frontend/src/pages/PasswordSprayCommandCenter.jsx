@@ -263,7 +263,7 @@ function sevWeight(s) {
 
 function Toggle({ on, onClick, label }) {
   return (
-    <Button variant="unstyled" type="button" onClick={onClick}
+    <Button variant="unstyled" type="button" onClick={onClick} aria-pressed={on}
       className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs font-mono transition-all w-full text-left"
       style={{ borderColor: on ? `${ACCENT}50` : '#ffffff14', backgroundColor: on ? `${ACCENT}14` : 'transparent', color: on ? '#fda4af' : '#ffffff55' }}>
       <span className="w-7 h-4 rounded-full relative transition-all shrink-0" style={{ backgroundColor: on ? ACCENT : '#ffffff20' }}>
@@ -349,7 +349,9 @@ function PostureCard({ finding, L, pathCount }) {
   const ev = finding?.evidence || {}
   const score = ev.score ?? finding?.score ?? '—'
   const grade = ev.grade ?? finding?.grade ?? '—'
-  const friction = ev.stuffing_friction != null ? Math.round(Number(ev.stuffing_friction) * 100) : null
+  const friction = ev.stuffing_friction != null && Number.isFinite(Number(ev.stuffing_friction))
+    ? Math.round(Number(ev.stuffing_friction) * 100)
+    : null
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
       className="rounded-2xl border p-5 mb-6 grid md:grid-cols-4 gap-4"
@@ -596,7 +598,8 @@ export default function PasswordSprayCommandCenter() {
       )}
     >
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-rose-500/30 text-rose-200'}`}>
+        <div role={toast.sev === 'error' ? 'alert' : 'status'} aria-live={toast.sev === 'error' ? 'assertive' : 'polite'}
+          className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-rose-500/30 text-rose-200'}`}>
           {toast.msg}
         </div>
       )}
@@ -680,7 +683,7 @@ export default function PasswordSprayCommandCenter() {
         </div>
 
         <div className="flex items-center justify-between gap-4 pt-2 border-t border-[var(--border-subtle)]">
-          <Button variant="unstyled" type="button" onClick={() => setShowAdvanced(!showAdvanced)} className="text-xs font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)]">
+          <Button variant="unstyled" type="button" onClick={() => setShowAdvanced(!showAdvanced)} aria-expanded={showAdvanced} className="text-xs font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)]">
             {showAdvanced ? '▾' : '▸'} {L.advanced}
           </Button>
           <div className="flex gap-2">

@@ -79,7 +79,7 @@ export default function CompetitiveDelta() {
     load()
   }, [load])
 
-  const lanes = Array.isArray(data?.moat?.lanes) ? data.moat.lanes : []
+  const lanes = useMemo(() => (Array.isArray(data?.moat?.lanes) ? data.moat.lanes : []), [data])
   const clusters = Array.isArray(data?.moat?.market_research?.clusters)
     ? data.moat.market_research.clusters
     : []
@@ -98,14 +98,14 @@ export default function CompetitiveDelta() {
     })
   }, [lanes, searchQuery, coverageFilter])
 
-  const pills = useMemo(
-    () => [
-      { id: 'all', label: t(`${NS}.all_lanes`), active: coverageFilter === 'all', onClick: () => setCoverageFilter('all') },
-      { id: 'live', label: t(`${NS}.live`), active: coverageFilter === 'live', onClick: () => setCoverageFilter('live') },
-      { id: 'gap', label: t(`${NS}.gap`), active: coverageFilter === 'gap', onClick: () => setCoverageFilter('gap') },
-    ],
-    [coverageFilter, t],
-  )
+  const pills = useMemo(() => {
+    const live = lanes.filter((l) => l.covered).length
+    return [
+      { id: 'all', label: t(`${NS}.all_lanes`), count: lanes.length, active: coverageFilter === 'all', onClick: () => setCoverageFilter('all') },
+      { id: 'live', label: t(`${NS}.live`), count: live, active: coverageFilter === 'live', onClick: () => setCoverageFilter('live') },
+      { id: 'gap', label: t(`${NS}.gap`), count: lanes.length - live, active: coverageFilter === 'gap', onClick: () => setCoverageFilter('gap') },
+    ]
+  }, [coverageFilter, t, lanes])
 
   const columns = useMemo(
     () => [
@@ -160,7 +160,7 @@ export default function CompetitiveDelta() {
   }
 
   const enginesTotal = data?.engines?.total_ids ?? data?.moat?.engines_total ?? '—'
-  const lanesCovered = data?.moat ? `${data.moat.lanes_covered}/${data.moat.lanes_total}` : '—'
+  const lanesCovered = data?.moat ? `${data.moat.lanes_covered ?? '—'}/${data.moat.lanes_total ?? '—'}` : '—'
   const otOk = Boolean(data?.ot_safety?.in_production_catalog)
   const campaign = data?.revision?.campaign_fabric
   const proof = data?.revision?.proof_artifacts
@@ -241,7 +241,7 @@ export default function CompetitiveDelta() {
               />
             </div>
 
-            <section data-testid="revision-facts" className="rounded-xl border border-white/10 bg-black/20 p-4 space-y-2">
+            <section data-testid="revision-facts" className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] p-4 space-y-2">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-cyan-200">
                 {t(`${NS}.revision_title`)}
               </h2>
@@ -266,7 +266,8 @@ export default function CompetitiveDelta() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={t(`${NS}.search_placeholder`)}
-                  className="w-full rounded-lg border border-white/10 bg-black/30 pl-9 pr-3 py-2 text-sm text-white placeholder:text-[var(--text-muted)]"
+                  aria-label={t(`${NS}.search_placeholder`)}
+                  className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] pl-9 pr-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
                 />
               </label>
               <Button type="button" variant="ghost" size="xs" onClick={() => doExport('json')}>
@@ -291,15 +292,15 @@ export default function CompetitiveDelta() {
             />
 
             {clusters.length > 0 && (
-              <section data-testid="market-research" className="rounded-xl border border-white/10 bg-black/20 p-4 space-y-3">
+              <section data-testid="market-research" className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] p-4 space-y-3">
                 <h2 className="text-sm font-semibold uppercase tracking-wider text-violet-200">
                   {t(`${NS}.research_title`)}
                 </h2>
                 <p className="text-xs text-[var(--text-muted)]">{t(`${NS}.research_notice`)}</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {clusters.map((c) => (
-                    <article key={c.cluster} className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 space-y-1">
-                      <h3 className="text-xs text-white font-medium">{c.cluster}</h3>
+                    <article key={c.cluster} className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2 space-y-1">
+                      <h3 className="text-xs text-[var(--text-primary)] font-medium">{c.cluster}</h3>
                       <p className="text-[10px] text-cyan-200/80 font-mono">
                         {(Array.isArray(c.vendors) ? c.vendors : []).join(' · ')}
                       </p>

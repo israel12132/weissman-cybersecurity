@@ -62,7 +62,7 @@ export default function CortexProvenBridge() {
 
   useEffect(() => { load(false) }, [load])
 
-  const items = Array.isArray(data?.items) ? data.items : []
+  const items = useMemo(() => (Array.isArray(data?.items) ? data.items : []), [data])
   const counts = data?.counts || {}
 
   const filtered = useMemo(() => {
@@ -77,6 +77,13 @@ export default function CortexProvenBridge() {
         .includes(q)
     })
   }, [items, searchQuery, filter])
+
+  const filterCounts = useMemo(() => ({
+    all: items.length,
+    proven: items.filter((f) => f.eligible).length,
+    blind: items.filter((f) => f.xdr_had_matching_alert === false && f.eligible).length,
+    pushed: items.filter((f) => f.cortex_status === 'pushed').length,
+  }), [items])
 
   const exportCsv = useCallback(() => {
     downloadCsv(
@@ -236,25 +243,26 @@ export default function CortexProvenBridge() {
                 variant="unstyled"
                 type="button"
                 onClick={() => setFilter(id)}
+                aria-pressed={filter === id}
                 className={`px-2.5 py-1 rounded-md text-[10px] font-mono border ${
                   filter === id
                     ? 'border-orange-400/60 text-orange-100 bg-orange-500/15'
-                    : 'border-white/10 text-white/50 hover:border-white/25'
+                    : 'border-[var(--border-default)] text-[var(--text-muted)] hover:border-[var(--border-strong)]'
                 }`}
               >
-                {t(`${NS}.filter_${id}`)}
+                {t(`${NS}.filter_${id}`)} <span className="opacity-60 tabular-nums">{filterCounts[id]}</span>
               </Button>
             ))}
           </div>
           <div className="relative max-w-sm">
-            <Search className="w-3.5 h-3.5 text-white/30 absolute left-2.5 top-1/2 -translate-y-1/2" />
+            <Search className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-2.5 top-1/2 -translate-y-1/2" />
             <input
               type="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={t(`${NS}.search_placeholder`)}
               aria-label={t(`${NS}.search_placeholder`)}
-              className="w-full pl-8 pr-3 py-2 rounded-lg text-sm bg-black/40 border border-white/10 text-white"
+              className="w-full pl-8 pr-3 py-2 rounded-lg text-sm bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-primary)]"
             />
           </div>
           {!filtered.length ? (
@@ -269,19 +277,19 @@ export default function CortexProvenBridge() {
                 return (
                   <li
                     key={f.id || f.finding_id}
-                    className="rounded-lg border border-white/10 p-3"
+                    className="rounded-lg border border-[var(--border-default)] p-3"
                     style={blind ? { borderColor: 'rgba(244,63,94,0.45)' } : undefined}
                   >
                     <div className="flex gap-2 items-center flex-wrap">
                       <span className="text-[10px] font-mono uppercase" style={{ color: c }}>{s}</span>
-                      <span className="text-xs text-white/50 font-mono">{f.engine_id || f.source}</span>
+                      <span className="text-xs text-[var(--text-muted)] font-mono">{f.engine_id || f.source}</span>
                       {f.proof_kind && (
                         <span className="text-[10px] font-mono text-cyan-200/80">{f.proof_kind}</span>
                       )}
                       {f.eligible ? (
                         <span className="text-[10px] font-mono uppercase text-orange-200">{t(`${NS}.eligible`)}</span>
                       ) : (
-                        <span className="text-[10px] font-mono uppercase text-white/40">{t(`${NS}.ineligible`)}</span>
+                        <span className="text-[10px] font-mono uppercase text-[var(--text-muted)]">{t(`${NS}.ineligible`)}</span>
                       )}
                       {blind && (
                         <span className="text-[10px] font-mono uppercase text-rose-300">{t(`${NS}.blind_spot`)}</span>
@@ -291,7 +299,7 @@ export default function CortexProvenBridge() {
                       )}
                     </div>
                     <div className="text-sm text-[var(--text-primary)] mt-1">{f.title}</div>
-                    <div className="text-[10px] font-mono text-white/40 mt-1">
+                    <div className="text-[10px] font-mono text-[var(--text-muted)] mt-1">
                       {f.target || '—'} · run {f.report_run_id ?? '—'} · {f.cortex_status}
                       {' · '}
                       <Link to={`/findings?q=${q}`} className="underline text-orange-200/80">

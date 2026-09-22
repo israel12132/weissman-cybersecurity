@@ -50,7 +50,7 @@ function SeverityBar({ stat }) {
   const total = Number(stat?.count) || 0
   if (!total) return null
   return (
-    <div className="flex h-1.5 w-full max-w-[180px] rounded-full overflow-hidden bg-white/5">
+    <div className="flex h-1.5 w-full max-w-[180px] rounded-full overflow-hidden bg-[var(--bg-2)]">
       {SEV_ORDER.map((k) => {
         const v = Number(stat[k]) || 0
         if (!v) return null
@@ -110,15 +110,15 @@ export default function AttackExposurePanel({ clientId }) {
   }, [error, filteredTechniques])
 
   return (
-    <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
+    <div className="bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
       <div className="px-4 pt-4">
         <EvidenceNotice>
           Live exposure from GET /api/attack-exposure/:clientId — MITRE ATT&amp;CK tactic and
           technique rollup straight from the engine. No fabricated exposure telemetry.
         </EvidenceNotice>
       </div>
-      <div className="p-4 border-b border-white/10 flex items-center justify-between gap-3 flex-wrap">
-        <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+      <div className="p-4 border-b border-[var(--border-default)] flex items-center justify-between gap-3 flex-wrap">
+        <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
           <Crosshair className="w-4 h-4 text-rose-400" />
           {t('pages.threatAnalysis.exposure_heading')}
         </h3>
@@ -136,7 +136,7 @@ export default function AttackExposurePanel({ clientId }) {
             onClick={exportPdf}
             disabled={!!error || !filteredTechniques.length}
             title={t('common.export_pdf')}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-white/15 text-white/70 hover:bg-white/10 disabled:opacity-40 transition-colors"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:bg-[var(--row-hover-bg)] disabled:opacity-40 transition-colors"
           >
             <FileText className="w-3.5 h-3.5" />
             {t('common.export_pdf')}
@@ -156,16 +156,16 @@ export default function AttackExposurePanel({ clientId }) {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-0">
           {/* Tactic rollup */}
-          <div className="p-4 border-b lg:border-b-0 lg:border-r border-white/5">
-            <div className="text-[10px] uppercase tracking-wider text-white/40 mb-3">{t('pages.threatAnalysis.exposure_tactics')}</div>
+          <div className="p-4 border-b lg:border-b-0 lg:border-r border-[var(--border-subtle)]">
+            <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-3">{t('pages.threatAnalysis.exposure_tactics')}</div>
             <div className="space-y-2">
               {tactics.map((ta) => (
                 <div key={ta.tactic} className="flex items-center gap-2">
-                  <div className="w-40 shrink-0 text-[11px] text-white/70 truncate" title={ta.tactic}>{ta.tactic}</div>
-                  <div className="flex-1 h-2 rounded-full bg-white/5 overflow-hidden">
+                  <div className="w-40 shrink-0 text-[11px] text-[var(--text-tertiary)] truncate" title={ta.tactic}>{ta.tactic}</div>
+                  <div className="flex-1 h-2 rounded-full bg-[var(--bg-2)] overflow-hidden">
                     <div className="h-full bg-gradient-to-r from-rose-500/70 to-amber-400/70" style={{ width: `${((Number(ta.finding_count) || 0) / barMax) * 100}%` }} />
                   </div>
-                  <div className="w-16 shrink-0 text-right text-[10px] font-mono text-white/45 tabular-nums">
+                  <div className="w-16 shrink-0 text-right text-[10px] font-mono text-[var(--text-muted)] tabular-nums">
                     {ta.finding_count}·{ta.technique_count}t
                   </div>
                 </div>
@@ -176,21 +176,21 @@ export default function AttackExposurePanel({ clientId }) {
           {/* Top techniques */}
           <div className="p-4">
             <div className="flex items-center justify-between gap-2 mb-3">
-              <div className="text-[10px] uppercase tracking-wider text-white/40">{t('pages.threatAnalysis.exposure_top')}</div>
+              <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">{t('pages.threatAnalysis.exposure_top')}</div>
               <div className="relative">
-                <Search className="w-3 h-3 text-white/30 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <Search className="w-3 h-3 text-[var(--text-muted)] absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="search"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={t('common.search')}
                   aria-label={t('common.search')}
-                  className="w-32 pl-6 pr-2 py-1 rounded-md text-[11px] bg-black/40 border border-white/10 text-white/80 placeholder-white/30 focus:outline-none focus:border-rose-500/40"
+                  className="w-32 pl-6 pr-2 py-1 rounded-md text-[11px] bg-[var(--table-surface)] border border-[var(--border-default)] text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-rose-500/40"
                 />
               </div>
             </div>
             {topTechniques.length === 0 ? (
-              <div className="text-[11px] text-white/35">{t('pages.threatAnalysis.exposure_no_match')}</div>
+              <div className="text-[11px] text-[var(--text-muted)]">{t('pages.threatAnalysis.exposure_no_match')}</div>
             ) : (
             <div className="space-y-2.5">
               {topTechniques.map((tech) => (
@@ -198,11 +198,11 @@ export default function AttackExposurePanel({ clientId }) {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <span className="text-[11px] font-mono text-rose-300">{tech.technique}</span>
-                      <span className="text-[11px] text-white/70 truncate">{tech.name || tech.tactic}</span>
+                      <span className="text-[11px] text-[var(--text-tertiary)] truncate">{tech.name || tech.tactic}</span>
                     </div>
                     <SeverityBar stat={tech} />
                   </div>
-                  <div className="w-8 shrink-0 text-right text-xs font-bold tabular-nums text-white">{tech.count}</div>
+                  <div className="w-8 shrink-0 text-right text-xs font-bold tabular-nums text-[var(--text-primary)]">{tech.count}</div>
                 </div>
               ))}
             </div>

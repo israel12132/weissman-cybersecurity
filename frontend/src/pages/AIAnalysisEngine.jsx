@@ -169,13 +169,14 @@ function buildCorrelations(patterns) {
   for (const p of patterns) {
     const engines = p._raw?.engines || []
     if (engines.length >= 2) {
+      const memberCount = Number(p.memberCount) || 1
       corrs.push({
         id: `corr-engines-${p.id}`,
         type: 'multi_engine',
         patternIds: [p.id],
         confidence: Math.min(0.95, p.confidence + 0.08),
-        meta: { name: p.name, engines: engines.join(', '), target: p._raw?.target || '—', count: p.memberCount },
-        riskMultiplier: Number((1 + Math.min(0.5, (p.memberCount - 1) * 0.08)).toFixed(2)),
+        meta: { name: p.name, engines: engines.join(', '), target: p._raw?.target || '—', count: memberCount },
+        riskMultiplier: Number((1 + Math.min(0.5, (memberCount - 1) * 0.08)).toFixed(2)),
         detectedAt: p.lastSeen || null,
       })
     }
@@ -468,6 +469,7 @@ export default function AIAnalysisEngine() {
                   <select
                     value={filterCategory}
                     onChange={(e) => setFilterCategory(e.target.value)}
+                    aria-label={t('pages.aiAnalysisEngine.filter_category_aria')}
                     className="flex-1 text-xs bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg px-2 py-1.5 text-[var(--text-tertiary)] focus:outline-none"
                   >
                     <option value="all">{t('pages.aiAnalysisEngine.filter_all_categories')}</option>
@@ -478,6 +480,7 @@ export default function AIAnalysisEngine() {
                   <select
                     value={filterSeverity}
                     onChange={(e) => setFilterSeverity(e.target.value)}
+                    aria-label={t('pages.aiAnalysisEngine.filter_severity_aria')}
                     className="flex-1 text-xs bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg px-2 py-1.5 text-[var(--text-tertiary)] focus:outline-none"
                   >
                     <option value="all">{t('pages.aiAnalysisEngine.filter_all_severity')}</option>
@@ -668,7 +671,7 @@ export default function AIAnalysisEngine() {
                       key="empty"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
-                      className="rounded-2xl border border-dashed border-[var(--border-default)] bg-white/3 p-12 flex flex-col items-center justify-center text-center h-full min-h-[300px]"
+                      className="rounded-2xl border border-dashed border-[var(--border-default)] bg-[var(--bg-2)] p-12 flex flex-col items-center justify-center text-center h-full min-h-[300px]"
                     >
                       <div className="text-4xl mb-4">🤖</div>
                       <div className="text-sm text-[var(--text-muted)]">{t('pages.aiAnalysisEngine.select_pattern')}</div>

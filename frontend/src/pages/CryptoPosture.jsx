@@ -159,7 +159,7 @@ export default function CryptoPosture() {
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-lg font-bold text-white">
+                <div className="text-lg font-bold text-[var(--text-primary)]">
                   {pqOperational ? t(`${NS}.pq_operational`) : t(`${NS}.pq_unverified`)}
                 </div>
                 <p className="text-[12px] text-[var(--text-tertiary)] mt-1 max-w-2xl leading-relaxed">

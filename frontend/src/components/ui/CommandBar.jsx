@@ -190,6 +190,15 @@ export default function CommandBar({
     }))
   }, [ranked])
 
+  // Flattened command order that matches the rendered/keyboard index. Grouping
+  // reorders `ranked`, so `activeIndex` (assigned in group order above) must be
+  // resolved against this list — indexing `ranked` directly would run the wrong
+  // command whenever results span more than one group.
+  const flatCommands = useMemo(
+    () => groups.flatMap((group) => group.items.map((it) => it.cmd)),
+    [groups],
+  )
+
   useEffect(() => {
     setActiveIndex(0)
   }, [query, ranked.length])
@@ -219,10 +228,10 @@ export default function CommandBar({
         setActiveIndex(Math.max(0, ranked.length - 1))
       } else if (e.key === 'Enter') {
         e.preventDefault()
-        run(ranked[activeIndex])
+        run(flatCommands[activeIndex])
       }
     },
-    [ranked, activeIndex, run],
+    [ranked.length, flatCommands, activeIndex, run],
   )
 
   // Keep the active row in view.

@@ -672,6 +672,7 @@ export default function KubernetesSecurityPanel({ clientId, target: defaultTarge
               <div className="flex-1"><Toggle on={!!params[k]} onClick={() => set(k, !params[k])} label={label} /></div>
               {pk && (
                 <input value={params[pk]} onChange={(e) => set(pk, e.target.value)} placeholder={defPorts} disabled={!params[k]}
+                  aria-label={`${label} — ${L.ports}`}
                   className="w-36 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg px-2 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-violet-500/40 disabled:opacity-30" />
               )}
             </div>

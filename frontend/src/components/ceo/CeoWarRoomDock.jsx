@@ -233,7 +233,7 @@ export default function CeoWarRoomDock() {
 
   return (
     <div className="rounded-xl border border-cyan-500/20 bg-gradient-to-b from-[var(--bg-0)]/95 to-black/90 overflow-hidden shadow-[0_0_40px_rgba(34,211,238,0.06)]">
-      <div className="px-4 py-3 border-b border-cyan-500/15 flex flex-wrap items-center justify-between gap-2 bg-black/50">
+      <div className="px-4 py-3 border-b border-cyan-500/15 flex flex-wrap items-center justify-between gap-2 bg-[var(--table-surface)]">
         <div>
           <h3 className="text-[10px] font-mono uppercase tracking-[0.25em] text-cyan-300/90">
             {t('components.ceo.warRoomDock.title')}
@@ -256,7 +256,7 @@ export default function CeoWarRoomDock() {
                 className={`px-2 py-0.5 rounded text-[9px] font-mono uppercase border ${
                   kindFilter === k
                     ? 'border-cyan-400/50 bg-cyan-950/50 text-cyan-200'
-                    : 'border-white/10 text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                    : 'border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                 }`}
               >
                 {lab}
@@ -268,7 +268,7 @@ export default function CeoWarRoomDock() {
           <Button variant="unstyled"
             type="button"
             onClick={() => loadJobs()}
-            className="px-3 py-1.5 rounded-lg border border-white/15 bg-white/5 text-[10px] font-mono uppercase text-[var(--text-secondary)] hover:bg-white/10"
+            className="px-3 py-1.5 rounded-lg border border-[var(--border-strong)] bg-[var(--bg-2)] text-[10px] font-mono uppercase text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)]"
           >
             {t('components.ceo.warRoomDock.refreshJobs')}
           </Button>
@@ -283,7 +283,7 @@ export default function CeoWarRoomDock() {
       </div>
 
       <div className="grid lg:grid-cols-5 gap-0 min-h-[320px]">
-        <div className="lg:col-span-2 border-b lg:border-b-0 lg:border-r border-cyan-500/10 p-3 max-h-[320px] overflow-y-auto bg-black/30">
+        <div className="lg:col-span-2 border-b lg:border-b-0 lg:border-r border-cyan-500/10 p-3 max-h-[320px] overflow-y-auto bg-[var(--table-surface)]">
           <p className="text-[9px] uppercase tracking-widest text-[var(--text-muted)] font-mono mb-2">
             {jobsScopedToClient
               ? t('components.ceo.warRoomDock.liveJobsClient')
@@ -298,18 +298,18 @@ export default function CeoWarRoomDock() {
             </p>
           )}
           <ul className="space-y-1.5">
-            {filteredJobs.map((j) => {
+            {filteredJobs.map((j, idx) => {
               const id = j.id || ''
               const active = id === selectedId
               return (
-                <li key={id}>
+                <li key={id || `job-${idx}`}>
                   <Button variant="unstyled"
                     type="button"
                     onClick={() => onPickJob(id)}
                     className={`w-full text-left rounded-lg px-2 py-2 border font-mono text-[10px] transition-all ${
                       active
                         ? 'border-cyan-400/50 bg-cyan-950/50 text-cyan-100'
-                        : 'border-white/10 bg-white/[0.03] text-[var(--text-tertiary)] hover:border-cyan-500/25 hover:text-[var(--text-secondary)]'
+                        : 'border-[var(--border-default)] bg-[var(--bg-2)] text-[var(--text-tertiary)] hover:border-cyan-500/25 hover:text-[var(--text-secondary)]'
                     }`}
                   >
                     <span className="block text-cyan-200/90 truncate" title={id}>
@@ -373,7 +373,7 @@ export default function CeoWarRoomDock() {
                 >
                   <div className="flex flex-wrap gap-2 items-baseline mb-1 opacity-90">
                     <span className="font-bold uppercase tracking-tight">{phase}</span>
-                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-black/40 border border-white/10">
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--table-surface)] border border-[var(--border-default)]">
                       {sev}
                     </span>
                     <span className="text-[9px] text-[var(--text-tertiary)]">{row.ts || '—'}</span>

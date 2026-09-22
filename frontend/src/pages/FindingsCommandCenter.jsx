@@ -765,13 +765,51 @@ export default function FindingsCommandCenter() {
           </Button>
         </PremiumPageHeader>
 
+        {!error && tableData.length > 0 && (
+          <div
+            className="flex flex-wrap items-center gap-2"
+            role="group"
+            aria-label={t('findings.filter_severity')}
+          >
+            {Object.entries(SEVERITY_META).map(([key, meta]) => {
+              const count = countsBySeverity[key] || 0
+              if (key === 'info' && count === 0) return null
+              const active = severityFilter === key
+              return (
+                <Button
+                  key={`sev-strip-${key}`}
+                  variant="unstyled"
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => {
+                    setSeverityFilter(active ? '' : key)
+                    setPagination((p) => ({ ...p, pageIndex: 0 }))
+                  }}
+                  className={[
+                    'inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-[11px] font-mono border transition-colors',
+                    active ? 'text-[var(--text-primary)]' : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]',
+                  ].join(' ')}
+                  style={{
+                    borderColor: active ? meta.color : 'var(--border-default)',
+                    background: active ? `color-mix(in srgb, ${meta.color} 16%, transparent)` : 'var(--row-hover-bg)',
+                  }}
+                >
+                  <span className="w-2 h-2 rounded-full" style={{ background: meta.color }} aria-hidden="true" />
+                  {t(`severity.${key}`, meta.label)}
+                  <span className="tabular-nums font-semibold" style={{ color: meta.color }}>{count}</span>
+                </Button>
+              )
+            })}
+          </div>
+        )}
+
         {filtersExpanded && !error && (
           <div className="glass-panel rounded-2xl p-4 sm:p-5 space-y-4">
             <FilterPills
               label={t('findings.filter_severity')}
               pills={Object.entries(SEVERITY_META).map(([key, meta]) => ({
                 id: `findings-filter-severity-${key}`,
-                label: meta.label,
+                label: t(`severity.${key}`, meta.label),
                 count: countsBySeverity[key] || 0,
                 active: severityFilter === key,
                 color: meta.color,
@@ -834,7 +872,8 @@ export default function FindingsCommandCenter() {
                     setPagination((p) => ({ ...p, pageIndex: 0 }))
                   }}
                   placeholder={t('findings.search_findings')}
-                  className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl pl-8 pr-8 py-2.5 text-xs text-[var(--text-secondary)] font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40 transition-colors"
+                  aria-label={t('findings.search_findings')}
+                  className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl pl-8 pr-8 py-2.5 text-xs text-[var(--text-secondary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40 transition-colors"
                 />
                 {globalFilter && (
                   <Button variant="unstyled"
@@ -854,6 +893,7 @@ export default function FindingsCommandCenter() {
                   setEngineFilter(e.target.value)
                   setPagination((p) => ({ ...p, pageIndex: 0 }))
                 }}
+                aria-label={t('findings.all_engine_groups')}
                 className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl px-3 py-2.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40 transition-colors"
               >
                 <option value="">{t('findings.all_engine_groups')}</option>

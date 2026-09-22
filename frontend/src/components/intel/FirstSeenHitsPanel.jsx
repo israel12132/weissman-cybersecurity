@@ -57,6 +57,7 @@ export default function FirstSeenHitsPanel({ clientId }) {
   const hits = Array.isArray(payload?.hits) ? payload.hits : []
   const firstSeen = hits.filter((h) => h.claimed_first_seen)
   const listed = hits.filter((h) => h.nvd_status === 'listed')
+  const skipped = hits.filter((h) => h.nvd_status === 'skipped_no_key')
 
   return (
     <div
@@ -91,7 +92,7 @@ export default function FirstSeenHitsPanel({ clientId }) {
 
       {!loading && !error && (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-3">
-          <div className="rounded-lg border border-white/[0.07] bg-black/30 px-3 py-2">
+          <div className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2">
             <p className="text-[9px] font-mono uppercase tracking-wider text-[var(--text-muted)]">
               {t(`${NS}.first_seen_pre_nvd`)}
             </p>
@@ -99,7 +100,7 @@ export default function FirstSeenHitsPanel({ clientId }) {
               {payload?.first_seen_count ?? firstSeen.length}
             </p>
           </div>
-          <div className="rounded-lg border border-white/[0.07] bg-black/30 px-3 py-2">
+          <div className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2">
             <p className="text-[9px] font-mono uppercase tracking-wider text-[var(--text-muted)]">
               {t(`${NS}.first_seen_listed`)}
             </p>
@@ -107,12 +108,12 @@ export default function FirstSeenHitsPanel({ clientId }) {
               {payload?.listed_count ?? listed.length}
             </p>
           </div>
-          <div className="rounded-lg border border-white/[0.07] bg-black/30 px-3 py-2">
+          <div className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2">
             <p className="text-[9px] font-mono uppercase tracking-wider text-[var(--text-muted)]">
               {t(`${NS}.first_seen_skipped`)}
             </p>
             <p className="text-xl font-bold tabular-nums text-cyan-200">
-              {payload?.skipped_count ?? 0}
+              {payload?.skipped_count ?? skipped.length}
             </p>
           </div>
         </div>
@@ -131,7 +132,7 @@ export default function FirstSeenHitsPanel({ clientId }) {
           {hits.map((h) => (
             <li
               key={h.id}
-              className="rounded-lg border border-white/[0.06] bg-black/25 px-3 py-2"
+              className="rounded-lg border border-[var(--border-subtle)] bg-[var(--table-surface)] px-3 py-2"
               data-testid={`first-seen-row-${h.id}`}
             >
               <div className="flex items-center justify-between gap-2 flex-wrap">

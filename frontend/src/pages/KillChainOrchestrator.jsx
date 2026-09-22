@@ -551,6 +551,7 @@ export default function KillChainOrchestrator() {
               <select
                 value={filterSeverity}
                 onChange={(e) => setFilterSeverity(e.target.value)}
+                aria-label={t('pages.killChainOrchestrator.filter_severity_aria')}
                 className="text-xs bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg px-2 py-1 text-[var(--text-tertiary)] focus:outline-none"
               >
                 <option value="all">{t('pages.killChainOrchestrator.filter_all')}</option>
@@ -591,6 +592,7 @@ export default function KillChainOrchestrator() {
                 return (
                   <motion.button
                     key={chain.id}
+                    type="button"
                     layout
                     whileHover={{ scale: 1.01 }}
                     onClick={() => { setActiveChain(chain); setActivePhase(null) }}
@@ -682,7 +684,7 @@ export default function KillChainOrchestrator() {
                         key={phase.id}
                         layout
                         className={`rounded-2xl border transition-all ${
-                          isExpanded ? 'border-[var(--border-strong)] bg-white/8' :
+                          isExpanded ? 'border-[var(--border-strong)] bg-[var(--bg-2)]' :
                           isCompleted ? 'border-[var(--border-default)] bg-[var(--row-hover-bg)]' :
                           isActive ? 'bg-[var(--row-hover-bg)]' :
                           'border-[var(--border-subtle)] bg-[var(--bg-1)] opacity-50'
@@ -705,7 +707,7 @@ export default function KillChainOrchestrator() {
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-semibold text-white">{phase.label}</span>
+                              <span className="text-sm font-semibold text-[var(--text-primary)]">{phase.label}</span>
                               <span className="text-[10px] font-mono text-[var(--text-disabled)]">{phase.mitre}</span>
                               {isActive && (
                                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#f59e0b]/20 text-[#f59e0b] border border-[#f59e0b]/30 animate-pulse">

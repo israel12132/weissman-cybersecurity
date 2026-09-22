@@ -52,7 +52,7 @@ export default function ShellScanActions({
           type="button"
           onClick={onExportXlsx}
           disabled={exportXlsxDisabled}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-500/35 text-[11px] font-mono text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-40"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-500/35 text-[11px] font-mono text-[var(--severity-low)] hover:bg-emerald-500/10 disabled:opacity-40"
         >
           <Download className="w-3.5 h-3.5" />
           {xlsxLabel || t('common.export_xlsx')}
@@ -63,7 +63,7 @@ export default function ShellScanActions({
         type="button"
         onClick={onExport}
         disabled={exportDisabled}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-cyan-500/35 text-[11px] font-mono text-cyan-300 hover:bg-cyan-500/10 disabled:opacity-40"
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-cyan-500/35 text-[11px] font-mono text-[var(--text-accent)] hover:bg-cyan-500/10 disabled:opacity-40"
       >
         <Download className="w-3.5 h-3.5" />
         {exportLabel || t('weissmanFindings.export_csv')}

@@ -153,7 +153,7 @@ function SubScoreBar({ label, value }) {
         <span className="text-[10px] font-mono text-[var(--text-tertiary)]">{label}</span>
         <span className="text-[10px] font-mono" style={{ color }}>{hasScore ? v : '—'}</span>
       </div>
-      <div className="h-1.5 rounded-full bg-white/8 overflow-hidden">
+      <div className="h-1.5 rounded-full bg-[var(--bg-2)] overflow-hidden">
         <div className="h-full rounded-full transition-all duration-500" style={{ width: hasScore ? `${v}%` : '0%', backgroundColor: color }} />
       </div>
     </div>
@@ -203,6 +203,19 @@ function Scorecard({ summary }) {
   const warehouse = summary.warehouse_exposure || {}
   const catalog = summary.cnapp_catalog || {}
   const rulesTriggered = summary.rules_triggered ?? 0
+  // Gate each panel on exactly what its body can render, so real signals (e.g. a
+  // public DocumentDB with no public Redshift, or unencrypted warehouses) are not
+  // suppressed by a narrower outer condition.
+  const obsHasSignal = (observability.waf_no_rules ?? 0) > 0
+    || (observability.waf_no_logging ?? 0) > 0
+    || (observability.logs_no_retention ?? 0) > 0
+    || (observability.logs_public_policy ?? 0) > 0
+  const warehouseHasSignal = (warehouse.public_redshift ?? 0) > 0
+    || (warehouse.public_documentdb ?? 0) > 0
+    || (warehouse.public_rds ?? 0) > 0
+    || (warehouse.public_neptune ?? 0) > 0
+    || (warehouse.memorydb_open_acl ?? 0) > 0
+    || (warehouse.unencrypted_warehouses ?? 0) > 0
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-6 mb-6">
@@ -221,7 +234,7 @@ function Scorecard({ summary }) {
           </div>
           <div>
             <div className="text-[10px] font-mono uppercase tracking-widest text-orange-400/80 mb-1">{t('pages.cloudPostureCommandCenter.scorecard_eyebrow')}</div>
-            <h3 className="text-lg font-bold text-white">{t('pages.cloudPostureCommandCenter.scorecard_title')}</h3>
+            <h3 className="text-lg font-bold text-[var(--text-primary)]">{t('pages.cloudPostureCommandCenter.scorecard_title')}</h3>
             {summary.account_id && (
               <p className="text-[11px] font-mono text-[var(--text-muted)] mt-1">{t('pages.cloudPostureCommandCenter.scorecard_account', { accountId: summary.account_id })}</p>
             )}
@@ -339,7 +352,7 @@ function Scorecard({ summary }) {
         </div>
       )}
 
-      {(riskRegister.length > 0 || perimeter.perimeter_status || warehouse.public_redshift > 0 || observability.waf_no_rules > 0) && (
+      {(riskRegister.length > 0 || perimeter.perimeter_status || warehouseHasSignal || obsHasSignal) && (
         <div className="mt-4 pt-4 border-t border-[var(--border-subtle)] grid grid-cols-1 lg:grid-cols-2 gap-4">
           {perimeter.perimeter_status && (
             <div className={`rounded-lg border px-3 py-3 ${
@@ -358,7 +371,7 @@ function Scorecard({ summary }) {
               </div>
             </div>
           )}
-          {(observability.waf_no_rules > 0 || observability.logs_no_retention > 0 || observability.waf_no_logging > 0) && (
+          {obsHasSignal && (
             <div className="rounded-lg border border-indigo-500/20 bg-indigo-950/20 px-3 py-3">
               <div className="text-[10px] font-mono uppercase tracking-wider text-indigo-300/70 mb-1">{t('pages.cloudPostureCommandCenter.metric_observability')}</div>
               <div className="text-[10px] font-mono text-[var(--text-tertiary)] space-y-0.5">
@@ -369,7 +382,7 @@ function Scorecard({ summary }) {
               </div>
             </div>
           )}
-          {(warehouse.public_redshift > 0 || warehouse.public_documentdb > 0 || warehouse.public_rds > 0 || warehouse.public_neptune > 0 || warehouse.memorydb_open_acl > 0) && (
+          {warehouseHasSignal && (
             <div className="rounded-lg border border-orange-500/20 bg-orange-950/20 px-3 py-3">
               <div className="text-[10px] font-mono uppercase tracking-wider text-orange-300/70 mb-1">{t('pages.cloudPostureCommandCenter.metric_warehouse')}</div>
               <div className="text-[10px] font-mono text-[var(--text-tertiary)] space-y-0.5">
@@ -637,7 +650,11 @@ export default function CloudPostureCommandCenter() {
       )}
     >
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-orange-500/30 text-orange-200'}`}>
+        <div
+          role={toast.sev === 'error' ? 'alert' : 'status'}
+          aria-live={toast.sev === 'error' ? 'assertive' : 'polite'}
+          className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-orange-500/30 text-orange-200'}`}
+        >
           {toast.msg}
         </div>
       )}

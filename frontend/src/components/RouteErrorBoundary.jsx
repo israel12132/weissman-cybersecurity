@@ -38,14 +38,14 @@ export default class RouteErrorBoundary extends React.Component {
     if (this.state.error) {
       const msg = this.state.error?.message || i18n.t(`${NS}.unexpected`)
       return (
-        <div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] text-white p-8">
+        <div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] text-[var(--text-primary)] p-8">
           <h1 className="text-lg font-semibold text-red-400 mb-2">{i18n.t(`${NS}.title`)}</h1>
-          <p className="text-sm text-white/60 mb-6 max-w-lg text-center font-mono break-words">{msg}</p>
+          <p className="text-sm text-[var(--text-tertiary)] mb-6 max-w-lg text-center font-mono break-words">{msg}</p>
           <div className="flex gap-4">
             <Button variant="unstyled"
               type="button"
               onClick={this.handleRetry}
-              className="px-4 py-2 rounded-lg border border-white/20 text-sm hover:bg-white/10"
+              className="px-4 py-2 rounded-lg border border-[var(--border-strong)] text-sm hover:bg-[var(--row-hover-bg)]"
             >
               {i18n.t(`${NS}.tryAgain`)}
             </Button>

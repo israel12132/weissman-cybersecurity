@@ -128,8 +128,8 @@ export default function CeoWarRoomStream({ jobId, onJobIdChange }) {
   }, [lines])
 
   return (
-    <section className="rounded-lg border border-white/10 bg-black/40 backdrop-blur-sm overflow-hidden">
-      <div className="px-4 py-3 border-b border-white/10 flex flex-wrap items-end gap-3">
+    <section className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] backdrop-blur-sm overflow-hidden">
+      <div className="px-4 py-3 border-b border-[var(--border-default)] flex flex-wrap items-end gap-3">
         <div className="flex-1 min-w-[200px]">
           <label className="block text-[10px] uppercase tracking-widest text-[var(--text-muted)] mb-1 font-mono">
             {t('components.ceo.warRoomStream.jobUuidLabel')}
@@ -138,7 +138,7 @@ export default function CeoWarRoomStream({ jobId, onJobIdChange }) {
             value={jobId}
             onChange={(e) => onJobIdChange(e.target.value)}
             placeholder={t('components.ceo.warRoomStream.jobUuidPlaceholder')}
-            className="w-full font-mono text-sm bg-[var(--bg-0)]/80 border border-white/15 rounded px-3 py-2 text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
+            className="w-full font-mono text-sm bg-[var(--bg-0)]/80 border border-[var(--border-strong)] rounded px-3 py-2 text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
           />
         </div>
         <div className="flex gap-2">
@@ -152,7 +152,7 @@ export default function CeoWarRoomStream({ jobId, onJobIdChange }) {
           <Button variant="unstyled"
             type="button"
             onClick={stop}
-            className="px-4 py-2 rounded bg-[var(--bg-1)] border border-white/15 text-[var(--text-secondary)] text-xs font-mono uppercase tracking-wide hover:bg-[var(--bg-3)]"
+            className="px-4 py-2 rounded bg-[var(--bg-1)] border border-[var(--border-strong)] text-[var(--text-secondary)] text-xs font-mono uppercase tracking-wide hover:bg-[var(--bg-3)]"
           >
             {t('components.ceo.warRoomStream.stop')}
           </Button>
@@ -180,7 +180,7 @@ export default function CeoWarRoomStream({ jobId, onJobIdChange }) {
             <div key={(row.id != null ? row.id : i) + '-' + (row.ts || i)} className="rounded-md p-2" style={st}>
               <div className="flex flex-wrap gap-2 items-baseline mb-1 opacity-90">
                 <span className="font-bold uppercase tracking-tight">{phase}</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/30 border border-white/10">{sev}</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--table-surface)] border border-[var(--border-default)]">{sev}</span>
                 <span className="text-[10px] text-[var(--text-tertiary)]">{row.ts || '—'}</span>
               </div>
               <pre className="whitespace-pre-wrap break-words text-[10px] opacity-95">

@@ -329,7 +329,8 @@ export default function AgentManagement() {
             <select
               value={tokenClient}
               onChange={(e) => setTokenClient(e.target.value)}
-              className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm font-mono text-white"
+              aria-label={t('agents.select_client')}
+              className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm font-mono text-[var(--text-primary)]"
             >
               <option value="">{t('agents.select_client')}</option>
               {clients.map((c) => (
@@ -342,8 +343,9 @@ export default function AgentManagement() {
               max={1440}
               value={tokenValidity}
               onChange={(e) => setTokenValidity(e.target.value)}
-              className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm font-mono text-white"
+              className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm font-mono text-[var(--text-primary)]"
               placeholder={t('agents.validity_minutes')}
+              aria-label={t('agents.validity_minutes')}
             />
             <Button variant="unstyled"
               type="button"
@@ -382,13 +384,15 @@ export default function AgentManagement() {
               key={f}
               type="button"
               onClick={() => setStatusFilter(f)}
+              aria-pressed={statusFilter === f}
               className={`px-3 py-1.5 rounded-lg text-xs font-mono border transition-all ${
                 statusFilter === f
                   ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
                   : 'border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
               }`}
             >
-              {t(`agents.filter_${f}`)}
+              {t(`agents.filter_${f}`)}{' '}
+              <span className="opacity-70 tabular-nums">{f === 'all' ? metrics.total : (metrics[f] || 0)}</span>
             </Button>
           ))}
           <span className="text-[10px] font-mono text-[var(--text-muted)] ml-auto">
@@ -449,12 +453,12 @@ export default function AgentManagement() {
             ) : (
               <div className="space-y-4 text-sm">
                 <div>
-                  <div className="text-lg font-bold text-white">{selectedAgent.hostname}</div>
+                  <div className="text-lg font-bold text-[var(--text-primary)]">{selectedAgent.hostname}</div>
                   <StatusBadge online={selectedAgent.online} last_seen_at={selectedAgent.last_seen_at} t={t} />
                 </div>
                 <DetailRow label={t('agents.col_client')} value={clientName(selectedAgent.client_id)} />
                 <DetailRow label={t('agents.agent_id')} value={selectedAgent.agent_id} mono copy />
-                <DetailRow label={t('agents.col_os')} value={`${selectedAgent.os} / ${selectedAgent.arch}`} />
+                <DetailRow label={t('agents.col_os')} value={`${selectedAgent.os || '—'} / ${selectedAgent.arch || '—'}`} />
                 <DetailRow label={t('agents.version')} value={selectedAgent.agent_version || '—'} />
                 <DetailRow label={t('agents.last_seen')} value={timeAgo(selectedAgent.last_seen_at, t)} />
                 <div>

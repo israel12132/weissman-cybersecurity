@@ -98,11 +98,7 @@ export default function SystemConfiguration() {
     { id: 'compliance', label: t(`${NS}.tab_compliance`), icon: <Lock /> },
   ];
 
-  useEffect(() => {
-    fetchConfig();
-  }, []);
-
-  const fetchConfig = async () => {
+  const fetchConfig = useCallback(async () => {
     try {
       setLoading(true);
       const data = await api.get('/api/system/config');
@@ -117,7 +113,11 @@ export default function SystemConfiguration() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [t]);
+
+  useEffect(() => {
+    fetchConfig();
+  }, [fetchConfig]);
 
   const saveConfig = async () => {
     try {
@@ -352,7 +352,7 @@ export default function SystemConfiguration() {
   );
 }
 
-function GeneralSettings({ config, onChange }) {
+function GeneralSettings({ config = {}, onChange }) {
   const { t } = useTranslation();
 
   return (
@@ -368,7 +368,7 @@ function GeneralSettings({ config, onChange }) {
             type="text"
             value={config.org_name || ''}
             onChange={(e) => onChange('org_name', e.target.value)}
-            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </label>
 
@@ -378,7 +378,7 @@ function GeneralSettings({ config, onChange }) {
             id="cfg-general-timezone"
             value={config.timezone || 'UTC'}
             onChange={(e) => onChange('timezone', e.target.value)}
-            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           >
             {TIMEZONE_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -394,7 +394,7 @@ function GeneralSettings({ config, onChange }) {
             id="cfg-general-language"
             value={config.language || 'en'}
             onChange={(e) => onChange('language', e.target.value)}
-            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           >
             {LANGUAGE_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -410,7 +410,7 @@ function GeneralSettings({ config, onChange }) {
             id="cfg-general-date_format"
             value={config.date_format || 'YYYY-MM-DD'}
             onChange={(e) => onChange('date_format', e.target.value)}
-            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           >
             {DATE_FORMAT_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -424,16 +424,16 @@ function GeneralSettings({ config, onChange }) {
   );
 }
 
-function SecuritySettings({ config, onChange, configUnavailable = false }) {
+function SecuritySettings({ config = {}, onChange, configUnavailable = false }) {
   const { t } = useTranslation();
 
   return (
     <div className="space-y-6">
-      <h3 className="text-lg font-bold text-white mb-4">{t(`${NS}.sections.security.title`)}</h3>
+      <h3 className="text-lg font-bold text-[var(--text-primary)] mb-4">{t(`${NS}.sections.security.title`)}</h3>
 
       <div className="space-y-4">
         <div className="bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.security.password_policy`)}</h4>
+          <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-3">{t(`${NS}.sections.security.password_policy`)}</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <label htmlFor="cfg-security-password_min_length" className="block text-sm text-[var(--text-tertiary)]">
               <span className="block mb-2">{t(`${NS}.fields.security.password_min_length`)}</span>
@@ -443,7 +443,7 @@ function SecuritySettings({ config, onChange, configUnavailable = false }) {
                 type="number"
                 value={config.password_min_length || 12}
                 onChange={(e) => onChange('password_min_length', parseInt(e.target.value, 10))}
-                className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               />
             </label>
             <label htmlFor="cfg-security-password_max_age" className="block text-sm text-[var(--text-tertiary)]">
@@ -454,7 +454,7 @@ function SecuritySettings({ config, onChange, configUnavailable = false }) {
                 type="number"
                 value={config.password_max_age || 90}
                 onChange={(e) => onChange('password_max_age', parseInt(e.target.value, 10))}
-                className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               />
             </label>
           </div>
@@ -496,7 +496,7 @@ function SecuritySettings({ config, onChange, configUnavailable = false }) {
         </div>
 
         <div className="bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.security.session_management`)}</h4>
+          <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-3">{t(`${NS}.sections.security.session_management`)}</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <label htmlFor="cfg-security-session_timeout" className="block text-sm text-[var(--text-tertiary)]">
               <span className="block mb-2">{t(`${NS}.fields.security.session_timeout`)}</span>
@@ -506,7 +506,7 @@ function SecuritySettings({ config, onChange, configUnavailable = false }) {
                 type="number"
                 value={config.session_timeout || 60}
                 onChange={(e) => onChange('session_timeout', parseInt(e.target.value, 10))}
-                className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               />
             </label>
             <label htmlFor="cfg-security-max_concurrent_sessions" className="block text-sm text-[var(--text-tertiary)]">
@@ -517,14 +517,14 @@ function SecuritySettings({ config, onChange, configUnavailable = false }) {
                 type="number"
                 value={config.max_concurrent_sessions || 3}
                 onChange={(e) => onChange('max_concurrent_sessions', parseInt(e.target.value, 10))}
-                className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               />
             </label>
           </div>
         </div>
 
         <div className="bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.security.mfa`)}</h4>
+          <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-3">{t(`${NS}.sections.security.mfa`)}</h4>
           <label htmlFor="cfg-security-mfa_required" className="flex items-center gap-2 text-sm text-[var(--text-secondary)] mb-3">
             <input
               id="cfg-security-mfa_required"
@@ -710,12 +710,12 @@ function MfaSelfServicePanel() {
   );
 }
 
-function ScanningSettings({ config, onChange }) {
+function ScanningSettings({ config = {}, onChange }) {
   const { t } = useTranslation();
 
   return (
     <div className="space-y-6">
-      <h3 className="text-lg font-bold text-white mb-4">{t(`${NS}.sections.scanning.title`)}</h3>
+      <h3 className="text-lg font-bold text-[var(--text-primary)] mb-4">{t(`${NS}.sections.scanning.title`)}</h3>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <label htmlFor="cfg-scanning-default_timeout" className="block text-sm font-medium text-[var(--text-secondary)]">
@@ -726,7 +726,7 @@ function ScanningSettings({ config, onChange }) {
             type="number"
             value={config.default_timeout || 300}
             onChange={(e) => onChange('default_timeout', parseInt(e.target.value, 10))}
-            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </label>
 
@@ -738,7 +738,7 @@ function ScanningSettings({ config, onChange }) {
             type="number"
             value={config.max_concurrency || 10}
             onChange={(e) => onChange('max_concurrency', parseInt(e.target.value, 10))}
-            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </label>
 
@@ -748,7 +748,7 @@ function ScanningSettings({ config, onChange }) {
             id="cfg-scanning-auto_retry"
             value={String(config.auto_retry ?? false)}
             onChange={(e) => onChange('auto_retry', e.target.value === 'true')}
-            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           >
             <option value="true">{t(`${NS}.common.enabled`)}</option>
             <option value="false">{t(`${NS}.common.disabled`)}</option>
@@ -763,7 +763,7 @@ function ScanningSettings({ config, onChange }) {
             type="number"
             value={config.max_retries || 3}
             onChange={(e) => onChange('max_retries', parseInt(e.target.value, 10))}
-            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </label>
       </div>
@@ -771,34 +771,34 @@ function ScanningSettings({ config, onChange }) {
   );
 }
 
-function IntegrationsSettings({ config, onChange }) {
+function IntegrationsSettings({ config = {}, onChange }) {
   const { t } = useTranslation();
 
   return (
     <div className="space-y-6">
-      <h3 className="text-lg font-bold text-white mb-4">{t(`${NS}.sections.integrations.title`)}</h3>
+      <h3 className="text-lg font-bold text-[var(--text-primary)] mb-4">{t(`${NS}.sections.integrations.title`)}</h3>
 
       <div className="space-y-4">
         <div className="bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.integrations.webhook`)}</h4>
+          <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-3">{t(`${NS}.sections.integrations.webhook`)}</h4>
           <input
             type="text"
             aria-label={t(`${NS}.sections.integrations.webhook`)}
             value={config.webhook_url || ''}
             onChange={(e) => onChange('webhook_url', e.target.value)}
             placeholder={t(`${NS}.placeholders.webhook_url`)}
-            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </div>
 
         <div className="bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.integrations.siem`)}</h4>
+          <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-3">{t(`${NS}.sections.integrations.siem`)}</h4>
           <div className="space-y-3">
             <select
               aria-label={t(`${NS}.sections.integrations.siem`)}
               value={config.siem_type || 'none'}
               onChange={(e) => onChange('siem_type', e.target.value)}
-              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             >
               {SIEM_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -813,14 +813,14 @@ function IntegrationsSettings({ config, onChange }) {
                 value={config.siem_endpoint || ''}
                 onChange={(e) => onChange('siem_endpoint', e.target.value)}
                 placeholder={t(`${NS}.placeholders.siem_endpoint`)}
-                className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               />
             )}
           </div>
         </div>
 
         <div className="bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.integrations.email`)}</h4>
+          <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-3">{t(`${NS}.sections.integrations.email`)}</h4>
           <div className="space-y-3">
             <input
               type="text"
@@ -828,7 +828,7 @@ function IntegrationsSettings({ config, onChange }) {
               value={config.smtp_server || ''}
               onChange={(e) => onChange('smtp_server', e.target.value)}
               placeholder={t(`${NS}.placeholders.smtp_server`)}
-              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             />
             <input
               type="number"
@@ -836,7 +836,7 @@ function IntegrationsSettings({ config, onChange }) {
               value={config.smtp_port || 587}
               onChange={(e) => onChange('smtp_port', parseInt(e.target.value, 10))}
               placeholder={t(`${NS}.placeholders.smtp_port`)}
-              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             />
           </div>
         </div>
@@ -845,12 +845,12 @@ function IntegrationsSettings({ config, onChange }) {
   );
 }
 
-function RetentionSettings({ config, onChange }) {
+function RetentionSettings({ config = {}, onChange }) {
   const { t } = useTranslation();
 
   return (
     <div className="space-y-6">
-      <h3 className="text-lg font-bold text-white mb-4">{t(`${NS}.sections.retention.title`)}</h3>
+      <h3 className="text-lg font-bold text-[var(--text-primary)] mb-4">{t(`${NS}.sections.retention.title`)}</h3>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <label htmlFor="cfg-retention-scan_results" className="block text-sm font-medium text-[var(--text-secondary)]">
@@ -861,7 +861,7 @@ function RetentionSettings({ config, onChange }) {
             type="number"
             value={config.scan_results_retention || 90}
             onChange={(e) => onChange('scan_results_retention', parseInt(e.target.value, 10))}
-            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </label>
 
@@ -873,7 +873,7 @@ function RetentionSettings({ config, onChange }) {
             type="number"
             value={config.audit_logs_retention || 365}
             onChange={(e) => onChange('audit_logs_retention', parseInt(e.target.value, 10))}
-            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </label>
 
@@ -885,7 +885,7 @@ function RetentionSettings({ config, onChange }) {
             type="number"
             value={config.findings_retention || 180}
             onChange={(e) => onChange('findings_retention', parseInt(e.target.value, 10))}
-            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </label>
 
@@ -897,7 +897,7 @@ function RetentionSettings({ config, onChange }) {
             type="number"
             value={config.metrics_retention || 30}
             onChange={(e) => onChange('metrics_retention', parseInt(e.target.value, 10))}
-            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </label>
       </div>
@@ -905,12 +905,12 @@ function RetentionSettings({ config, onChange }) {
   );
 }
 
-function PerformanceSettings({ config, onChange }) {
+function PerformanceSettings({ config = {}, onChange }) {
   const { t } = useTranslation();
 
   return (
     <div className="space-y-6">
-      <h3 className="text-lg font-bold text-white mb-4">{t(`${NS}.sections.performance.title`)}</h3>
+      <h3 className="text-lg font-bold text-[var(--text-primary)] mb-4">{t(`${NS}.sections.performance.title`)}</h3>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <label htmlFor="cfg-performance-worker_threads" className="block text-sm font-medium text-[var(--text-secondary)]">
@@ -921,7 +921,7 @@ function PerformanceSettings({ config, onChange }) {
             type="number"
             value={config.worker_threads || 4}
             onChange={(e) => onChange('worker_threads', parseInt(e.target.value, 10))}
-            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </label>
 
@@ -933,7 +933,7 @@ function PerformanceSettings({ config, onChange }) {
             type="number"
             value={config.cache_ttl || 300}
             onChange={(e) => onChange('cache_ttl', parseInt(e.target.value, 10))}
-            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </label>
 
@@ -945,7 +945,7 @@ function PerformanceSettings({ config, onChange }) {
             type="number"
             value={config.max_memory || 2048}
             onChange={(e) => onChange('max_memory', parseInt(e.target.value, 10))}
-            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </label>
 
@@ -957,7 +957,7 @@ function PerformanceSettings({ config, onChange }) {
             type="number"
             value={config.db_pool_size || 20}
             onChange={(e) => onChange('db_pool_size', parseInt(e.target.value, 10))}
-            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </label>
       </div>
@@ -965,12 +965,12 @@ function PerformanceSettings({ config, onChange }) {
   );
 }
 
-function ComplianceSettings({ config, onChange }) {
+function ComplianceSettings({ config = {}, onChange }) {
   const { t } = useTranslation();
 
   return (
     <div className="space-y-6">
-      <h3 className="text-lg font-bold text-white mb-4">{t(`${NS}.sections.compliance.title`)}</h3>
+      <h3 className="text-lg font-bold text-[var(--text-primary)] mb-4">{t(`${NS}.sections.compliance.title`)}</h3>
 
       <div className="space-y-3">
         {COMPLIANCE_FRAMEWORKS.map((framework) => (
@@ -987,7 +987,7 @@ function ComplianceSettings({ config, onChange }) {
               onChange={(e) => onChange(framework.configKey, e.target.checked)}
               className="rounded"
             />
-            <span className="text-sm font-medium text-white">{t(`${NS}.${framework.labelKey}`)}</span>
+            <span className="text-sm font-medium text-[var(--text-primary)]">{t(`${NS}.${framework.labelKey}`)}</span>
           </label>
         ))}
       </div>

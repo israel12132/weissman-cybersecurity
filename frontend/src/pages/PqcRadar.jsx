@@ -98,6 +98,7 @@ function Section({ title, icon, accent = '#10b981', count, defaultOpen = true, c
     <div className="rounded-xl border bg-[var(--table-surface)] overflow-hidden" style={{ borderColor: `${accent}22` }}>
       <Button variant="unstyled"
         type="button"
+        aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
         className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-[var(--row-hover-bg)] transition-colors"
       >
@@ -170,6 +171,8 @@ function Toggle({ label, value, onChange }) {
   return (
     <Button variant="unstyled"
       type="button"
+      role="switch"
+      aria-checked={value}
       onClick={() => onChange(!value)}
       className={`flex items-center justify-between w-full px-2.5 py-1.5 rounded-lg border text-[11px] font-mono transition-all ${
         value ? 'border-[#10b981]/40 bg-[#10b981]/10 text-[#10b981]' : 'border-[var(--border-default)] bg-[var(--bg-2)] text-[var(--text-muted)] hover:text-[var(--text-tertiary)]'
@@ -253,7 +256,7 @@ function FindingCard({ f }) {
   const checks = Array.isArray(ev.checks) ? ev.checks : []
   return (
     <div className={`rounded-xl border ${SEV_STYLE[sev] ?? SEV_STYLE.info} overflow-hidden`}>
-      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-2 px-3 py-2 text-left hover:bg-[var(--row-hover-bg)]">
+      <Button variant="unstyled" type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-2 px-3 py-2 text-left hover:bg-[var(--row-hover-bg)]">
         <span className="text-[8px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded border border-current shrink-0 mt-0.5">{sev}</span>
         <span className="text-[11px] font-mono text-[var(--text-primary)] flex-1 leading-snug">{f.title || f.type}</span>
         {typeof f.confidence === 'number' && (
@@ -474,7 +477,11 @@ export default function PqcRadar() {
       </div>
 
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-[#10b981]/30 text-[#10b981]'}`}>
+        <div
+          role={toast.sev === 'error' ? 'alert' : 'status'}
+          aria-live={toast.sev === 'error' ? 'assertive' : 'polite'}
+          className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-[#10b981]/30 text-[#10b981]'}`}
+        >
           {toast.msg}
         </div>
       )}

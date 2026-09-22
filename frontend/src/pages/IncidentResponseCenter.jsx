@@ -323,12 +323,21 @@ function PlaybookSteps({ playbookId, onToggle, steps, t }) {
             <motion.div
               key={step.id}
               layout
-              className="flex items-start gap-3 rounded-lg p-2.5 border transition-all cursor-pointer hover:border-[var(--border-strong)]"
+              role="button"
+              tabIndex={0}
+              aria-pressed={step.done}
+              className="flex items-start gap-3 rounded-lg p-2.5 border transition-all cursor-pointer hover:border-[var(--border-strong)] focus-visible:outline-none focus-visible:border-cyan-400/60"
               style={{
                 borderColor: step.done ? 'rgba(34,211,238,0.2)' : 'rgba(255,255,255,0.07)',
                 background: step.done ? 'rgba(34,211,238,0.04)' : 'rgba(0,0,0,0.2)',
               }}
               onClick={() => onToggle && onToggle(step.id)}
+              onKeyDown={(e) => {
+                if (onToggle && (e.key === 'Enter' || e.key === ' ')) {
+                  e.preventDefault()
+                  onToggle(step.id)
+                }
+              }}
             >
               <div
                 className="mt-0.5 w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-all"
@@ -694,6 +703,7 @@ export default function IncidentResponseCenter() {
                   <Button variant="unstyled"
                     key={tabKey}
                     type="button"
+                    aria-pressed={tab === tabKey}
                     onClick={() => setTab(tabKey)}
                     className="text-[11px] font-mono uppercase tracking-widest px-3 py-1.5 rounded-lg transition-all"
                     style={{

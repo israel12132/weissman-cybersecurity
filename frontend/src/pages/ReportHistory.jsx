@@ -14,6 +14,7 @@ import PageShell from './PageShell'
 import EmptyState from '../components/ui/EmptyState'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
+import FilterPills from '../components/ui/FilterPills'
 import DataTable from '../components/ui/DataTable'
 import CopyButton from '../components/ui/CopyButton'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
@@ -29,6 +30,7 @@ export default function ReportHistory() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
+  const [artifactFilter, setArtifactFilter] = useState('all')
   const abortRef = useRef(null)
 
   const load = useCallback(async () => {
@@ -62,15 +64,29 @@ export default function ReportHistory() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return rows
-    return rows.filter((r) => `${r.id} ${r.pdf_path} ${r.created_at}`.toLowerCase().includes(q))
-  }, [rows, search])
+    return rows.filter((r) => {
+      if (artifactFilter === 'with' && !r.pdf_path) return false
+      if (artifactFilter === 'without' && r.pdf_path) return false
+      if (!q) return true
+      return `${r.id} ${r.pdf_path} ${r.created_at}`.toLowerCase().includes(q)
+    })
+  }, [rows, search, artifactFilter])
 
   const stats = useMemo(() => {
     const withArtifact = rows.filter((r) => r.pdf_path).length
     const latest = rows[0]?.created_at ? new Date(rows[0].created_at).toLocaleDateString() : '—'
     return { total: rows.length, withArtifact, latest }
   }, [rows])
+
+  const artifactPills = useMemo(() => {
+    const withArtifact = stats.withArtifact
+    const without = stats.total - withArtifact
+    return [
+      { id: 'all', label: t(`${NS}.filter_all`), count: stats.total, color: '#22d3ee' },
+      { id: 'with', label: t(`${NS}.filter_with`), count: withArtifact, color: '#4ade80' },
+      { id: 'without', label: t(`${NS}.filter_without`), count: without, color: '#94a3b8' },
+    ].map((p) => ({ ...p, active: artifactFilter === p.id, onClick: () => setArtifactFilter(p.id) }))
+  }, [stats, artifactFilter, t])
 
   const columns = useMemo(
     () => [
@@ -138,16 +154,19 @@ export default function ReportHistory() {
               <ExecutiveWidget label={t(`${NS}.kpi_latest`)} value={stats.latest} accent="#a78bfa" />
             </div>
 
-            <div className="relative flex-1 min-w-[220px] max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-disabled)] pointer-events-none" />
-              <input
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                aria-label={t(`${NS}.search_placeholder`)}
+            <div className="flex flex-wrap items-end gap-4">
+              <div className="relative flex-1 min-w-[220px] max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-disabled)] pointer-events-none" />
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  aria-label={t(`${NS}.search_placeholder`)}
                   placeholder={t(`${NS}.search_placeholder`)}
-                className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl pl-10 pr-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
-              />
+                  className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl pl-10 pr-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
+                />
+              </div>
+              {rows.length > 0 && <FilterPills pills={artifactPills} />}
             </div>
 
             {rows.length === 0 ? (

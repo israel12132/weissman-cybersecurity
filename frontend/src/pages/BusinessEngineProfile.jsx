@@ -340,7 +340,7 @@ export default function BusinessEngineProfile() {
           <span className="text-[var(--text-disabled)] text-xs">|</span>
           <Link to={`/engines/${engineId}`} className="text-cyan-400/80 hover:text-cyan-300 text-xs font-mono">{t('pages.businessEngineProfile.engine_detail')}</Link>
           <span className="text-[var(--text-disabled)] text-xs">|</span>
-          <h1 className="text-sm font-bold tracking-tight text-white">{title}</h1>
+          <h1 className="text-sm font-bold tracking-tight text-[var(--text-primary)]">{title}</h1>
           <div className="ms-auto">
             <ShellScanActions
               onRefresh={reloadProfile}
@@ -382,7 +382,7 @@ export default function BusinessEngineProfile() {
         </section>
 
         <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 space-y-3">
-          <h2 className="text-sm font-semibold text-white">{t('pages.businessEngineProfile.run_heading')}</h2>
+          <h2 className="text-sm font-semibold text-[var(--text-primary)]">{t('pages.businessEngineProfile.run_heading')}</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <select
               value={clientId}
@@ -448,7 +448,7 @@ export default function BusinessEngineProfile() {
         {!historyUnavailable && (
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 h-[280px]">
-            <h3 className="text-sm font-semibold text-white mb-2">{t('pages.businessEngineProfile.job_status_dist')}</h3>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2">{t('pages.businessEngineProfile.job_status_dist')}</h3>
             <ResponsiveContainer width="100%" height="90%">
               <BarChart accessibilityLayer data={statusData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" />
@@ -460,7 +460,7 @@ export default function BusinessEngineProfile() {
             </ResponsiveContainer>
           </article>
           <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 h-[280px]">
-            <h3 className="text-sm font-semibold text-white mb-2">{t('pages.businessEngineProfile.findings_trend')}</h3>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2">{t('pages.businessEngineProfile.findings_trend')}</h3>
             <ResponsiveContainer width="100%" height="90%">
               <LineChart accessibilityLayer data={findingsData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" />
@@ -487,7 +487,7 @@ export default function BusinessEngineProfile() {
 
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
-            <h3 className="text-sm font-semibold text-white mb-2">{t('pages.businessEngineProfile.recent_jobs')}</h3>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2">{t('pages.businessEngineProfile.recent_jobs')}</h3>
             <div className="space-y-2 max-h-[280px] overflow-auto pr-1">
               {!historyUnavailable && visibleJobs.map((j) => (
                 <div key={`${j.job_id}-${j.created_at}`} className="text-xs rounded border border-[var(--border-default)] bg-[var(--table-surface)] p-2 text-[var(--text-secondary)] font-mono">
@@ -502,7 +502,7 @@ export default function BusinessEngineProfile() {
             </div>
           </article>
           <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
-            <h3 className="text-sm font-semibold text-white mb-2">{t('pages.businessEngineProfile.live_findings')}</h3>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2">{t('pages.businessEngineProfile.live_findings')}</h3>
             <div className="space-y-2 max-h-[280px] overflow-auto pr-1">
               {!historyUnavailable && visibleFindings.map((f) => (
                 <div key={`${f.id}-${f.discovered_at}`} className="text-xs rounded border border-[var(--border-default)] bg-[var(--table-surface)] p-2 text-[var(--text-secondary)]">
@@ -519,7 +519,7 @@ export default function BusinessEngineProfile() {
         </section>
 
         <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
-          <h3 className="text-sm font-semibold text-white mb-2">{t('pages.businessEngineProfile.effective_payload')}</h3>
+          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2">{t('pages.businessEngineProfile.effective_payload')}</h3>
           <JsonView value={effectivePayload} />
         </section>
         </AgentRequiredGate>

@@ -23,7 +23,9 @@ export default function CrownJewelFlagPanel({
 }) {
   const { t } = useTranslation()
   const [nodes, setNodes] = useState([])
-  const [loading, setLoading] = useState(false)
+  // Start in the loading state when a client is present so the very first paint shows the
+  // loading hint rather than flashing the "no nodes" empty state before the fetch begins.
+  const [loading, setLoading] = useState(clientId != null)
   const [savingId, setSavingId] = useState(null)
   const [error, setError] = useState('')
   const [query, setQuery] = useState('')
@@ -91,7 +93,7 @@ export default function CrownJewelFlagPanel({
     >
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
             <Crown className="w-4 h-4 text-violet-300" aria-hidden />
             {t(`${NS}.flags_heading`)}
           </h2>

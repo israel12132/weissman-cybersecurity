@@ -133,7 +133,7 @@ export default function MemoryForensicsLab() {
       .finally(() => {
         if (!requestInit?.signal?.aborted) setLoading(false)
       })
-  }, [clientId])
+  }, [clientId, t])
 
   useEffect(() => {
     const ac = new AbortController()
@@ -318,7 +318,7 @@ export default function MemoryForensicsLab() {
                   key={byteOffset}
                   onMouseEnter={() => setHoveredSlot(slot)}
                   onMouseLeave={() => setHoveredSlot(null)}
-                  className={`cursor-default px-0.5 rounded ${severityClass} ${isHovered ? 'bg-cyan-500/40 text-white' : isBleed || (blockEntropy != null && blockEntropy >= ENTROPY_SAFE) ? 'hover:bg-red-500/20' : 'hover:bg-[var(--bg-4)]/50'}`}
+                  className={`cursor-default px-0.5 rounded ${severityClass} ${isHovered ? 'bg-cyan-500/40 text-[var(--text-primary)]' : isBleed || (blockEntropy != null && blockEntropy >= ENTROPY_SAFE) ? 'hover:bg-red-500/20' : 'hover:bg-[var(--bg-4)]/50'}`}
                   title={
                     blockEntropy != null
                       ? `Offset ${byteOffset} → ${slot} (entropy ${blockEntropy.toFixed(2)})`

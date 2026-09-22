@@ -286,7 +286,7 @@ export default function SocialEngineering() {
               <span className="text-sm text-[var(--text-tertiary)]">{t('pages.socialEngineering.total_campaigns')}</span>
               <Users className="w-4 h-4 text-purple-400" />
             </div>
-            <div className="text-2xl font-bold text-white">{statValue('total_campaigns')}</div>
+            <div className="text-2xl font-bold text-[var(--text-primary)]">{statValue('total_campaigns')}</div>
           </div>
           <div className="bg-red-500/10 backdrop-blur-md border border-red-500/30 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
@@ -300,7 +300,7 @@ export default function SocialEngineering() {
               <span className="text-sm text-[var(--text-tertiary)]">{t('pages.socialEngineering.assessments_loaded')}</span>
               <Shield className="w-4 h-4 text-emerald-400" />
             </div>
-            <div className="text-2xl font-bold text-white">{loading || error ? '—' : campaigns.length}</div>
+            <div className="text-2xl font-bold text-[var(--text-primary)]">{loading || error ? '—' : campaigns.length}</div>
           </div>
         </div>
         )}
@@ -329,17 +329,18 @@ export default function SocialEngineering() {
         <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 backdrop-blur-md border border-purple-500/30 rounded-xl p-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h3 className="text-sm font-semibold text-white mb-1">{t('pages.socialEngineering.run_assessment_heading')}</h3>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1">{t('pages.socialEngineering.run_assessment_heading')}</h3>
               <p className="text-xs text-[var(--text-tertiary)]">{t('pages.socialEngineering.run_assessment_subtitle', { engine: ASSESSMENT_ENGINE })}</p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <select
                 value={scanClientId}
                 onChange={(e) => setScanClientId(e.target.value)}
-                className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] px-3 py-2 text-xs text-white font-mono"
+                aria-label={t('common.client')}
+                className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] px-3 py-2 text-xs text-[var(--text-primary)] font-mono"
               >
                 {clients.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
+                  <option key={c.id} value={c.id}>{c.name || `${t('common.client')} ${c.id}`}</option>
                 ))}
               </select>
               <Button variant="unstyled"
@@ -424,7 +425,7 @@ export default function SocialEngineering() {
         )}
 
         <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-6">
-          <h3 className="text-sm font-semibold text-white mb-1">{t('pages.socialEngineering.templates_heading')}</h3>
+          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1">{t('pages.socialEngineering.templates_heading')}</h3>
           <p className="text-xs text-[var(--text-muted)] mb-4">{t('pages.socialEngineering.templates_notice')}</p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {TEMPLATES.map((template) => (
@@ -435,7 +436,7 @@ export default function SocialEngineering() {
                 className="p-4 text-left bg-gradient-to-br from-[var(--bg-2)]/50 to-[var(--bg-1)]/50 border border-[var(--border-default)] rounded-lg hover:border-purple-500/30 transition-colors"
               >
                 <Mail className="w-5 h-5 text-purple-400 mb-2" />
-                <h4 className="text-sm font-medium text-white mb-1">{templateLabel(template)}</h4>
+                <h4 className="text-sm font-medium text-[var(--text-primary)] mb-1">{templateLabel(template)}</h4>
                 <p className="text-xs text-[var(--text-muted)]">{t('pages.socialEngineering.click_create')}</p>
               </Button>
             ))}
@@ -450,15 +451,15 @@ export default function SocialEngineering() {
           onKeyDown={(e) => { if (e.key === 'Escape') setCreateOpen(false) }}
         >
           <div ref={createModalRef} role="dialog" aria-modal="true" aria-label={t('pages.socialEngineering.create_modal_title')} className="w-full max-w-md rounded-xl border border-[var(--border-default)] bg-[var(--bg-1)] p-6 shadow-xl">
-            <h3 className="mb-4 text-lg font-semibold text-white">{t('pages.socialEngineering.create_modal_title')}</h3>
+            <h3 className="mb-4 text-lg font-semibold text-[var(--text-primary)]">{t('pages.socialEngineering.create_modal_title')}</h3>
             <div className="space-y-4">
               <div>
                 <label className="mb-1 block text-xs text-[var(--text-tertiary)]">{t('pages.socialEngineering.campaign_name_label')}</label>
-                <input type="text" value={createName} onChange={(e) => setCreateName(e.target.value)} className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] px-3 py-2 text-sm text-white" />
+                <input type="text" value={createName} onChange={(e) => setCreateName(e.target.value)} className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] px-3 py-2 text-sm text-[var(--text-primary)]" />
               </div>
               <div>
                 <label className="mb-1 block text-xs text-[var(--text-tertiary)]">{t('pages.socialEngineering.template_label')}</label>
-                <select value={createTemplate} onChange={(e) => setCreateTemplate(e.target.value)} className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] px-3 py-2 text-sm text-white">
+                <select value={createTemplate} onChange={(e) => setCreateTemplate(e.target.value)} className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] px-3 py-2 text-sm text-[var(--text-primary)]">
                   {TEMPLATES.map((template) => (
                     <option key={template} value={template}>{templateLabel(template)}</option>
                   ))}
@@ -466,7 +467,7 @@ export default function SocialEngineering() {
               </div>
               <div>
                 <label className="mb-1 block text-xs text-[var(--text-tertiary)]">{t('common.client')}</label>
-                <select value={createClientId} onChange={(e) => setCreateClientId(e.target.value)} className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] px-3 py-2 text-sm text-white">
+                <select value={createClientId} onChange={(e) => setCreateClientId(e.target.value)} className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] px-3 py-2 text-sm text-[var(--text-primary)]">
                   {clients.length === 0 ? (
                     <option value="">{t('pages.socialEngineering.no_clients')}</option>
                   ) : (

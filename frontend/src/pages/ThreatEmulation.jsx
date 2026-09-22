@@ -417,6 +417,7 @@ export default function ThreatEmulation() {
           <select
             value={selectedClientId ?? ''}
             onChange={(e) => setSelectedClientId(e.target.value || null)}
+            aria-label={t('pages.threatEmulation.target_client')}
             className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40"
           >
             <option value="">{t('pages.threatEmulation.select_placeholder')}</option>
@@ -444,7 +445,7 @@ export default function ThreatEmulation() {
       </div>
 
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-cyan-500/30 text-cyan-200'}`}>
+        <div role={toast.sev === 'error' ? 'alert' : 'status'} aria-live={toast.sev === 'error' ? 'assertive' : 'polite'} className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-cyan-500/30 text-cyan-200'}`}>
           {toast.msg}
         </div>
       )}
@@ -540,7 +541,7 @@ export default function ThreatEmulation() {
             <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-5">
               <div className="flex items-center gap-2 mb-4">
                 <History className="w-4 h-4 text-[var(--text-muted)]" />
-                <h3 className="text-sm font-semibold text-white">{t('pages.threatEmulation.history_heading')}</h3>
+                <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('pages.threatEmulation.history_heading')}</h3>
               </div>
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {history.slice(0, 10).map((job) => (

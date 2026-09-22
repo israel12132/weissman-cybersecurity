@@ -118,6 +118,7 @@ function CampaignCard({ campaign, selected, onSelect, t }) {
     <motion.button
       type="button"
       layout
+      aria-pressed={selected === campaign.id}
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       onClick={() => onSelect(campaign.id === selected ? null : campaign.id)}
@@ -226,8 +227,9 @@ function QueryCard({ query, t }) {
     >
       <Button variant="unstyled"
         type="button"
+        aria-expanded={expanded}
         onClick={() => setExpanded((p) => !p)}
-        className="w-full text-left p-4 flex items-start justify-between gap-3 hover:bg-white/3 transition-colors"
+        className="w-full text-left p-4 flex items-start justify-between gap-3 hover:bg-[var(--row-hover-bg)] transition-colors"
       >
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -303,7 +305,7 @@ function IocTable({ iocs, t, onExport }) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: i * 0.03 }}
-            className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-x-4 px-4 py-2.5 border-b border-[var(--border-subtle)] hover:bg-white/2 transition-colors items-center"
+            className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-x-4 px-4 py-2.5 border-b border-[var(--border-subtle)] hover:bg-[var(--row-hover-bg)] transition-colors items-center"
           >
             <span className="text-sm">{IOC_TYPE_ICON[ioc.type] ?? '?'}</span>
             <div className="min-w-0">
@@ -344,9 +346,9 @@ export default function ThreatHuntingWorkbench() {
   const loadHuntData = useCallback(async () => {
     try {
       const data = await apiFetch('/api/soc/hunts')
-      const list = (Array.isArray(data.campaigns) ? data.campaigns : []).map((raw) => normalizeCampaign(raw, t))
-      const iocList = (Array.isArray(data.iocs) ? data.iocs : []).map(normalizeIoc)
-      const queryList = (Array.isArray(data.queries) ? data.queries : []).map((raw, i) => normalizeQuery(raw, i, t))
+      const list = (Array.isArray(data?.campaigns) ? data.campaigns : []).map((raw) => normalizeCampaign(raw, t))
+      const iocList = (Array.isArray(data?.iocs) ? data.iocs : []).map(normalizeIoc)
+      const queryList = (Array.isArray(data?.queries) ? data.queries : []).map((raw, i) => normalizeQuery(raw, i, t))
       setCampaigns(list)
       setIocs(iocList)
       setQueries(queryList)
@@ -481,7 +483,7 @@ export default function ThreatHuntingWorkbench() {
           <div className="flex gap-2 mb-6 flex-wrap">
             {tabs.map((tab) => (
               <Button variant="unstyled"
-                key={tab.id} type="button" onClick={() => setActiveTab(tab.id)}
+                key={tab.id} type="button" aria-pressed={activeTab === tab.id} onClick={() => setActiveTab(tab.id)}
                 className="px-4 py-2 rounded-xl text-xs font-mono border transition-all"
                 style={{
                   color: activeTab === tab.id ? '#8b5cf6' : 'rgba(255,255,255,0.35)',

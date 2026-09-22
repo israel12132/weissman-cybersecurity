@@ -38,6 +38,9 @@ export default function ContainmentRulesBuilder() {
       return;
     }
     fetchRules(clientId);
+    // fetchRules is a stable closure recreated each render; re-running only on client/
+    // availability changes is intentional (including it would refetch on every render).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, clientLoading, clientsUnavailable]);
 
   const fetchRules = async (cid) => {
@@ -237,7 +240,7 @@ export default function ContainmentRulesBuilder() {
 
         <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
           <div className="p-4 border-b border-[var(--border-default)] space-y-3">
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
               <Shield className="w-4 h-4 text-cyan-400" />
               {t('pages.containmentRulesBuilder.rules_heading')}
             </h3>
@@ -282,7 +285,7 @@ export default function ContainmentRulesBuilder() {
 
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
-                          <h4 className="text-sm font-semibold text-white">{rule.name}</h4>
+                          <h4 className="text-sm font-semibold text-[var(--text-primary)]">{rule.name}</h4>
                           <span
                             className={`px-2 py-1 rounded text-xs font-medium border ${getActionColor(
                               rule.action
@@ -355,7 +358,7 @@ export default function ContainmentRulesBuilder() {
         <div className="bg-gradient-to-r from-red-500/10 to-orange-500/10 backdrop-blur-md border border-red-500/30 rounded-xl p-6">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-semibold text-white mb-1 flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1 flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-red-400" />
                 {t('pages.containmentRulesBuilder.emergency_title')}
               </h3>
@@ -438,7 +441,7 @@ function RuleModal({ rule, clientId, onClose, onSave }) {
     >
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={rule ? t('pages.containmentRulesBuilder.edit_rule') : t('pages.containmentRulesBuilder.create_containment_rule')} className="bg-[var(--bg-1)] border border-[var(--border-default)] rounded-xl max-w-lg w-full p-6">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-bold text-white">
+          <h3 className="text-lg font-bold text-[var(--text-primary)]">
             {rule ? t('pages.containmentRulesBuilder.edit_rule') : t('pages.containmentRulesBuilder.create_containment_rule')}
           </h3>
           <Button variant="unstyled" onClick={onClose} className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)]">
@@ -448,8 +451,9 @@ function RuleModal({ rule, clientId, onClose, onSave }) {
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">{t('pages.containmentRulesBuilder.rule_name')}</label>
+            <label htmlFor="rule-name" className="block text-sm font-medium text-[var(--text-secondary)] mb-2">{t('pages.containmentRulesBuilder.rule_name')}</label>
             <input
+              id="rule-name"
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -459,8 +463,9 @@ function RuleModal({ rule, clientId, onClose, onSave }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">{t('pages.containmentRulesBuilder.action')}</label>
+            <label htmlFor="rule-action" className="block text-sm font-medium text-[var(--text-secondary)] mb-2">{t('pages.containmentRulesBuilder.action')}</label>
             <select
+              id="rule-action"
               value={formData.action}
               onChange={(e) => setFormData({ ...formData, action: e.target.value })}
               className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"

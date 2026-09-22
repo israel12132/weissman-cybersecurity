@@ -117,7 +117,7 @@ export default function KeyboardShortcuts() {
                   {keys.split(' ').map((k, i) => (
                     <React.Fragment key={i}>
                       {i > 0 && <span className="text-[var(--text-disabled)] mx-1">{t('a11y.then')}</span>}
-                      <kbd className="inline-block px-2 py-0.5 rounded border border-[var(--border-strong)] bg-[var(--row-hover-bg)] text-cyan-200 text-[11px]">{k}</kbd>
+                      <kbd className="inline-block px-2 py-0.5 rounded border border-[var(--border-strong)] bg-[var(--row-hover-bg)] text-[var(--text-accent)] text-[11px]">{k}</kbd>
                     </React.Fragment>
                   ))}
                 </td>

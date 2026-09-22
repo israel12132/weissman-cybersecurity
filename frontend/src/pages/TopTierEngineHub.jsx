@@ -10,12 +10,13 @@ import { downloadCsv } from '../lib/exportFindingsCsv'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import EngineHubForensicHeader from '../components/engine/EngineHubForensicHeader'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
+import FilterPills from '../components/ui/FilterPills'
 import Button from '../components/ui/Button'
 
 function badgeClass(kind) {
-  if (kind === 'command_center_engine') return 'text-emerald-300 border-emerald-500/40 bg-emerald-500/10'
-  if (kind === 'poe_synthesis_run') return 'text-cyan-300 border-cyan-500/40 bg-cyan-500/10'
-  return 'text-rose-300 border-rose-500/40 bg-rose-500/10'
+  if (kind === 'command_center_engine') return 'text-[var(--severity-low)] border-emerald-500/40 bg-emerald-500/10'
+  if (kind === 'poe_synthesis_run') return 'text-[var(--text-accent)] border-cyan-500/40 bg-cyan-500/10'
+  return 'text-[var(--severity-critical)] border-rose-500/40 bg-rose-500/10'
 }
 
 export default function TopTierEngineHub() {
@@ -32,6 +33,7 @@ export default function TopTierEngineHub() {
   const [probeSummary, setProbeSummary] = useState('')
   const [probeByEngine, setProbeByEngine] = useState({})
   const [engineSearch, setEngineSearch] = useState('')
+  const [probeFilter, setProbeFilter] = useState('all')
 
   const reloadAudit = useCallback(async () => {
     setLoading(true)
@@ -167,14 +169,34 @@ export default function TopTierEngineHub() {
 
   const filteredEngineIds = useMemo(() => {
     const q = engineSearch.trim().toLowerCase()
-    if (!q) return TOP_TIER_ENGINE_IDS
     return TOP_TIER_ENGINE_IDS.filter((id) => {
+      if (probeFilter !== 'all' && (probeByEngine[id]?.status || 'none') !== probeFilter) return false
+      if (!q) return true
       const engine = ENGINES_BY_ID[id]
       const row = auditById[id]
       const hay = `${id} ${engine?.label || ''} ${engine?.description || ''} ${row?.execution_path || ''} ${row?.canonical_engine || ''}`.toLowerCase()
       return hay.includes(q)
     })
-  }, [engineSearch, auditById])
+  }, [engineSearch, auditById, probeFilter, probeByEngine])
+
+  // Probe-status distribution over engines a health probe has reported on.
+  const probeCounts = useMemo(() => {
+    const c = { pass: 0, fail: 0, pending: 0 }
+    for (const v of Object.values(probeByEngine)) {
+      if (v?.status && c[v.status] != null) c[v.status] += 1
+    }
+    return { ...c, all: TOP_TIER_ENGINE_IDS.length, reported: c.pass + c.fail + c.pending }
+  }, [probeByEngine])
+
+  const probePills = useMemo(() => {
+    const defs = [
+      { id: 'all', label: t('common.all'), count: probeCounts.all, color: '#22d3ee' },
+      { id: 'pass', label: t('pages.topTierEngineHub.probe_pass'), count: probeCounts.pass, color: 'var(--severity-low)' },
+      { id: 'fail', label: t('pages.topTierEngineHub.probe_fail'), count: probeCounts.fail, color: 'var(--severity-critical)' },
+      { id: 'pending', label: t('pages.topTierEngineHub.probe_pending'), count: probeCounts.pending, color: 'var(--severity-medium)' },
+    ]
+    return defs.map((p) => ({ ...p, active: probeFilter === p.id, onClick: () => setProbeFilter(p.id) }))
+  }, [probeCounts, probeFilter, t])
 
   function exportAuditCsv() {
     if (auditUnavailable) return
@@ -195,9 +217,9 @@ export default function TopTierEngineHub() {
   }
 
   function probeBadge(status) {
-    if (status === 'pass') return 'text-emerald-300 border-emerald-500/40 bg-emerald-500/10'
-    if (status === 'fail') return 'text-rose-300 border-rose-500/40 bg-rose-500/10'
-    if (status === 'pending') return 'text-amber-300 border-amber-500/40 bg-amber-500/10'
+    if (status === 'pass') return 'text-[var(--severity-low)] border-emerald-500/40 bg-emerald-500/10'
+    if (status === 'fail') return 'text-[var(--severity-critical)] border-rose-500/40 bg-rose-500/10'
+    if (status === 'pending') return 'text-[var(--severity-medium)] border-amber-500/40 bg-amber-500/10'
     return 'text-[var(--text-tertiary)] border-[var(--border-strong)] bg-[var(--row-hover-bg)]'
   }
 
@@ -251,7 +273,7 @@ export default function TopTierEngineHub() {
               ))}
             </select>
             {clientsUnavailable && (
-              <p data-testid="top-tier-engine-hub-clients-unavailable" className="text-xs text-amber-300/80 font-mono md:col-span-4">
+              <p data-testid="top-tier-engine-hub-clients-unavailable" className="text-xs text-[var(--severity-medium)] font-mono md:col-span-4">
                 {t('pages.topTierEngineHub.clients_unavailable')}
               </p>
             )}
@@ -265,7 +287,7 @@ export default function TopTierEngineHub() {
               type="button"
               onClick={startHealthProbe}
               disabled={probeRunning}
-              className="rounded-lg px-3 py-2 text-sm font-mono border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10 disabled:opacity-50"
+              className="rounded-lg px-3 py-2 text-sm font-mono border border-cyan-500/40 text-[var(--text-accent)] hover:bg-cyan-500/10 disabled:opacity-50"
             >
               {probeRunning ? t('pages.topTierEngineHub.running_probe') : t('pages.topTierEngineHub.run_health_probe')}
             </Button>
@@ -290,12 +312,14 @@ export default function TopTierEngineHub() {
           </span>
         </div>
 
+        {probeCounts.reported > 0 && <FilterPills pills={probePills} />}
+
         {loading ? (
           <SkeletonWidgetGrid count={6} />
         ) : (
         <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {auditUnavailable && (
-            <p data-testid="top-tier-engine-hub-audit-unavailable" className="col-span-full text-xs text-amber-300/80 font-mono">
+            <p data-testid="top-tier-engine-hub-audit-unavailable" className="col-span-full text-xs text-[var(--severity-medium)] font-mono">
               {t('pages.topTierEngineHub.audit_unavailable')}
             </p>
           )}
@@ -303,16 +327,17 @@ export default function TopTierEngineHub() {
             <div className="col-span-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-6 text-sm text-[var(--text-tertiary)] text-center">
               {t('pages.topTierEngineHub.no_search_results')}
             </div>
-          ) : filteredEngineIds.map((id, idx) => {
+          ) : filteredEngineIds.map((id) => {
             const engine = ENGINES_BY_ID[id]
             const row = auditById[id]
             const path = auditUnavailable ? '—' : (row?.execution_path || 'unknown')
             const probe = probeByEngine[id] || null
+            const rank = TOP_TIER_ENGINE_IDS.indexOf(id) + 1
             return (
               <article key={id} className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 space-y-3">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-[11px] font-mono text-[var(--text-muted)]">{t('pages.topTierEngineHub.top_tier_num', { num: idx + 1 })}</div>
+                    <div className="text-[11px] font-mono text-[var(--text-muted)]">{t('pages.topTierEngineHub.top_tier_num', { num: rank })}</div>
                     <h3 className="text-base font-semibold text-[var(--text-primary)]">{engine?.label || id}</h3>
                     <div className="text-[11px] font-mono text-[var(--text-muted)]">{id}</div>
                   </div>
@@ -352,7 +377,7 @@ export default function TopTierEngineHub() {
                 <div className="flex items-center gap-2">
                   <Link
                     to={`/engines/top-tier/${id}`}
-                    className="px-3 py-1.5 rounded-lg text-xs font-mono border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10 transition-colors"
+                    className="px-3 py-1.5 rounded-lg text-xs font-mono border border-cyan-500/40 text-[var(--text-accent)] hover:bg-cyan-500/10 transition-colors"
                   >
                     {t('pages.topTierEngineHub.open_dedicated')}
                   </Link>

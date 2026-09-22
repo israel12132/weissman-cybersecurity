@@ -96,11 +96,11 @@ export default function WeissmanFindingsPanel({
         <span className="text-[9px] font-mono uppercase shrink-0" style={{ color: SEV_COLORS[(f.severity || 'info').toLowerCase()] || SEV_COLORS.info }}>
           [{f.severity || 'info'}]
         </span>
-        <span className="text-[12px] font-mono text-[var(--text-primary)] min-w-0">{f.title || f.type || 'Finding'}</span>
+        <span className="text-[12px] font-mono text-[var(--text-primary)] min-w-0">{f.title || f.type || t('weissmanFindings.finding_fallback')}</span>
       </div>
       {f.description && <p className="text-[10px] font-mono text-[var(--text-muted)] leading-relaxed">{f.description}</p>}
       {(f.confidence_multiplier != null || f.effective_risk_confidence != null) && (
-        <p className="text-[9px] font-mono text-cyan-400/80">
+        <p className="text-[9px] font-mono text-[var(--text-accent)]">
           {t('weissmanFindings.confidence', {
             value: (f.effective_risk_confidence ?? f.confidence_multiplier ?? 1).toFixed?.(2)
               ?? f.effective_risk_confidence ?? f.confidence_multiplier,
@@ -152,24 +152,29 @@ export default function WeissmanFindingsPanel({
               onChange={(e) => onSearchChange?.(e.target.value)}
               placeholder={t('weissmanFindings.search_placeholder')}
               aria-label={t('weissmanFindings.search_placeholder')}
-              className="pl-8 pr-3 py-1.5 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] text-[11px] font-mono text-[var(--text-secondary)] placeholder-white/25 focus:outline-none focus:border-cyan-500/40 min-w-[200px]"
+              className="pl-8 pr-3 py-1.5 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] text-[11px] font-mono text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40 min-w-[200px]"
             />
           </div>
           <div className="flex gap-1 flex-wrap">
-            {SEV_FILTER_OPTIONS.map((s) => (
-              <Button variant="unstyled"
-                key={s}
-                type="button"
-                onClick={() => onSeverityChange?.(s)}
-                className={`text-[9px] font-mono px-2 py-0.5 rounded border uppercase ${
-                  severityFilter === s
-                    ? 'border-cyan-500/50 text-cyan-200 bg-cyan-500/10'
-                    : 'border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-tertiary)]'
-                }`}
-              >
-                {s === 'all' ? t('weissmanFindings.filter_all') : s}
-              </Button>
-            ))}
+            {SEV_FILTER_OPTIONS.map((s) => {
+              const n = s === 'all' ? displayTotal : (counts ? (counts[s] || 0) : null)
+              return (
+                <Button variant="unstyled"
+                  key={s}
+                  type="button"
+                  onClick={() => onSeverityChange?.(s)}
+                  aria-pressed={severityFilter === s}
+                  className={`text-[9px] font-mono px-2 py-0.5 rounded border uppercase ${
+                    severityFilter === s
+                      ? 'border-cyan-500/50 text-[var(--text-accent)] bg-cyan-500/10'
+                      : 'border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-tertiary)]'
+                  }`}
+                >
+                  {s === 'all' ? t('weissmanFindings.filter_all') : s}
+                  {n != null && <span className="ml-1 opacity-60 tabular-nums">{n}</span>}
+                </Button>
+              )
+            })}
           </div>
         </div>
       </div>

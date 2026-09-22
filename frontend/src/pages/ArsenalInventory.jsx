@@ -185,31 +185,31 @@ export default function ArsenalInventory({ clientId }) {
   if (error || engines.length === 0) return null
 
   return (
-    <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
+    <div className="bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
       <div className="px-4 pt-4">
         <EvidenceNotice>
           Live catalog from GET /api/arsenal/catalog — every production engine with its authoritative
           kind, category, and ATT&amp;CK mapping. No fabricated engine telemetry.
         </EvidenceNotice>
       </div>
-      <div className="p-4 border-b border-white/10 flex items-center justify-between gap-3 flex-wrap">
-        <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+      <div className="p-4 border-b border-[var(--border-default)] flex items-center justify-between gap-3 flex-wrap">
+        <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
           <Boxes className="w-4 h-4 text-cyan-400" />
           {t('pages.threatAnalysis.inv_heading')}
-          <span className="text-[10px] font-mono text-white/40">
+          <span className="text-[10px] font-mono text-[var(--text-muted)]">
             {t('pages.threatAnalysis.inv_count2', { count: data?.engine_count ?? engines.length, distinct: distinctCount })}
           </span>
         </h3>
         <div className="flex items-center gap-2">
           <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/25" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-disabled)]" />
             <input
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t('pages.threatAnalysis.inv_search')}
               aria-label={t('pages.threatAnalysis.inv_search')}
-              className="bg-black/40 border border-white/10 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white/80 placeholder-white/25 font-mono focus:outline-none focus:border-cyan-500/40 w-44 md:w-56"
+              className="bg-[var(--table-surface)] border border-[var(--border-default)] rounded-lg pl-8 pr-3 py-1.5 text-xs text-[var(--text-secondary)] placeholder-[var(--text-muted)] font-mono focus:outline-none focus:border-cyan-500/40 w-44 md:w-56"
             />
           </div>
           <ShellScanActions
@@ -224,7 +224,7 @@ export default function ArsenalInventory({ clientId }) {
             onClick={exportPdf}
             disabled={!filtered.length}
             title={t('common.export_pdf')}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-white/15 text-white/70 hover:bg-white/10 disabled:opacity-40 transition-colors"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] disabled:opacity-40 transition-colors"
           >
             <FileText className="w-3.5 h-3.5" />
             {t('common.export_pdf')}
@@ -258,22 +258,22 @@ export default function ArsenalInventory({ clientId }) {
       )}
 
       {/* Category filter */}
-      <div className="px-4 py-2 border-b border-white/5 flex items-center gap-1.5 flex-wrap">
+      <div className="px-4 py-2 border-b border-[var(--border-subtle)] flex items-center gap-1.5 flex-wrap">
         <Button
           variant="unstyled"
           type="button"
           onClick={() => setDistinctOnly((v) => !v)}
           title={t('pages.threatAnalysis.inv_distinct_hint')}
-          className={`px-2 py-0.5 rounded text-[10px] font-mono border transition-colors ${distinctOnly ? 'text-emerald-200 border-emerald-500/40 bg-emerald-500/10' : 'text-white/45 border-white/10 hover:border-white/25'}`}
+          className={`px-2 py-0.5 rounded text-[10px] font-mono border transition-colors ${distinctOnly ? 'text-emerald-200 border-emerald-500/40 bg-emerald-500/10' : 'text-[var(--text-muted)] border-[var(--border-default)] hover:border-[var(--border-strong)]'}`}
         >
           {t('pages.threatAnalysis.inv_distinct')}
         </Button>
-        <span className="w-px h-4 bg-white/10 mx-0.5" />
+        <span className="w-px h-4 bg-[var(--bg-2)] mx-0.5" />
         <Button
           variant="unstyled"
           type="button"
           onClick={() => setCategory('')}
-          className={`px-2 py-0.5 rounded text-[10px] font-mono border transition-colors ${category === '' ? 'text-cyan-200 border-cyan-500/40 bg-cyan-500/10' : 'text-white/45 border-white/10'}`}
+          className={`px-2 py-0.5 rounded text-[10px] font-mono border transition-colors ${category === '' ? 'text-cyan-200 border-cyan-500/40 bg-cyan-500/10' : 'text-[var(--text-muted)] border-[var(--border-default)]'}`}
         >
           {t('pages.threatAnalysis.inv_all')}
         </Button>
@@ -283,31 +283,31 @@ export default function ArsenalInventory({ clientId }) {
             key={c}
             type="button"
             onClick={() => setCategory((p) => (p === c ? '' : c))}
-            className={`px-2 py-0.5 rounded text-[10px] font-mono border transition-colors ${category === c ? 'text-cyan-200 border-cyan-500/40 bg-cyan-500/10' : 'text-white/45 border-white/10 hover:border-white/25'}`}
+            className={`px-2 py-0.5 rounded text-[10px] font-mono border transition-colors ${category === c ? 'text-cyan-200 border-cyan-500/40 bg-cyan-500/10' : 'text-[var(--text-muted)] border-[var(--border-default)] hover:border-[var(--border-strong)]'}`}
           >
-            {c} <span className="text-white/30">{byCategory[c]}</span>
+            {c} <span className="text-[var(--text-muted)]">{byCategory[c]}</span>
           </Button>
         ))}
       </div>
 
-      <div className="divide-y divide-white/5 max-h-[28rem] overflow-y-auto">
+      <div className="divide-y divide-[var(--border-subtle)] max-h-[28rem] overflow-y-auto">
         {shown.map((e) => {
           const tone = KIND_TONE[e.kind] || KIND_TONE.special
           const st = runStatus[e.id]
           const Icon = st ? STATUS_ICON[st] : null
           return (
-            <div key={e.id} className="px-4 py-2 flex items-center gap-2 hover:bg-white/5">
-              <span className="flex-1 min-w-0 text-[12px] font-mono text-white/85 truncate">
+            <div key={e.id} className="px-4 py-2 flex items-center gap-2 hover:bg-[var(--row-hover-bg)]">
+              <span className="flex-1 min-w-0 text-[12px] font-mono text-[var(--text-secondary)] truncate">
                 {e.id}
                 {e.kind === 'alias' && e.canonical && (
                   <span className="text-[10px] text-sky-300/70 ml-1.5" title={t('pages.threatAnalysis.inv_alias_hint')}>→ {e.canonical}</span>
                 )}
               </span>
-              <span className="hidden md:block text-[10px] text-white/35 w-32 shrink-0 truncate">{e.category}</span>
+              <span className="hidden md:block text-[10px] text-[var(--text-muted)] w-32 shrink-0 truncate">{e.category}</span>
               <span className={`text-[9px] px-1.5 py-0.5 rounded border shrink-0 ${tone.cls}`}>{tone.label}</span>
               {e.critical_infra && <span className="text-[9px] px-1.5 py-0.5 rounded border border-rose-500/30 bg-rose-500/10 text-rose-300 shrink-0">CI</span>}
               {Array.isArray(e.techniques) && e.techniques.length > 0 && (
-                <span className="hidden lg:block text-[9px] font-mono text-white/30 w-10 text-right shrink-0" title={e.techniques.join(', ')}>{e.techniques.length}T</span>
+                <span className="hidden lg:block text-[9px] font-mono text-[var(--text-muted)] w-10 text-right shrink-0" title={e.techniques.join(', ')}>{e.techniques.length}T</span>
               )}
               {Icon && <Icon className={`w-3.5 h-3.5 shrink-0 ${STATUS_TONE[st]} ${st === 'running' ? 'animate-spin' : ''}`} />}
               <Button
@@ -325,12 +325,12 @@ export default function ArsenalInventory({ clientId }) {
           )
         })}
         {filtered.length > shown.length && (
-          <div className="px-4 py-2 text-[10px] font-mono text-white/35">
+          <div className="px-4 py-2 text-[10px] font-mono text-[var(--text-muted)]">
             {t('pages.threatAnalysis.inv_more', { count: filtered.length - shown.length })}
           </div>
         )}
         {filtered.length === 0 && (
-          <div className="px-4 py-3 text-[11px] text-white/35">{t('pages.threatAnalysis.inv_none')}</div>
+          <div className="px-4 py-3 text-[11px] text-[var(--text-muted)]">{t('pages.threatAnalysis.inv_none')}</div>
         )}
       </div>
     </div>

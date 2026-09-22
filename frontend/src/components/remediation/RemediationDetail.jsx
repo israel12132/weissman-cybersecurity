@@ -42,14 +42,14 @@ function DiffView({ patch }) {
   if (!patch || !patch.trim()) return null
   const lines = patch.split('\n')
   return (
-    <div className="rounded-lg border border-white/10 bg-black/60 overflow-x-auto">
+    <div className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] overflow-x-auto">
       <pre className="text-[11px] font-mono leading-relaxed p-3 min-w-max">
         {lines.map((ln, i) => {
-          let color = 'text-white/55'
+          let color = 'text-[var(--text-tertiary)]'
           if (ln.startsWith('+') && !ln.startsWith('+++')) color = 'text-green-400'
           else if (ln.startsWith('-') && !ln.startsWith('---')) color = 'text-rose-400'
           else if (ln.startsWith('@@')) color = 'text-cyan-400'
-          else if (ln.startsWith('diff ') || ln.startsWith('index ') || ln.startsWith('+++') || ln.startsWith('---')) color = 'text-white/35'
+          else if (ln.startsWith('diff ') || ln.startsWith('index ') || ln.startsWith('+++') || ln.startsWith('---')) color = 'text-[var(--text-muted)]'
           return <div key={i} className={color}>{ln || ' '}</div>
         })}
       </pre>
@@ -65,10 +65,10 @@ function BilingualBlock({ title, value, mode, curLang }) {
     <div className="space-y-1.5">
       <h4 className="text-xs font-semibold text-cyan-300 uppercase tracking-wide">{title}</h4>
       {showHe && value.he && (
-        <p dir="rtl" className="text-sm text-white/85 leading-relaxed text-right">{value.he}</p>
+        <p dir="rtl" className="text-sm text-[var(--text-secondary)] leading-relaxed text-right">{value.he}</p>
       )}
       {showEn && value.en && (
-        <p dir="ltr" className="text-sm text-white/70 leading-relaxed">{value.en}</p>
+        <p dir="ltr" className="text-sm text-[var(--text-tertiary)] leading-relaxed">{value.en}</p>
       )}
     </div>
   )
@@ -223,7 +223,7 @@ export default function RemediationDetail({ finding, onClose }) {
       }
     } catch (e) {
       setHealing(false)
-      setHealError(e.message || 'failed')
+      setHealError(e.message || t('pages.remediationHub.heal_failed'))
     }
   }, [clientId, findingId, repoSlug, gitToken, baseBranch, channel, healthCurl, destructiveConfirm, dualApprove, selectedChannelMeta, t])
 
@@ -249,7 +249,7 @@ export default function RemediationDetail({ finding, onClose }) {
       })
       setReverted(true)
     } catch (e) {
-      setHealError(e.message || 'revert failed')
+      setHealError(e.message || t('pages.remediationHub.revert_failed'))
     } finally {
       setReverting(false)
     }
@@ -261,36 +261,36 @@ export default function RemediationDetail({ finding, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events -- modal backdrop click-to-dismiss; Escape/close button provide keyboard path */}
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-[var(--table-surface)] backdrop-blur-sm" onClick={onClose} />
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative w-full max-w-2xl h-full bg-[#0b0f14] border-l border-white/10 overflow-y-auto shadow-2xl"
+        className="relative w-full max-w-2xl h-full bg-[#0b0f14] border-l border-[var(--border-default)] overflow-y-auto shadow-2xl"
       >
         {/* Header */}
-        <div className="sticky top-0 z-10 bg-[#0b0f14]/95 backdrop-blur border-b border-white/10 p-4 flex items-start justify-between gap-3">
+        <div className="sticky top-0 z-10 bg-[#0b0f14]/95 backdrop-blur border-b border-[var(--border-default)] p-4 flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <Wrench className="w-4 h-4 text-cyan-400 shrink-0" />
-              <h3 id={titleId} className="text-sm font-semibold text-white truncate">{finding?.title || findingId}</h3>
+              <h3 id={titleId} className="text-sm font-semibold text-[var(--text-primary)] truncate">{finding?.title || findingId}</h3>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase" style={{ color: SEV_COLOR[sev] || SEV_COLOR.info, background: `${SEV_COLOR[sev] || SEV_COLOR.info}18` }}>{sev}</span>
-              <span className="text-[10px] font-mono text-white/40">{findingId}</span>
+              <span className="text-[10px] font-mono text-[var(--text-muted)]">{findingId}</span>
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Button variant="unstyled"
               type="button"
               onClick={() => setLangMode((m) => (m === 'both' ? 'current' : 'both'))}
-              className="p-1.5 rounded-md border border-white/10 text-white/60 hover:text-white hover:border-white/25"
+              className="p-1.5 rounded-md border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)]"
               title={t('pages.remediationHub.show_both_languages')}
             >
               <Languages className="w-4 h-4" />
             </Button>
-            <Button variant="unstyled" type="button" onClick={onClose} className="p-1.5 rounded-md border border-white/10 text-white/60 hover:text-white hover:border-white/25">
+            <Button variant="unstyled" type="button" onClick={onClose} className="p-1.5 rounded-md border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)]">
               <X className="w-4 h-4" />
             </Button>
           </div>
@@ -300,7 +300,7 @@ export default function RemediationDetail({ finding, onClose }) {
           {/* Bilingual brief */}
           <section className="space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-cyan-400" />
                 {t('pages.remediationHub.detail_title')}
               </h3>
@@ -324,16 +324,16 @@ export default function RemediationDetail({ finding, onClose }) {
             {briefError && !briefUnavailable && (
               <div className="p-3 rounded-lg border border-rose-500/30 bg-rose-900/20 text-rose-300 text-xs flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 shrink-0" />
-                {t('pages.remediationHub.brief_error', { error: briefError })}: {briefError}
+                {t('pages.remediationHub.brief_error', { error: briefError })}
               </div>
             )}
 
             {briefLoading && !brief && (
-              <div className="text-xs text-white/40 flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t('pages.remediationHub.brief_loading')}</div>
+              <div className="text-xs text-[var(--text-muted)] flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t('pages.remediationHub.brief_loading')}</div>
             )}
 
             {brief && !briefUnavailable && (
-              <div className="space-y-4 p-4 rounded-xl border border-white/10 bg-black/30">
+              <div className="space-y-4 p-4 rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)]">
                 <BilingualBlock title={t('pages.remediationHub.brief_problem')} value={brief.problem} mode={langMode} curLang={curLang} />
                 <BilingualBlock title={t('pages.remediationHub.brief_root_cause')} value={brief.root_cause} mode={langMode} curLang={curLang} />
                 <BilingualBlock title={t('pages.remediationHub.brief_impact')} value={brief.impact} mode={langMode} curLang={curLang} />
@@ -345,7 +345,7 @@ export default function RemediationDetail({ finding, onClose }) {
           {/* Before / after diff */}
           {patch && !briefUnavailable && (
             <section className="space-y-2">
-              <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
                 <GitPullRequest className="w-4 h-4 text-cyan-400" />
                 {t('pages.remediationHub.diff_after')}
               </h3>
@@ -355,7 +355,7 @@ export default function RemediationDetail({ finding, onClose }) {
 
           {/* Channel picker */}
           <section className="space-y-3">
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
               <ChevronRight className="w-4 h-4 text-cyan-400" />
               {t('pages.remediationHub.channel_label')}
             </h3>
@@ -368,7 +368,7 @@ export default function RemediationDetail({ finding, onClose }) {
                     key={c.id}
                     type="button"
                     onClick={() => setChannel(c.id)}
-                    className={`flex items-center gap-2 p-2.5 rounded-lg border text-xs text-left transition-colors ${active ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-200' : 'border-white/10 text-white/60 hover:border-white/25'}`}
+                    className={`flex items-center gap-2 p-2.5 rounded-lg border text-xs text-left transition-colors ${active ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-200' : 'border-[var(--border-default)] text-[var(--text-tertiary)] hover:border-[var(--border-strong)]'}`}
                   >
                     <Icon className="w-4 h-4 shrink-0" />
                     <span>{t(`pages.remediationHub.${c.labelKey}`)}</span>
@@ -378,7 +378,7 @@ export default function RemediationDetail({ finding, onClose }) {
             </div>
 
             {channelHowTo && !briefUnavailable && (
-              <div className="space-y-3 p-3 rounded-lg border border-white/10 bg-black/30">
+              <div className="space-y-3 p-3 rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)]">
                 <BilingualBlock title={t('pages.remediationHub.channel_connect')} value={channelHowTo.connect} mode={langMode} curLang={curLang} />
                 <BilingualBlock title={t('pages.remediationHub.channel_apply')} value={channelHowTo.apply} mode={langMode} curLang={curLang} />
               </div>
@@ -387,7 +387,7 @@ export default function RemediationDetail({ finding, onClose }) {
 
           {/* Heal form */}
           <section className="space-y-3">
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-cyan-400" />
               {t('pages.remediationHub.heal_now')}
             </h3>
@@ -399,18 +399,18 @@ export default function RemediationDetail({ finding, onClose }) {
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-2">
-                <p className="text-[11px] text-white/45">{t('pages.remediationHub.channel_no_repo')}</p>
+                <p className="text-[11px] text-[var(--text-muted)]">{t('pages.remediationHub.channel_no_repo')}</p>
                 <Field label={t('pages.remediationHub.repo_slug')} value={repoSlug} onChange={setRepoSlug} placeholder="owner/repo" />
                 <Field label={t('pages.remediationHub.git_token')} value={gitToken} onChange={setGitToken} type="password" placeholder="ghp_…" />
               </div>
             )}
             <Field label={t('pages.remediationHub.health_curl')} value={healthCurl} onChange={setHealthCurl} placeholder="curl http://localhost:3000/health" />
-            <details className="text-[11px] text-white/50">
-              <summary className="cursor-pointer text-white/60">{t('pages.remediationHub.dual_auth_required')}</summary>
+            <details className="text-[11px] text-[var(--text-muted)]">
+              <summary className="cursor-pointer text-[var(--text-tertiary)]">{t('pages.remediationHub.dual_auth_required')}</summary>
               <div className="grid grid-cols-1 gap-2 mt-2">
                 <Field label="X-Weissman-Destructive-Confirm" value={destructiveConfirm} onChange={setDestructiveConfirm} type="password" />
                 <Field label="X-Weissman-Dual-Approve" value={dualApprove} onChange={setDualApprove} type="password" />
-                <p className="text-white/35">{t('pages.remediationHub.dual_auth_hint')}</p>
+                <p className="text-[var(--text-muted)]">{t('pages.remediationHub.dual_auth_hint')}</p>
               </div>
             </details>
 
@@ -435,7 +435,7 @@ export default function RemediationDetail({ finding, onClose }) {
           {(steps.length > 0 || jobStatus) && (
             <section className="space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-cyan-400" />
                   {t('pages.remediationHub.verification_steps')}
                 </h3>
@@ -471,7 +471,7 @@ export default function RemediationDetail({ finding, onClose }) {
                     <GitPullRequest className="w-3.5 h-3.5" /> {t('pages.remediationHub.view_pr')}
                   </a>
                   {reverted ? (
-                    <span className="inline-flex items-center gap-1 text-xs text-white/40">
+                    <span className="inline-flex items-center gap-1 text-xs text-[var(--text-muted)]">
                       <X className="w-3.5 h-3.5" /> {t('pages.remediationHub.reverted')}
                     </span>
                   ) : (
@@ -500,26 +500,26 @@ export default function RemediationDetail({ finding, onClose }) {
                   </a>
                 )}
                 {jobId && jobStatus?.status === 'completed' && (
-                  <a href={apiUrl(`/api/heal-verify/${jobId}/report.json`)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs text-white/50 hover:text-white/80" title={t('pages.remediationHub.report_json_hint')}>
+                  <a href={apiUrl(`/api/heal-verify/${jobId}/report.json`)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)]" title={t('pages.remediationHub.report_json_hint')}>
                     <FileText className="w-3.5 h-3.5" /> JSON
                   </a>
                 )}
                 {jobId && jobStatus?.status === 'completed' && (
-                  <a href={apiUrl(`/api/heal-verify/${jobId}/sarif`)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs text-white/50 hover:text-white/80" title={t('pages.remediationHub.report_sarif_hint')}>
+                  <a href={apiUrl(`/api/heal-verify/${jobId}/sarif`)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)]" title={t('pages.remediationHub.report_sarif_hint')}>
                     <FileText className="w-3.5 h-3.5" /> SARIF
                   </a>
                 )}
               </div>
 
-              <ol className="space-y-1.5 border-l border-white/10 pl-4">
+              <ol className="space-y-1.5 border-l border-[var(--border-default)] pl-4">
                 {steps.map((s, i) => (
                   <li key={i} className="text-xs">
                     <span className="font-mono text-cyan-300">{s.step}</span>
-                    {s.detail && <span className="text-white/50"> — {s.detail}</span>}
+                    {s.detail && <span className="text-[var(--text-muted)]"> — {s.detail}</span>}
                   </li>
                 ))}
                 {healing && steps.length === 0 && (
-                  <li className="text-xs text-white/40 flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t('pages.remediationHub.step_waiting')}</li>
+                  <li className="text-xs text-[var(--text-muted)] flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t('pages.remediationHub.step_waiting')}</li>
                 )}
               </ol>
             </section>
@@ -528,11 +528,11 @@ export default function RemediationDetail({ finding, onClose }) {
           {/* Heal history for this finding */}
           {history.length > 0 && (
             <section className="space-y-2">
-              <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
                 <Clock className="w-4 h-4 text-cyan-400" />
                 {t('pages.remediationHub.heal_history')}
               </h3>
-              <div className="divide-y divide-white/5 rounded-lg border border-white/10 overflow-hidden">
+              <div className="divide-y divide-[var(--border-subtle)] rounded-lg border border-[var(--border-default)] overflow-hidden">
                 {history.map((h) => {
                   const vm = h.verdict ? VERDICT_META[h.verdict] : null
                   return (
@@ -541,10 +541,10 @@ export default function RemediationDetail({ finding, onClose }) {
                         {vm ? (
                           <span style={{ color: vm.color }}>●</span>
                         ) : (
-                          <span className="text-white/30">●</span>
+                          <span className="text-[var(--text-muted)]">●</span>
                         )}
-                        <span className="text-white/70 truncate">{h.verification_status || h.verdict || '—'}</span>
-                        {h.channel && <span className="text-[10px] text-white/35 font-mono">{h.channel}</span>}
+                        <span className="text-[var(--text-tertiary)] truncate">{h.verification_status || h.verdict || '—'}</span>
+                        {h.channel && <span className="text-[10px] text-[var(--text-muted)] font-mono">{h.channel}</span>}
                         {h.attempts > 1 && <span className="text-[10px] text-amber-300/70 font-mono">×{h.attempts}</span>}
                         {h.attested && <span className="text-[10px] text-emerald-300/70">🔏</span>}
                       </div>
@@ -554,7 +554,7 @@ export default function RemediationDetail({ finding, onClose }) {
                             <GitPullRequest className="w-3.5 h-3.5" />
                           </a>
                         )}
-                        <span className="text-[10px] text-white/30 font-mono whitespace-nowrap">{(h.created_at || '').slice(0, 10)}</span>
+                        <span className="text-[10px] text-[var(--text-muted)] font-mono whitespace-nowrap">{(h.created_at || '').slice(0, 10)}</span>
                       </div>
                     </div>
                   )
@@ -571,13 +571,13 @@ export default function RemediationDetail({ finding, onClose }) {
 function Field({ label, value, onChange, type = 'text', placeholder = '' }) {
   return (
     <label className="block">
-      <span className="text-[11px] text-white/50 font-mono">{label}</span>
+      <span className="text-[11px] text-[var(--text-muted)] font-mono">{label}</span>
       <input
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="mt-1 w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/85 placeholder-white/25 font-mono focus:outline-none focus:border-cyan-500/40"
+        className="mt-1 w-full bg-[var(--table-surface)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] placeholder-[var(--text-muted)] font-mono focus:outline-none focus:border-cyan-500/40"
       />
     </label>
   )

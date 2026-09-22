@@ -60,19 +60,32 @@ export default function CeoVault() {
 
   const toggleSecretVisibility = async (secretId) => {
     if (!showSecret[secretId]) {
-      // Log access attempt
-      await api.post(`/api/ceo/vault/secrets/${secretId}/access`);
+      // Log access attempt (best-effort; do not block the reveal on an audit write)
+      try {
+        await api.post(`/api/ceo/vault/secrets/${secretId}/access`);
+      } catch {
+        // audit logging is non-fatal
+      }
     }
     setShowSecret((prev) => ({ ...prev, [secretId]: !prev[secretId] }));
   };
 
   const copyToClipboard = async (secretId, value) => {
-    await navigator.clipboard.writeText(value);
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      toast.error(t('pages.ceoVault.copy_failed'));
+      return;
+    }
     setCopiedId(secretId);
     setTimeout(() => setCopiedId(null), 2000);
 
-    // Log copy event
-    await api.post(`/api/ceo/vault/secrets/${secretId}/copy`);
+    // Log copy event (best-effort)
+    try {
+      await api.post(`/api/ceo/vault/secrets/${secretId}/copy`);
+    } catch {
+      // audit logging is non-fatal
+    }
   };
 
   const deleteSecret = async (secretId) => {
@@ -178,7 +191,7 @@ export default function CeoVault() {
               <span className="text-sm text-[var(--text-tertiary)]">{t('pages.ceoVault.total_secrets')}</span>
               <Lock className="w-4 h-4 text-cyan-400" />
             </div>
-            <div className="text-2xl font-bold text-white">{secrets.length}</div>
+            <div className="text-2xl font-bold text-[var(--text-primary)]">{secrets.length}</div>
           </div>
 
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
@@ -186,7 +199,7 @@ export default function CeoVault() {
               <span className="text-sm text-[var(--text-tertiary)]">{t('pages.ceoVault.api_keys')}</span>
               <Key className="w-4 h-4 text-yellow-400" />
             </div>
-            <div className="text-2xl font-bold text-white">
+            <div className="text-2xl font-bold text-[var(--text-primary)]">
               {secrets.filter((s) => s.type === 'api_key').length}
             </div>
           </div>
@@ -196,7 +209,7 @@ export default function CeoVault() {
               <span className="text-sm text-[var(--text-tertiary)]">{t('pages.ceoVault.expiring_soon')}</span>
               <Shield className="w-4 h-4 text-orange-400" />
             </div>
-            <div className="text-2xl font-bold text-white">
+            <div className="text-2xl font-bold text-[var(--text-primary)]">
               {
                 secrets.filter((s) => {
                   if (!s.expires_at) return false;
@@ -240,7 +253,7 @@ export default function CeoVault() {
         {/* Secrets List */}
         <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
           <div className="p-4 border-b border-[var(--border-default)] space-y-3">
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
               <Lock className="w-4 h-4 text-cyan-400" />
               {t('pages.ceoVault.stored_secrets')}
             </h3>
@@ -277,7 +290,7 @@ export default function CeoVault() {
                           {getTypeIcon(secret.type)}
                         </div>
                         <div>
-                          <h4 className="text-sm font-semibold text-white">
+                          <h4 className="text-sm font-semibold text-[var(--text-primary)]">
                             {secret.name}
                           </h4>
                           <p className="text-xs text-[var(--text-tertiary)]">
@@ -296,12 +309,13 @@ export default function CeoVault() {
                             type={showSecret[secret.id] ? 'text' : 'password'}
                             value={showSecret[secret.id] ? secret.value : '••••••••••••'}
                             readOnly
-                            className="w-full px-3 py-2 bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg text-sm text-white font-mono"
+                            className="w-full px-3 py-2 bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg text-sm text-[var(--text-primary)] font-mono"
                           />
                         </div>
 
                         <Button variant="unstyled"
                           onClick={() => toggleSecretVisibility(secret.id)}
+                          aria-label={showSecret[secret.id] ? t('pages.ceoVault.hide_value') : t('pages.ceoVault.show_value')}
                           className="p-2 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)] transition-colors"
                         >
                           {showSecret[secret.id] ? (
@@ -315,6 +329,7 @@ export default function CeoVault() {
                           onClick={() =>
                             copyToClipboard(secret.id, secret.value)
                           }
+                          aria-label={t('common.copy')}
                           className="p-2 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)] transition-colors"
                         >
                           {copiedId === secret.id ? (
@@ -349,12 +364,14 @@ export default function CeoVault() {
                     <div className="flex items-center gap-2">
                       <Button variant="unstyled"
                         onClick={() => setEditModal(secret)}
+                        aria-label={t('common.edit')}
                         className="p-2 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg hover:bg-cyan-500/30 transition-colors"
                       >
                         <Edit className="w-4 h-4" />
                       </Button>
                       <Button variant="unstyled"
                         onClick={() => deleteSecret(secret.id)}
+                        aria-label={t('common.delete')}
                         className="p-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -432,6 +449,7 @@ function SecretModal({ secret, onClose, onSave }) {
           </h3>
           <Button variant="unstyled"
             onClick={onClose}
+            aria-label={t('common.close')}
             className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
           >
             ✕
@@ -447,7 +465,7 @@ function SecretModal({ secret, onClose, onSave }) {
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               placeholder={t('pages.ceoVault.name_placeholder')}
             />
           </div>
@@ -462,7 +480,7 @@ function SecretModal({ secret, onClose, onSave }) {
               onChange={(e) =>
                 setFormData({ ...formData, description: e.target.value })
               }
-              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               placeholder={t('pages.ceoVault.description_placeholder')}
             />
           </div>
@@ -474,7 +492,7 @@ function SecretModal({ secret, onClose, onSave }) {
             <select
               value={formData.type}
               onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             >
               <option value="api_key">{t('pages.ceoVault.type_api_key')}</option>
               <option value="password">{t('pages.ceoVault.type_password')}</option>
@@ -491,7 +509,7 @@ function SecretModal({ secret, onClose, onSave }) {
               value={formData.value}
               onChange={(e) => setFormData({ ...formData, value: e.target.value })}
               rows={4}
-              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] font-mono text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               placeholder={t('pages.ceoVault.secret_placeholder')}
             />
           </div>
@@ -506,7 +524,7 @@ function SecretModal({ secret, onClose, onSave }) {
               onChange={(e) =>
                 setFormData({ ...formData, expires_at: e.target.value })
               }
-              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             />
           </div>
         </div>

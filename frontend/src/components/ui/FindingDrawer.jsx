@@ -40,9 +40,9 @@ function DependencyPathChain({ path }) {
         const isLast = i === path.length - 1
         const isFirst = i === 0
         const cls = isLast
-          ? 'border-rose-500/40 text-rose-200 bg-rose-500/10'
+          ? 'border-rose-500/40 text-[var(--severity-critical)] bg-rose-500/10'
           : isFirst
-            ? 'border-amber-500/40 text-amber-200 bg-amber-500/10'
+            ? 'border-amber-500/40 text-[var(--severity-medium)] bg-amber-500/10'
             : 'border-[var(--border-strong)] text-[var(--text-secondary)]'
         return (
           <React.Fragment key={`${node}-${i}`}>
@@ -98,7 +98,7 @@ function EvidenceBlock({ title, content, copyable = true, evidenceLabel, copyLab
           </span>
           {copyable && <CopyButton value={text} size="md" label={copyLabel} />}
         </div>
-        <pre className="p-3 text-[11px] font-mono text-emerald-300/85 overflow-x-auto max-h-72 whitespace-pre-wrap break-all leading-relaxed m-0 custom-scroll">
+        <pre className="p-3 text-[11px] font-mono text-[var(--severity-low)] overflow-x-auto max-h-72 whitespace-pre-wrap break-all leading-relaxed m-0 custom-scroll">
           {text}
         </pre>
       </div>
@@ -124,20 +124,21 @@ export default function FindingDrawer({
   const [activeTab, setActiveTab] = useState('evidence')
   const dialogRef = useRef(null)
   const tabRefs = useRef([])
+  const statusTimerRef = useRef(null)
 
   // Keep Tab focus inside the modal drawer while it's open (a11y: role="dialog" aria-modal).
   useFocusTrap(dialogRef, Boolean(finding))
 
   const drawerTabs = useMemo(
     () => [
-      { id: 'evidence', label: 'Evidence' },
-      { id: 'mitre', label: 'MITRE' },
-      { id: 'remediation', label: 'Remediation' },
-      { id: 'playbook', label: 'Playbook' },
-      { id: 'compliance', label: 'Compliance' },
-      { id: 'financial', label: 'Financial' },
+      { id: 'evidence', label: t('components.findingDrawer.evidence') },
+      { id: 'mitre', label: t('components.findingDrawer.tabMitre') },
+      { id: 'remediation', label: t('components.findingDrawer.remediation') },
+      { id: 'playbook', label: t('components.findingDrawer.tabPlaybook') },
+      { id: 'compliance', label: t('components.findingDrawer.tabCompliance') },
+      { id: 'financial', label: t('components.findingDrawer.tabFinancial') },
     ],
-    [],
+    [t],
   )
 
   const onTabKeyDown = (e, index) => {
@@ -185,6 +186,14 @@ export default function FindingDrawer({
     }
   }, [finding, onClose])
 
+  // Clear any pending status-spinner timer when the drawer unmounts.
+  useEffect(
+    () => () => {
+      if (statusTimerRef.current) clearTimeout(statusTimerRef.current)
+    },
+    [],
+  )
+
   const references = useMemo(() => {
     const refs = finding?.references ?? finding?.refs ?? finding?.reference_urls ?? null
     if (!refs) return []
@@ -226,7 +235,8 @@ export default function FindingDrawer({
     if (!newStatus || newStatus === finding?.status) return
     setStatusUpdating(true)
     onStatusUpdate?.(finding?.raw_id ?? finding?.id, newStatus)
-    setTimeout(() => setStatusUpdating(false), 600)
+    if (statusTimerRef.current) clearTimeout(statusTimerRef.current)
+    statusTimerRef.current = setTimeout(() => setStatusUpdating(false), 600)
   }
 
   const meta = getSeverityMeta(finding?.severity)
@@ -289,18 +299,18 @@ export default function FindingDrawer({
                     <KevEpssBadge kev={kev} epss={epss} compact />
                     {priorityScore != null && (
                       <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-[var(--border-strong)] text-[var(--text-tertiary)]">
-                        Priority {Number(priorityScore).toFixed(1)}
+                        {t('components.findingDrawer.priority', { score: Number(priorityScore).toFixed(1) })}
                       </span>
                     )}
                     {seenCount > 1 && (
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-amber-500/30 text-amber-300/90">
-                        Seen {seenCount}×
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-amber-500/30 text-[var(--severity-medium)]">
+                        {t('components.findingDrawer.seenTimes', { n: seenCount })}
                       </span>
                     )}
                     {clusterId != null && (
                       <Link
                         to={`/finding-clusters?id=${encodeURIComponent(clusterId)}`}
-                        className="text-[10px] font-mono px-2 py-0.5 rounded border border-cyan-500/20 text-cyan-300/90 hover:text-cyan-200 hover:border-cyan-400/40"
+                        className="text-[10px] font-mono px-2 py-0.5 rounded border border-cyan-500/20 text-[var(--text-accent)] hover:text-[var(--text-accent)] hover:border-cyan-400/40"
                       >
                         {t('components.findingDrawer.cluster', { id: clusterId })}
                       </Link>
@@ -310,7 +320,7 @@ export default function FindingDrawer({
                       verdict={finding.live_verdict}
                     />
                     {finding.attestation_valid && (
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-emerald-500/30 text-emerald-300/90">
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-emerald-500/30 text-[var(--severity-low)]">
                         {t('components.findingDrawer.attestationValid')}
                       </span>
                     )}
@@ -341,7 +351,7 @@ export default function FindingDrawer({
                         href={`https://nvd.nist.gov/vuln/detail/${cve}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-[11px] font-mono text-cyan-300/90 hover:text-cyan-200 transition-colors ltr-only"
+                        className="inline-flex items-center gap-1 text-[11px] font-mono text-[var(--text-accent)] hover:text-[var(--text-accent)] transition-colors ltr-only"
                       >
                         {cve}
                         <ExternalLink className="w-3 h-3" />
@@ -355,7 +365,7 @@ export default function FindingDrawer({
                       href={`https://attack.mitre.org/techniques/${String(finding.mitre_attack).replace('.', '/')}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-[10px] font-mono text-cyan-300/75 hover:underline"
+                      className="inline-flex items-center gap-1 text-[10px] font-mono text-[var(--text-accent)] hover:underline"
                     >
                       MITRE {finding.mitre_attack}
                       <ExternalLink className="w-2.5 h-2.5" />
@@ -411,7 +421,7 @@ export default function FindingDrawer({
                       onClick={action.onClick}
                       className={
                         action.variant === 'primary'
-                          ? 'px-3 py-1.5 rounded-lg text-[11px] font-mono border border-cyan-500/35 bg-cyan-500/10 text-cyan-200 hover:bg-cyan-500/20'
+                          ? 'px-3 py-1.5 rounded-lg text-[11px] font-mono border border-cyan-500/35 bg-cyan-500/10 text-[var(--text-accent)] hover:bg-cyan-500/20'
                           : 'px-3 py-1.5 rounded-lg text-[11px] font-mono border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)]'
                       }
                     >
@@ -442,7 +452,7 @@ export default function FindingDrawer({
                     onKeyDown={(e) => onTabKeyDown(e, index)}
                     className={`text-[10px] font-mono uppercase tracking-wider px-2.5 py-1 rounded-md border transition-colors ${
                       activeTab === tab.id
-                        ? 'border-cyan-500/40 text-cyan-200 bg-cyan-500/10'
+                        ? 'border-cyan-500/40 text-[var(--text-accent)] bg-cyan-500/10'
                         : 'border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                     }`}
                   >
@@ -515,7 +525,7 @@ export default function FindingDrawer({
                     {compliance.map((tag, i) => (
                       <span
                         key={i}
-                        className="text-[10px] font-mono px-2 py-0.5 rounded border border-violet-500/25 text-violet-200/80 bg-violet-500/5"
+                        className="text-[10px] font-mono px-2 py-0.5 rounded border border-violet-500/25 text-[var(--text-accent-violet)] bg-violet-500/5"
                       >
                         {typeof tag === 'string' ? tag : JSON.stringify(tag)}
                       </span>
@@ -546,7 +556,7 @@ export default function FindingDrawer({
                               href={u}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-cyan-300/80 hover:text-cyan-200 underline break-all inline-flex items-center gap-1"
+                              className="text-[var(--text-accent)] hover:text-[var(--text-accent)] underline break-all inline-flex items-center gap-1"
                             >
                               {u}
                               <ExternalLink className="w-3 h-3 shrink-0" />
@@ -568,7 +578,7 @@ export default function FindingDrawer({
                       <div className="flex flex-wrap items-center gap-2">
                         <ReachabilityBadge tier={scReach} t={t} />
                         {scGet('is_direct_dependency') === true && (
-                          <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-amber-500/30 text-amber-300/90">
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-amber-500/30 text-[var(--severity-medium)]">
                             {t('components.findingDrawer.supplyChain.directDependency')}
                           </span>
                         )}
@@ -629,7 +639,7 @@ export default function FindingDrawer({
                                 href={href}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-[10px] font-mono px-2 py-0.5 rounded border border-cyan-500/25 text-cyan-200/85 hover:bg-cyan-500/10 ltr-only"
+                                className="text-[10px] font-mono px-2 py-0.5 rounded border border-cyan-500/25 text-[var(--text-accent)] hover:bg-cyan-500/10 ltr-only"
                               >
                                 {String(id)}
                               </a>
@@ -694,17 +704,17 @@ export default function FindingDrawer({
               )}
 
               {activeTab === 'mitre' && (
-                <Section title="MITRE ATT&CK">
-                  <MetaRow label="Technique" value={finding.mitre_attack ?? finding.raw?.mitre_attack} copyable />
-                  <MetaRow label="CWE" value={finding.cwe_id ?? finding.cwe} copyable />
+                <Section title={t('components.findingDrawer.mitreAttack')}>
+                  <MetaRow label={t('components.findingDrawer.technique')} value={finding.mitre_attack ?? finding.raw?.mitre_attack} copyable />
+                  <MetaRow label={t('components.findingDrawer.cwe')} value={finding.cwe_id ?? finding.cwe} copyable />
                   {finding.mitre_attack && (
                     <a
                       href={`https://attack.mitre.org/techniques/${String(finding.mitre_attack).replace('.', '/')}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-[11px] text-cyan-300/80 hover:underline inline-flex items-center gap-1 mt-2"
+                      className="text-[11px] text-[var(--text-accent)] hover:underline inline-flex items-center gap-1 mt-2"
                     >
-                      Open MITRE technique <ExternalLink className="w-3 h-3" />
+                      {t('components.findingDrawer.openMitreTechnique')} <ExternalLink className="w-3 h-3" />
                     </a>
                   )}
                 </Section>
@@ -719,11 +729,11 @@ export default function FindingDrawer({
               )}
 
               {activeTab === 'playbook' && (
-                <Section title="SOAR / Playbook">
-                  <MetaRow label="Engine" value={finding.source ?? finding.engine} />
-                  <MetaRow label="Playbook hint" value={finding.raw?.playbook_id ?? finding.playbook_id} />
+                <Section title={t('components.findingDrawer.soarPlaybook')}>
+                  <MetaRow label={t('components.findingDrawer.engine')} value={finding.source ?? finding.engine} />
+                  <MetaRow label={t('components.findingDrawer.playbookHint')} value={finding.raw?.playbook_id ?? finding.playbook_id} />
                   <p className="text-[11px] text-[var(--text-muted)] mt-2">
-                    Fire from Playbooks hub or POST /api/playbooks/fire with this finding id.
+                    {t('components.findingDrawer.playbookFireHint')}
                   </p>
                 </Section>
               )}
@@ -731,13 +741,13 @@ export default function FindingDrawer({
               {activeTab === 'compliance' && (
                 <Section title={t('components.findingDrawer.complianceImpact')}>
                   {compliance.length === 0 ? (
-                    <p className="text-[var(--text-muted)] text-[12px]">No compliance tags on this finding.</p>
+                    <p className="text-[var(--text-muted)] text-[12px]">{t('components.findingDrawer.noComplianceTags')}</p>
                   ) : (
                     <div className="flex flex-wrap gap-1.5">
                       {compliance.map((tag, i) => (
                         <span
                           key={i}
-                          className="text-[10px] font-mono px-2 py-0.5 rounded border border-violet-500/25 text-violet-200/80 bg-violet-500/5"
+                          className="text-[10px] font-mono px-2 py-0.5 rounded border border-violet-500/25 text-[var(--text-accent-violet)] bg-violet-500/5"
                         >
                           {typeof tag === 'string' ? tag : JSON.stringify(tag)}
                         </span>
@@ -748,12 +758,12 @@ export default function FindingDrawer({
               )}
 
               {activeTab === 'financial' && (
-                <Section title="Financial impact">
-                  <MetaRow label="Priority score" value={priorityScore} />
-                  <MetaRow label="CVSS" value={finding.cvss_score ?? finding.score} />
-                  <MetaRow label="EPSS" value={epss} />
+                <Section title={t('components.findingDrawer.financialImpact')}>
+                  <MetaRow label={t('components.findingDrawer.priorityScore')} value={priorityScore} />
+                  <MetaRow label={t('components.findingDrawer.cvss')} value={finding.cvss_score ?? finding.score} />
+                  <MetaRow label={t('components.findingDrawer.epss')} value={epss} />
                   <MetaRow
-                    label="Blast radius"
+                    label={t('components.findingDrawer.blastRadius')}
                     value={finding.raw?.financial_blast_radius ?? finding.financial_blast_radius}
                   />
                 </Section>

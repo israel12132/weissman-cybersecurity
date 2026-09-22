@@ -23,6 +23,16 @@ import { exportRowsCsv, exportRowsPdf, rowMatchesQuery } from '../lib/pageExport
 const NS = 'pages.eliteHardening'
 const columnHelper = createColumnHelper()
 
+// Canonical section key for a control. The section pills, per-section counts, and
+// the active-section filter must all derive the key the same way, otherwise a
+// pill built from the "§<section>" fallback (control with no section_title) filters
+// to zero rows and shows a 0 count.
+function sectionKey(c) {
+  if (c?.section_title) return c.section_title
+  if (c?.section != null && c.section !== '') return `§${c.section}`
+  return ''
+}
+
 export const ELITE_CSV_HEADER = ['id', 'section', 'title', 'enforced', 'detail']
 
 export function eliteControlRows(controls) {
@@ -61,19 +71,19 @@ export default function EliteHardeningCommandCenter() {
     load()
   }, [load])
 
-  const controls = Array.isArray(data?.controls) ? data.controls : []
+  const controls = useMemo(() => (Array.isArray(data?.controls) ? data.controls : []), [data])
   const sections = useMemo(() => {
     const seen = []
     for (const c of controls) {
-      const title = c.section_title || `§${c.section}`
-      if (!seen.includes(title)) seen.push(title)
+      const title = sectionKey(c)
+      if (title && !seen.includes(title)) seen.push(title)
     }
     return seen
   }, [controls])
 
   const filtered = useMemo(() => {
     return controls.filter((c) => {
-      if (sectionFilter !== 'all' && (c.section_title || '') !== sectionFilter) return false
+      if (sectionFilter !== 'all' && sectionKey(c) !== sectionFilter) return false
       return rowMatchesQuery(searchQuery, [c.id, c.section_title, c.title, c.detail, c.enforced ? 'live' : 'gap'])
     })
   }, [controls, searchQuery, sectionFilter])
@@ -82,17 +92,27 @@ export default function EliteHardeningCommandCenter() {
   const total = Number(data?.controls_total) || controls.length
   const gaps = Math.max(0, total - enforced)
 
+  const bySection = useMemo(() => {
+    const m = {}
+    for (const c of controls) {
+      const s = sectionKey(c)
+      if (s) m[s] = (m[s] || 0) + 1
+    }
+    return m
+  }, [controls])
+
   const pills = useMemo(
     () => [
-      { id: 'all', label: t(`${NS}.all_sections`), active: sectionFilter === 'all', onClick: () => setSectionFilter('all') },
+      { id: 'all', label: t(`${NS}.all_sections`), count: controls.length, active: sectionFilter === 'all', onClick: () => setSectionFilter('all') },
       ...sections.map((s) => ({
         id: s,
         label: s,
+        count: bySection[s] || 0,
         active: sectionFilter === s,
         onClick: () => setSectionFilter(s),
       })),
     ],
-    [sectionFilter, sections, t],
+    [sectionFilter, sections, t, controls.length, bySection],
   )
 
   const columns = useMemo(
@@ -231,10 +251,10 @@ export default function EliteHardeningCommandCenter() {
                     <article
                       key={lane.id}
                       data-testid="moat-lane"
-                      className="rounded-lg border border-white/10 bg-black/30 px-3 py-2"
+                      className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2"
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <h3 className="text-xs text-white font-medium leading-snug">{lane.title}</h3>
+                        <h3 className="text-xs text-[var(--text-primary)] font-medium leading-snug">{lane.title}</h3>
                         <span className="font-mono text-cyan-300 text-sm tabular-nums">
                           {lane.live_engine_count}
                         </span>
@@ -261,7 +281,7 @@ export default function EliteHardeningCommandCenter() {
                 </div>
                 <p className="text-xs text-[var(--text-muted)]">{t(`${NS}.palo_notice`)}</p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <article className="rounded-lg border border-white/10 bg-black/30 px-3 py-2">
+                  <article className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2">
                     <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
                       {t(`${NS}.palo_catalog_ids`)}
                     </div>
@@ -269,7 +289,7 @@ export default function EliteHardeningCommandCenter() {
                       {data.moat.palo_alto.catalog?.total_ids ?? data.catalog?.total_ids ?? '—'}
                     </div>
                   </article>
-                  <article className="rounded-lg border border-white/10 bg-black/30 px-3 py-2">
+                  <article className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2">
                     <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
                       {t(`${NS}.palo_catalog_distinct`)}
                     </div>
@@ -277,7 +297,7 @@ export default function EliteHardeningCommandCenter() {
                       {data.moat.palo_alto.catalog?.distinct_canonical ?? '—'}
                     </div>
                   </article>
-                  <article className="rounded-lg border border-white/10 bg-black/30 px-3 py-2">
+                  <article className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2">
                     <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
                       {t(`${NS}.palo_catalog_aliases`)}
                     </div>
@@ -285,11 +305,11 @@ export default function EliteHardeningCommandCenter() {
                       {data.moat.palo_alto.catalog?.alias_ids ?? '—'}
                     </div>
                   </article>
-                  <article className="rounded-lg border border-white/10 bg-black/30 px-3 py-2">
+                  <article className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2">
                     <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
                       {t(`${NS}.palo_find_vs_block`)}
                     </div>
-                    <div className="font-mono text-sm text-white">
+                    <div className="font-mono text-sm text-[var(--text-primary)]">
                       {data.moat.palo_alto.find_vs_block?.find
                         ? t(`${NS}.palo_finds`)
                         : '—'}
@@ -306,10 +326,10 @@ export default function EliteHardeningCommandCenter() {
                       <article
                         key={loop.id}
                         data-testid="palo-loop"
-                        className="rounded-lg border border-white/10 bg-black/30 px-3 py-2"
+                        className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2"
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <h3 className="text-xs text-white font-mono">{loop.id}</h3>
+                          <h3 className="text-xs text-[var(--text-primary)] font-mono">{loop.id}</h3>
                           <span
                             className={`text-[10px] uppercase tracking-wider ${
                               loop.present ? 'text-emerald-300' : 'text-rose-300'
@@ -329,9 +349,9 @@ export default function EliteHardeningCommandCenter() {
                       <article
                         key={sku.sku}
                         data-testid="palo-sku"
-                        className="rounded-lg border border-white/10 bg-black/30 px-3 py-2"
+                        className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2"
                       >
-                        <h3 className="text-xs text-white font-medium">{sku.sku}</h3>
+                        <h3 className="text-xs text-[var(--text-primary)] font-medium">{sku.sku}</h3>
                         <p className="font-mono text-[10px] text-amber-300/90">{sku.maturity}</p>
                         <p className="mt-1 text-[10px] font-mono text-[var(--text-muted)]">
                           {(sku.ids || []).join(', ') || t(`${NS}.palo_no_ids`)}
@@ -355,8 +375,9 @@ export default function EliteHardeningCommandCenter() {
                   type="search"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  aria-label={t(`${NS}.search_placeholder`)}
                   placeholder={t(`${NS}.search_placeholder`)}
-                  className="w-full rounded-lg border border-white/10 bg-black/30 pl-9 pr-3 py-2 text-sm text-white placeholder:text-[var(--text-muted)]"
+                  className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] pl-9 pr-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
                 />
               </label>
               <Button type="button" variant="ghost" size="xs" onClick={() => doExport('pdf')}>

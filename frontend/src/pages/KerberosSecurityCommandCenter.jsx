@@ -731,7 +731,11 @@ export default function KerberosSecurityCommandCenter() {
       )}
     >
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-amber-500/30 text-amber-200'}`}>
+        <div
+          role={toast.sev === 'error' ? 'alert' : 'status'}
+          aria-live={toast.sev === 'error' ? 'assertive' : 'polite'}
+          className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-amber-500/30 text-amber-200'}`}
+        >
           {toast.msg}
         </div>
       )}

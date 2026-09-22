@@ -100,7 +100,7 @@ export default function AppShell({
               >
                 <Search className="w-3.5 h-3.5" aria-hidden="true" />
                 <span>{t('components.globalSearch.triggerLabel')}</span>
-                <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-[10px]">{modKey}K</kbd>
+                <kbd className="px-1.5 py-0.5 rounded bg-[var(--bg-2)] text-[10px]">{modKey}K</kbd>
               </Button>
               <Button variant="unstyled"
                 type="button"

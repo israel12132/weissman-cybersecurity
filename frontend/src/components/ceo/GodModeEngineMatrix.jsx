@@ -33,7 +33,7 @@ function Cell({ engine, scanning, onTenantEngineToggle, engineToggleBusy, t }) {
       className={`relative rounded-lg border px-2 py-2.5 transition-all duration-200 ${
         tenantOn
           ? 'border-emerald-500/40 bg-emerald-950/30 shadow-[inset_0_1px_0_rgba(52,211,153,0.12)]'
-          : 'border-white/10 bg-black/45 hover:border-white/20'
+          : 'border-[var(--border-default)] bg-[var(--table-surface)] hover:border-[var(--border-strong)]'
       } ${scanning ? 'ring-1 ring-cyan-500/25' : ''}`}
     >
       {scanning && (
@@ -81,7 +81,7 @@ function Cell({ engine, scanning, onTenantEngineToggle, engineToggleBusy, t }) {
             <span
               className={`
                 relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors duration-200
-                ${tenantOn ? 'border-emerald-400/50 bg-emerald-600/35' : 'border-white/15 bg-[var(--bg-1)]'}
+                ${tenantOn ? 'border-emerald-400/50 bg-emerald-600/35' : 'border-[var(--border-strong)] bg-[var(--bg-1)]'}
                 ${canToggle ? 'group-hover:border-emerald-300/40' : ''}
               `}
             >
@@ -179,7 +179,7 @@ export default function GodModeEngineMatrix({
           className={`text-[10px] font-mono uppercase px-3 py-1 rounded-lg border ${
             scanningActive === true
               ? 'border-orange-500/50 text-orange-300 bg-orange-950/40'
-              : 'border-white/15 text-[var(--text-muted)] bg-white/5'
+              : 'border-[var(--border-strong)] text-[var(--text-muted)] bg-[var(--bg-2)]'
           }`}
         >
           {scanningActive === true
@@ -233,7 +233,7 @@ export default function GodModeEngineMatrix({
               i18nKey="components.ceo.engineMatrix.clientsWithOt"
               components={{ 1: <code className="text-violet-300/90" /> }}
             />{' '}
-            <span className="text-white tabular-nums">{ot.clients_with_industrial_ot_enabled ?? 0}</span> /{' '}
+            <span className="text-[var(--text-primary)] tabular-nums">{ot.clients_with_industrial_ot_enabled ?? 0}</span> /{' '}
             {ot.clients_total ?? 0}
           </p>
         </div>

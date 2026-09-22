@@ -931,7 +931,7 @@ function Sel({ label, value, onChange, options, hint }) {
   return (
     <label className="block space-y-1">
       <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white focus:outline-none focus:border-cyan-400/40">
+      <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-cyan-400/40">
         {options.map((o) => <option key={o} value={o}>{o}</option>)}
       </select>
       <Hint>{hint}</Hint>
@@ -942,7 +942,7 @@ function Txt({ label, value, onChange, placeholder, hint, type = 'text' }) {
   return (
     <label className="block space-y-1">
       <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-[var(--text-primary)] font-mono placeholder-white/20 focus:outline-none focus:border-cyan-400/40" />
+      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-[var(--text-primary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-400/40" />
       <Hint>{hint}</Hint>
     </label>
   )
@@ -951,7 +951,7 @@ function Area({ label, value, onChange, placeholder, rows = 3, hint, mono = true
   return (
     <label className="block space-y-1">
       <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
-      <textarea rows={rows} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={`w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-xs text-white ${mono ? 'font-mono' : ''} placeholder-white/20 focus:outline-none focus:border-cyan-400/40 resize-y`} />
+      <textarea rows={rows} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={`w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-xs text-[var(--text-primary)] ${mono ? 'font-mono' : ''} placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-400/40 resize-y`} />
       <Hint>{hint}</Hint>
     </label>
   )
@@ -998,7 +998,7 @@ function ScoreGauge({ score, grade, blast }) {
         <circle cx="50" cy="50" r="42" fill="none" stroke={color} strokeWidth="8" strokeDasharray={hasScore ? `${pct * 2.64} 264` : '0 264'} strokeLinecap="round" style={{ filter: hasScore ? `drop-shadow(0 0 8px ${color}80)` : undefined }} />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-3xl font-bold text-white">{grade ?? '—'}</span>
+        <span className="text-3xl font-bold text-[var(--text-primary)]">{grade ?? '—'}</span>
         <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-widest">{hasScore ? `risk ${pct}` : 'risk —'}</span>
         {hasScore && blast > 1 && <span className="text-[8px] font-mono text-rose-300/80 mt-0.5">×{blast.toFixed(2)} blast</span>}
       </div>
@@ -1009,7 +1009,7 @@ function MetricTile({ label, value, accent = '#22d3ee' }) {
   return (
     <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4" style={{ boxShadow: `inset 0 1px 0 ${accent}20` }}>
       <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-1">{label}</p>
-      <p className="text-2xl font-bold text-white">{value ?? '—'}</p>
+      <p className="text-2xl font-bold text-[var(--text-primary)]">{value ?? '—'}</p>
     </div>
   )
 }
@@ -1021,7 +1021,7 @@ function AttackPathCard({ chain }) {
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="text-[9px] font-mono uppercase tracking-widest" style={{ color: SEV_COLOR[sev] }}>{chain.id}</p>
-          <p className="text-sm font-semibold text-white mt-0.5 leading-snug">{chain.title}</p>
+          <p className="text-sm font-semibold text-[var(--text-primary)] mt-0.5 leading-snug">{chain.title}</p>
         </div>
         <span className="text-[10px] font-mono px-1.5 py-0.5 rounded uppercase shrink-0" style={{ color: SEV_COLOR[sev], background: `${SEV_COLOR[sev]}1a` }}>{sev}</span>
       </div>
@@ -1069,7 +1069,7 @@ function ComplianceCard({ pack }) {
   return (
     <div className="rounded-lg border bg-[var(--table-surface)] p-3" style={{ borderColor: ok ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)' }}>
       <div className="flex items-center justify-between">
-        <span className="text-xs font-bold text-white">{pack.pack}</span>
+        <span className="text-xs font-bold text-[var(--text-primary)]">{pack.pack}</span>
         <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${ok ? 'text-emerald-300 bg-emerald-500/10' : 'text-rose-300 bg-rose-500/10'}`}>{ok ? 'PASS' : 'FAIL'}</span>
       </div>
       <p className="text-[10px] font-mono text-[var(--text-muted)] mt-1">{failed} failed · {pack.controls_covered ?? 0} covered</p>
@@ -1103,7 +1103,7 @@ function PolicyCatalog({ catalog, query, onQuery }) {
   const triggered = filtered.filter((p) => p.triggered)
   return (
     <div className="space-y-2">
-      <input value={query} onChange={(e) => onQuery(e.target.value)} placeholder="Search policy id, title, framework…" className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-xs text-white font-mono placeholder-white/25" />
+      <input value={query} onChange={(e) => onQuery(e.target.value)} placeholder="Search policy id, title, framework…" className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-xs text-[var(--text-primary)] font-mono placeholder-[var(--text-muted)]" />
       <p className="text-[9px] font-mono text-[var(--text-muted)]">{triggered.length} triggered · {filtered.length} shown · {list.length} total</p>
       <div className="max-h-52 overflow-auto space-y-1 pr-1">
         {filtered.slice(0, 120).map((p) => (
@@ -1300,7 +1300,7 @@ function CisScorecard({ scorecard }) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         {packs.map((p) => (
           <div key={p.pack} className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] p-2">
-            <p className="text-[10px] font-bold text-white">{p.pack}</p>
+            <p className="text-[10px] font-bold text-[var(--text-primary)]">{p.pack}</p>
             <p className="text-[9px] font-mono text-[var(--text-muted)]">{p.pass_pct}% pass · {p.controls_failed} failed</p>
           </div>
         ))}
@@ -1393,7 +1393,7 @@ function LiveBlastPanel({ liveBlast, realLiveRisk, staticRisk }) {
         {liveBlast.k8s_auth_source && <> · K8s: {liveBlast.k8s_auth_source}</>}
       </p>
       <div className="grid grid-cols-2 md:grid-cols-6 gap-2 text-[10px] font-mono">
-        <div className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] p-2"><span className="text-[var(--text-muted)]">{t('iacSecurity.live_blast_nodes', 'Graph nodes')}</span><p className="text-white font-bold">{graph.node_count ?? 0}</p></div>
+        <div className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] p-2"><span className="text-[var(--text-muted)]">{t('iacSecurity.live_blast_nodes', 'Graph nodes')}</span><p className="text-[var(--text-primary)] font-bold">{graph.node_count ?? 0}</p></div>
         <div className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] p-2"><span className="text-[var(--text-muted)]">{t('iacSecurity.live_blast_paths', 'Proven paths')}</span><p className="text-rose-300 font-bold">{liveBlast.proven_path_count ?? 0}</p></div>
         <div className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] p-2"><span className="text-[var(--text-muted)]">{t('iacSecurity.live_blast_score', 'Blast score')}</span><p className="text-amber-300 font-bold">{blast.blast_score ?? 0}</p></div>
         <div className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] p-2"><span className="text-[var(--text-muted)]">{t('iacSecurity.live_blast_live', 'Live confirmed')}</span><p className="text-emerald-300 font-bold">{liveBlast.live_confirmed_resources ?? status.confirmed ?? 0}</p></div>
@@ -1952,7 +1952,7 @@ export default function IacSecurityCenter() {
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-emerald-400/30 text-emerald-300 bg-emerald-500/10 uppercase tracking-widest">{paramCount} {t('iacSecurity.live_params', 'live parameters')}</span>
                 {liveSummary && <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-[var(--border-strong)] text-[var(--text-tertiary)]">{liveSummary.policies_available} policies</span>}
               </div>
-              <h1 className="text-2xl font-bold text-white tracking-tight">{engine?.label ? `${engine.label} — Security Center` : 'IaC Security Center'}</h1>
+              <h1 className="text-2xl font-bold text-[var(--text-primary)] tracking-tight">{engine?.label ? `${engine.label} — Security Center` : 'IaC Security Center'}</h1>
               <p className="text-sm text-[var(--text-tertiary)] mt-1 max-w-2xl leading-relaxed">{t('iacSecurity.hero_desc', 'Deterministic, agentless static analysis of your infrastructure code with deep policy coverage, secret detection, compliance posture and code-level remediation — inspired by Wiz, Checkov & tfsec.')}</p>
             </div>
             <Link to={`/engines/${ENGINE_ID}`} className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-colors">Engine Detail →</Link>
@@ -1964,14 +1964,14 @@ export default function IacSecurityCenter() {
           <div className="xl:sticky xl:top-4 space-y-3 xl:max-h-[calc(100dvh-2rem)] xl:overflow-y-auto pr-1">
             <div className="rounded-2xl border border-cyan-500/25 bg-gradient-to-b from-cyan-950/30 to-black/50 p-3">
               <div className="flex items-center justify-between mb-2 px-1">
-                <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-2"><span>🎛️</span> {t('iacSecurity.control', 'Scan Control')}</h2>
+                <h2 className="text-sm font-bold text-[var(--text-primary)] tracking-tight flex items-center gap-2"><span>🎛️</span> {t('iacSecurity.control', 'Scan Control')}</h2>
                 <Button variant="unstyled" type="button" onClick={resetParams} className="text-[9px] font-mono uppercase tracking-wide px-2 py-1 rounded-md border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]">{t('common.reset', 'Reset')}</Button>
               </div>
 
               <Section title={t('iacSecurity.sec_target', 'Target Binding')} icon="🎯" accent="#22d3ee" count={2}>
                 <label className="block space-y-1">
                   <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{t('common.client', 'Client')}</span>
-                  <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white focus:outline-none focus:border-cyan-400/40">
+                  <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-cyan-400/40">
                     <option value="">—</option>
                     {clients.map((c) => <option key={c.id} value={c.id}>{c.name || c.id}</option>)}
                   </select>
@@ -1987,7 +1987,7 @@ export default function IacSecurityCenter() {
                       <Button variant="unstyled" key={m.id} type="button" onClick={() => toggleIn('scan_modes', m.id)} className={`flex items-center gap-2 text-left w-full rounded-lg border px-2.5 py-1.5 transition-all ${on ? 'bg-[var(--row-hover-bg)] border-cyan-400/50' : 'opacity-50 border-[var(--border-default)] hover:opacity-90'}`}>
                         <span>{m.icon}</span>
                         <span className="min-w-0 flex-1">
-                          <span className="text-xs font-semibold text-white block">{m.label}</span>
+                          <span className="text-xs font-semibold text-[var(--text-primary)] block">{m.label}</span>
                           <span className="text-[9px] text-[var(--text-muted)] block leading-tight">{m.desc}</span>
                         </span>
                         <span className={`text-[9px] font-mono ${on ? 'text-emerald-400' : 'text-[var(--text-disabled)]'}`}>{on ? 'ON' : 'OFF'}</span>
@@ -2249,7 +2249,7 @@ export default function IacSecurityCenter() {
                     onChange={(e) => setFindingSearch(e.target.value)}
                     aria-label={t('iacSecurity.findings_search', 'Search policy, file, resource…')}
                     placeholder={t('iacSecurity.findings_search', 'Search policy, file, resource…')}
-                    className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] text-[11px] font-mono text-[var(--text-secondary)] placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
+                    className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] text-[11px] font-mono text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
                   />
                 </div>
                 <div className="flex gap-1 items-center flex-wrap">

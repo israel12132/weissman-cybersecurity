@@ -173,6 +173,7 @@ function OtEngineCard({ engine, clientId, clients, onScanComplete, onFindingsUpd
           type="button"
           onClick={handleRun}
           disabled={status === 'running' || !clientId}
+          aria-label={t('pages.otIcsSecurity.scan')}
           className="shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-mono uppercase border border-cyan-500/30 text-cyan-400/70 hover:bg-cyan-500/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
         >
           {status === 'running' ? '⟳' : t('pages.otIcsSecurity.scan')}
@@ -497,7 +498,10 @@ export default function OtIcsSecurity() {
         </div>
 
         {toast && (
-          <div className={`fixed top-16 end-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${
+          <div
+            role={toast.sev === 'error' ? 'alert' : 'status'}
+            aria-live={toast.sev === 'error' ? 'assertive' : 'polite'}
+            className={`fixed top-16 end-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${
             toast.sev === 'error'
               ? 'bg-rose-950/90 border-rose-500/40 text-rose-200'
               : 'bg-[var(--bg-1)] border-cyan-500/30 text-cyan-300'
@@ -513,7 +517,7 @@ export default function OtIcsSecurity() {
           >
             <div className="flex items-center gap-2">
               <ShieldAlert className="w-4 h-4 text-rose-400" />
-              <h3 className="text-sm font-semibold text-white">{t('pages.otIcsSecurity.safety_heading')}</h3>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('pages.otIcsSecurity.safety_heading')}</h3>
               <span className="text-[9px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded border border-rose-500/40 text-rose-300 bg-rose-500/10">
                 {t('pages.otIcsSecurity.safety_unavailable')}
               </span>
@@ -537,7 +541,7 @@ export default function OtIcsSecurity() {
             <div className="flex items-start justify-between gap-3 flex-wrap">
               <div className="flex items-center gap-2">
                 <Lock className={`w-4 h-4 ${safety.live ? 'text-emerald-400' : 'text-amber-300'}`} />
-                <h3 className="text-sm font-semibold text-white">{t('pages.otIcsSecurity.safety_heading')}</h3>
+                <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('pages.otIcsSecurity.safety_heading')}</h3>
                 <span className={`text-[9px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded border ${
                   safety.live
                     ? 'border-emerald-500/40 text-emerald-300 bg-emerald-500/10'
@@ -785,7 +789,7 @@ export default function OtIcsSecurity() {
                       style={{ borderColor: `${meta.color}33`, background: `${meta.color}0d` }}
                     >
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium text-white">{p.name}</span>
+                        <span className="text-sm font-medium text-[var(--text-primary)]">{p.name}</span>
                         <Icon className="w-4 h-4" style={{ color: meta.color }} />
                       </div>
                       <div className="flex items-center justify-between">
@@ -920,7 +924,7 @@ export default function OtIcsSecurity() {
           <div className="flex items-start gap-4">
             <AlertTriangle className="w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5" />
             <div>
-              <h3 className="text-sm font-semibold text-white mb-1">{t('pages.otIcsSecurity.notice_title')}</h3>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1">{t('pages.otIcsSecurity.notice_title')}</h3>
               <p className="text-xs text-[var(--text-tertiary)] leading-relaxed">{t('pages.otIcsSecurity.notice_body')}</p>
             </div>
           </div>

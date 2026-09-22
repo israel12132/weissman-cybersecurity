@@ -28,7 +28,7 @@ export default function RoeApprovals() {
     setError('')
     try {
       const data = await apiFetch('/api/roe/override-requests?status=pending')
-      if (!Array.isArray(data.requests)) {
+      if (!Array.isArray(data?.requests)) {
         throw new Error(t('pages.roeApprovals.network_error'))
       }
       setRequests(data.requests)

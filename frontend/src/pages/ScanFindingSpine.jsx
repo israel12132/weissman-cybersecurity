@@ -15,19 +15,23 @@ import PageShell from './PageShell'
 import EmptyState from '../components/ui/EmptyState'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
+import FilterPills from '../components/ui/FilterPills'
 import DataTable from '../components/ui/DataTable'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { apiFetch } from '../utils/apiFetch'
 import { downloadCsv } from '../lib/exportFindingsCsv'
+import { normalizeSeverity, SEV_COLOR } from '../lib/severity'
 import { filterEngines, filterGaps, spineCsvRows, SPINE_CSV_HEADER } from '../lib/scanFindingSpine'
 
 const NS = 'pages.scanFindingSpine'
 const columnHelper = createColumnHelper()
+const SEV_KEYS = ['critical', 'high', 'medium', 'low', 'info']
 
 function gapColor(severity) {
-  if (severity === 'critical') return '#f43f5e'
-  if (severity === 'high') return '#f97316'
+  const s = normalizeSeverity(severity)
+  if (s === 'critical') return '#f43f5e'
+  if (s === 'high') return '#f97316'
   return '#94a3b8'
 }
 
@@ -37,6 +41,7 @@ export default function ScanFindingSpine() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
+  const [gapSev, setGapSev] = useState('all')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -58,8 +63,33 @@ export default function ScanFindingSpine() {
 
   const kpis = data?.kpis || {}
   const engines = useMemo(() => filterEngines(data?.engines || [], search), [data, search])
-  const gaps = useMemo(() => filterGaps(data?.gaps || [], search), [data, search])
+  const allGaps = useMemo(() => filterGaps(data?.gaps || [], search), [data, search])
   const scans = data?.scans || []
+
+  const gapSevCounts = useMemo(() => {
+    const c = { all: allGaps.length, critical: 0, high: 0, medium: 0, low: 0, info: 0 }
+    for (const g of allGaps) c[normalizeSeverity(g.severity)] += 1
+    return c
+  }, [allGaps])
+
+  const gaps = useMemo(
+    () => (gapSev === 'all' ? allGaps : allGaps.filter((g) => normalizeSeverity(g.severity) === gapSev)),
+    [allGaps, gapSev],
+  )
+
+  const gapPills = useMemo(
+    () =>
+      [
+        { id: 'all', label: t('common.all'), count: gapSevCounts.all, color: '#22d3ee' },
+        ...SEV_KEYS.filter((s) => gapSevCounts[s] > 0).map((s) => ({
+          id: s,
+          label: t(`severity.${s}`),
+          count: gapSevCounts[s],
+          color: SEV_COLOR[s] || SEV_COLOR.info,
+        })),
+      ].map((p) => ({ ...p, active: gapSev === p.id, onClick: () => setGapSev(p.id) })),
+    [gapSevCounts, gapSev, t],
+  )
 
   const columns = useMemo(
     () => [
@@ -67,7 +97,7 @@ export default function ScanFindingSpine() {
         id: 'source',
         header: t(`${NS}.col_engine`),
         cell: (ctx) => (
-          <span className="font-mono text-[11px] text-cyan-200/90">{ctx.getValue() || '—'}</span>
+          <span className="font-mono text-[11px] text-[var(--text-accent)]">{ctx.getValue() || '—'}</span>
         ),
       }),
       columnHelper.accessor((r) => r.reality_kind || '', {
@@ -93,7 +123,7 @@ export default function ScanFindingSpine() {
         id: 'unverified',
         header: t(`${NS}.col_unverified`),
         cell: (ctx) => (
-          <span className={ctx.getValue() > 0 ? 'text-rose-300 font-mono' : 'text-[var(--text-muted)] font-mono'}>
+          <span className={ctx.getValue() > 0 ? 'text-[var(--severity-critical)] font-mono' : 'text-[var(--text-muted)] font-mono'}>
             {ctx.getValue()}
           </span>
         ),
@@ -116,9 +146,9 @@ export default function ScanFindingSpine() {
       actions={
         <ShellScanActions
           onRefresh={load}
-          onExport={() => downloadCsv(spineCsvRows(data || {}), SPINE_CSV_HEADER, 'weissman-scan-finding-spine')}
+          onExport={error ? undefined : () => downloadCsv(spineCsvRows(data || {}), SPINE_CSV_HEADER, 'weissman-scan-finding-spine')}
           refreshLoading={loading}
-          exportDisabled={!data}
+          exportDisabled={!!error || !data}
         />
       }
     >
@@ -128,7 +158,7 @@ export default function ScanFindingSpine() {
         {loading && <SkeletonWidgetGrid count={4} />}
 
         {error && (
-          <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-4 py-3 text-sm text-rose-300 font-mono">
+          <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-4 py-3 text-sm text-[var(--severity-critical)] font-mono">
             {error}
           </div>
         )}
@@ -143,13 +173,13 @@ export default function ScanFindingSpine() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3 text-[11px] font-mono">
-              <Link to="/findings" className="text-cyan-400/80 hover:text-cyan-300">{t(`${NS}.link_findings`)}</Link>
+              <Link to="/findings" className="text-[var(--text-accent)] hover:text-[var(--text-accent)]">{t(`${NS}.link_findings`)}</Link>
               <span className="text-[var(--text-disabled)]">·</span>
-              <Link to="/jobs" className="text-cyan-400/80 hover:text-cyan-300">{t(`${NS}.link_jobs`)}</Link>
+              <Link to="/jobs" className="text-[var(--text-accent)] hover:text-[var(--text-accent)]">{t(`${NS}.link_jobs`)}</Link>
               <span className="text-[var(--text-disabled)]">·</span>
-              <Link to="/attack-paths" className="text-cyan-400/80 hover:text-cyan-300">{t(`${NS}.link_attack_paths`)}</Link>
+              <Link to="/attack-paths" className="text-[var(--text-accent)] hover:text-[var(--text-accent)]">{t(`${NS}.link_attack_paths`)}</Link>
               <span className="text-[var(--text-disabled)]">·</span>
-              <Link to="/kill-chain" className="text-cyan-400/80 hover:text-cyan-300">{t(`${NS}.link_kill_chain`)}</Link>
+              <Link to="/kill-chain" className="text-[var(--text-accent)] hover:text-[var(--text-accent)]">{t(`${NS}.link_kill_chain`)}</Link>
             </div>
 
             <div className="relative max-w-md">
@@ -166,8 +196,11 @@ export default function ScanFindingSpine() {
 
             <section className="space-y-3">
               <h2 className="text-sm font-semibold tracking-wide text-[var(--text-secondary)]">{t(`${NS}.gaps_heading`)}</h2>
-              {gaps.length === 0 ? (
+              {allGaps.length > 0 && <FilterPills pills={gapPills} />}
+              {allGaps.length === 0 ? (
                 <EmptyState icon="shield" title={t(`${NS}.no_gaps_title`)} body={t(`${NS}.no_gaps_body`)} />
+              ) : gaps.length === 0 ? (
+                <p className="text-xs font-mono text-[var(--text-muted)] px-1 py-2">{t(`${NS}.no_gaps_for_filter`)}</p>
               ) : (
                 <ul className="space-y-2">
                   {gaps.map((g) => (
@@ -206,8 +239,8 @@ export default function ScanFindingSpine() {
                 <ul className="space-y-2 font-mono text-[11px]">
                   {scans.slice(0, 12).map((j) => (
                     <li key={j.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-3)] px-3 py-2">
-                      <span className="text-cyan-200/90">{j.kind}</span>
-                      <span className={j.stuck ? 'text-rose-300' : 'text-[var(--text-muted)]'}>{j.status}{j.stuck ? ` · ${t(`${NS}.stuck`)}` : ''}</span>
+                      <span className="text-[var(--text-accent)]">{j.kind}</span>
+                      <span className={j.stuck ? 'text-[var(--severity-critical)]' : 'text-[var(--text-muted)]'}>{j.status}{j.stuck ? ` · ${t(`${NS}.stuck`)}` : ''}</span>
                       <span className="text-[var(--text-disabled)] truncate max-w-[240px]">{j.target || j.id}</span>
                     </li>
                   ))}

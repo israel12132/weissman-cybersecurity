@@ -55,7 +55,7 @@ export default function ComplianceDashboardTab() {
         setPostureError(e?.message || t(`${NS}.unavailable`))
       })
       .finally(() => setPostureLoading(false))
-  }, [selectedClientId])
+  }, [selectedClientId, t])
 
   useEffect(() => {
     loadPosture()
@@ -102,7 +102,7 @@ export default function ComplianceDashboardTab() {
 
   if (!selectedClientId) {
     return (
-      <div className="p-8 text-center text-white/50 text-sm">{t(`${NS}.selectClient`)}</div>
+      <div className="p-8 text-center text-[var(--text-muted)] text-sm">{t(`${NS}.selectClient`)}</div>
     )
   }
 
@@ -111,8 +111,8 @@ export default function ComplianceDashboardTab() {
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-8">
       <div>
-        <h2 className="text-lg font-semibold text-white tracking-tight mb-1">{t(`${NS}.title`)}</h2>
-        <p className="text-xs text-white/50 uppercase tracking-widest">
+        <h2 className="text-lg font-semibold text-[var(--text-primary)] tracking-tight mb-1">{t(`${NS}.title`)}</h2>
+        <p className="text-xs text-[var(--text-muted)] uppercase tracking-widest">
           {t(`${NS}.subtitle`)}
         </p>
       </div>
@@ -127,15 +127,15 @@ export default function ComplianceDashboardTab() {
         </div>
       )}
 
-      <section className="rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md p-6 space-y-4">
+      <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] backdrop-blur-md p-6 space-y-4">
         <h3 className="text-sm font-semibold text-[#22d3ee] uppercase tracking-wider">{t(`${NS}.awsIamTitle`)}</h3>
-        <p className="text-xs text-white/45 leading-relaxed">
+        <p className="text-xs text-[var(--text-muted)] leading-relaxed">
           {t(`${NS}.awsIamBodyBefore`)}
           <code className="text-cyan-300/90">sts:AssumeRole</code>
           {t(`${NS}.awsIamBodyAfter`)}
         </p>
         <label className="block">
-          <span className="text-xs uppercase tracking-widest text-white/50 block mb-1.5">{t(`${NS}.roleArnLabel`)}</span>
+          <span className="text-xs uppercase tracking-widest text-[var(--text-muted)] block mb-1.5">{t(`${NS}.roleArnLabel`)}</span>
           <input
             type="text"
             autoComplete="off"
@@ -143,27 +143,27 @@ export default function ComplianceDashboardTab() {
             placeholder={t(`${NS}.roleArnPlaceholder`)}
             value={arn}
             onChange={(e) => setArn(e.target.value)}
-            className="w-full rounded-lg bg-black/50 border border-white/15 px-3 py-2 text-sm text-white font-mono placeholder:text-white/25 focus:border-[#22d3ee]/50 focus:outline-none"
+            className="w-full rounded-lg bg-[var(--table-surface)] border border-[var(--border-strong)] px-3 py-2 text-sm text-[var(--text-primary)] font-mono placeholder:text-[var(--text-disabled)] focus:border-[#22d3ee]/50 focus:outline-none"
           />
         </label>
         <label className="block">
-          <span className="text-xs uppercase tracking-widest text-white/50 block mb-1.5">{t(`${NS}.externalIdLabel`)}</span>
+          <span className="text-xs uppercase tracking-widest text-[var(--text-muted)] block mb-1.5">{t(`${NS}.externalIdLabel`)}</span>
           <input
             type="password"
             autoComplete="new-password"
             value={externalId}
             onChange={(e) => setExternalId(e.target.value)}
-            className="w-full rounded-lg bg-black/50 border border-white/15 px-3 py-2 text-sm text-white font-mono placeholder:text-white/25 focus:border-[#22d3ee]/50 focus:outline-none"
+            className="w-full rounded-lg bg-[var(--table-surface)] border border-[var(--border-strong)] px-3 py-2 text-sm text-[var(--text-primary)] font-mono placeholder:text-[var(--text-disabled)] focus:border-[#22d3ee]/50 focus:outline-none"
             placeholder="••••••••"
           />
         </label>
         <label className="block">
-          <span className="text-xs uppercase tracking-widest text-white/50 block mb-1.5">{t(`${NS}.gcpProjectLabel`)}</span>
+          <span className="text-xs uppercase tracking-widest text-[var(--text-muted)] block mb-1.5">{t(`${NS}.gcpProjectLabel`)}</span>
           <input
             type="text"
             value={gcpProject}
             onChange={(e) => setGcpProject(e.target.value)}
-            className="w-full rounded-lg bg-black/50 border border-white/15 px-3 py-2 text-sm text-white font-mono focus:border-[#22d3ee]/50 focus:outline-none"
+            className="w-full rounded-lg bg-[var(--table-surface)] border border-[var(--border-strong)] px-3 py-2 text-sm text-[var(--text-primary)] font-mono focus:border-[#22d3ee]/50 focus:outline-none"
             placeholder={t(`${NS}.gcpPlaceholder`)}
           />
         </label>
@@ -180,29 +180,29 @@ export default function ComplianceDashboardTab() {
             type="button"
             disabled={scanning || !arn.trim()}
             onClick={runCloudScan}
-            className="px-4 py-2 rounded-xl text-sm font-semibold border border-white/20 bg-white/5 text-white hover:bg-white/10 disabled:opacity-40"
+            className="px-4 py-2 rounded-xl text-sm font-semibold border border-[var(--border-strong)] bg-[var(--bg-2)] text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)] disabled:opacity-40"
           >
             {scanning ? t(`${NS}.scanning`) : t(`${NS}.runAgentlessScan`)}
           </Button>
         </div>
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md p-6">
+      <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] backdrop-blur-md p-6">
         <h3 className="text-sm font-semibold text-[#22d3ee] uppercase tracking-wider mb-4">{t(`${NS}.postureTitle`)}</h3>
-        {postureLoading && <p className="text-sm text-white/40">{t(`${NS}.loadingPosture`)}</p>}
+        {postureLoading && <p className="text-sm text-[var(--text-muted)]">{t(`${NS}.loadingPosture`)}</p>}
         {!postureLoading && postureError && (
           <p className="text-sm text-red-300" data-testid="compliance-posture-unavailable" role="alert">
             {t(`${NS}.unavailable`)}
           </p>
         )}
         {!postureLoading && !postureError && frameworks.length === 0 && (
-          <p className="text-sm text-white/45">{t(`${NS}.noFrameworkData`)}</p>
+          <p className="text-sm text-[var(--text-muted)]">{t(`${NS}.noFrameworkData`)}</p>
         )}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {frameworks.map((f) => (
             <div
               key={f.framework}
-              className="rounded-xl border border-white/10 bg-[var(--bg-0)]/80 p-4 flex flex-col gap-1"
+              className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-0)]/80 p-4 flex flex-col gap-1"
             >
               <span className="text-xs uppercase tracking-widest text-[var(--text-muted)]">{labelForFramework(f.framework)}</span>
               <span className="text-3xl font-bold text-[var(--text-primary)] tabular-nums">{f.compliance_percent}%</span>

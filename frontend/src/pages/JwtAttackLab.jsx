@@ -129,7 +129,7 @@ function Toggle({ label, hint, checked, onChange }) {
         <span className="block text-[12px] font-mono text-[var(--text-primary)] truncate">{label}</span>
         {hint && <span className="block text-[10px] font-mono text-[var(--text-muted)] truncate">{hint}</span>}
       </span>
-      <span className={`shrink-0 w-9 h-5 rounded-full relative transition-colors ${checked ? 'bg-[#a855f7]/70' : 'bg-white/15'}`}>
+      <span className={`shrink-0 w-9 h-5 rounded-full relative transition-colors ${checked ? 'bg-[#a855f7]/70' : 'bg-[var(--bg-2)]'}`}>
         <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${checked ? 'left-[18px]' : 'left-0.5'}`} />
       </span>
     </Button>
@@ -476,7 +476,7 @@ export default function JwtAttackLab() {
       </div>
 
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-[#a855f7]/30 text-[#c084fc]'}`}>{toast.msg}</div>
+        <div role={toast.sev === 'error' ? 'alert' : 'status'} aria-live={toast.sev === 'error' ? 'assertive' : 'polite'} className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-[#a855f7]/30 text-[#c084fc]'}`}>{toast.msg}</div>
       )}
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
@@ -586,7 +586,7 @@ export default function JwtAttackLab() {
                       onChange={(e) => setSearchQuery(e.target.value)}
                       aria-label={t('pages.jwtLab.search_placeholder')}
                       placeholder={t('pages.jwtLab.search_placeholder')}
-                      className="pl-8 pr-3 py-1.5 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] text-[11px] font-mono text-[var(--text-secondary)] placeholder-white/25 focus:outline-none focus:border-[#a855f7]/40 min-w-[200px]"
+                      className="pl-8 pr-3 py-1.5 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] text-[11px] font-mono text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[#a855f7]/40 min-w-[200px]"
                     />
                   </div>
                   <div className="flex gap-1 flex-wrap">

@@ -20,7 +20,7 @@ export default function AuditTrailTab() {
       columnHelper.accessor('timestamp', {
         header: t(`${NS}.colTime`),
         cell: (info) => (
-          <span className="text-white/70 whitespace-nowrap">{info.getValue() || '—'}</span>
+          <span className="text-[var(--text-tertiary)] whitespace-nowrap">{info.getValue() || '—'}</span>
         ),
       }),
       columnHelper.accessor((r) => sanitizeFindingPlainText(r.user, 500), {
@@ -36,7 +36,7 @@ export default function AuditTrailTab() {
         id: 'user_id',
         header: t(`${NS}.colUserId`),
         cell: (info) => (
-          <span className="text-white/50 whitespace-nowrap tabular-nums">{info.getValue()}</span>
+          <span className="text-[var(--text-muted)] whitespace-nowrap tabular-nums">{info.getValue()}</span>
         ),
       }),
       columnHelper.accessor((r) => sanitizeFindingPlainText(r.action_type, 200), {
@@ -49,13 +49,13 @@ export default function AuditTrailTab() {
       columnHelper.accessor((r) => sanitizeFindingPlainText(r.ip_address, 80), {
         id: 'ip_address',
         header: t(`${NS}.colIp`),
-        cell: (info) => <span className="text-white/50">{info.getValue() || '—'}</span>,
+        cell: (info) => <span className="text-[var(--text-muted)]">{info.getValue() || '—'}</span>,
       }),
       columnHelper.accessor((r) => sanitizeFindingPlainText(r.details, 8000), {
         id: 'details',
         header: t(`${NS}.colDetails`),
         cell: (info) => (
-          <span className="text-white/60 max-w-md break-words block">{info.getValue() || '—'}</span>
+          <span className="text-[var(--text-tertiary)] max-w-md break-words block">{info.getValue() || '—'}</span>
         ),
       }),
     ],
@@ -91,12 +91,12 @@ export default function AuditTrailTab() {
   }, [t])
 
   return (
-    <div className="p-6 text-white/90 max-w-6xl mx-auto">
-      <h2 className="text-lg font-semibold mb-1 tracking-tight text-white">{t(`${NS}.title`)}</h2>
-      <p className="text-xs text-white/50 mb-6 uppercase tracking-widest">
+    <div className="p-6 text-[var(--text-secondary)] max-w-6xl mx-auto">
+      <h2 className="text-lg font-semibold mb-1 tracking-tight text-[var(--text-primary)]">{t(`${NS}.title`)}</h2>
+      <p className="text-xs text-[var(--text-muted)] mb-6 uppercase tracking-widest">
         {t(`${NS}.subtitle`)}
       </p>
-      {loading && <p className="text-sm text-white/40">{t(`${NS}.loading`)}</p>}
+      {loading && <p className="text-sm text-[var(--text-muted)]">{t(`${NS}.loading`)}</p>}
       {err && (
         <div className="text-sm text-red-300 mb-4 rounded-lg border border-red-500/40 bg-red-950/30 px-4 py-3" role="alert">
           {err}
@@ -109,7 +109,7 @@ export default function AuditTrailTab() {
           data={rows}
           getRowId={(r) => r.id}
           animateRows={false}
-          emptyState={<span className="text-white/40">{t(`${NS}.noEntries`)}</span>}
+          emptyState={<span className="text-[var(--text-muted)]">{t(`${NS}.noEntries`)}</span>}
         />
       )}
     </div>

@@ -75,19 +75,21 @@ export default function LiveFeed() {
 
   const stats = useMemo(() => {
     let critHigh = 0
+    const bySev = {}
     for (const e of events) {
       const s = (e.severity || '').toLowerCase()
+      if (s) bySev[s] = (bySev[s] || 0) + 1
       if (s === 'critical' || s === 'high') critHigh += 1
     }
-    return { total: events.length, critHigh, severities: severities.length }
+    return { total: events.length, critHigh, severities: severities.length, bySev }
   }, [events, severities])
 
   const sevPills = useMemo(
     () => [
-      { id: 'all', label: t(`${NS}.all_severities`), active: sevFilter === 'all', onClick: () => setSevFilter('all') },
-      ...severities.map((s) => ({ id: s, label: s, active: sevFilter === s, onClick: () => setSevFilter(s) })),
+      { id: 'all', label: t(`${NS}.all_severities`), count: events.length, active: sevFilter === 'all', onClick: () => setSevFilter('all') },
+      ...severities.map((s) => ({ id: s, label: s, count: stats.bySev[s] || 0, active: sevFilter === s, onClick: () => setSevFilter(s) })),
     ],
-    [severities, sevFilter, t],
+    [severities, sevFilter, t, events.length, stats.bySev],
   )
 
   // Resolve the event's client id → a human name (falls back to "client N").

@@ -16,13 +16,13 @@ export default function RoEPanel() {
   }
 
   return (
-    <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 transition-all duration-300 hover:border-white/20">
-      <div className="text-xs font-semibold text-white/50 uppercase tracking-[0.2em] mb-4">
+    <div className="rounded-2xl bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] p-5 transition-all duration-300 hover:border-[var(--border-strong)]">
+      <div className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-[0.2em] mb-4">
         {t(`${NS}.title`)}
       </div>
       <div className="flex flex-wrap items-center gap-6">
         <div className="flex flex-col gap-2">
-          <span className="text-xs text-white/60">
+          <span className="text-xs text-[var(--text-tertiary)]">
             {isTakeover
               ? t(`${NS}.takeoverDescription`)
               : t(`${NS}.safeDescription`)}

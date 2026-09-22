@@ -77,7 +77,7 @@ export default function App() {
           {/* Single-sourced from lib/appNav.js (INTEL_MAP_QUICKNAV) — no hardcoded drift. */}
           {INTEL_MAP_QUICKNAV.map((item) => (
             <Fragment key={item.to}>
-              {item.separatorBefore && <span className="text-white/10" aria-hidden="true">|</span>}
+              {item.separatorBefore && <span className="text-[var(--text-disabled)]" aria-hidden="true">|</span>}
               <Link
                 to={item.to}
                 className={`nav-link${item.className ? ` ${item.className}` : ''}`}
@@ -87,7 +87,7 @@ export default function App() {
               </Link>
             </Fragment>
           ))}
-          <span className="text-white/10" aria-hidden="true">|</span>
+          <span className="text-[var(--text-disabled)]" aria-hidden="true">|</span>
           <Button
             variant="unstyled"
             type="button"

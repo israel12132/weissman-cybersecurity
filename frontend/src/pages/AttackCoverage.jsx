@@ -14,6 +14,7 @@ import PageShell from './PageShell'
 import EmptyState from '../components/ui/EmptyState'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
+import FilterPills from '../components/ui/FilterPills'
 import { SkeletonWidgetGrid, SkeletonCard } from '../components/ui/Skeleton'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { apiFetch } from '../utils/apiFetch'
@@ -47,6 +48,7 @@ export default function AttackCoverage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
+  const [depthFilter, setDepthFilter] = useState('all')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -68,22 +70,42 @@ export default function AttackCoverage() {
   const tactics = useMemo(() => (Array.isArray(data?.tactics) ? data.tactics : []), [data])
   const totals = data?.totals || {}
   const readiness = data?.attack_readiness || {}
-  const thinTactics = Array.isArray(readiness.thin_tactics) ? readiness.thin_tactics : []
+  const thinTactics = useMemo(
+    () => (Array.isArray(data?.attack_readiness?.thin_tactics) ? data.attack_readiness.thin_tactics : []),
+    [data],
+  )
   const plannerEngines = Array.isArray(readiness.planner_wired_engines) ? readiness.planner_wired_engines : []
+
+  // Tactics the readiness rollup flags as thin (under-covered). Used to let the
+  // matrix jump straight to the coverage gaps the readiness panel calls out.
+  const thinTacticSet = useMemo(
+    () => new Set(thinTactics.map((g) => g.tactic).filter(Boolean)),
+    [thinTactics],
+  )
 
   const filteredTactics = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return tactics
     return tactics
+      .filter((tac) => depthFilter !== 'gaps' || thinTacticSet.has(tac.tactic))
       .map((tac) => {
+        if (!q) return tac
         const techniques = (tac.techniques || []).filter((tech) => {
           const hay = `${tac.tactic} ${tech.id} ${tech.name} ${(tech.engines || []).join(' ')}`.toLowerCase()
           return hay.includes(q)
         })
         return { ...tac, techniques }
       })
-      .filter((tac) => tac.techniques.length > 0)
-  }, [tactics, search])
+      .filter((tac) => (tac.techniques || []).length > 0)
+  }, [tactics, search, depthFilter, thinTacticSet])
+
+  const depthPills = useMemo(
+    () =>
+      [
+        { id: 'all', label: t(`${NS}.filter_all`), count: tactics.length, color: '#a78bfa' },
+        { id: 'gaps', label: t(`${NS}.filter_gaps`), count: thinTacticSet.size, color: '#fbbf24' },
+      ].map((p) => ({ ...p, active: depthFilter === p.id, onClick: () => setDepthFilter(p.id) })),
+    [tactics.length, thinTacticSet.size, depthFilter, t],
+  )
 
   const shownTechniques = useMemo(
     () => filteredTactics.reduce((n, tac) => n + (tac.techniques?.length || 0), 0),
@@ -165,16 +187,19 @@ export default function AttackCoverage() {
               )}
             </section>
 
-            <div className="relative max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-disabled)] pointer-events-none" />
-              <input
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                aria-label={t(`${NS}.search_placeholder`)}
-                placeholder={t(`${NS}.search_placeholder`)}
-                className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl pl-10 pr-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-rose-500/40"
-              />
+            <div className="flex flex-wrap items-end gap-4">
+              <div className="relative max-w-md flex-1 min-w-[220px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-disabled)] pointer-events-none" />
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  aria-label={t(`${NS}.search_placeholder`)}
+                  placeholder={t(`${NS}.search_placeholder`)}
+                  className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl pl-10 pr-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-rose-500/40"
+                />
+              </div>
+              {thinTacticSet.size > 0 && <FilterPills pills={depthPills} />}
             </div>
 
             {search && (

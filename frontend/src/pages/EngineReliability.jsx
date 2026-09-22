@@ -184,7 +184,7 @@ export default function EngineReliability() {
       <div className="space-y-6">
         <div className="space-y-2 max-w-2xl">
           <p className="text-sm text-[var(--text-tertiary)]">
-            {t('pages.engineReliability.subtitle', { })}
+            {t('pages.engineReliability.subtitle')}
           </p>
           <EngineRealitySummary compact />
         </div>
@@ -221,7 +221,7 @@ export default function EngineReliability() {
                 value={remoteDetectionCount ?? '—'}
                 tone="#22d3ee"
                 icon={<Globe className="w-4 h-4 text-cyan-400" />}
-                hint="Engines that can detect from a remote scan without an agent"
+                hint={t('pages.engineReliability.hint_remote_capable')}
               />
               <StatCard
                 label={t('pages.engineReliability.real_probes')}
@@ -319,7 +319,7 @@ export default function EngineReliability() {
               </label>
               <span className="text-[11px] font-mono text-[var(--text-muted)] ml-auto">
                 {rows.length} {t('pages.engineReliability.shown')}
-                {telemLoading && !telem ? ' · telemetry…' : ''}
+                {telemLoading && !telem ? ` · ${t('pages.engineReliability.telemetry_hint')}` : ''}
               </span>
             </div>
 
@@ -341,7 +341,7 @@ export default function EngineReliability() {
                 if (!r) return null
                 const h = r.health
                 return (
-                  <div key={r.id} className="rounded-lg border border-white/[0.06] bg-[var(--table-surface)] px-4 py-2.5 hover:bg-[var(--row-hover-bg)]">
+                  <div key={r.id} className="rounded-lg border border-[var(--border-subtle)] bg-[var(--table-surface)] px-4 py-2.5 hover:bg-[var(--row-hover-bg)]">
                     <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
                       <div className="min-w-[180px] flex-1 font-mono text-[var(--text-primary)] text-xs">
                         {r.id}
@@ -354,9 +354,9 @@ export default function EngineReliability() {
                       </div>
                       <div className="shrink-0 text-center w-8">
                         {r.remote_detection ? (
-                          <Globe className="w-3.5 h-3.5 text-cyan-400 inline-block" title="Remote detection" />
+                          <Globe className="w-3.5 h-3.5 text-cyan-400 inline-block" title={t('pages.engineReliability.title_remote_detection')} />
                         ) : (
-                          <WifiOff className="w-3.5 h-3.5 text-amber-500/80 inline-block" title="Agent required" />
+                          <WifiOff className="w-3.5 h-3.5 text-amber-500/80 inline-block" title={t('pages.engineReliability.title_agent_required')} />
                         )}
                       </div>
                       <div className="font-mono text-xs text-[var(--text-secondary)] text-right w-12">{h?.total_runs ?? '—'}</div>

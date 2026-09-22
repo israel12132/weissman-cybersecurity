@@ -67,7 +67,7 @@ export default function QuantumTimingProfiler() {
         setClient(null)
         setError(e?.message || t(`${NS}.unavailable`))
       })
-  }, [clientId])
+  }, [clientId, t])
 
   useEffect(() => {
     fetchClient()
@@ -99,7 +99,7 @@ export default function QuantumTimingProfiler() {
       body,
     })
       .then((data) => {
-        if (data.detail) setError('')
+        if (data?.detail) setError('')
         const wsUrl = `${WS_BASE()}/ws/timing`
         const ws = new WebSocket(wsUrl)
         wsRef.current = ws

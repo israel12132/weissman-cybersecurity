@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Clock, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -10,6 +10,12 @@ import Button from './ui/Button'
 export default function RateLimitToast({ show, onClose, retryAfter = 60, message }) {
   const { t } = useTranslation();
   const [countdown, setCountdown] = useState(retryAfter);
+  // Keep onClose in a ref so a parent re-render (e.g. a sibling toast mounting)
+  // does not tear down and restart the countdown interval, which would reset the timer.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!show) return;
@@ -19,7 +25,7 @@ export default function RateLimitToast({ show, onClose, retryAfter = 60, message
       setCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(interval);
-          onClose?.();
+          onCloseRef.current?.();
           return 0;
         }
         return prev - 1;
@@ -27,7 +33,7 @@ export default function RateLimitToast({ show, onClose, retryAfter = 60, message
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [show, retryAfter, onClose]);
+  }, [show, retryAfter]);
 
   if (!show) return null;
 
@@ -47,7 +53,7 @@ export default function RateLimitToast({ show, onClose, retryAfter = 60, message
             </div>
 
             <div className="flex-1 min-w-0">
-              <h4 className="text-sm font-semibold text-white mb-1">
+              <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-1">
                 {t('components.rateLimitToast.title')}
               </h4>
               <p className="text-xs text-orange-200/80 leading-relaxed">
@@ -57,7 +63,7 @@ export default function RateLimitToast({ show, onClose, retryAfter = 60, message
 
             <Button variant="unstyled"
               onClick={onClose}
-              className="flex-shrink-0 w-6 h-6 rounded-lg hover:bg-white/10 flex items-center justify-center transition-colors"
+              className="flex-shrink-0 w-6 h-6 rounded-lg hover:bg-[var(--row-hover-bg)] flex items-center justify-center transition-colors"
               aria-label={t('components.rateLimitToast.close')}
             >
               <X className="w-4 h-4 text-[var(--text-tertiary)]" />
@@ -65,13 +71,13 @@ export default function RateLimitToast({ show, onClose, retryAfter = 60, message
           </div>
 
           <div className="px-4 pb-4">
-            <div className="flex items-center justify-between gap-3 p-3 bg-black/30 rounded-lg">
+            <div className="flex items-center justify-between gap-3 p-3 bg-[var(--table-surface)] rounded-lg">
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-cyan-400" />
                 <span className="text-xs text-[var(--text-secondary)]">{t('components.rateLimitToast.retry_in')}</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-lg font-mono font-bold text-white">
+                <span className="text-lg font-mono font-bold text-[var(--text-primary)]">
                   {Math.floor(countdown / 60)}:{(countdown % 60).toString().padStart(2, '0')}
                 </span>
                 <span className="text-xs text-[var(--text-tertiary)]">{t('components.rateLimitToast.min_abbr')}</span>
@@ -79,7 +85,7 @@ export default function RateLimitToast({ show, onClose, retryAfter = 60, message
             </div>
           </div>
 
-          <div className="h-1 bg-black/30">
+          <div className="h-1 bg-[var(--table-surface)]">
             <motion.div
               className="h-full bg-gradient-to-r from-orange-500 to-red-500"
               initial={{ width: '100%' }}

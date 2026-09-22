@@ -166,7 +166,7 @@ function MfaBoxes({ value, onChange, disabled, inputRef, id, label }) {
   )
 }
 
-function BrandPanel({ t, pulse }) {
+function BrandPanel({ t, pulse, homeHref = '/' }) {
   const engineLabel = pulse?.production_engines
     ? t('auth.trust_engines_live', { count: pulse.production_engines })
     : t('auth.trust_engines_checking')
@@ -195,7 +195,7 @@ function BrandPanel({ t, pulse }) {
         />
       </div>
       <div className="relative z-10 flex flex-1 flex-col justify-center px-12 xl:px-16 py-16">
-        <a href="/" className="mb-10 inline-flex w-fit" aria-label={t('auth.back_to_site')}>
+        <a href={homeHref} className="mb-10 inline-flex w-fit" aria-label={t('auth.back_to_site')}>
           <Logo size={48} glow />
         </a>
         <h1 className="max-w-md font-display text-3xl font-semibold leading-tight tracking-tight text-white xl:text-4xl">
@@ -388,7 +388,7 @@ export default function LoginGate({
         }
       `}</style>
       <div className="flex min-h-[100dvh] flex-col lg:flex-row">
-        <BrandPanel t={t} pulse={pulse} />
+        <BrandPanel t={t} pulse={pulse} homeHref={homeHref} />
         <main className="relative flex flex-1 flex-col">
           <div className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-gradient-to-b from-cyan-500/[0.06] to-transparent lg:hidden" aria-hidden />
           <header className="relative z-10 flex items-center justify-between px-6 pt-6 lg:justify-end lg:px-10 lg:pt-8">
@@ -546,6 +546,7 @@ export default function LoginGate({
                         type="button"
                         className="text-xs text-white/40 hover:text-white/70"
                         onClick={() => setShowWorkspace((v) => !v)}
+                        aria-expanded={showWorkspace}
                       >
                         {showWorkspace ? t('auth.hide_workspace') : t('auth.different_workspace')}
                       </Button>
@@ -554,6 +555,7 @@ export default function LoginGate({
                         type="button"
                         className="text-xs text-white/40 hover:text-white/70"
                         onClick={() => setShowSso((v) => !v)}
+                        aria-expanded={showSso}
                       >
                         {t('auth.use_company_sso')}
                       </Button>

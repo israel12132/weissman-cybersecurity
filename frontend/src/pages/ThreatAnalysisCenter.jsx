@@ -87,14 +87,12 @@ export default function ThreatAnalysisCenter() {
   const score = Number(analysis.incident_score || 0);
   const tone = scoreTone(score);
   const chain = analysis.attack_chain;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const hits = Array.isArray(analysis.correlation_hits) ? analysis.correlation_hits : [];
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const netFindings = Array.isArray(analysis.network_findings) ? analysis.network_findings : [];
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const idFindings = Array.isArray(analysis.identity_findings) ? analysis.identity_findings : [];
 
   const unifiedFindings = useMemo(() => {
+    const a = report?.analysis || {};
+    const hits = Array.isArray(a.correlation_hits) ? a.correlation_hits : [];
+    const netFindings = Array.isArray(a.network_findings) ? a.network_findings : [];
+    const idFindings = Array.isArray(a.identity_findings) ? a.identity_findings : [];
     const list = [];
     hits.forEach((h, idx) => {
       list.push({
@@ -128,7 +126,7 @@ export default function ThreatAnalysisCenter() {
       });
     });
     return list;
-  }, [hits, netFindings, idFindings]);
+  }, [report]);
 
   const {
     filteredFindings,
@@ -245,7 +243,7 @@ export default function ThreatAnalysisCenter() {
               <SummaryCard
                 label={t('pages.threatAnalysis.detections')}
                 value={`${summary.network_detections ?? 0} / ${summary.identity_detections ?? 0}`}
-                valueClass="text-white"
+                valueClass="text-[var(--text-primary)]"
                 icon={<Network className="w-4 h-4 text-purple-400" />}
               />
             </div>
@@ -265,7 +263,7 @@ export default function ThreatAnalysisCenter() {
                     <div key={i} className="flex items-center gap-2">
                       {i > 0 && <span className="text-[var(--text-muted)]">→</span>}
                       <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5">
-                        <div className="text-xs font-medium text-white">{s.name}</div>
+                        <div className="text-xs font-medium text-[var(--text-primary)]">{s.name}</div>
                         <div className="text-[10px] font-mono text-red-300/80">{s.mitre}</div>
                       </div>
                     </div>
@@ -285,12 +283,12 @@ export default function ThreatAnalysisCenter() {
               onSeverityChange={setSeverityFilter}
               accent={ACCENT}
               title={t('pages.threatAnalysis.multi_stage')}
-              emptyTitle={t('pages.threatAnalysis.no_incidents', { })}
-              emptyBody={t('pages.threatAnalysis.no_incidents', { })}
+              emptyTitle={t('pages.threatAnalysis.no_incidents')}
+              emptyBody={t('pages.threatAnalysis.no_incidents_body')}
               renderFinding={(f) => (
                 <div key={f.id} className="rounded-lg border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-3">
                   <div className="flex items-center justify-between gap-2 mb-2">
-                    <span className="text-sm font-medium text-white">{f.title}</span>
+                    <span className="text-sm font-medium text-[var(--text-primary)]">{f.title}</span>
                     <span className="flex items-center gap-2">
                       {f.type && (
                         <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded border border-[var(--border-default)] text-[var(--text-muted)]">

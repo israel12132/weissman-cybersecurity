@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 
 const VERT = `#version 300 es
 in vec2 a_pos;
@@ -94,6 +95,7 @@ export default function BattlespaceWebGL({
   onNodePick,
   className = '',
 }) {
+  const { t } = useTranslation()
   const canvasRef = useRef(null)
   const glRef = useRef(null)
   const programsRef = useRef({})
@@ -252,11 +254,16 @@ export default function BattlespaceWebGL({
     const my = clientY - rect.top
     const pan = panRef.current
     const zoom = zoomRef.current
+    // The vertex shader scales by u_zoom then divides by the device-pixel
+    // resolution (w*dpr) while u_pan is expressed in CSS pixels, so the rendered
+    // CSS position carries a 1/dpr factor. Mirror it here or hit-testing drifts
+    // by the device-pixel ratio on HiDPI/retina displays (clicks miss nodes).
+    const dpr = Math.min(window.devicePixelRatio || 1, 2)
     let best = null
     let bestD = 20
     for (let i = 0; i < allNodes.length; i++) {
-      const px = (positions[i * 2] + pan.x + rect.width / 2) * zoom
-      const py = (positions[i * 2 + 1] + pan.y + rect.height / 2) * zoom
+      const px = (positions[i * 2] + pan.x + rect.width / 2) * zoom / dpr
+      const py = (positions[i * 2 + 1] + pan.y + rect.height / 2) * zoom / dpr
       const d = Math.hypot(px - mx, py - my)
       if (d < bestD) {
         bestD = d
@@ -270,6 +277,8 @@ export default function BattlespaceWebGL({
     <canvas
       ref={canvasRef}
       className={`battlespace-canvas w-full h-full touch-none ${className}`}
+      role="img"
+      aria-label={t('battlespace.canvas_label')}
       onWheel={(e) => {
         e.preventDefault()
         zoomRef.current = Math.max(0.2, Math.min(4, zoomRef.current * (e.deltaY > 0 ? 0.92 : 1.08)))

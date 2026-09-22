@@ -195,7 +195,7 @@ function FindingCard({ f }) {
   const controls = Array.isArray(f.controls) ? f.controls : []
   return (
     <div className={`rounded-xl border ${st.bd} ${st.bg} p-3`}>
-      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full text-left flex items-start gap-3">
+      <Button variant="unstyled" type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="w-full text-left flex items-start gap-3">
         <span className="mt-1 w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: st.dot }} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -568,7 +568,7 @@ export default function DnsDomainPosture() {
       )}
     >
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-cyan-500/30 text-cyan-200'}`}>
+        <div role={toast.sev === 'error' ? 'alert' : 'status'} aria-live={toast.sev === 'error' ? 'assertive' : 'polite'} className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-cyan-500/30 text-cyan-200'}`}>
           {toast.msg}
         </div>
       )}
@@ -596,7 +596,7 @@ export default function DnsDomainPosture() {
             className="px-5 py-2 rounded-xl font-mono text-sm border border-cyan-500/40 text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
             {status === 'running' ? t('pages.dnsDomainPosture.scanning', '⟳ Scanning…') : t('pages.dnsDomainPosture.run_scan', '▶ Run Posture Scan')}
           </Button>
-          <Button variant="unstyled" type="button" onClick={() => setShowParams((s) => !s)}
+          <Button variant="unstyled" type="button" aria-expanded={showParams} onClick={() => setShowParams((s) => !s)}
             className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-all">
             {showParams ? t('pages.dnsDomainPosture.hide_params', '▾ Parameters') : t('pages.dnsDomainPosture.show_params', '▸ Parameters')}
           </Button>

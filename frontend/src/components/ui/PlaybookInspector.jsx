@@ -41,7 +41,7 @@ function ToggleChip({ active, onClick, children, accent = 'cyan' }) {
         'rounded-full px-3 py-1.5 text-[11px] font-medium ring-1 transition-all',
         active
           ? activeCls
-          : 'bg-[var(--row-hover-bg)] ring-white/[0.08] text-[var(--text-muted)] hover:bg-[var(--row-hover-bg)] hover:text-[var(--text-secondary)]',
+          : 'bg-[var(--row-hover-bg)] ring-[var(--border-default)] text-[var(--text-muted)] hover:bg-[var(--row-hover-bg)] hover:text-[var(--text-secondary)]',
       )}
     >
       {children}
@@ -77,7 +77,7 @@ export function PlaybookTriggerFields({ trigger = {}, onChange, idPrefix = 'pb-t
                   'rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-wider ring-1 transition-all',
                   active
                     ? `${colors.bg} ${colors.ring} ${colors.text}`
-                    : 'bg-[var(--row-hover-bg)] ring-white/[0.08] text-[var(--text-muted)] hover:text-[var(--text-tertiary)]',
+                    : 'bg-[var(--row-hover-bg)] ring-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-tertiary)]',
                 )}
               >
                 {t(`playbooks.severity.${s}`)}
@@ -114,7 +114,7 @@ export function PlaybookTriggerFields({ trigger = {}, onChange, idPrefix = 'pb-t
             onChange={(e) => update({
               epss_min: e.target.value === '' ? undefined : Number(e.target.value),
             })}
-            className="mt-1 block w-full rounded-lg bg-[var(--bg-2)] px-3 py-2 text-[13px] text-[var(--text-primary)] ring-1 ring-white/[0.08] focus:outline-none focus:ring-cyan-400/30"
+            className="mt-1 block w-full rounded-lg bg-[var(--bg-2)] px-3 py-2 text-[13px] text-[var(--text-primary)] ring-1 ring-[var(--border-default)] focus:outline-none focus:ring-cyan-400/30"
           />
         </div>
         <div>
@@ -128,7 +128,7 @@ export function PlaybookTriggerFields({ trigger = {}, onChange, idPrefix = 'pb-t
             onChange={(e) => update({
               cooldown_seconds: e.target.value === '' ? undefined : Number(e.target.value),
             })}
-            className="mt-1 block w-full rounded-lg bg-[var(--bg-2)] px-3 py-2 text-[13px] text-[var(--text-primary)] ring-1 ring-white/[0.08] focus:outline-none focus:ring-cyan-400/30"
+            className="mt-1 block w-full rounded-lg bg-[var(--bg-2)] px-3 py-2 text-[13px] text-[var(--text-primary)] ring-1 ring-[var(--border-default)] focus:outline-none focus:ring-cyan-400/30"
           />
         </div>
       </div>
@@ -157,7 +157,7 @@ function ActionParamFields({ kind, params = {}, onChange, idPrefix }) {
                 id={fid}
                 value={value ?? options[0]}
                 onChange={(e) => patch(field.key, e.target.value)}
-                className="mt-1 block w-full rounded-lg bg-[var(--bg-2)] px-3 py-2 text-[13px] text-[var(--text-primary)] ring-1 ring-white/[0.08] focus:outline-none focus:ring-cyan-400/30"
+                className="mt-1 block w-full rounded-lg bg-[var(--bg-2)] px-3 py-2 text-[13px] text-[var(--text-primary)] ring-1 ring-[var(--border-default)] focus:outline-none focus:ring-cyan-400/30"
               >
                 {options.map((opt) => (
                   <option key={opt} value={opt}>{opt}</option>
@@ -175,7 +175,7 @@ function ActionParamFields({ kind, params = {}, onChange, idPrefix }) {
                 rows={3}
                 value={value ?? ''}
                 onChange={(e) => patch(field.key, e.target.value)}
-                className="mt-1 block w-full resize-y rounded-lg bg-[var(--bg-2)] px-3 py-2 font-mono text-[12px] text-emerald-300/90 ring-1 ring-white/[0.08] focus:outline-none focus:ring-cyan-400/30"
+                className="mt-1 block w-full resize-y rounded-lg bg-[var(--bg-2)] px-3 py-2 font-mono text-[12px] text-emerald-300/90 ring-1 ring-[var(--border-default)] focus:outline-none focus:ring-cyan-400/30"
               />
             </div>
           )
@@ -204,7 +204,7 @@ function ActionParamFields({ kind, params = {}, onChange, idPrefix }) {
                   ? (e.target.value === '' ? undefined : Number(e.target.value))
                   : e.target.value,
               )}
-              className="mt-1 block w-full rounded-lg bg-[var(--bg-2)] px-3 py-2 text-[13px] text-[var(--text-primary)] ring-1 ring-white/[0.08] focus:outline-none focus:ring-cyan-400/30"
+              className="mt-1 block w-full rounded-lg bg-[var(--bg-2)] px-3 py-2 text-[13px] text-[var(--text-primary)] ring-1 ring-[var(--border-default)] focus:outline-none focus:ring-cyan-400/30"
             />
           </div>
         )
@@ -240,7 +240,7 @@ function JsonParamField({ id, label, value, onChange }) {
         }}
         className={cn(
           'mt-1 block w-full resize-y rounded-lg bg-[var(--bg-2)] px-3 py-2 font-mono text-[12px] text-emerald-300/90 ring-1 focus:outline-none',
-          invalid ? 'ring-rose-500/40' : 'ring-white/[0.08] focus:ring-cyan-400/30',
+          invalid ? 'ring-rose-500/40' : 'ring-[var(--border-default)] focus:ring-cyan-400/30',
         )}
         aria-invalid={invalid || undefined}
         aria-label={label}
@@ -350,7 +350,7 @@ export default function PlaybookInspector({
                   label: NODE_LABEL[meta.nodeType] || next,
                 })
               }}
-              className="mt-1 block w-full rounded-lg bg-[var(--bg-2)] px-3 py-2 text-[13px] text-[var(--text-primary)] ring-1 ring-white/[0.08] focus:outline-none focus:ring-cyan-400/30"
+              className="mt-1 block w-full rounded-lg bg-[var(--bg-2)] px-3 py-2 text-[13px] text-[var(--text-primary)] ring-1 ring-[var(--border-default)] focus:outline-none focus:ring-cyan-400/30"
             >
               {ACTION_KIND_CATALOG.map((k) => (
                 <option key={k.kind} value={k.kind}>{t(`playbooks.action.${k.kind}`)}</option>

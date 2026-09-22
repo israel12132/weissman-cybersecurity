@@ -8,6 +8,7 @@ import PageShell from './PageShell'
 import EmptyState from '../components/ui/EmptyState'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
+import FilterPills from '../components/ui/FilterPills'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import Button from '../components/ui/Button'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
@@ -28,6 +29,7 @@ export default function ItdrCommandCenter() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [outcomeFilter, setOutcomeFilter] = useState('all')
   const [pulling, setPulling] = useState('')
 
   const load = useCallback(async () => {
@@ -47,17 +49,43 @@ export default function ItdrCommandCenter() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => { load() }, [load])
 
+  const outcomeCounts = useMemo(() => {
+    let fail = 0
+    let success = 0
+    let mfa = 0
+    for (const ev of events) {
+      if (ev.success === false) fail += 1
+      else if (ev.success) success += 1
+      if (ev.mfa_prompted) mfa += 1
+    }
+    return { all: events.length, fail, success, mfa }
+  }, [events])
+
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
-    if (!q) return events
-    return events.filter((ev) =>
-      `${ev.username} ${ev.ip} ${ev.country} ${ev.provider}`.toLowerCase().includes(q),
-    )
-  }, [events, searchQuery])
+    return events.filter((ev) => {
+      if (outcomeFilter === 'fail' && ev.success !== false) return false
+      if (outcomeFilter === 'success' && !ev.success) return false
+      if (outcomeFilter === 'mfa' && !ev.mfa_prompted) return false
+      if (!q) return true
+      return `${ev.username} ${ev.ip} ${ev.country} ${ev.provider}`.toLowerCase().includes(q)
+    })
+  }, [events, searchQuery, outcomeFilter])
+
+  const outcomePills = useMemo(
+    () =>
+      [
+        { id: 'all', label: t('common.all'), count: outcomeCounts.all, color: '#22d3ee' },
+        { id: 'fail', label: t(`${NS}.filter_failed`), count: outcomeCounts.fail, color: '#fb7185' },
+        { id: 'success', label: t(`${NS}.filter_success`), count: outcomeCounts.success, color: '#34d399' },
+        { id: 'mfa', label: t(`${NS}.filter_mfa`), count: outcomeCounts.mfa, color: '#a78bfa' },
+      ].map((p) => ({ ...p, active: outcomeFilter === p.id, onClick: () => setOutcomeFilter(p.id) })),
+    [outcomeCounts, outcomeFilter, t],
+  )
 
   const exportCsv = useCallback(() => {
     if (error) return
@@ -133,15 +161,18 @@ export default function ItdrCommandCenter() {
               </Button>
             ))}
           </div>
-          <p className="text-xs text-white/40 font-mono">{t(`${NS}.connector_hint`)} {armedProviders.join(', ') || t(`${NS}.none_armed`)}</p>
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={t(`${NS}.search_placeholder`)}
-            aria-label={t(`${NS}.search_placeholder`)}
-            className="w-full max-w-sm px-3 py-2 rounded-lg text-sm bg-black/40 border border-white/10 text-white"
-          />
+          <p className="text-xs text-[var(--text-muted)] font-mono">{t(`${NS}.connector_hint`)} {armedProviders.join(', ') || t(`${NS}.none_armed`)}</p>
+          <div className="flex flex-wrap items-end gap-4">
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t(`${NS}.search_placeholder`)}
+              aria-label={t(`${NS}.search_placeholder`)}
+              className="w-full max-w-sm px-3 py-2 rounded-lg text-sm bg-[var(--bg-3)] border border-[var(--border-default)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
+            />
+            {events.length > 0 && <FilterPills pills={outcomePills} />}
+          </div>
           {!filtered.length ? (
             <EmptyState
               title={t(unconfigured ? `${NS}.empty_unconfigured_title` : `${NS}.empty_title`)}
@@ -150,8 +181,8 @@ export default function ItdrCommandCenter() {
           ) : (
             <ul className="space-y-1.5 font-mono text-xs">
               {filtered.slice(0, 200).map((ev, i) => (
-                <li key={`${ev.ts}-${ev.ip}-${i}`} className="border border-white/10 rounded px-3 py-2 flex justify-between gap-3">
-                  <span>{ev.username} @ {ev.ip}</span>
+                <li key={`${ev.ts}-${ev.ip}-${i}`} className="border border-[var(--border-default)] bg-[var(--table-surface)] rounded px-3 py-2 flex justify-between gap-3">
+                  <span className="text-[var(--text-primary)]">{ev.username} @ {ev.ip}</span>
                   <span className={ev.success ? 'text-emerald-300' : 'text-rose-300'}>
                     {ev.success ? t(`${NS}.ok`) : t(`${NS}.fail`)} {ev.mfa_prompted ? 'MFA' : ''}
                   </span>

@@ -5,9 +5,9 @@ import Logo from '../Logo'
 import Button from './Button'
 
 const QUICK_LINKS = [
-  { to: '/', label: 'Dashboard', desc: 'Command Center overview', Icon: LayoutDashboard },
-  { to: '/findings', label: 'Findings', desc: 'Vulnerability findings hub', Icon: ShieldAlert },
-  { to: '/engines', label: 'Engines', desc: 'Scan engine matrix', Icon: Radar },
+  { to: '/', labelKey: 'nav.dashboard', descKey: 'not_found.dashboard_desc', Icon: LayoutDashboard },
+  { to: '/findings', labelKey: 'nav.findings', descKey: 'not_found.findings_desc', Icon: ShieldAlert },
+  { to: '/engines', labelKey: 'nav.engines', descKey: 'not_found.engines_desc', Icon: Radar },
 ]
 
 /**
@@ -29,8 +29,8 @@ export default function NotFound() {
             <Logo size={48} />
           </div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[10px] font-mono tracking-widest text-[var(--text-muted)] uppercase mb-4">
-            <Compass className="w-3 h-3 text-cyan-400/70" aria-hidden="true" />
-            Route not found
+            <Compass className="w-3 h-3 text-[var(--text-accent)]" aria-hidden="true" />
+            {t('not_found.badge')}
           </div>
           <div className="text-[5.5rem] sm:text-7xl font-bold font-mono leading-none text-transparent bg-clip-text bg-gradient-to-b from-cyan-400/50 to-cyan-900/20 mb-3 select-none">
             404
@@ -39,16 +39,16 @@ export default function NotFound() {
             {t('errors.unknown_route')}
           </h1>
           <p className="text-sm text-[var(--text-tertiary)] font-mono break-all">
-            <code className="text-cyan-300/75">{location.pathname}</code>
+            <code className="text-[var(--text-accent)]">{location.pathname}</code>
           </p>
         </div>
 
         <p className="text-[13px] text-[var(--text-muted)] text-center mb-8 leading-relaxed max-w-md mx-auto">
-          The page you requested doesn&apos;t exist or was moved. Use the links below to return to an active module.
+          {t('not_found.description')}
         </p>
 
         <nav aria-label="Quick navigation" className="grid gap-2.5 mb-8">
-          {QUICK_LINKS.map(({ to, label, desc, Icon }) => (
+          {QUICK_LINKS.map(({ to, labelKey, descKey, Icon }) => (
             <Link
               key={to}
               to={to}
@@ -56,15 +56,15 @@ export default function NotFound() {
               style={{ transitionDuration: 'var(--duration-standard)' }}
             >
               <span className="flex items-center justify-center w-9 h-9 rounded-lg border border-[var(--border-default)] bg-[var(--row-hover-bg)] group-hover:border-cyan-500/25 group-hover:bg-cyan-500/10 transition-colors" style={{ transitionDuration: 'var(--duration-fast)' }}>
-                <Icon className="w-4 h-4 text-cyan-400/80" strokeWidth={2} aria-hidden="true" />
+                <Icon className="w-4 h-4 text-[var(--text-accent)]" strokeWidth={2} aria-hidden="true" />
               </span>
               <span className="flex-1 min-w-0 text-start">
                 <span className="block text-sm font-medium text-[var(--text-primary)] group-hover:text-cyan-100 transition-colors" style={{ transitionDuration: 'var(--duration-fast)' }}>
-                  {label}
+                  {t(labelKey)}
                 </span>
-                <span className="block text-[11px] text-[var(--text-muted)] mt-0.5">{desc}</span>
+                <span className="block text-[11px] text-[var(--text-muted)] mt-0.5">{t(descKey)}</span>
               </span>
-              <ArrowLeft className="w-4 h-4 text-[var(--text-disabled)] group-hover:text-cyan-400/60 rotate-180 transition-colors shrink-0" style={{ transitionDuration: 'var(--duration-fast)' }} aria-hidden="true" />
+              <ArrowLeft className="w-4 h-4 text-[var(--text-disabled)] group-hover:text-[var(--text-accent)] rotate-180 transition-colors shrink-0" style={{ transitionDuration: 'var(--duration-fast)' }} aria-hidden="true" />
             </Link>
           ))}
         </nav>
@@ -76,14 +76,14 @@ export default function NotFound() {
             className="px-4 py-2 rounded-lg text-sm font-mono border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-colors"
             style={{ transitionDuration: 'var(--duration-fast)' }}
           >
-            ← Go back
+            <span aria-hidden="true">← </span>{t('not_found.go_back')}
           </Button>
           <Link
             to="/status"
             className="px-4 py-2 rounded-lg text-sm font-mono border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-colors"
             style={{ transitionDuration: 'var(--duration-fast)' }}
           >
-            System status
+            {t('not_found.system_status')}
           </Link>
         </div>
       </div>

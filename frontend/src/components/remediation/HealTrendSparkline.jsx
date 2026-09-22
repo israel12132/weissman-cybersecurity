@@ -66,7 +66,7 @@ export default function HealTrendSparkline({ clientIds = [], days = 30 }) {
 
   if (unavailable) {
     return (
-      <p data-testid="heal-trend-unavailable" className="text-xs text-amber-300/80 font-mono">
+      <p data-testid="heal-trend-unavailable" className="text-xs text-[var(--severity-medium)] font-mono">
         {t('pages.healTrends.unavailable')}
       </p>
     )
@@ -90,17 +90,17 @@ export default function HealTrendSparkline({ clientIds = [], days = 30 }) {
   const pct = (v) => `${Math.round(v * 100)}%`
 
   return (
-    <section className="rounded-2xl border border-white/10 bg-black/40 p-4 sm:p-5">
+    <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] p-4 sm:p-5">
       <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-        <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-cyan-400" />
+        <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+          <TrendingUp className="w-4 h-4 text-[var(--text-accent)]" />
           {t('pages.healTrends.title')}
-          <span className="text-[11px] text-white/35 font-mono">· {days}d</span>
+          <span className="text-[11px] text-[var(--text-muted)] font-mono">· {days}d</span>
         </h3>
         <div className="flex items-center gap-4 text-xs">
-          <span className="text-white/60">{t('pages.healTrends.total')} <b className="text-white tabular-nums">{data.total}</b></span>
-          <span className="text-emerald-300/90">{t('pages.healTrends.success')} <b className="tabular-nums">{pct(data.rate)}</b></span>
-          <span className="text-amber-300/80">{t('pages.healTrends.avg_attempts')} <b className="tabular-nums">{data.avgAttempts.toFixed(1)}</b></span>
+          <span className="text-[var(--text-tertiary)]">{t('pages.healTrends.total')} <b className="text-[var(--text-primary)] tabular-nums">{data.total}</b></span>
+          <span className="text-[var(--severity-low)]">{t('pages.healTrends.success')} <b className="tabular-nums">{pct(data.rate)}</b></span>
+          <span className="text-[var(--severity-medium)]">{t('pages.healTrends.avg_attempts')} <b className="tabular-nums">{data.avgAttempts.toFixed(1)}</b></span>
         </div>
       </div>
       <div className="overflow-x-auto">
@@ -120,7 +120,7 @@ export default function HealTrendSparkline({ clientIds = [], days = 30 }) {
           <circle cx={x(n - 1)} cy={yT(last.total)} r="3.2" fill="#22d3ee" />
         </svg>
       </div>
-      <div className="flex items-center gap-4 mt-1.5 text-[10px] text-white/40">
+      <div className="flex items-center gap-4 mt-1.5 text-[10px] text-[var(--text-muted)]">
         <span className="inline-flex items-center gap-1.5"><span className="inline-block w-3 h-0.5 bg-cyan-400" /> {t('pages.healTrends.volume')}</span>
         <span className="inline-flex items-center gap-1.5"><span className="inline-block w-3 h-0.5 bg-emerald-400" /> {t('pages.healTrends.success_rate')}</span>
       </div>

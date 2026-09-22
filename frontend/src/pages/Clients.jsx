@@ -26,6 +26,25 @@ function fmtUsd(n) {
   return `$${Math.round(n).toLocaleString()}`
 }
 
+// Portfolio triage colours, keyed to worst-case single-loss exposure ($SLE).
+const SEV = {
+  critical: { color: '#f43f5e', bg: 'rgba(244,63,94,0.14)', border: 'rgba(244,63,94,0.38)' },
+  high: { color: '#fb923c', bg: 'rgba(251,146,60,0.14)', border: 'rgba(251,146,60,0.34)' },
+  medium: { color: '#fbbf24', bg: 'rgba(251,191,36,0.13)', border: 'rgba(251,191,36,0.32)' },
+  low: { color: '#34d399', bg: 'rgba(52,211,153,0.13)', border: 'rgba(52,211,153,0.32)' },
+  none: { color: '#94a3b8', bg: 'rgba(148,163,184,0.1)', border: 'rgba(148,163,184,0.26)' },
+}
+
+function severityKey(snap) {
+  if (!snap) return 'none'
+  const v = snap.sle_worst_usd || 0
+  if (v > 1_000_000) return 'critical'
+  if (v > 250_000) return 'high'
+  if (v > 50_000) return 'medium'
+  if (v > 0) return 'low'
+  return 'none'
+}
+
 export default function Clients() {
   const { t } = useTranslation()
   const { toast } = useToast()
@@ -213,6 +232,33 @@ export default function Clients() {
     return clients.filter((c) => ids.has(String(c.id)))
   }, [clients, filteredFindings, searchQuery])
 
+  const [filterMode, setFilterMode] = useState('all')
+  const [sortMode, setSortMode] = useState('worst')
+
+  // Largest worst-case exposure in the portfolio — the risk bars scale against it.
+  const portfolioMax = useMemo(
+    () => Math.max(1, ...clients.map((c) => risk[c.id]?.sle_worst_usd || 0)),
+    [clients, risk],
+  )
+
+  const filterCounts = useMemo(() => ({
+    all: visibleClients.length,
+    at_risk: visibleClients.filter((c) => (risk[c.id]?.sle_worst_usd || 0) > 0).length,
+    unscanned: visibleClients.filter((c) => !risk[c.id]).length,
+  }), [visibleClients, risk])
+
+  const displayClients = useMemo(() => {
+    let list = visibleClients.slice()
+    if (filterMode === 'at_risk') list = list.filter((c) => (risk[c.id]?.sle_worst_usd || 0) > 0)
+    else if (filterMode === 'unscanned') list = list.filter((c) => !risk[c.id])
+    list.sort((a, b) => {
+      if (sortMode === 'name') return String(a.name || '').localeCompare(String(b.name || ''))
+      if (sortMode === 'newest') return new Date(b.created_at || 0) - new Date(a.created_at || 0)
+      return (risk[b.id]?.sle_worst_usd || 0) - (risk[a.id]?.sle_worst_usd || 0)
+    })
+    return list
+  }, [visibleClients, filterMode, sortMode, risk])
+
   return (
     <PageShell
       title={t('clients_page.title')}
@@ -294,7 +340,10 @@ export default function Clients() {
         )}
 
         {scanToast && (
-          <div className={`rounded-xl border px-4 py-3 ${
+          <div
+            role={scanToast.kind === 'ok' ? 'status' : 'alert'}
+            aria-live={scanToast.kind === 'ok' ? 'polite' : 'assertive'}
+            className={`rounded-xl border px-4 py-3 ${
             scanToast.kind === 'ok'
               ? 'bg-emerald-950/25 border-emerald-500/30 text-emerald-200'
               : 'bg-rose-950/25 border-rose-500/30 text-rose-300'
@@ -331,10 +380,53 @@ export default function Clients() {
               onSearchChange={setSearchQuery}
               searchPlaceholder={t('clients_page.search_placeholder')}
               lastUpdated={lastUpdated}
-              resultCount={visibleClients.length}
+              resultCount={displayClients.length}
               totalCount={clients.length}
             />
-            {visibleClients.length === 0 ? (
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div
+                className="inline-flex items-center gap-1 rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] p-1"
+                role="tablist"
+                aria-label={t('clients_page.filter_all')}
+              >
+                {[['all', 'filter_all'], ['at_risk', 'filter_at_risk'], ['unscanned', 'filter_unscanned']].map(
+                  ([mode, key]) => (
+                    <Button
+                      key={mode}
+                      variant="unstyled"
+                      type="button"
+                      role="tab"
+                      aria-selected={filterMode === mode}
+                      onClick={() => setFilterMode(mode)}
+                      className={[
+                        'px-3 py-1.5 rounded-lg text-[11px] font-mono transition-colors border',
+                        filterMode === mode
+                          ? 'bg-violet-500/20 text-violet-100 border-violet-500/30'
+                          : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)] border-transparent',
+                      ].join(' ')}
+                    >
+                      {t(`clients_page.${key}`)}{' '}
+                      <span className="opacity-60 tabular-nums">{filterCounts[mode]}</span>
+                    </Button>
+                  ),
+                )}
+              </div>
+              <label className="inline-flex items-center gap-2 text-[11px] font-mono text-[var(--text-muted)]">
+                {t('clients_page.sort_by')}
+                <select
+                  value={sortMode}
+                  onChange={(e) => setSortMode(e.target.value)}
+                  className="bg-[var(--table-surface)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-[var(--text-secondary)] outline-none focus-visible:border-violet-500/40 cursor-pointer"
+                >
+                  <option value="worst">{t('clients_page.sort_worst')}</option>
+                  <option value="name">{t('clients_page.sort_name')}</option>
+                  <option value="newest">{t('clients_page.sort_newest')}</option>
+                </select>
+              </label>
+            </div>
+
+            {displayClients.length === 0 ? (
               <EmptyState
                 icon="search"
                 title={t('weissmanFindings.filtered_title')}
@@ -342,7 +434,7 @@ export default function Clients() {
               />
             ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-            {visibleClients.map((client) => {
+            {displayClients.map((client) => {
               const domains = (() => {
                 try {
                   const parsed = typeof client.domains === 'string' ? JSON.parse(client.domains) : client.domains
@@ -360,6 +452,11 @@ export default function Clients() {
                   return []
                 }
               })()
+
+              const snap = risk[client.id]
+              const sev = severityKey(snap)
+              const sc = SEV[sev]
+              const barPct = snap ? Math.max(3, Math.round(((snap.sle_worst_usd || 0) / portfolioMax) * 100)) : 0
 
               return (
                 <article
@@ -380,12 +477,21 @@ export default function Clients() {
                         <p className="text-sm text-[var(--text-muted)] mt-1 truncate font-mono">{client.contact_email}</p>
                       )}
                     </div>
-                    <Link
-                      to={`/clients/${client.id}`}
-                      className="shrink-0 px-3 py-1 text-[10px] font-mono uppercase tracking-wider border border-violet-500/30 rounded-lg text-violet-300 hover:bg-violet-500/10 transition-colors"
-                    >
-                      {t('clients_page.view')}
-                    </Link>
+                    <div className="shrink-0 flex flex-col items-end gap-1.5">
+                      <span
+                        className="px-2 py-0.5 rounded-md text-[9px] font-mono uppercase tracking-wider border"
+                        style={{ color: sc.color, borderColor: sc.border, background: sc.bg }}
+                        title={t('clients_page.worst_case_hint')}
+                      >
+                        {t(`clients_page.sev_${sev}`)}
+                      </span>
+                      <Link
+                        to={`/clients/${client.id}`}
+                        className="px-3 py-1 text-[10px] font-mono uppercase tracking-wider border border-violet-500/30 rounded-lg text-violet-300 hover:bg-violet-500/10 transition-colors"
+                      >
+                        {t('clients_page.view')}
+                      </Link>
+                    </div>
                   </div>
 
                   <div
@@ -415,6 +521,15 @@ export default function Clients() {
                         ? fmtUsd(risk[client.id].sle_worst_usd)
                         : <span className="text-[var(--text-muted)] text-sm font-normal">{t('clients_page.no_snapshot')}</span>}
                     </div>
+                    {snap && (
+                      <div
+                        className="mt-2 h-1 rounded-full bg-[var(--border-subtle)] overflow-hidden"
+                        role="img"
+                        aria-label={`${t(`clients_page.sev_${sev}`)} · ${fmtUsd(snap.sle_worst_usd)}`}
+                      >
+                        <div className="h-full rounded-full transition-all" style={{ width: `${barPct}%`, background: sc.color }} />
+                      </div>
+                    )}
                     {risk[client.id] && (
                       <div className="text-[10px] font-mono text-[var(--text-muted)] mt-1.5">
                         {t('clients_page.ale_crown', {

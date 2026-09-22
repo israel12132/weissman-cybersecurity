@@ -192,6 +192,7 @@ function Section({ title, icon, accent = '#f97316', defaultOpen = true, children
       <Button variant="unstyled"
         type="button"
         onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
         className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-[var(--row-hover-bg)] transition-colors"
       >
         <span className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.18em] font-semibold" style={{ color: accent }}>
@@ -247,7 +248,7 @@ function SelectField({ label, value, onChange, options }) {
 
 function Toggle({ label, value, onChange }) {
   return (
-    <Button variant="unstyled" type="button" onClick={() => onChange(!value)}
+    <Button variant="unstyled" type="button" onClick={() => onChange(!value)} aria-pressed={value}
       className={`flex items-center justify-between w-full px-2.5 py-1.5 rounded-lg border text-[11px] font-mono transition-all ${
         value ? 'border-[#f97316]/40 bg-[#f97316]/10 text-[#f97316]' : 'border-[var(--border-default)] bg-[var(--bg-2)] text-[var(--text-muted)] hover:text-[var(--text-tertiary)]'}`}>
       <span>{label}</span>
@@ -319,7 +320,7 @@ function FindingCard({ f }) {
   const checks = Array.isArray(ev.checks) ? ev.checks : []
   return (
     <div className={`rounded-xl border ${SEV_STYLE[sev] ?? SEV_STYLE.info} overflow-hidden`}>
-      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-2 px-3 py-2 text-left hover:bg-[var(--row-hover-bg)]">
+      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="w-full flex items-start gap-2 px-3 py-2 text-left hover:bg-[var(--row-hover-bg)]">
         <span className="text-[8px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded border border-current shrink-0 mt-0.5">{sev}</span>
         <span className="text-[11px] font-mono text-[var(--text-primary)] flex-1 leading-snug">{f.title || f.type}</span>
         {typeof f.confidence === 'number' && <span className="text-[9px] font-mono text-[var(--text-disabled)] shrink-0">{Math.round(f.confidence * 100)}%</span>}
@@ -467,7 +468,7 @@ function BgpDnsFlagship({ clientId, target, showToast, t, tt, onShellReady, isFo
         <div>
           <div className="flex items-center gap-2">
             <span className="text-2xl">🛰</span>
-            <h2 className="text-base font-bold text-white">{tt('flagship_title', 'DNS & BGP Hijack-Resistance')}</h2>
+            <h2 className="text-base font-bold text-[var(--text-primary)]">{tt('flagship_title', 'DNS & BGP Hijack-Resistance')}</h2>
           </div>
           <p className="text-[11px] text-[var(--text-muted)] mt-1 max-w-2xl leading-relaxed">
             {tt('flagship_desc', 'Live multi-resolver consensus, DNSSEC chain validation, RPKI ROA validation, BGP origin-AS / MOAS analysis, NS diversity, CAA & subdomain-takeover — fully read-only.')}
@@ -782,7 +783,8 @@ export default function NetworkIntelligence() {
       )}
 
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-[#f97316]/30 text-[#f97316]'}`}>
+        <div role={toast.sev === 'error' ? 'alert' : 'status'} aria-live={toast.sev === 'error' ? 'assertive' : 'polite'}
+          className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-[#f97316]/30 text-[#f97316]'}`}>
           {toast.msg}
         </div>
       )}

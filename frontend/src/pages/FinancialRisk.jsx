@@ -102,6 +102,9 @@ export default function FinancialRisk() {
 
   useEffect(() => {
     setSnapshot(null)
+    // Clear any prior error so a failed load for one client (or deselecting to
+    // "no client", which does not call load) can't leave a stale error banner.
+    setError('')
     if (selectedClientId != null) load(false)
   }, [selectedClientId, load])
 

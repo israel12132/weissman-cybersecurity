@@ -28,7 +28,7 @@ export default function RedTeamSkullSwitch() {
 
   return (
     <motion.div
-      className="relative rounded-2xl bg-black/50 backdrop-blur-md border p-4 flex flex-col items-center gap-3"
+      className="relative rounded-2xl bg-[var(--table-surface)] backdrop-blur-md border p-4 flex flex-col items-center gap-3"
       animate={{
         borderColor: commandRefused ? 'rgba(239, 68, 68, 0.9)' : isWeaponized ? 'rgba(239, 68, 68, 0.6)' : 'rgba(255,255,255,0.1)',
         boxShadow: commandRefused ? '0 0 20px rgba(239,68,68,0.6)' : isWeaponized ? '0 0 30px rgba(239,68,68,0.2)' : '0 0 0 transparent',
@@ -45,7 +45,7 @@ export default function RedTeamSkullSwitch() {
           {t(`${NS}.commandRefused`)}
         </motion.span>
       )}
-      <span className="text-[10px] font-semibold text-white/50 uppercase tracking-[0.2em]">
+      <span className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-[0.2em]">
         {t(`${NS}.weaponization`)}
       </span>
       <Button variant="unstyled"
@@ -58,14 +58,14 @@ export default function RedTeamSkullSwitch() {
           disabled:opacity-50 disabled:cursor-not-allowed
           ${isWeaponized
             ? 'border-[#ef4444] bg-[#ef4444]/20 text-[#ef4444] shadow-[0_0_24px_rgba(239,68,68,0.5)]'
-            : 'border-white/20 bg-white/5 text-white/60 hover:border-white/40 hover:text-white/80'
+            : 'border-[var(--border-strong)] bg-[var(--bg-2)] text-[var(--text-tertiary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]'
           }
         `}
         aria-label={isWeaponized ? t(`${NS}.disableRedTeam`) : t(`${NS}.enableRedTeam`)}
       >
         <Skull className="w-7 h-7" strokeWidth={2} />
       </Button>
-      <span className="text-[10px] text-white/60">
+      <span className="text-[10px] text-[var(--text-tertiary)]">
         {isWeaponized ? t(`${NS}.redTeamOn`) : t(`${NS}.proofOnly`)}
       </span>
     </motion.div>

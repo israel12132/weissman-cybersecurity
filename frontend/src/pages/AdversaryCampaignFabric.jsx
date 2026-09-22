@@ -15,6 +15,7 @@ import { Crosshair, Play, Pause, GitBranch, FlaskConical, Loader2, Wrench, Shiel
 import PageShell from './PageShell'
 import EmptyState from '../components/ui/EmptyState'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
+import FilterPills from '../components/ui/FilterPills'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
@@ -77,6 +78,12 @@ function exportCampaignsCsv(rows) {
   downloadCsv(data, header, 'weissman-campaigns')
 }
 
+const CAMPAIGN_STATUS_ORDER = ['running', 'blocked', 'failed', 'paused', 'draft', 'completed']
+const CAMPAIGN_STATUS_COLOR = {
+  running: '#22d3ee', blocked: '#f43f5e', failed: '#fb923c',
+  paused: '#fbbf24', draft: '#94a3b8', completed: '#34d399',
+}
+
 export default function AdversaryCampaignFabric() {
   const { t } = useTranslation()
   const { clients, selectedClientId, setSelectedClientId } = useClient()
@@ -92,6 +99,7 @@ export default function AdversaryCampaignFabric() {
   const [profiles, setProfiles] = useState([])
   const [provenOnly, setProvenOnly] = useState(false)
   const [provingStep, setProvingStep] = useState(null)
+  const [statusFilter, setStatusFilter] = useState('all')
 
   const loadList = useCallback(async () => {
     setLoading(true)
@@ -150,6 +158,7 @@ export default function AdversaryCampaignFabric() {
         const catalog = Array.isArray(data?.profiles) ? data.profiles : []
         if (!cancelled && catalog.length) setProfiles(catalog)
       })
+      // eslint-disable-next-line no-restricted-syntax -- best-effort profile refresh; the catalog already loaded via loadList, so a failure here is non-fatal
       .catch(() => {})
     return () => {
       cancelled = true
@@ -178,9 +187,11 @@ export default function AdversaryCampaignFabric() {
     try {
       const body = { client_id: selectedClientId, goal }
       if (profileId) body.profile_id = profileId
+      // apiFetch serializes an object body and sets the JSON Content-Type header
+      // itself; pre-stringifying skips that header, so Axum rejects the payload.
       const data = await apiFetch('/api/campaigns', {
         method: 'POST',
-        body: JSON.stringify(body),
+        body,
       })
       await loadList()
       if (data?.campaign?.id) await loadOne(data.campaign.id)
@@ -274,11 +285,36 @@ export default function AdversaryCampaignFabric() {
     },
   )
 
-  const visible = useMemo(() => {
+  const searchMatched = useMemo(() => {
     const ids = new Set(filteredFindings.map((f) => String(f.id)))
     if (!searchQuery.trim()) return campaigns
     return campaigns.filter((c) => ids.has(String(c.id)))
   }, [campaigns, filteredFindings, searchQuery])
+
+  const statusCounts = useMemo(() => {
+    const c = { all: campaigns.length }
+    for (const camp of campaigns) c[camp.status] = (c[camp.status] || 0) + 1
+    return c
+  }, [campaigns])
+
+  const visible = useMemo(
+    () => (statusFilter === 'all' ? searchMatched : searchMatched.filter((c) => c.status === statusFilter)),
+    [searchMatched, statusFilter],
+  )
+
+  const statusPills = useMemo(
+    () =>
+      [
+        { id: 'all', label: t('common.all'), count: statusCounts.all, color: '#22d3ee' },
+        ...CAMPAIGN_STATUS_ORDER.filter((s) => statusCounts[s] > 0).map((s) => ({
+          id: s,
+          label: t(`${NS}.status_${s}`, { defaultValue: s }),
+          count: statusCounts[s],
+          color: CAMPAIGN_STATUS_COLOR[s] || '#94a3b8',
+        })),
+      ].map((p) => ({ ...p, active: statusFilter === p.id, onClick: () => setStatusFilter(p.id) })),
+    [statusCounts, statusFilter, t],
+  )
 
   const facts = active?.world_state?.facts
   const evidence = active?.world_state?.evidence || {}
@@ -286,7 +322,10 @@ export default function AdversaryCampaignFabric() {
     const raw = active?.world_state?.proven_facts
     return new Set(Array.isArray(raw) ? raw.map(String) : [])
   }, [active?.world_state?.proven_facts])
-  const steps = Array.isArray(active?.steps) ? active.steps : []
+  const steps = useMemo(
+    () => (Array.isArray(active?.steps) ? active.steps : []),
+    [active?.steps],
+  )
   const visibleSteps = useMemo(
     () => (provenOnly ? steps.filter((s) => proofStatusOf(s) === 'proven') : steps),
     [steps, provenOnly],
@@ -404,7 +443,7 @@ export default function AdversaryCampaignFabric() {
 
         {selectedClientId != null && loading && <SkeletonWidgetGrid count={4} />}
 
-        {selectedClientId != null && !loading && visible.length === 0 && (
+        {selectedClientId != null && !loading && campaigns.length === 0 && (
           <EmptyState
             icon="network"
             title={t(`${NS}.empty_title`)}
@@ -421,6 +460,14 @@ export default function AdversaryCampaignFabric() {
               </Button>
             }
           />
+        )}
+
+        {selectedClientId != null && !loading && campaigns.length > 0 && (
+          <FilterPills className="-mt-1" pills={statusPills} />
+        )}
+
+        {selectedClientId != null && !loading && campaigns.length > 0 && visible.length === 0 && (
+          <p className="text-xs font-mono text-[var(--text-muted)] px-1">{t(`${NS}.no_status_match`, { defaultValue: 'No campaigns match this filter.' })}</p>
         )}
 
         {selectedClientId != null && !loading && visible.length > 0 && (

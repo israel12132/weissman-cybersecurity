@@ -103,7 +103,7 @@ export default function AlertRulesEngine() {
     try {
       const result = await api.post(`/api/alerts/rules/${ruleId}/test`);
       if (result.success) {
-        toast.success(t('pages.alertRulesEngine.test_success', { count: result.matched }));
+        toast.success(t('pages.alertRulesEngine.test_success', { count: result.matched ?? 0 }));
       } else {
         toast.warning(t('pages.alertRulesEngine.test_failed'));
       }
@@ -184,7 +184,7 @@ export default function AlertRulesEngine() {
               <span className="text-sm text-[var(--text-tertiary)]">{t('pages.alertRulesEngine.total_rules')}</span>
               <Bell className="w-4 h-4 text-cyan-400" />
             </div>
-            <div className="text-2xl font-bold text-white">{stats.total}</div>
+            <div className="text-2xl font-bold text-[var(--text-primary)]">{stats.total}</div>
           </div>
 
           <div className="bg-green-500/10 backdrop-blur-md border border-green-500/30 rounded-xl p-4">
@@ -220,6 +220,7 @@ export default function AlertRulesEngine() {
               <Button variant="unstyled"
                 key={f}
                 onClick={() => setFilter(f)}
+                aria-pressed={filter === f}
                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                   filter === f
                     ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
@@ -243,7 +244,7 @@ export default function AlertRulesEngine() {
         {/* Rules List */}
         <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
           <div className="p-4 border-b border-[var(--border-default)] space-y-3">
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
               <Bell className="w-4 h-4 text-cyan-400" />
               {t('pages.alertRulesEngine.rules_heading', { count: unavailable ? '—' : filteredRules.length })}
             </h3>
@@ -256,7 +257,7 @@ export default function AlertRulesEngine() {
           </div>
 
           {loading ? (
-            <div className="p-8 text-center text-[var(--text-muted)]">
+            <div className="p-8 text-center text-[var(--text-muted)]" role="status" aria-live="polite">
               <div className="animate-spin w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full mx-auto mb-3" />
               Loading rules...
             </div>
@@ -304,7 +305,7 @@ export default function AlertRulesEngine() {
 
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
-                          <h4 className="text-sm font-semibold text-white">{rule.name}</h4>
+                          <h4 className="text-sm font-semibold text-[var(--text-primary)]">{rule.name}</h4>
                           <span
                             className={`px-2 py-1 rounded text-xs font-medium ${
                               rule.enabled
@@ -412,7 +413,7 @@ export default function AlertRulesEngine() {
 
         {/* Quick Templates */}
         <div className="bg-gradient-to-r from-purple-500/10 to-blue-500/10 backdrop-blur-md border border-purple-500/30 rounded-xl p-6">
-          <h3 className="text-sm font-semibold text-white mb-3">Quick Templates</h3>
+          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Quick Templates</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
             <Button variant="unstyled"
               onClick={() =>
@@ -463,7 +464,7 @@ export default function AlertRulesEngine() {
               }
               className="p-3 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left"
             >
-              <div className="text-sm font-medium text-white mb-1">High Volume</div>
+              <div className="text-sm font-medium text-[var(--text-primary)] mb-1">High Volume</div>
               <div className="text-xs text-[var(--text-tertiary)]">Alert when findings exceed threshold</div>
             </Button>
             <Button variant="unstyled"
@@ -479,7 +480,7 @@ export default function AlertRulesEngine() {
               }
               className="p-3 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left"
             >
-              <div className="text-sm font-medium text-white mb-1">{t('pages.alertRulesEngine.template_oast')}</div>
+              <div className="text-sm font-medium text-[var(--text-primary)] mb-1">{t('pages.alertRulesEngine.template_oast')}</div>
               <div className="text-xs text-[var(--text-tertiary)]">{t('pages.alertRulesEngine.template_oast_hint')}</div>
             </Button>
             <Button variant="unstyled"
@@ -498,7 +499,7 @@ export default function AlertRulesEngine() {
               className="p-3 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left"
               data-testid="template-kev-jewel"
             >
-              <div className="text-sm font-medium text-white mb-1">{t('pages.alertRulesEngine.template_kev')}</div>
+              <div className="text-sm font-medium text-[var(--text-primary)] mb-1">{t('pages.alertRulesEngine.template_kev')}</div>
               <div className="text-xs text-[var(--text-tertiary)]">{t('pages.alertRulesEngine.template_kev_hint')}</div>
             </Button>
           </div>
@@ -593,7 +594,7 @@ function RuleModal({ rule, template, onClose, onSave }) {
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               placeholder="Critical vulnerabilities alert"
             />
           </div>
@@ -605,7 +606,7 @@ function RuleModal({ rule, template, onClose, onSave }) {
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               rows={2}
-              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               placeholder="Alert when critical findings are detected"
             />
           </div>
@@ -619,10 +620,11 @@ function RuleModal({ rule, template, onClose, onSave }) {
                 min="1"
                 max="10"
                 value={formData.priority}
-                onChange={(e) =>
-                  setFormData({ ...formData, priority: parseInt(e.target.value) })
-                }
-                className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                onChange={(e) => {
+                  const parsed = parseInt(e.target.value, 10)
+                  setFormData({ ...formData, priority: Number.isNaN(parsed) ? '' : parsed })
+                }}
+                className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               />
             </div>
 
@@ -634,7 +636,7 @@ function RuleModal({ rule, template, onClose, onSave }) {
                 onChange={(e) =>
                   setFormData({ ...formData, enabled: e.target.value === 'enabled' })
                 }
-                className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               >
                 <option value="enabled">Enabled</option>
                 <option value="disabled">Disabled</option>
@@ -689,7 +691,7 @@ function RuleModal({ rule, template, onClose, onSave }) {
                     },
                   })
                 }
-                className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               />
             </div>
             <div>
@@ -712,7 +714,7 @@ function RuleModal({ rule, template, onClose, onSave }) {
                     },
                   })
                 }
-                className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               />
             </div>
           </div>
@@ -869,7 +871,7 @@ function RuleModal({ rule, template, onClose, onSave }) {
                       },
                     })
                   }}
-                  className="mt-1 w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                  className="mt-1 w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
                   placeholder="0.70"
                 />
                 <span className="block text-xs text-[var(--text-tertiary)] mt-1">

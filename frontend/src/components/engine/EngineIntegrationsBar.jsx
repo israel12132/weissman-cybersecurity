@@ -60,10 +60,10 @@ export default function EngineIntegrationsBar({
           {!integrationsUnavailable && readiness.chips.map((chip) => (
             <span
               key={chip.key}
-              title={chip.ok ? chip.label : `${chip.label} — not configured`}
+              title={chip.ok ? chip.label : t('components.engineIntegrations.not_configured', { label: chip.label })}
               className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
                 chip.ok
-                  ? 'border-emerald-500/40 text-emerald-300/90 bg-emerald-500/10'
+                  ? 'border-emerald-500/40 text-[var(--severity-low)] bg-emerald-500/10'
                   : 'border-[var(--border-strong)] text-[var(--text-muted)] bg-[var(--row-hover-bg)]'
               }`}
             >
@@ -75,7 +75,7 @@ export default function EngineIntegrationsBar({
           {clientId && (
             <Link
               to={`/clients/${clientId}/integrations`}
-              className="text-[10px] font-mono text-amber-300/90 hover:text-amber-200 border border-amber-500/30 rounded px-2 py-0.5"
+              className="text-[10px] font-mono text-[var(--severity-medium)] hover:text-[var(--severity-medium)] border border-amber-500/30 rounded px-2 py-0.5"
             >
               {t('components.engineIntegrations.configure')}
             </Link>
@@ -83,7 +83,7 @@ export default function EngineIntegrationsBar({
           {engineId && (
             <Link
               to={`/engines/${engineId}`}
-              className="text-[10px] font-mono text-cyan-300/90 hover:text-cyan-200 border border-cyan-500/30 rounded px-2 py-0.5"
+              className="text-[10px] font-mono text-[var(--text-accent)] hover:text-[var(--text-accent)] border border-cyan-500/30 rounded px-2 py-0.5"
             >
               {t('components.engineIntegrations.engine_detail')}
             </Link>
@@ -91,12 +91,12 @@ export default function EngineIntegrationsBar({
         </div>
       </div>
       {integrationsUnavailable && (
-        <p data-testid="engine-integrations-unavailable" className="mt-2 text-[10px] font-mono text-rose-300/90 leading-snug">
+        <p data-testid="engine-integrations-unavailable" className="mt-2 text-[10px] font-mono text-[var(--severity-critical)] leading-snug">
           {t('components.engineIntegrations.unavailable')}
         </p>
       )}
       {!integrationsUnavailable && !readiness.ready && clientId && !integrationsLoading && readiness.chips.length > 0 && (
-        <p className="mt-2 text-[10px] font-mono text-amber-400/80 leading-snug">
+        <p className="mt-2 text-[10px] font-mono text-[var(--severity-medium)] leading-snug">
           {t('components.engineIntegrations.hint')}
         </p>
       )}

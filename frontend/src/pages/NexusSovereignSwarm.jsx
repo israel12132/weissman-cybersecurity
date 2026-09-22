@@ -330,6 +330,7 @@ function Section({ title, icon, accent = '#a855f7', count, defaultOpen = true, c
     <div className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] overflow-hidden" style={{ borderColor: `${accent}22` }}>
       <Button variant="unstyled"
         type="button"
+        aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
         className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-[var(--row-hover-bg)] transition-colors"
       >
@@ -361,7 +362,7 @@ function Num({ label, value, onChange, min, max, step, hint }) {
         step={step}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-violet-400/40"
+        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-[var(--text-primary)] font-mono focus:outline-none focus:border-violet-400/40"
       />
       <Hint>{hint}</Hint>
     </label>
@@ -375,7 +376,7 @@ function Sel({ label, value, onChange, options, hint }) {
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white focus:outline-none focus:border-violet-400/40"
+        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-violet-400/40"
       >
         {options.map((o) => (
           <option key={o} value={o}>{o}</option>
@@ -394,7 +395,7 @@ function Txt({ label, value, onChange, placeholder, hint }) {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white font-mono placeholder-white/20 focus:outline-none focus:border-violet-400/40"
+        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-[var(--text-primary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-violet-400/40"
       />
       <Hint>{hint}</Hint>
     </label>
@@ -410,7 +411,7 @@ function Area({ label, value, onChange, placeholder, rows = 3, hint }) {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-xs text-white font-mono placeholder-white/20 focus:outline-none focus:border-violet-400/40 resize-y"
+        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-xs text-[var(--text-primary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-violet-400/40 resize-y"
       />
       <Hint>{hint}</Hint>
     </label>
@@ -547,7 +548,7 @@ function SiqGauge({ score }) {
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-3xl font-bold text-white">{hasScore ? pct : '—'}</span>
+        <span className="text-3xl font-bold text-[var(--text-primary)]">{hasScore ? pct : '—'}</span>
         <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-widest">SIQ</span>
       </div>
     </div>
@@ -558,7 +559,7 @@ function MetricTile({ label, value, accent = '#a855f7' }) {
   return (
     <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] backdrop-blur-md p-4" style={{ boxShadow: `inset 0 1px 0 ${accent}20` }}>
       <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-1">{label}</p>
-      <p className="text-2xl font-bold text-white">{value ?? '—'}</p>
+      <p className="text-2xl font-bold text-[var(--text-primary)]">{value ?? '—'}</p>
     </div>
   )
 }
@@ -1033,7 +1034,7 @@ function FindingRow({ finding }) {
   const evidence = f.evidence || f.swarm_metrics
   return (
     <div className="text-[11px] border-b border-[var(--border-subtle)] pb-2 last:border-0">
-      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full text-left">
+      <Button variant="unstyled" type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="w-full text-left">
         <div className="flex items-start gap-2">
           <span className={`font-mono shrink-0 ${f.severity === 'critical' ? 'text-red-400' : f.severity === 'high' ? 'text-orange-400' : f.severity === 'medium' ? 'text-amber-400' : 'text-cyan-400'}`}>
             [{f.severity || 'info'}]
@@ -1082,7 +1083,7 @@ function MissionPresetsBar({ onApply, onSave, onExport, onImport, onWaveReplay, 
           >
             <span>{p.icon}</span>
             <span className="min-w-0 flex-1">
-              <span className="text-[11px] font-semibold text-white block">{p.label}</span>
+              <span className="text-[11px] font-semibold text-[var(--text-primary)] block">{p.label}</span>
               <span className="text-[9px] text-[var(--text-muted)] block truncate">{p.desc}</span>
             </span>
           </Button>
@@ -1250,7 +1251,9 @@ export default function NexusSovereignSwarm() {
     [endpointAgents, selectedClientId],
   )
   const fleetOnline = useMemo(
-    () => fleetForClient.filter((a) => a.status === 'online' || a.live).length,
+    // Agent objects from /api/agents/status expose `online` (boolean); keep the
+    // legacy status/live fallbacks so no shape regresses.
+    () => fleetForClient.filter((a) => a.online || a.status === 'online' || a.live).length,
     [fleetForClient],
   )
 
@@ -1311,7 +1314,12 @@ export default function NexusSovereignSwarm() {
 
   const loadAgents = useCallback(() => {
     apiFetch('/api/agents/status')
-      .then((d) => { if (Array.isArray(d)) setEndpointAgents(d) })
+      // GET /api/agents/status returns { agents: [...], online_count }, not a
+      // bare array — reading `d` as the array left the fleet permanently empty.
+      .then((d) => {
+        const list = Array.isArray(d?.agents) ? d.agents : Array.isArray(d) ? d : null
+        if (list) setEndpointAgents(list)
+      })
       .catch((e) => { if (e?.status) setEndpointAgents([]) })
   }, [])
 
@@ -1657,7 +1665,7 @@ export default function NexusSovereignSwarm() {
                 <ConfigCompletenessBadge parity={schemaParity} completeness={completeness} />
                 <span className="text-[10px] font-mono text-[var(--text-disabled)]">MITRE T1595</span>
               </div>
-              <h1 className="text-2xl font-bold text-white tracking-tight">
+              <h1 className="text-2xl font-bold text-[var(--text-primary)] tracking-tight">
                 {engine?.label || 'Nexus Sovereign Swarm Intelligence'}
               </h1>
               <p className="text-sm text-[var(--text-tertiary)] mt-1 max-w-2xl leading-relaxed">
@@ -1682,7 +1690,7 @@ export default function NexusSovereignSwarm() {
           <div className="xl:sticky xl:top-4 space-y-3 xl:max-h-[calc(100dvh-2rem)] xl:overflow-y-auto pr-1">
             <div className="rounded-2xl border border-violet-500/25 bg-gradient-to-b from-violet-950/30 to-black/50 p-3">
               <div className="flex items-center justify-between mb-2 px-1">
-                <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+                <h2 className="text-sm font-bold text-[var(--text-primary)] tracking-tight flex items-center gap-2">
                   <span>🎛️</span> {t('nexusSwarm.control_column', 'Sovereign Control Column')}
                 </h2>
                 <Button variant="unstyled"
@@ -1713,7 +1721,7 @@ export default function NexusSovereignSwarm() {
                   <select
                     value={selectedClientId}
                     onChange={(e) => setSelectedClientId(e.target.value)}
-                    className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white focus:outline-none focus:border-violet-400/40"
+                    className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-violet-400/40"
                   >
                     <option value="">—</option>
                     {clients.map((c) => (
@@ -1778,7 +1786,7 @@ export default function NexusSovereignSwarm() {
                       >
                         <span>{a.icon}</span>
                         <span className="min-w-0 flex-1">
-                          <span className="text-xs font-semibold text-white block">{a.label}</span>
+                          <span className="text-xs font-semibold text-[var(--text-primary)] block">{a.label}</span>
                           <span className="text-[9px] text-[var(--text-muted)] block leading-tight truncate">{a.desc}</span>
                         </span>
                         <span className={`text-[9px] font-mono ${on ? 'text-emerald-400' : 'text-[var(--text-disabled)]'}`}>{on ? 'ON' : 'OFF'}</span>
@@ -1808,13 +1816,13 @@ export default function NexusSovereignSwarm() {
                         value={h.name}
                         onChange={(e) => setHeader(i, 'name', e.target.value)}
                         placeholder="Header"
-                        className="w-2/5 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-2 py-1 text-[11px] text-white font-mono placeholder-white/20 focus:outline-none focus:border-violet-400/40"
+                        className="w-2/5 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-2 py-1 text-[11px] text-[var(--text-primary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-violet-400/40"
                       />
                       <input
                         value={h.value}
                         onChange={(e) => setHeader(i, 'value', e.target.value)}
                         placeholder="Value"
-                        className="flex-1 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-2 py-1 text-[11px] text-white font-mono placeholder-white/20 focus:outline-none focus:border-violet-400/40"
+                        className="flex-1 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-2 py-1 text-[11px] text-[var(--text-primary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-violet-400/40"
                       />
                       <Button variant="unstyled" type="button" aria-label="Remove header" onClick={() => removeHeader(i)} className="text-[var(--text-disabled)] hover:text-rose-400 text-sm px-1">✕</Button>
                     </div>
@@ -1868,6 +1876,7 @@ export default function NexusSovereignSwarm() {
               <Section title={t('nexusSwarm.sec_payload', 'Live Payload Preview')} icon="📦" accent="#64748b" count={paramCount} defaultOpen={false}>
                 <Button variant="unstyled"
                   type="button"
+                  aria-expanded={showPreview}
                   onClick={() => setShowPreview((s) => !s)}
                   className="text-[10px] font-mono text-cyan-300/70 hover:text-cyan-200"
                 >
@@ -1975,9 +1984,9 @@ export default function NexusSovereignSwarm() {
               </p>
               <div className="flex flex-wrap gap-2">
                 {fleetForClient.slice(0, 8).map((a) => (
-                  <span key={a.agent_uuid} className="flex items-center gap-1.5 text-[10px] font-mono text-[var(--text-muted)] rounded-lg border border-[var(--border-default)] px-2 py-1">
-                    <span className={`w-1.5 h-1.5 rounded-full ${a.status === 'online' || a.live ? 'bg-emerald-400' : 'bg-white/20'}`} />
-                    {a.hostname || a.device_name || a.agent_uuid?.slice(0, 8)}
+                  <span key={a.agent_id || a.agent_uuid} className="flex items-center gap-1.5 text-[10px] font-mono text-[var(--text-muted)] rounded-lg border border-[var(--border-default)] px-2 py-1">
+                    <span className={`w-1.5 h-1.5 rounded-full ${a.online || a.status === 'online' || a.live ? 'bg-emerald-400' : 'bg-[var(--bg-2)]'}`} />
+                    {a.hostname || a.device_name || a.agent_id || a.agent_uuid?.slice(0, 8)}
                   </span>
                 ))}
               </div>

@@ -25,13 +25,15 @@ const STAGE_COLORS = {
 }
 
 function ConfidenceBadge({ confidence }) {
-  const color = confidence > 0.8 ? '#4ade80' : confidence > 0.5 ? '#f59e0b' : '#6b7280'
+  const n = Number(confidence)
+  const valid = Number.isFinite(n)
+  const color = n > 0.8 ? '#4ade80' : n > 0.5 ? '#f59e0b' : '#6b7280'
   return (
     <span
       className="px-1.5 py-0.5 rounded text-[10px] font-mono"
       style={{ backgroundColor: `${color}20`, color }}
     >
-      {Math.round(confidence * 100)}%
+      {valid ? `${Math.round(n * 100)}%` : '—'}
     </span>
   )
 }
@@ -117,6 +119,7 @@ function DomainCard({ domain, selected, onSelect, onScanClick }) {
             type="checkbox"
             checked={selected}
             onChange={() => onSelect(domain.domain)}
+            aria-label={t('pages.domainDiscovery.select_domain_aria', { domain: domain.domain })}
             className="w-4 h-4 rounded border-[var(--border-strong)] bg-[var(--bg-2)] text-cyan-500 focus:ring-cyan-500/40"
           />
           <span className="text-sm font-semibold text-[var(--text-primary)] truncate">{domain.domain}</span>
@@ -386,6 +389,7 @@ export default function DomainDiscovery() {
             <select
               value={selectedClientId ?? ''}
               onChange={(e) => setSelectedClientId(e.target.value || null)}
+              aria-label={t('pages.domainDiscovery.client')}
               className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-2 py-1 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40"
             >
               <option value="">{t('pages.domainDiscovery.select_client')}</option>
@@ -414,6 +418,8 @@ export default function DomainDiscovery() {
         {toast && (
           <motion.div
             key={toast.id}
+            role={toast.sev === 'error' ? 'alert' : 'status'}
+            aria-live={toast.sev === 'error' ? 'assertive' : 'polite'}
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
@@ -456,7 +462,7 @@ export default function DomainDiscovery() {
                 value={target}
                 onChange={(e) => setTarget(e.target.value)}
                 placeholder={t('pages.domainDiscovery.target_placeholder')}
-                className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
+                className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
               />
             </div>
             <div>
@@ -468,7 +474,7 @@ export default function DomainDiscovery() {
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
                 placeholder={t('pages.domainDiscovery.company_placeholder')}
-                className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
+                className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
               />
             </div>
             <div className="flex items-end">

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { CornerDownLeft, Mic, Play, Sparkles } from 'lucide-react'
 import { cn } from '../../lib/cn'
 
@@ -37,6 +38,7 @@ export default function AiCommandConsole({
   className,
   ...props
 }) {
+  const { t } = useTranslation()
   const [value, setValue] = useState('')
   const [listening, setListening] = useState(false)
   const threadRef = useRef(null)
@@ -107,7 +109,7 @@ export default function AiCommandConsole({
         <span className="inline-flex size-6 items-center justify-center rounded-md bg-accent-violet-muted text-accent-violet">
           <Sparkles className="size-3.5" aria-hidden="true" />
         </span>
-        <span className="text-sm font-semibold text-text-primary">Ask Weissman</span>
+        <span className="text-sm font-semibold text-text-primary">{t('components.aiCommandConsole.title', 'Ask Weissman')}</span>
         {context.length > 0 && (
           <span className="ms-auto flex flex-wrap items-center gap-1.5">
             {context.map((c, i) => (
@@ -127,13 +129,15 @@ export default function AiCommandConsole({
         ref={threadRef}
         role="log"
         aria-live="polite"
-        aria-label="Conversation"
+        aria-label={t('components.aiCommandConsole.conversation', 'Conversation')}
         className="flex max-h-80 min-h-[8rem] flex-col gap-3 overflow-y-auto custom-scroll p-4"
       >
         {messages.length === 0 && !busy && (
           <p className="m-auto max-w-sm text-center text-xs text-text-muted">
-            Ask a question or issue a command in natural language. I can run scans,
-            launch playbooks, and pull up findings.
+            {t(
+              'components.aiCommandConsole.emptyState',
+              'Ask a question or issue a command in natural language. I can run scans, launch playbooks, and pull up findings.',
+            )}
           </p>
         )}
         {messages.map((m, i) => {
@@ -176,7 +180,7 @@ export default function AiCommandConsole({
         })}
         {busy && (
           <div className="flex justify-start">
-            <div className="inline-flex items-center gap-1 rounded-2xl bg-bg-3 px-3.5 py-2.5" aria-label="Assistant is thinking">
+            <div className="inline-flex items-center gap-1 rounded-2xl bg-bg-3 px-3.5 py-2.5" aria-label={t('components.aiCommandConsole.thinking', 'Assistant is thinking')}>
               <span className="size-1.5 animate-pulse-subtle rounded-full bg-text-muted" />
               <span className="size-1.5 animate-pulse-subtle rounded-full bg-text-muted" style={{ animationDelay: '150ms' }} />
               <span className="size-1.5 animate-pulse-subtle rounded-full bg-text-muted" style={{ animationDelay: '300ms' }} />
@@ -214,14 +218,14 @@ export default function AiCommandConsole({
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder={placeholder}
-          aria-label="Ask Weissman"
+          aria-label={t('components.aiCommandConsole.title', 'Ask Weissman')}
           className="flex-1 rounded-lg border border-border-default bg-bg-1 px-3 py-2 text-sm text-text-primary outline-none placeholder:text-text-muted focus-visible:border-accent-cyan/50 focus-visible:shadow-[var(--focus-ring)]"
         />
         {voiceSupported && (
           <button
             type="button"
             onClick={toggleVoice}
-            aria-label={listening ? 'Stop voice input' : 'Start voice input'}
+            aria-label={listening ? t('components.aiCommandConsole.stopVoice', 'Stop voice input') : t('components.aiCommandConsole.startVoice', 'Start voice input')}
             aria-pressed={listening}
             className={cn(
               'inline-flex size-9 items-center justify-center rounded-lg border focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]',
@@ -236,7 +240,7 @@ export default function AiCommandConsole({
         <button
           type="submit"
           disabled={busy || !value.trim()}
-          aria-label="Send"
+          aria-label={t('components.aiCommandConsole.send', 'Send')}
           className="inline-flex size-9 items-center justify-center rounded-lg bg-accent-gradient text-text-inverse disabled:opacity-40 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"
         >
           <CornerDownLeft className="size-4" aria-hidden="true" />

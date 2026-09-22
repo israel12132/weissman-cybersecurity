@@ -11,7 +11,14 @@ export function Hero() {
 
   return (
     <header className="relative overflow-hidden border-b border-[var(--line)]">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_78%_-10%,rgba(34,211,238,0.16),transparent_50%),radial-gradient(ellipse_50%_40%_at_10%_80%,rgba(62,224,178,0.07),transparent_50%),linear-gradient(180deg,#0b1016_0%,#07090c_78%)]" />
+      {/* Brand shield — full-bleed hero backdrop, responsive cover. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-40"
+        style={{ backgroundImage: 'url(/brand-cover.jpg)' }}
+      />
+      {/* Translucent scrim keeps hero copy legible over the image while the shield glows through. */}
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_78%_-10%,rgba(34,211,238,0.18),transparent_50%),radial-gradient(ellipse_50%_40%_at_10%_80%,rgba(62,224,178,0.08),transparent_50%),linear-gradient(180deg,rgba(11,16,22,0.64)_0%,rgba(7,9,12,0.82)_78%)]" />
       <div className="pointer-events-none absolute inset-0 opacity-35 [background-image:linear-gradient(rgba(244,239,230,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(244,239,230,0.045)_1px,transparent_1px)] [background-size:56px_56px]" />
       <div className="site-wrap relative grid items-center gap-12 py-16 md:py-20 lg:grid-cols-12 lg:py-24">
         <div className="lg:col-span-5">
