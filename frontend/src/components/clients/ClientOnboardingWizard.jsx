@@ -342,7 +342,10 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
                   >
                     <div className="font-medium text-[var(--text-primary)] text-sm">{modLabel}</div>
                     <div className="text-[11px] text-[var(--text-muted)] mt-1 font-mono">
-                      {mod.engine_count} engines · {mod.requirements?.length} reqs
+                      {t('pages.clientOnboarding.module_meta', {
+                        engines: mod.engine_count,
+                        reqs: mod.requirements?.length ?? 0,
+                      })}
                     </div>
                   </Button>
                 )
@@ -363,7 +366,7 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
                     <Field label={label(catalog?.requirements?.aws_cross_account)} required>
                       <input className={inputCls} value={form.aws_cross_account_role_arn} onChange={(e) => patch({ aws_cross_account_role_arn: e.target.value })} placeholder="arn:aws:iam::123456789012:role/WeissmanAudit" />
                     </Field>
-                    <Field label="AWS External ID" required>
+                    <Field label={t('pages.clientOnboarding.aws_external_id')} required>
                       <input type="password" autoComplete="off" className={inputCls} value={form.aws_external_id} onChange={(e) => patch({ aws_external_id: e.target.value })} />
                     </Field>
                   </>
@@ -378,7 +381,7 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
                     <Field label={label(catalog?.requirements?.azure_subscription)} required>
                       <input className={inputCls} value={form.azure_subscription_id} onChange={(e) => patch({ azure_subscription_id: e.target.value })} placeholder="subscription-id" />
                     </Field>
-                    <Field label="Azure Tenant ID" required>
+                    <Field label={t('pages.clientOnboarding.azure_tenant_id')} required>
                       <input className={inputCls} value={form.azure_tenant_id} onChange={(e) => patch({ azure_tenant_id: e.target.value })} />
                     </Field>
                   </>
@@ -468,7 +471,12 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
             <div className="grid sm:grid-cols-2 gap-3 text-sm">
               <SummaryItem label={t('pages.clientNew.client_name')} value={form.name} />
               <SummaryItem label={t('pages.clientNew.contact_email')} value={form.contact_email} />
-              <SummaryItem label={t('pages.clientNew.authorized_domains')} value={form.domains.split(/[\n,]+/).filter(Boolean).length + ' domains'} />
+              <SummaryItem
+                label={t('pages.clientNew.authorized_domains')}
+                value={t('pages.clientOnboarding.domains_count', {
+                  n: form.domains.split(/[\n,]+/).filter(Boolean).length,
+                })}
+              />
               <SummaryItem label={t('pages.clientOnboarding.modules')} value={form.engagement_modules.join(', ')} />
             </div>
             <div className="space-y-2 mt-4">
@@ -482,7 +490,7 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
                   <span className={item.satisfied ? 'text-[var(--text-tertiary)]' : 'text-[var(--severity-medium)]'}>
                     {label(item.def)}
                     {item.scope === 'tenant' && (
-                      <span className="ms-1 text-[10px] font-mono text-[var(--text-muted)]">(tenant)</span>
+                      <span className="ms-1 text-[10px] font-mono text-[var(--text-muted)]">{t('pages.clientOnboarding.scope_tenant_tag')}</span>
                     )}
                   </span>
                 </div>

@@ -47,6 +47,7 @@ export default function FindingSafeProof({ finding, onProofComplete }) {
       setReason(d?.reason ? String(d.reason) : '')
     } catch {
       setArtifacts([])
+      setReason('')
     } finally {
       setArtifactsLoaded(true)
     }

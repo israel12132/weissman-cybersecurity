@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation, Trans } from 'react-i18next'
 import {
@@ -43,6 +43,13 @@ export default function OnboardingWizard({ open, onComplete }) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [scanResult, setScanResult] = useState(null)
+  const completeTimerRef = useRef(null)
+
+  // Clear the pending "opening cockpit" hand-off timer if the wizard unmounts
+  // first, so onComplete never fires against a torn-down parent.
+  useEffect(() => () => {
+    if (completeTimerRef.current) clearTimeout(completeTimerRef.current)
+  }, [])
 
   if (!open) return null
 
@@ -102,7 +109,7 @@ export default function OnboardingWizard({ open, onComplete }) {
         message: d.message || t('components.onboarding.scan_queued_default'),
         jobs_queued: d.jobs_queued ?? 0,
       })
-      setTimeout(() => {
+      completeTimerRef.current = setTimeout(() => {
         onComplete?.({ clientId, scan: d })
       }, 1800)
     } catch (err) {

@@ -11,7 +11,7 @@ const CHANNELS = ['github_pr', 'github_direct_commit', 'gitlab_mr', 'bitbucket_p
  * BatchHealPanel — heal every fixable finding in a remediation family at once. Groups the findings
  * by client and calls POST /api/clients/:id/heal-batch per client. Repo/token are entered once.
  */
-export default function BatchHealPanel({ findings, onClose }) {
+export default function BatchHealPanel({ findings = [], onClose }) {
   const { t } = useTranslation()
   const [repoSlug, setRepoSlug] = useState('')
   const [gitToken, setGitToken] = useState('')
@@ -62,7 +62,7 @@ export default function BatchHealPanel({ findings, onClose }) {
       }
       setResult({ enqueued, skipped })
     } catch (e) {
-      setError(e.message || 'batch heal failed')
+      setError(e.message || t('pages.remediationHub.batch_heal_failed'))
     } finally {
       setSubmitting(false)
     }
@@ -86,11 +86,11 @@ export default function BatchHealPanel({ findings, onClose }) {
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <input value={repoSlug} onChange={(e) => setRepoSlug(e.target.value)} placeholder="owner/repo"
+            <input value={repoSlug} onChange={(e) => setRepoSlug(e.target.value)} placeholder="owner/repo" aria-label={t('pages.remediationHub.repo_slug')}
               className="bg-[var(--table-surface)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-secondary)] placeholder-[var(--text-muted)] font-mono focus:outline-none focus:border-cyan-500/40" />
-            <input type="password" value={gitToken} onChange={(e) => setGitToken(e.target.value)} placeholder="git token"
+            <input type="password" value={gitToken} onChange={(e) => setGitToken(e.target.value)} placeholder="ghp_…" aria-label={t('pages.remediationHub.git_token')}
               className="bg-[var(--table-surface)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-secondary)] placeholder-[var(--text-muted)] font-mono focus:outline-none focus:border-cyan-500/40" />
-            <select value={channel} onChange={(e) => setChannel(e.target.value)}
+            <select value={channel} onChange={(e) => setChannel(e.target.value)} aria-label={t('pages.remediationHub.channel_label')}
               className="bg-[var(--table-surface)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40">
               {CHANNELS.map((c) => <option key={c} value={c}>{t(`pages.remediationHub.channel_${c === 'github_direct_commit' ? 'github_commit' : c}`)}</option>)}
             </select>
@@ -98,9 +98,9 @@ export default function BatchHealPanel({ findings, onClose }) {
           <details className="text-[11px] text-[var(--text-muted)]">
             <summary className="cursor-pointer text-[var(--text-tertiary)]">{t('pages.remediationHub.dual_auth_required')}</summary>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
-              <input type="password" value={destructiveConfirm} onChange={(e) => setDestructiveConfirm(e.target.value)} placeholder="X-Weissman-Destructive-Confirm"
+              <input type="password" value={destructiveConfirm} onChange={(e) => setDestructiveConfirm(e.target.value)} placeholder="X-Weissman-Destructive-Confirm" aria-label="X-Weissman-Destructive-Confirm"
                 className="bg-[var(--table-surface)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40" />
-              <input type="password" value={dualApprove} onChange={(e) => setDualApprove(e.target.value)} placeholder="X-Weissman-Dual-Approve"
+              <input type="password" value={dualApprove} onChange={(e) => setDualApprove(e.target.value)} placeholder="X-Weissman-Dual-Approve" aria-label="X-Weissman-Dual-Approve"
                 className="bg-[var(--table-surface)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40" />
             </div>
           </details>

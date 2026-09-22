@@ -53,7 +53,7 @@ export default function NeuralEngineWeb({ width = 400, height = 300 }) {
         out.push({
           id: `${client.id}-${engineId}`,
           engineId,
-          clientName: client.name || `Client ${client.id}`,
+          clientName: client.name || t('components.neuralEngineWeb.client_fallback', { id: client.id }),
           color,
           from: hub,
           to,
@@ -64,7 +64,7 @@ export default function NeuralEngineWeb({ width = 400, height = 300 }) {
       })
     })
     return out
-  }, [clients, selectedClientId, enabledEngines, width, height, activity])
+  }, [clients, selectedClientId, enabledEngines, width, height, activity, t])
 
   const hasClients = (selectedClientId ? clients.filter((c) => String(c.id) === String(selectedClientId)) : clients).length > 0
   const showEmpty = !hasClients || enabledEngines.length === 0

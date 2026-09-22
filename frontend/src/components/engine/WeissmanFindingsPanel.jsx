@@ -96,7 +96,7 @@ export default function WeissmanFindingsPanel({
         <span className="text-[9px] font-mono uppercase shrink-0" style={{ color: SEV_COLORS[(f.severity || 'info').toLowerCase()] || SEV_COLORS.info }}>
           [{f.severity || 'info'}]
         </span>
-        <span className="text-[12px] font-mono text-[var(--text-primary)] min-w-0">{f.title || f.type || 'Finding'}</span>
+        <span className="text-[12px] font-mono text-[var(--text-primary)] min-w-0">{f.title || f.type || t('weissmanFindings.finding_fallback')}</span>
       </div>
       {f.description && <p className="text-[10px] font-mono text-[var(--text-muted)] leading-relaxed">{f.description}</p>}
       {(f.confidence_multiplier != null || f.effective_risk_confidence != null) && (

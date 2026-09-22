@@ -15,11 +15,12 @@ const VERDICT_SEGMENTS = [
 ]
 
 function Donut({ segments, total }) {
+  const { t } = useTranslation()
   const R = 52
   const C = 2 * Math.PI * R
   let offset = 0
   return (
-    <svg viewBox="0 0 130 130" className="w-36 h-36 shrink-0" role="img" aria-label="verdict distribution">
+    <svg viewBox="0 0 130 130" className="w-36 h-36 shrink-0" role="img" aria-label={t('pages.remediationHub.verdict_distribution')}>
       <circle cx="65" cy="65" r={R} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="16" />
       {total > 0 && segments.map((s) => {
         if (!s.value) return null
@@ -39,7 +40,7 @@ function Donut({ segments, total }) {
         return el
       })}
       <text x="65" y="61" textAnchor="middle" className="fill-white" style={{ fontSize: 20, fontWeight: 700 }}>{total}</text>
-      <text x="65" y="78" textAnchor="middle" style={{ fontSize: 9, fill: 'rgba(255,255,255,0.4)' }}>runs</text>
+      <text x="65" y="78" textAnchor="middle" style={{ fontSize: 9, fill: 'rgba(255,255,255,0.4)' }}>{t('pages.remediationHub.runs')}</text>
     </svg>
   )
 }

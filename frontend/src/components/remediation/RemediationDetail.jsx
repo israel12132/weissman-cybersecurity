@@ -223,7 +223,7 @@ export default function RemediationDetail({ finding, onClose }) {
       }
     } catch (e) {
       setHealing(false)
-      setHealError(e.message || 'failed')
+      setHealError(e.message || t('pages.remediationHub.heal_failed'))
     }
   }, [clientId, findingId, repoSlug, gitToken, baseBranch, channel, healthCurl, destructiveConfirm, dualApprove, selectedChannelMeta, t])
 
@@ -249,7 +249,7 @@ export default function RemediationDetail({ finding, onClose }) {
       })
       setReverted(true)
     } catch (e) {
-      setHealError(e.message || 'revert failed')
+      setHealError(e.message || t('pages.remediationHub.revert_failed'))
     } finally {
       setReverting(false)
     }
@@ -324,7 +324,7 @@ export default function RemediationDetail({ finding, onClose }) {
             {briefError && !briefUnavailable && (
               <div className="p-3 rounded-lg border border-rose-500/30 bg-rose-900/20 text-rose-300 text-xs flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 shrink-0" />
-                {t('pages.remediationHub.brief_error', { error: briefError })}: {briefError}
+                {t('pages.remediationHub.brief_error', { error: briefError })}
               </div>
             )}
 

@@ -22,13 +22,14 @@ function groupParams(schema) {
 }
 
 export function EngineParamField({ def, value, onChange, disabled }) {
+  const { t } = useTranslation()
   const fieldId = useId()
   const base = 'bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40 disabled:opacity-50'
   const label = (
     <label htmlFor={fieldId} className="block text-[11px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider mb-1">
       {def.label}
       {def.type === 'password' && (
-        <span className="ml-1 text-[var(--severity-medium)] normal-case tracking-normal" title="Stored securely; masked values are not overwritten">
+        <span className="ml-1 text-[var(--severity-medium)] normal-case tracking-normal" title={t('components.engineScanParams.secret_masked_hint')}>
           🔒
         </span>
       )}
@@ -145,8 +146,9 @@ export default function EngineScanParamsPanel({
             onClick={() => setCollapsed((c) => !c)}
             className="p-0.5 rounded hover:bg-[var(--row-hover-bg)] text-[var(--text-tertiary)]"
             aria-expanded={!collapsed}
+            aria-label={t('components.engineScanParams.toggle_params')}
           >
-            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${collapsed ? '' : 'rotate-180'}`} />
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${collapsed ? '' : 'rotate-180'}`} aria-hidden />
           </Button>
         )}
         {t('components.engineScanParams.title')}

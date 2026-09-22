@@ -26,5 +26,14 @@ export default function WarRoomSoundscape() {
     }
   }, [redTeamActive, startAlarmHum, stopAlarmHum])
 
+  // Silence the alarm hum on unmount so it doesn't keep playing after the
+  // soundscape leaves the tree (startAlarmHum/stopAlarmHum are stable).
+  useEffect(() => () => {
+    if (humActiveRef.current) {
+      humActiveRef.current = false
+      stopAlarmHum()
+    }
+  }, [stopAlarmHum])
+
   return null
 }

@@ -357,6 +357,7 @@ export default function CeoIntegratedCommandDeck() {
                 max={86400}
                 value={intervalInput}
                 onChange={(e) => setIntervalInput(e.target.value)}
+                aria-label={t('components.ceo.integratedCommandDeck.orchestratorInterval')}
                 className="flex-1 min-w-0 font-mono text-sm bg-[var(--table-surface)] border border-amber-500/25 rounded-lg px-3 py-2 text-amber-100"
               />
               <Button variant="unstyled"

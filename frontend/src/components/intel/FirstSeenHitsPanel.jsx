@@ -57,6 +57,7 @@ export default function FirstSeenHitsPanel({ clientId }) {
   const hits = Array.isArray(payload?.hits) ? payload.hits : []
   const firstSeen = hits.filter((h) => h.claimed_first_seen)
   const listed = hits.filter((h) => h.nvd_status === 'listed')
+  const skipped = hits.filter((h) => h.nvd_status === 'skipped_no_key')
 
   return (
     <div
@@ -112,7 +113,7 @@ export default function FirstSeenHitsPanel({ clientId }) {
               {t(`${NS}.first_seen_skipped`)}
             </p>
             <p className="text-xl font-bold tabular-nums text-cyan-200">
-              {payload?.skipped_count ?? 0}
+              {payload?.skipped_count ?? skipped.length}
             </p>
           </div>
         </div>

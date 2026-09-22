@@ -60,7 +60,7 @@ export default function EngineIntegrationsBar({
           {!integrationsUnavailable && readiness.chips.map((chip) => (
             <span
               key={chip.key}
-              title={chip.ok ? chip.label : `${chip.label} — not configured`}
+              title={chip.ok ? chip.label : t('components.engineIntegrations.not_configured', { label: chip.label })}
               className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
                 chip.ok
                   ? 'border-emerald-500/40 text-[var(--severity-low)] bg-emerald-500/10'

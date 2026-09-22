@@ -1,9 +1,11 @@
 import { Link, Navigate, useLocation, useNavigate } from 'react-router'
+import { Trans, useTranslation } from 'react-i18next'
 import { useAuth } from '../../context/AuthContext'
 import Button from '../ui/Button'
 
 export default function CeoProtectedRoute({ children }) {
   const { isAuthenticated, isLoading, isCeo, logout } = useAuth()
+  const { t } = useTranslation()
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -13,7 +15,7 @@ export default function CeoProtectedRoute({ children }) {
         <div className="flex flex-col items-center gap-4">
           <div className="w-10 h-10 border-2 border-emerald-500/30 border-t-emerald-400 rounded-full animate-spin" />
           <span className="text-xs font-mono text-[var(--text-muted)] uppercase tracking-widest">
-            Verifying CEO access
+            {t('components.ceo.protectedRoute.verifying')}
           </span>
         </div>
       </div>
@@ -26,12 +28,19 @@ export default function CeoProtectedRoute({ children }) {
 
   if (!isCeo) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[#030712] text-[var(--text-secondary)] px-6">
-        <h1 className="text-xl font-semibold text-red-400 mb-2">Access denied</h1>
+      <div
+        role="alert"
+        className="min-h-screen flex flex-col items-center justify-center bg-[var(--bg-0)] text-[var(--text-secondary)] px-6"
+      >
+        <h1 className="text-xl font-semibold text-red-400 mb-2">{t('auth.access_denied')}</h1>
         <p className="text-sm text-[var(--text-tertiary)] text-center max-w-md mb-6">
-          CEO Command Center requires JWT role <span className="text-[var(--text-secondary)]">ceo</span> or{' '}
-          <span className="text-[var(--text-secondary)]">is_superadmin</span> on your account. If an admin just
-          upgraded you, sign in again so your cookies get a fresh token.
+          <Trans
+            i18nKey="components.ceo.protectedRoute.requiresRole"
+            components={{
+              1: <span className="text-[var(--text-secondary)]" />,
+              2: <span className="text-[var(--text-secondary)]" />,
+            }}
+          />
         </p>
         <div className="flex flex-col sm:flex-row gap-4 items-center">
           <Button variant="unstyled"
@@ -42,13 +51,13 @@ export default function CeoProtectedRoute({ children }) {
               navigate('/login', { replace: true, state: { from: location } })
             }}
           >
-            Sign in again
+            {t('auth.sign_in_again')}
           </Button>
           <Link
             to="/operations"
             className="text-sm font-mono text-cyan-400 hover:text-cyan-300 underline underline-offset-4"
           >
-            Open operator cockpit
+            {t('auth.open_operator_cockpit')}
           </Link>
         </div>
       </div>

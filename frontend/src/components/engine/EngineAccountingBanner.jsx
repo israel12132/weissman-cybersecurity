@@ -54,7 +54,7 @@ export default function EngineAccountingBanner() {
           <div key={c.label} className="rounded-lg border border-[var(--border-default)] bg-bg-1/40 px-3 py-2">
             <div className="text-[10px] uppercase tracking-wider text-text-muted">{c.label}</div>
             <div className={`text-xl font-mono font-semibold tabular-nums ${c.tone}`}>
-              {Number(c.value).toLocaleString()}
+              {Number.isFinite(Number(c.value)) ? Number(c.value).toLocaleString() : '—'}
             </div>
           </div>
         ))}

@@ -298,11 +298,11 @@ export default function CeoWarRoomDock() {
             </p>
           )}
           <ul className="space-y-1.5">
-            {filteredJobs.map((j) => {
+            {filteredJobs.map((j, idx) => {
               const id = j.id || ''
               const active = id === selectedId
               return (
-                <li key={id}>
+                <li key={id || `job-${idx}`}>
                   <Button variant="unstyled"
                     type="button"
                     onClick={() => onPickJob(id)}
