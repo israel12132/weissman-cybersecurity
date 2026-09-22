@@ -85,16 +85,21 @@ function tick() {
 function loop() {
   if (!running) return
   tick()
-  self.postMessage({ type: 'positions', positions: positions.slice() })
+  // A `start` before any `init` would leave positions null — never post a
+  // malformed frame (and never crash the worker on `.slice()` of null).
+  if (positions) self.postMessage({ type: 'positions', positions: positions.slice() })
   tickId = setTimeout(loop, 16)
 }
 
 self.onmessage = (ev) => {
-  const msg = ev.data
+  const msg = ev && ev.data
+  // Guard against malformed / null message payloads so a stray postMessage
+  // cannot throw an uncaught error inside the worker.
+  if (!msg || typeof msg.type !== 'string') return
   if (msg.type === 'init') {
     running = false
     if (tickId) clearTimeout(tickId)
-    initState(msg.nodes || [], msg.edges || [])
+    initState(Array.isArray(msg.nodes) ? msg.nodes : [], Array.isArray(msg.edges) ? msg.edges : [])
     self.postMessage({ type: 'positions', positions: positions.slice() })
   }
   if (msg.type === 'start') {
@@ -105,4 +110,12 @@ self.onmessage = (ev) => {
     running = false
     if (tickId) clearTimeout(tickId)
   }
+}
+
+// Surface (rather than silently drop) messages that fail structured-clone
+// deserialization instead of leaving the caller waiting on a frame that
+// never arrives.
+self.onmessageerror = () => {
+  running = false
+  if (tickId) clearTimeout(tickId)
 }

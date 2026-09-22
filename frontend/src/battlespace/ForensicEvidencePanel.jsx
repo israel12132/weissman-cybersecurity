@@ -26,7 +26,7 @@ export default function ForensicEvidencePanel({
               {t('battlespace.forensic_provenance')}
             </span>
           </div>
-          <Button variant="unstyled" type="button" onClick={onClose} className="p-1 text-white/40 hover:text-white/80" aria-label="Close">
+          <Button variant="unstyled" type="button" onClick={onClose} className="p-1 text-white/40 hover:text-white/80" aria-label={t('common.close')}>
             <X className="w-4 h-4" />
           </Button>
         </div>
@@ -38,7 +38,7 @@ export default function ForensicEvidencePanel({
           </div>
 
           <div className="rounded-lg border border-cyan-500/20 bg-cyan-950/20 px-3 py-2">
-            <p className="text-[9px] font-mono uppercase tracking-wider text-cyan-300/60 mb-1">SHA-256 integrity</p>
+            <p className="text-[9px] font-mono uppercase tracking-wider text-cyan-300/60 mb-1">{t('battlespace.sha256_integrity')}</p>
             <div className="flex items-center gap-2">
               <code className="text-[10px] font-mono text-cyan-100/90 break-all flex-1">{hash}</code>
               {hash !== '—' && <CopyButton value={hash} size="sm" />}
@@ -49,13 +49,13 @@ export default function ForensicEvidencePanel({
             <div className="space-y-2">
               {meta.pcap_ref && (
                 <div className="rounded-lg border border-amber-500/20 bg-amber-950/15 px-3 py-2">
-                  <p className="text-[9px] font-mono text-amber-300/70 uppercase">PCAP ref</p>
+                  <p className="text-[9px] font-mono text-amber-300/70 uppercase">{t('battlespace.pcap_ref')}</p>
                   <code className="text-[10px] text-amber-100/80 break-all">{String(meta.pcap_ref)}</code>
                 </div>
               )}
               {meta.stack_trace && (
                 <div className="rounded-lg border border-white/10 bg-black/40 px-3 py-2">
-                  <p className="text-[9px] font-mono text-white/40 uppercase mb-1">Stack trace</p>
+                  <p className="text-[9px] font-mono text-white/40 uppercase mb-1">{t('battlespace.stack_trace')}</p>
                   <pre className="text-[9px] font-mono text-white/65 whitespace-pre-wrap max-h-32 overflow-y-auto">{String(meta.stack_trace)}</pre>
                 </div>
               )}
@@ -82,8 +82,8 @@ export default function ForensicEvidencePanel({
               </p>
               <ul className="space-y-1.5">
                 {evidence.slice(0, 12).map((f, i) => (
-                  <li key={f.id || i} className="rounded border border-white/8 bg-white/[0.02] px-2 py-1.5">
-                    <p className="text-[11px] text-white/75 truncate">{f.title || f.type || 'Finding'}</p>
+                  <li key={`${f.id ?? 'f'}-${i}`} className="rounded border border-white/8 bg-white/[0.02] px-2 py-1.5">
+                    <p className="text-[11px] text-white/75 truncate">{f.title || f.type || t('battlespace.finding_fallback')}</p>
                     <p className="text-[9px] font-mono text-rose-300/70">{f.severity}</p>
                   </li>
                 ))}

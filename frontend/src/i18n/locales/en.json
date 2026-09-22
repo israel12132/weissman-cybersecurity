@@ -9392,6 +9392,135 @@
       "kev_suffix": " · KEV",
       "action_fallback": "action",
       "dry_run": "Dry-run playbook"
+    },
+    "accessPolicyEditor": {
+      "effect": "Effect",
+      "allow": "Allow",
+      "deny": "Deny",
+      "subject": "Subject",
+      "subjectPlaceholder": "Subject (role/attr)",
+      "action": "Action",
+      "resource": "Resource",
+      "condition": "Condition",
+      "conditionPlaceholder": "Condition (e.g. env == 'prod')",
+      "removeRule": "Remove rule",
+      "emptyHint": "No rules yet — every request is denied by default.",
+      "addRule": "Add rule"
+    },
+    "alert": {
+      "dismiss": "Dismiss"
+    },
+    "approvalWorkflow": {
+      "awaiting": "Awaiting",
+      "reject": "Reject",
+      "approve": "Approve",
+      "rejected": "Approval rejected.",
+      "allComplete": "All approvals complete.",
+      "noStages": "No approval stages."
+    },
+    "aiCommandConsole": {
+      "title": "Ask Weissman",
+      "conversation": "Conversation",
+      "emptyState": "Ask a question or issue a command in natural language. I can run scans, launch playbooks, and pull up findings.",
+      "thinking": "Assistant is thinking",
+      "stopVoice": "Stop voice input",
+      "startVoice": "Start voice input",
+      "send": "Send"
+    },
+    "auditTrailExport": {
+      "filter": "Filter",
+      "filterPlaceholder": "actor, action or target…",
+      "result": "Result",
+      "allResults": "All results",
+      "success": "Success",
+      "failure": "Failure",
+      "exportCsv": "Export CSV",
+      "exportJson": "Export JSON"
+    },
+    "blastRadius": {
+      "sle": "Single loss (SLE)",
+      "ale": "Annualized loss (ALE)",
+      "crownJewels": "Crown jewels",
+      "noCrownJewels": "No crown jewels mapped"
+    },
+    "blastRadiusSimulator": {
+      "mitigationCoverage": "Mitigation coverage",
+      "threatLikelihood": "Threat likelihood",
+      "likelihood": {
+        "low": "Low",
+        "expected": "Expected",
+        "high": "High"
+      },
+      "projectedExposure": "Projected exposure",
+      "savingsVsBaseline": "Annualized savings vs baseline"
+    },
+    "commentThread": {
+      "comments": "Comments",
+      "unknown": "Unknown",
+      "addComment": "Add a comment",
+      "postComment": "Post comment"
+    },
+    "complianceMatrix": {
+      "control": "Control",
+      "status": {
+        "covered": "Covered",
+        "partial": "Partial",
+        "gap": "Gap",
+        "na": "N/A"
+      }
+    },
+    "copyButton": {
+      "copied": "Copied"
+    },
+    "dataTable": {
+      "noData": "No data",
+      "noDataBody": "Nothing to display yet.",
+      "switchComfortable": "Switch to comfortable rows",
+      "switchCompact": "Switch to compact rows",
+      "densityCompact": "Compact",
+      "densityCozy": "Cozy",
+      "columns": "Columns",
+      "close": "Close",
+      "csv": "CSV",
+      "rowsLabel": "Rows:",
+      "rowsPerPage": "Rows per page",
+      "firstPage": "First page",
+      "prevPage": "Previous page",
+      "nextPage": "Next page",
+      "lastPage": "Last page"
+    },
+    "smartFilterBar": {
+      "newViewName": "New view name",
+      "viewNamePlaceholder": "View name",
+      "confirmViewName": "Confirm view name",
+      "cancelSaveView": "Cancel saving view"
+    },
+    "usageMeter": {
+      "overLimit": "over limit",
+      "ariaLabel": "Usage"
+    },
+    "topology3d": {
+      "regionLabel": "3D network topology",
+      "webglUnavailable": "3D rendering unavailable — see the node list below.",
+      "nodesLabel": "Topology nodes"
+    },
+    "whiteLabelStudio": {
+      "brandName": "Brand name",
+      "brandNamePlaceholder": "Acme Security",
+      "logoUrl": "Logo URL",
+      "palette": "Palette",
+      "colorWord": "color",
+      "labelPrimary": "Primary",
+      "labelGradientMid": "Gradient mid",
+      "labelSecondary": "Secondary",
+      "resetPalette": "Reset to default palette",
+      "preview": "Preview",
+      "primaryAction": "Primary action",
+      "premium": "Premium"
+    },
+    "toaster": {
+      "regionLabel": "Notifications",
+      "dismiss": "Dismiss notification"
     }
   },
   "supremeNerveCenter": {

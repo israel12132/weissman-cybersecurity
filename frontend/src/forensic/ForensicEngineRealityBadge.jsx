@@ -5,6 +5,7 @@
  * via Rust/WASM before any badge text is rendered. Tamper events are explicit.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useEngineCapabilities } from '../lib/useEngineCapabilities'
 import { REALITY_KIND_META } from '../lib/realityKindMeta'
 import { mountForensicShadow, unmountForensicShadow, forensicBadgeHtml, escapeHtml, escapeAttr } from './forensicShadowHost'
@@ -38,11 +39,12 @@ export default function ForensicEngineRealityBadge({
   showCanonical = false,
   className = '',
 }) {
+  const { t } = useTranslation()
   const hostRef = useRef(null)
   const { byId, legend, loading, payload, unavailable } = useEngineCapabilities()
   const [forensic, setForensic] = useState(/** @type {{ state: ForensicState, detail: string }} */({
     state: 'pending',
-    detail: 'awaiting WASM provenance verification',
+    detail: t('forensic.detail_awaiting'),
   }))
 
   const cap = engineId ? byId[engineId] : null
@@ -61,8 +63,8 @@ export default function ForensicEngineRealityBadge({
           setForensic({
             state: 'error',
             detail: unavailable
-              ? 'capabilities API unavailable — cannot verify'
-              : 'capabilities manifest empty — cannot verify',
+              ? t('forensic.detail_api_unavailable')
+              : t('forensic.detail_manifest_empty'),
           })
         }
         return
@@ -71,7 +73,7 @@ export default function ForensicEngineRealityBadge({
       if (!manifest?.payload_sha256) {
         setForensic({
           state: 'tamper',
-          detail: 'capabilities response missing cryptographic provenance manifest',
+          detail: t('forensic.detail_missing_provenance'),
         })
         return
       }
@@ -87,18 +89,18 @@ export default function ForensicEngineRealityBadge({
         })
         if (cancelled) return
         if (result.status === 'verified') {
-          setForensic({ state: 'verified', detail: result.detail || 'manifest verified' })
+          setForensic({ state: 'verified', detail: result.detail || t('forensic.detail_verified') })
         } else {
           setForensic({
             state: 'tamper',
-            detail: result.detail || 'FORENSIC TAMPER — provenance verification failed',
+            detail: result.detail || t('forensic.detail_tamper_failed'),
           })
         }
       } catch (err) {
         if (!cancelled) {
           setForensic({
             state: 'error',
-            detail: err?.message || 'WASM provenance worker failure',
+            detail: err?.message || t('forensic.detail_worker_failure'),
           })
         }
       }
@@ -108,26 +110,26 @@ export default function ForensicEngineRealityBadge({
     return () => {
       cancelled = true
     }
-  }, [payload, loading, unavailable])
+  }, [payload, loading, unavailable, t])
 
   const shadowHtml = useMemo(() => {
     if (forensic.state === 'tamper') {
       return forensicBadgeHtml({
-        label: 'FORENSIC TAMPER',
+        label: t('forensic.tamper_label'),
         tone: 'tamper',
         detail: forensic.detail,
       })
     }
     if (forensic.state === 'error') {
       return forensicBadgeHtml({
-        label: 'PROVENANCE ERROR',
+        label: t('forensic.provenance_error_label'),
         tone: 'tamper',
         detail: forensic.detail,
       })
     }
     if (!meta) {
       if (loading && engineId) {
-        return forensicBadgeHtml({ label: 'VERIFYING…', tone: 'pending' })
+        return forensicBadgeHtml({ label: t('forensic.verifying_label'), tone: 'pending' })
       }
       return ''
     }
@@ -138,7 +140,7 @@ export default function ForensicEngineRealityBadge({
         tone: forensic.state === 'verified' ? 'verified' : 'pending',
         detail: [
           meta.description,
-          canonical ? `Resolves to ${canonical}` : '',
+          canonical ? t('forensic.resolves_to', { canonical }) : '',
           legendHint || '',
           forensic.detail,
         ]
@@ -150,21 +152,21 @@ export default function ForensicEngineRealityBadge({
     if (showRemote && remoteDetection != null) {
       parts.push(
         forensicBadgeHtml({
-          label: remoteDetection ? 'REMOTE' : 'LOCAL',
+          label: remoteDetection ? t('forensic.remote_label') : t('forensic.local_label'),
           tone: forensic.state === 'verified' ? 'verified' : 'pending',
-          detail: remoteDetection ? 'Detects remotely without an agent' : 'Not remotely detectable',
+          detail: remoteDetection ? t('forensic.remote_detail') : t('forensic.local_detail'),
         }),
       )
     }
 
     if (kind === 'alias' && canonical) {
       parts.push(
-        `<span class="forensic-meta" title="Same engine as ${escapeAttr(canonical)}">= ${escapeHtml(canonical)}</span>`,
+        `<span class="forensic-meta" title="${escapeAttr(t('forensic.same_engine_as', { canonical }))}">= ${escapeHtml(canonical)}</span>`,
       )
     }
 
     if (showCanonical && canonical && kind !== 'alias') {
-      parts.push(`<span class="forensic-meta" title="Canonical: ${escapeAttr(canonical)}">→ ${escapeHtml(canonical)}</span>`)
+      parts.push(`<span class="forensic-meta" title="${escapeAttr(t('forensic.canonical_title', { canonical }))}">→ ${escapeHtml(canonical)}</span>`)
     }
 
     if (forensic.state === 'verified') {
@@ -172,7 +174,7 @@ export default function ForensicEngineRealityBadge({
         forensicBadgeHtml({
           label: 'WASM ✓',
           tone: 'verified',
-          detail: 'Cryptographic manifest verified in isolated worker',
+          detail: t('forensic.wasm_verified_detail'),
         }),
       )
     }
@@ -189,6 +191,7 @@ export default function ForensicEngineRealityBadge({
     showRemote,
     showCanonical,
     legendHint,
+    t,
   ])
 
   useEffect(() => {
@@ -211,8 +214,8 @@ export default function ForensicEngineRealityBadge({
       aria-live="polite"
       aria-label={
         forensic.state === 'tamper'
-          ? `Forensic tamper detected for engine ${engineId || 'unknown'}`
-          : `Engine reality badge ${engineId || ''} ${meta?.label || ''}`
+          ? t('forensic.aria_tamper', { engineId: engineId || t('forensic.unknown_engine') })
+          : t('forensic.aria_badge', { engineId: engineId || '', label: meta?.label || '' })
       }
     />
   )

@@ -9392,6 +9392,135 @@
       "kev_suffix": " · KEV",
       "action_fallback": "פעולה",
       "dry_run": "הרצת יבש של הפלייבוק"
+    },
+    "accessPolicyEditor": {
+      "effect": "השפעה",
+      "allow": "אפשר",
+      "deny": "מנע",
+      "subject": "נושא",
+      "subjectPlaceholder": "נושא (תפקיד/תכונה)",
+      "action": "פעולה",
+      "resource": "משאב",
+      "condition": "תנאי",
+      "conditionPlaceholder": "תנאי (למשל env == 'prod')",
+      "removeRule": "הסר כלל",
+      "emptyHint": "אין כללים עדיין — כל בקשה נדחית כברירת מחדל.",
+      "addRule": "הוסף כלל"
+    },
+    "alert": {
+      "dismiss": "סגור"
+    },
+    "approvalWorkflow": {
+      "awaiting": "ממתין",
+      "reject": "דחה",
+      "approve": "אשר",
+      "rejected": "האישור נדחה.",
+      "allComplete": "כל האישורים הושלמו.",
+      "noStages": "אין שלבי אישור."
+    },
+    "aiCommandConsole": {
+      "title": "שאל את Weissman",
+      "conversation": "שיחה",
+      "emptyState": "שאל שאלה או תן פקודה בשפה טבעית. אני יכול להריץ סריקות, להפעיל תרחישים ולשלוף ממצאים.",
+      "thinking": "העוזר חושב",
+      "stopVoice": "עצור קלט קולי",
+      "startVoice": "התחל קלט קולי",
+      "send": "שלח"
+    },
+    "auditTrailExport": {
+      "filter": "סינון",
+      "filterPlaceholder": "מבצע, פעולה או יעד…",
+      "result": "תוצאה",
+      "allResults": "כל התוצאות",
+      "success": "הצלחה",
+      "failure": "כישלון",
+      "exportCsv": "ייצוא CSV",
+      "exportJson": "ייצוא JSON"
+    },
+    "blastRadius": {
+      "sle": "הפסד יחיד (SLE)",
+      "ale": "הפסד שנתי (ALE)",
+      "crownJewels": "נכסי ליבה",
+      "noCrownJewels": "לא מופו נכסי ליבה"
+    },
+    "blastRadiusSimulator": {
+      "mitigationCoverage": "כיסוי מיטיגציה",
+      "threatLikelihood": "סבירות איום",
+      "likelihood": {
+        "low": "נמוכה",
+        "expected": "צפויה",
+        "high": "גבוהה"
+      },
+      "projectedExposure": "חשיפה חזויה",
+      "savingsVsBaseline": "חיסכון שנתי מול קו הבסיס"
+    },
+    "commentThread": {
+      "comments": "תגובות",
+      "unknown": "לא ידוע",
+      "addComment": "הוסף תגובה",
+      "postComment": "פרסם תגובה"
+    },
+    "complianceMatrix": {
+      "control": "בקרה",
+      "status": {
+        "covered": "מכוסה",
+        "partial": "חלקי",
+        "gap": "פער",
+        "na": "לא רלוונטי"
+      }
+    },
+    "copyButton": {
+      "copied": "הועתק"
+    },
+    "dataTable": {
+      "noData": "אין נתונים",
+      "noDataBody": "אין מה להציג עדיין.",
+      "switchComfortable": "עבור לשורות מרווחות",
+      "switchCompact": "עבור לשורות צפופות",
+      "densityCompact": "צפוף",
+      "densityCozy": "מרווח",
+      "columns": "עמודות",
+      "close": "סגור",
+      "csv": "CSV",
+      "rowsLabel": "שורות:",
+      "rowsPerPage": "שורות לעמוד",
+      "firstPage": "עמוד ראשון",
+      "prevPage": "עמוד קודם",
+      "nextPage": "עמוד הבא",
+      "lastPage": "עמוד אחרון"
+    },
+    "smartFilterBar": {
+      "newViewName": "שם תצוגה חדש",
+      "viewNamePlaceholder": "שם תצוגה",
+      "confirmViewName": "אשר שם תצוגה",
+      "cancelSaveView": "בטל שמירת תצוגה"
+    },
+    "usageMeter": {
+      "overLimit": "מעל המכסה",
+      "ariaLabel": "שימוש"
+    },
+    "topology3d": {
+      "regionLabel": "טופולוגיית רשת תלת-ממדית",
+      "webglUnavailable": "עיבוד תלת-ממד אינו זמין — ראה את רשימת הצמתים למטה.",
+      "nodesLabel": "צמתי טופולוגיה"
+    },
+    "whiteLabelStudio": {
+      "brandName": "שם מותג",
+      "brandNamePlaceholder": "Acme Security",
+      "logoUrl": "כתובת לוגו",
+      "palette": "פלטה",
+      "colorWord": "צבע",
+      "labelPrimary": "ראשי",
+      "labelGradientMid": "אמצע מעבר צבע",
+      "labelSecondary": "משני",
+      "resetPalette": "אפס לפלטת ברירת המחדל",
+      "preview": "תצוגה מקדימה",
+      "primaryAction": "פעולה ראשית",
+      "premium": "פרימיום"
+    },
+    "toaster": {
+      "regionLabel": "התראות",
+      "dismiss": "סגור התראה"
     }
   },
   "supremeNerveCenter": {
