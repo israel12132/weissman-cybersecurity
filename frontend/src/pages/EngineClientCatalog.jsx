@@ -644,7 +644,7 @@ export default function EngineClientCatalog() {
       <div className="rounded-xl border border-cyan-500/20 bg-cyan-950/20 px-4 py-3 text-xs text-cyan-100/70 mb-4 leading-relaxed">
         {t('engines.catalog_lens_notice', {
           production: productionCount,
-          capabilities: capSummary?.production ?? capLoading ? '…' : Object.keys(capabilityById).length,
+          capabilities: capSummary?.production ?? (capLoading ? '…' : Object.keys(capabilityById).length),
         })}
       </div>
 
@@ -707,6 +707,8 @@ export default function EngineClientCatalog() {
         {toast && (
           <motion.div
             key={toast.id}
+            role={toast.severity === 'error' ? 'alert' : 'status'}
+            aria-live={toast.severity === 'error' ? 'assertive' : 'polite'}
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
@@ -809,6 +811,7 @@ export default function EngineClientCatalog() {
                 <Button variant="unstyled"
                   type="button"
                   onClick={() => setSearch('')}
+                  aria-label={t('common.clear', 'Clear search')}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] text-xs"
                 >
                   ✕
@@ -834,6 +837,7 @@ export default function EngineClientCatalog() {
             </Button>
             <Button variant="unstyled"
               type="button"
+              aria-pressed={productionOnly}
               onClick={() => setProductionOnly((v) => !v)}
               className={`px-2.5 py-1 rounded-lg text-[10px] font-mono border transition-colors ${
                 productionOnly ? 'border-emerald-500/40 text-emerald-300 bg-emerald-500/10' : 'border-[var(--border-default)] text-[var(--text-muted)]'
@@ -843,6 +847,7 @@ export default function EngineClientCatalog() {
             </Button>
             <Button variant="unstyled"
               type="button"
+              aria-pressed={remoteOnly}
               onClick={() => setRemoteOnly((v) => !v)}
               className={`px-2.5 py-1 rounded-lg text-[10px] font-mono border transition-colors ${
                 remoteOnly ? 'border-cyan-500/40 text-cyan-300 bg-cyan-500/10' : 'border-[var(--border-default)] text-[var(--text-muted)]'

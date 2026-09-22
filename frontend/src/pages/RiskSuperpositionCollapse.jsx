@@ -178,6 +178,7 @@ function ParamSection({ title, children, defaultOpen = true }) {
     <div className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] overflow-hidden">
       <Button variant="unstyled"
         type="button"
+        aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
         className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-[var(--row-hover-bg)] transition-colors"
       >
@@ -416,7 +417,7 @@ export default function RiskSuperpositionCollapse() {
     // Guard against a tick that resolves after unmount / after `running` flips —
     // no setState on a torn-down effect, and no chained second fetch either.
     return () => { cancelled = true; clearInterval(iv) }
-  }, [jobId, runState.running, loadClusters, t])
+  }, [jobId, runState.running, loadClusters, setHistoryUnavailable, t])
 
   return (
     <PageShell
@@ -431,7 +432,7 @@ export default function RiskSuperpositionCollapse() {
       syncAt={historyUnavailable ? null : lastUpdated}
       evidence={t('pages.superpositionCollapse.evidence_notice')}
       breadcrumbs={[
-        { label: t('nav.engines'), to: '/engine-matrix' },
+        { label: t('nav.engines'), to: '/engines' },
         { label: engine?.label || ENGINE_ID, to: `/engines/${ENGINE_ID}` },
         { label: t('pages.superpositionCollapse.breadcrumb') },
       ]}
@@ -621,6 +622,7 @@ export default function RiskSuperpositionCollapse() {
             <div className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] overflow-hidden">
               <Button variant="unstyled"
                 type="button"
+                aria-expanded={showPayload}
                 onClick={() => setShowPayload((s) => !s)}
                 className="w-full px-4 py-2 text-left text-[10px] font-mono text-[var(--text-tertiary)] hover:bg-[var(--row-hover-bg)]"
               >

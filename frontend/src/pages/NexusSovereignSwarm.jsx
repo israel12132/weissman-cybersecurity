@@ -330,6 +330,7 @@ function Section({ title, icon, accent = '#a855f7', count, defaultOpen = true, c
     <div className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] overflow-hidden" style={{ borderColor: `${accent}22` }}>
       <Button variant="unstyled"
         type="button"
+        aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
         className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-[var(--row-hover-bg)] transition-colors"
       >
@@ -1033,7 +1034,7 @@ function FindingRow({ finding }) {
   const evidence = f.evidence || f.swarm_metrics
   return (
     <div className="text-[11px] border-b border-[var(--border-subtle)] pb-2 last:border-0">
-      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full text-left">
+      <Button variant="unstyled" type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="w-full text-left">
         <div className="flex items-start gap-2">
           <span className={`font-mono shrink-0 ${f.severity === 'critical' ? 'text-red-400' : f.severity === 'high' ? 'text-orange-400' : f.severity === 'medium' ? 'text-amber-400' : 'text-cyan-400'}`}>
             [{f.severity || 'info'}]
@@ -1250,7 +1251,9 @@ export default function NexusSovereignSwarm() {
     [endpointAgents, selectedClientId],
   )
   const fleetOnline = useMemo(
-    () => fleetForClient.filter((a) => a.status === 'online' || a.live).length,
+    // Agent objects from /api/agents/status expose `online` (boolean); keep the
+    // legacy status/live fallbacks so no shape regresses.
+    () => fleetForClient.filter((a) => a.online || a.status === 'online' || a.live).length,
     [fleetForClient],
   )
 
@@ -1311,7 +1314,12 @@ export default function NexusSovereignSwarm() {
 
   const loadAgents = useCallback(() => {
     apiFetch('/api/agents/status')
-      .then((d) => { if (Array.isArray(d)) setEndpointAgents(d) })
+      // GET /api/agents/status returns { agents: [...], online_count }, not a
+      // bare array — reading `d` as the array left the fleet permanently empty.
+      .then((d) => {
+        const list = Array.isArray(d?.agents) ? d.agents : Array.isArray(d) ? d : null
+        if (list) setEndpointAgents(list)
+      })
       .catch((e) => { if (e?.status) setEndpointAgents([]) })
   }, [])
 
@@ -1868,6 +1876,7 @@ export default function NexusSovereignSwarm() {
               <Section title={t('nexusSwarm.sec_payload', 'Live Payload Preview')} icon="📦" accent="#64748b" count={paramCount} defaultOpen={false}>
                 <Button variant="unstyled"
                   type="button"
+                  aria-expanded={showPreview}
                   onClick={() => setShowPreview((s) => !s)}
                   className="text-[10px] font-mono text-cyan-300/70 hover:text-cyan-200"
                 >
@@ -1975,9 +1984,9 @@ export default function NexusSovereignSwarm() {
               </p>
               <div className="flex flex-wrap gap-2">
                 {fleetForClient.slice(0, 8).map((a) => (
-                  <span key={a.agent_uuid} className="flex items-center gap-1.5 text-[10px] font-mono text-[var(--text-muted)] rounded-lg border border-[var(--border-default)] px-2 py-1">
-                    <span className={`w-1.5 h-1.5 rounded-full ${a.status === 'online' || a.live ? 'bg-emerald-400' : 'bg-[var(--bg-2)]'}`} />
-                    {a.hostname || a.device_name || a.agent_uuid?.slice(0, 8)}
+                  <span key={a.agent_id || a.agent_uuid} className="flex items-center gap-1.5 text-[10px] font-mono text-[var(--text-muted)] rounded-lg border border-[var(--border-default)] px-2 py-1">
+                    <span className={`w-1.5 h-1.5 rounded-full ${a.online || a.status === 'online' || a.live ? 'bg-emerald-400' : 'bg-[var(--bg-2)]'}`} />
+                    {a.hostname || a.device_name || a.agent_id || a.agent_uuid?.slice(0, 8)}
                   </span>
                 ))}
               </div>

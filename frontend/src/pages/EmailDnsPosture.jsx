@@ -815,7 +815,7 @@ export default function EmailDnsPosture() {
       )}
     >
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-emerald-500/30 text-emerald-200'}`}>
+        <div role={toast.sev === 'error' ? 'alert' : 'status'} aria-live={toast.sev === 'error' ? 'assertive' : 'polite'} className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-emerald-500/30 text-emerald-200'}`}>
           {toast.msg}
         </div>
       )}
@@ -843,7 +843,7 @@ export default function EmailDnsPosture() {
             className="px-5 py-2 rounded-xl font-mono text-sm border border-emerald-500/40 text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
             {status === 'running' ? `⟳ ${t('pages.emailDnsPosture.btn_scanning')}` : `▶ ${t('pages.emailDnsPosture.btn_run_scan')}`}
           </Button>
-          <Button variant="unstyled" type="button" onClick={() => setShowParams((s) => !s)}
+          <Button variant="unstyled" type="button" aria-expanded={showParams} onClick={() => setShowParams((s) => !s)}
             className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-all">
             {showParams ? '▾' : '▸'} {t('pages.emailDnsPosture.params_label')}
           </Button>

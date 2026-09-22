@@ -202,7 +202,7 @@ function EngineMatrixCard({
     <div
       role="button"
       tabIndex={0}
-      aria-label={`Open ${engine.name || engine.id} engine`}
+      aria-label={`Open ${engine.label || engine.id} engine`}
       className="group relative rounded-2xl bg-gradient-to-br from-white/[0.07] via-black/40 to-black/60 backdrop-blur-xl border border-[var(--border-default)] p-4 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-400/25 focus-visible:outline-none focus-visible:border-cyan-400/60 focus-visible:ring-1 focus-visible:ring-cyan-400/50"
       style={enabled ? { boxShadow: `inset 0 1px 0 ${groupColor}18` } : {}}
       onClick={(e) => {
@@ -703,10 +703,12 @@ export default function EngineMatrix() {
           engines: Array.from(runnableEnabledSet),
         },
       })
-      showToast('info', `Queued ${d.engines_queued} engines (Job: ${d.job_id})`)
+      showToast('info', `Queued ${d.engines_queued ?? 0} engines (Job: ${d.job_id ?? '—'})`)
       setEngineStates((prev) => {
         const next = { ...prev }
-        for (const id of enabledSet) {
+        // Only the engines actually queued (runnable) should show as running —
+        // enabled catalog-only engines are never dispatched by this endpoint.
+        for (const id of runnableEnabledSet) {
           next[id] = { ...next[id], status: 'running' }
         }
         return next
@@ -777,6 +779,7 @@ export default function EngineMatrix() {
               <select
                 value={selectedClientId ?? ''}
                 onChange={(e) => setSelectedClientId(e.target.value || null)}
+                aria-label={t('engines.client_label')}
                 className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl px-3 py-1.5 text-xs text-[var(--text-primary)] font-mono focus:outline-none focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/20"
               >
                 <option value="">{t('engines.select_client')}</option>
@@ -826,6 +829,8 @@ export default function EngineMatrix() {
         {toast && (
           <motion.div
             key={toast.id}
+            role={toast.severity === 'error' ? 'alert' : 'status'}
+            aria-live={toast.severity === 'error' ? 'assertive' : 'polite'}
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
@@ -880,6 +885,7 @@ export default function EngineMatrix() {
               <Button variant="unstyled"
                 type="button"
                 onClick={() => setSearch('')}
+                aria-label={t('common.clear')}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] text-xs"
               >
                 ✕

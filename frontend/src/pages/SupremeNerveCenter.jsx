@@ -116,7 +116,7 @@ function SupremeNerveCenterInner() {
   // Refresh on POLL_MS cadence, skipping ticks while the tab is hidden.
   useVisiblePolling(load, POLL_MS)
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `snap` changes on each poll, so the `|| []` fallback identity is intentionally not memoized; downstream useMemo hooks already depend on `snap` via `engines`.
   const engines = snap?.engines || []
   const modules = snap?.system_modules || []
   const jobs = snap?.live_jobs || []
@@ -273,6 +273,7 @@ function SupremeNerveCenterInner() {
             <Button variant="unstyled"
               key={id}
               type="button"
+              aria-current={section === id ? 'page' : undefined}
               onClick={() => setSection(id)}
               className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
                 section === id
@@ -306,7 +307,7 @@ function SupremeNerveCenterInner() {
         </header>
 
         {error ? (
-          <div className="mb-4 rounded-lg border border-red-500/30 bg-red-950/30 px-4 py-3 text-sm text-red-300">
+          <div role="alert" aria-live="assertive" className="mb-4 rounded-lg border border-red-500/30 bg-red-950/30 px-4 py-3 text-sm text-red-300">
             {error}
           </div>
         ) : null}

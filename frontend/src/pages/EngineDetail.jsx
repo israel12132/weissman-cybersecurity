@@ -752,6 +752,8 @@ export default function EngineDetail() {
       <AnimatePresence>
         {toast && (
           <motion.div key={toast.id} initial={{ opacity:0, y:-10 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0, y:-10 }}
+            role={toast.sev === 'error' ? 'alert' : 'status'}
+            aria-live={toast.sev === 'error' ? 'assertive' : 'polite'}
             className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${
               toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-cyan-500/30 text-cyan-200'
             }`}>
@@ -912,10 +914,10 @@ export default function EngineDetail() {
 
           {/* Target */}
           <div>
-            <label className="block text-[11px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider mb-1">
+            <label htmlFor="engine-target" className="block text-[11px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider mb-1">
               {t('engines.detail_target_optional')}
             </label>
-            <input type="text" value={target} onChange={(e) => setTarget(e.target.value)}
+            <input id="engine-target" type="text" value={target} onChange={(e) => setTarget(e.target.value)}
               placeholder={engine.requiresTarget ? 'https://target.com' : 'Optional — uses client scope'}
               disabled={running}
               className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40 disabled:opacity-50" />
@@ -923,8 +925,8 @@ export default function EngineDetail() {
 
           {/* Timeout */}
           <div>
-            <label className="block text-[11px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider mb-1">{t('engines.detail_timeout')}</label>
-            <input type="number" value={timeoutSec} onChange={(e) => setTimeoutSec(Number(e.target.value))}
+            <label htmlFor="engine-timeout" className="block text-[11px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider mb-1">{t('engines.detail_timeout')}</label>
+            <input id="engine-timeout" type="number" value={timeoutSec} onChange={(e) => setTimeoutSec(Number(e.target.value))}
               min={10} max={3600} disabled={running}
               className="w-36 bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono focus:outline-none focus:border-cyan-500/40 disabled:opacity-50" />
           </div>

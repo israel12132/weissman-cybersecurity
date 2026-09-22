@@ -123,6 +123,8 @@ function JsonEditor({ value, onChange, error, label, invalidLabel }) {
           value={value}
           onChange={(e) => onChange(e.target.value)}
           spellCheck={false}
+          aria-label={label}
+          aria-invalid={!!error}
           className="json-textarea custom-scroll"
           rows={Math.min(20, Math.max(6, lineCount))}
         />
@@ -188,6 +190,8 @@ function ActionCard({ action, index, total, label, onMoveUp, onMoveDown, onRemov
               onChange={(e) => { setParamsText(e.target.value); setJsonError(false) }}
               onBlur={handleBlur}
               rows={Math.min(8, Math.max(3, paramsText.split('\n').length))}
+              aria-label={label || action.kind}
+              aria-invalid={jsonError}
               className="block w-full resize-none bg-transparent p-2.5 font-mono text-[11px] leading-relaxed text-emerald-300/90 focus:outline-none"
               spellCheck={false}
             />

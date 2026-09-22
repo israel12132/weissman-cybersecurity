@@ -872,6 +872,7 @@ export default function FindingsCommandCenter() {
                     setPagination((p) => ({ ...p, pageIndex: 0 }))
                   }}
                   placeholder={t('findings.search_findings')}
+                  aria-label={t('findings.search_findings')}
                   className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl pl-8 pr-8 py-2.5 text-xs text-[var(--text-secondary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40 transition-colors"
                 />
                 {globalFilter && (
@@ -892,6 +893,7 @@ export default function FindingsCommandCenter() {
                   setEngineFilter(e.target.value)
                   setPagination((p) => ({ ...p, pageIndex: 0 }))
                 }}
+                aria-label={t('findings.all_engine_groups')}
                 className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl px-3 py-2.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40 transition-colors"
               >
                 <option value="">{t('findings.all_engine_groups')}</option>

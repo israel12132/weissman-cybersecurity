@@ -476,7 +476,7 @@ export default function JwtAttackLab() {
       </div>
 
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-[#a855f7]/30 text-[#c084fc]'}`}>{toast.msg}</div>
+        <div role={toast.sev === 'error' ? 'alert' : 'status'} aria-live={toast.sev === 'error' ? 'assertive' : 'polite'} className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-[#a855f7]/30 text-[#c084fc]'}`}>{toast.msg}</div>
       )}
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">

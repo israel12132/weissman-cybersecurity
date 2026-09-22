@@ -209,7 +209,7 @@ export default function DiscoveryLab() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     loadAll()
@@ -627,6 +627,7 @@ export default function DiscoveryLab() {
           <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-disabled)] pointer-events-none" />
           <input
             type="search"
+            aria-label={t(`${NS}.search_placeholder`)}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t(`${NS}.search_placeholder`)}
@@ -840,7 +841,7 @@ export default function DiscoveryLab() {
               <li>{t(`${NS}.checklist_human_send`)}</li>
             </ul>
           </div>
-          {filteredPacks.length === 0 ? (
+          {filteredPacks.length === 0 && !loading ? (
             <EmptyState icon="file" title={t(`${NS}.no_packs`)} description={t(`${NS}.no_packs_hint`)} compact />
           ) : (
             filteredPacks.map((pack) => (

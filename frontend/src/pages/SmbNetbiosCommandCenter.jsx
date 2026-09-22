@@ -486,7 +486,7 @@ function SmbExposureGraph({ graph, running }) {
 
 function Toggle({ on, onClick, label }) {
   return (
-    <Button variant="unstyled" type="button" onClick={onClick} className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-[var(--row-hover-bg)] border border-[var(--border-subtle)] hover:bg-[var(--row-hover-bg)] text-left">
+    <Button variant="unstyled" type="button" aria-pressed={on} onClick={onClick} className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-[var(--row-hover-bg)] border border-[var(--border-subtle)] hover:bg-[var(--row-hover-bg)] text-left">
       <span className="text-[11px] font-mono text-[var(--text-secondary)]">{label}</span>
       <span className={`shrink-0 w-9 h-5 rounded-full relative transition-colors ${on ? 'bg-blue-500/70' : 'bg-[var(--bg-2)]'}`}>
         <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
@@ -823,7 +823,7 @@ export default function SmbNetbiosCommandCenter() {
       )}
     >
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-blue-500/30 text-blue-200'}`}>
+        <div role={toast.sev === 'error' ? 'alert' : 'status'} aria-live={toast.sev === 'error' ? 'assertive' : 'polite'} className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-blue-500/30 text-blue-200'}`}>
           {toast.msg}
         </div>
       )}
@@ -851,7 +851,7 @@ export default function SmbNetbiosCommandCenter() {
             className="px-5 py-2 rounded-xl font-mono text-sm border border-blue-500/40 text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 transition-all disabled:opacity-40">
             {status === 'running' ? L.scanning : `▶ ${L.run}`}
           </Button>
-          <Button variant="unstyled" type="button" onClick={() => setShowParams((s) => !s)} className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]">
+          <Button variant="unstyled" type="button" aria-expanded={showParams} onClick={() => setShowParams((s) => !s)} className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]">
             {showParams ? L.hideParams : L.showParams}
           </Button>
           {!historyUnavailable && findings.length > 0 && (

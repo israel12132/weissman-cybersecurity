@@ -264,7 +264,7 @@ function FindingCard({ f }) {
   const controls = Array.isArray(f.controls) ? f.controls : []
   return (
     <div className={`rounded-xl border ${st.bd} ${st.bg} p-3`}>
-      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full text-left flex items-start gap-3">
+      <Button variant="unstyled" type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="w-full text-left flex items-start gap-3">
         <span className="mt-1 w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: st.dot }} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -371,6 +371,7 @@ function Scorecard({ summary, t }) {
                 const raw = dims[d.key]
                 if (raw === undefined || raw === null) return null
                 const n = Number(raw)
+                if (!Number.isFinite(n)) return null
                 const barColor = n >= 80 ? '#34d399' : n >= 60 ? '#fbbf24' : '#fb7185'
                 return (
                   <div key={d.key} className="rounded-lg border border-[var(--border-subtle)] bg-[var(--table-surface)] px-2.5 py-2">
@@ -610,7 +611,11 @@ export default function FileUploadSecurityLab() {
       )}
     >
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-orange-500/30 text-orange-200'}`}>
+        <div
+          role={toast.sev === 'error' ? 'alert' : 'status'}
+          aria-live={toast.sev === 'error' ? 'assertive' : 'polite'}
+          className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-orange-500/30 text-orange-200'}`}
+        >
           {toast.msg}
         </div>
       )}
@@ -654,7 +659,7 @@ export default function FileUploadSecurityLab() {
             className="px-5 py-2 rounded-xl font-mono text-sm border border-orange-500/40 text-orange-300 bg-orange-500/10 hover:bg-orange-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
             {status === 'running' ? t('pages.fileUploadLab.scanning', '⟳ Scanning…') : t('pages.fileUploadLab.run_scan', '▶ Run Upload Scan')}
           </Button>
-          <Button variant="unstyled" type="button" onClick={() => setShowParams((s) => !s)}
+          <Button variant="unstyled" type="button" aria-expanded={showParams} onClick={() => setShowParams((s) => !s)}
             className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-all">
             {showParams ? t('pages.fileUploadLab.hide_params', '▾ Parameters') : t('pages.fileUploadLab.show_params', '▸ Parameters')}
           </Button>

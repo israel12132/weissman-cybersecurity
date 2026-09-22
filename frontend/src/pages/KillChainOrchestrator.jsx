@@ -551,6 +551,7 @@ export default function KillChainOrchestrator() {
               <select
                 value={filterSeverity}
                 onChange={(e) => setFilterSeverity(e.target.value)}
+                aria-label={t('pages.killChainOrchestrator.filter_severity_aria')}
                 className="text-xs bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg px-2 py-1 text-[var(--text-tertiary)] focus:outline-none"
               >
                 <option value="all">{t('pages.killChainOrchestrator.filter_all')}</option>
@@ -591,6 +592,7 @@ export default function KillChainOrchestrator() {
                 return (
                   <motion.button
                     key={chain.id}
+                    type="button"
                     layout
                     whileHover={{ scale: 1.01 }}
                     onClick={() => { setActiveChain(chain); setActivePhase(null) }}

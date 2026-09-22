@@ -257,6 +257,8 @@ export default function ScanScheduler() {
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-3 flex-1">
                       <Button variant="unstyled"
+                        aria-label={schedule.enabled ? t('pages.scanScheduler.pause_schedule') : t('pages.scanScheduler.enable_schedule')}
+                        aria-pressed={schedule.enabled}
                         onClick={() => toggleSchedule(schedule.id, schedule.enabled)}
                         className={`p-2 rounded-lg border transition-colors ${
                           schedule.enabled
@@ -265,9 +267,9 @@ export default function ScanScheduler() {
                         }`}
                       >
                         {schedule.enabled ? (
-                          <Play className="w-4 h-4" />
+                          <Play className="w-4 h-4" aria-hidden="true" />
                         ) : (
-                          <Pause className="w-4 h-4" />
+                          <Pause className="w-4 h-4" aria-hidden="true" />
                         )}
                       </Button>
 
@@ -345,16 +347,18 @@ export default function ScanScheduler() {
                         Run Now
                       </Button>
                       <Button variant="unstyled"
+                        aria-label={t('common.edit')}
                         onClick={() => setEditModal(schedule)}
                         className="p-2 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg hover:bg-cyan-500/30 transition-colors"
                       >
-                        <Edit className="w-4 h-4" />
+                        <Edit className="w-4 h-4" aria-hidden="true" />
                       </Button>
                       <Button variant="unstyled"
+                        aria-label={t('common.delete')}
                         onClick={() => deleteSchedule(schedule.id)}
                         className="p-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-4 h-4" aria-hidden="true" />
                       </Button>
                     </div>
                   </div>
@@ -608,7 +612,7 @@ function ScheduleModal({ schedule, template, onClose, onSave }) {
           </div>
 
           {error && (
-            <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+            <div role="alert" className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
               {error}
             </div>
           )}

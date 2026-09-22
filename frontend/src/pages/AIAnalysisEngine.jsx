@@ -169,13 +169,14 @@ function buildCorrelations(patterns) {
   for (const p of patterns) {
     const engines = p._raw?.engines || []
     if (engines.length >= 2) {
+      const memberCount = Number(p.memberCount) || 1
       corrs.push({
         id: `corr-engines-${p.id}`,
         type: 'multi_engine',
         patternIds: [p.id],
         confidence: Math.min(0.95, p.confidence + 0.08),
-        meta: { name: p.name, engines: engines.join(', '), target: p._raw?.target || '—', count: p.memberCount },
-        riskMultiplier: Number((1 + Math.min(0.5, (p.memberCount - 1) * 0.08)).toFixed(2)),
+        meta: { name: p.name, engines: engines.join(', '), target: p._raw?.target || '—', count: memberCount },
+        riskMultiplier: Number((1 + Math.min(0.5, (memberCount - 1) * 0.08)).toFixed(2)),
         detectedAt: p.lastSeen || null,
       })
     }
@@ -468,6 +469,7 @@ export default function AIAnalysisEngine() {
                   <select
                     value={filterCategory}
                     onChange={(e) => setFilterCategory(e.target.value)}
+                    aria-label={t('pages.aiAnalysisEngine.filter_category_aria')}
                     className="flex-1 text-xs bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg px-2 py-1.5 text-[var(--text-tertiary)] focus:outline-none"
                   >
                     <option value="all">{t('pages.aiAnalysisEngine.filter_all_categories')}</option>
@@ -478,6 +480,7 @@ export default function AIAnalysisEngine() {
                   <select
                     value={filterSeverity}
                     onChange={(e) => setFilterSeverity(e.target.value)}
+                    aria-label={t('pages.aiAnalysisEngine.filter_severity_aria')}
                     className="flex-1 text-xs bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg px-2 py-1.5 text-[var(--text-tertiary)] focus:outline-none"
                   >
                     <option value="all">{t('pages.aiAnalysisEngine.filter_all_severity')}</option>

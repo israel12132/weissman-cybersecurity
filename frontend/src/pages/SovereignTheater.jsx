@@ -328,7 +328,7 @@ export default function SovereignTheater() {
           searchPlaceholder={t(`${NS}.search_placeholder`)}
         />
         {error ? (
-          <div className="text-sm text-rose-300 border border-rose-500/30 rounded-lg px-3 py-2">{error}</div>
+          <div role="alert" className="text-sm text-rose-300 border border-rose-500/30 rounded-lg px-3 py-2">{error}</div>
         ) : null}
 
         <div className="flex flex-wrap gap-2 items-end">
@@ -407,6 +407,7 @@ export default function SovereignTheater() {
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
                 placeholder={t(`${NS}.placeholder`)}
+                aria-label={t(`${NS}.placeholder`)}
                 disabled={sending}
               />
               <Button type="submit" variant="primary" disabled={sending}>

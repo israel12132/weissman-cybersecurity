@@ -130,7 +130,7 @@ function Section({ title, icon, accent = ACCENT, count, defaultOpen = true, chil
 
 function Toggle({ label, hint, checked, onChange }) {
   return (
-    <Button variant="unstyled" type="button" onClick={() => onChange(!checked)} className="w-full flex items-center justify-between gap-3 px-2 py-1.5 rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left">
+    <Button variant="unstyled" type="button" role="switch" aria-checked={checked} onClick={() => onChange(!checked)} className="w-full flex items-center justify-between gap-3 px-2 py-1.5 rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left">
       <span className="min-w-0">
         <span className="block text-[11px] font-mono text-[var(--text-primary)]">{label}</span>
         {hint && <span className="block text-[9px] font-mono text-[var(--text-disabled)]">{hint}</span>}
@@ -506,7 +506,7 @@ export default function ServerlessSecurityCommandCenter() {
                   ].map(([k, v]) => (
                     <div key={k} className="rounded-lg bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-2 py-1.5">
                       <span className="text-[var(--text-muted)] block">{k}</span>
-                      <span className="text-[var(--text-secondary)]">{String(v)}</span>
+                      <span className="text-[var(--text-secondary)]">{v == null ? '—' : String(v)}</span>
                     </div>
                   ))}
                 </div>

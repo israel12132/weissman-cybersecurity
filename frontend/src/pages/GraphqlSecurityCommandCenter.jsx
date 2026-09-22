@@ -305,6 +305,7 @@ function Section({ title, icon, accent = '#f472b6', count, defaultOpen = true, c
     <div className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] overflow-hidden" style={{ borderColor: `${accent}22` }}>
       <Button variant="unstyled"
         type="button"
+        aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
         className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-[var(--row-hover-bg)] transition-colors"
       >
@@ -1267,7 +1268,7 @@ export default function GraphqlSecurityCommandCenter() {
 
               {/* Payload preview */}
               <Section title={t('graphqlSec.sec_payload', 'Live Payload Preview')} icon="📦" accent="#64748b" count={paramCount} defaultOpen={false}>
-                <Button variant="unstyled" type="button" onClick={() => setShowPreview((s) => !s)} className="text-[10px] font-mono text-pink-300/70 hover:text-pink-200">
+                <Button variant="unstyled" type="button" aria-expanded={showPreview} onClick={() => setShowPreview((s) => !s)} className="text-[10px] font-mono text-pink-300/70 hover:text-pink-200">
                   {showPreview ? t('graphqlSec.hide_json', 'hide JSON') : t('graphqlSec.show_json', 'show exact request JSON')}
                 </Button>
                 {showPreview && (

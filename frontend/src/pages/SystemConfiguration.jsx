@@ -98,11 +98,7 @@ export default function SystemConfiguration() {
     { id: 'compliance', label: t(`${NS}.tab_compliance`), icon: <Lock /> },
   ];
 
-  useEffect(() => {
-    fetchConfig();
-  }, []);
-
-  const fetchConfig = async () => {
+  const fetchConfig = useCallback(async () => {
     try {
       setLoading(true);
       const data = await api.get('/api/system/config');
@@ -117,7 +113,11 @@ export default function SystemConfiguration() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [t]);
+
+  useEffect(() => {
+    fetchConfig();
+  }, [fetchConfig]);
 
   const saveConfig = async () => {
     try {
@@ -352,7 +352,7 @@ export default function SystemConfiguration() {
   );
 }
 
-function GeneralSettings({ config, onChange }) {
+function GeneralSettings({ config = {}, onChange }) {
   const { t } = useTranslation();
 
   return (
@@ -424,7 +424,7 @@ function GeneralSettings({ config, onChange }) {
   );
 }
 
-function SecuritySettings({ config, onChange, configUnavailable = false }) {
+function SecuritySettings({ config = {}, onChange, configUnavailable = false }) {
   const { t } = useTranslation();
 
   return (
@@ -710,7 +710,7 @@ function MfaSelfServicePanel() {
   );
 }
 
-function ScanningSettings({ config, onChange }) {
+function ScanningSettings({ config = {}, onChange }) {
   const { t } = useTranslation();
 
   return (
@@ -771,7 +771,7 @@ function ScanningSettings({ config, onChange }) {
   );
 }
 
-function IntegrationsSettings({ config, onChange }) {
+function IntegrationsSettings({ config = {}, onChange }) {
   const { t } = useTranslation();
 
   return (
@@ -845,7 +845,7 @@ function IntegrationsSettings({ config, onChange }) {
   );
 }
 
-function RetentionSettings({ config, onChange }) {
+function RetentionSettings({ config = {}, onChange }) {
   const { t } = useTranslation();
 
   return (
@@ -905,7 +905,7 @@ function RetentionSettings({ config, onChange }) {
   );
 }
 
-function PerformanceSettings({ config, onChange }) {
+function PerformanceSettings({ config = {}, onChange }) {
   const { t } = useTranslation();
 
   return (
@@ -965,7 +965,7 @@ function PerformanceSettings({ config, onChange }) {
   );
 }
 
-function ComplianceSettings({ config, onChange }) {
+function ComplianceSettings({ config = {}, onChange }) {
   const { t } = useTranslation();
 
   return (

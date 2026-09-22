@@ -158,6 +158,7 @@ export default function AdversaryCampaignFabric() {
         const catalog = Array.isArray(data?.profiles) ? data.profiles : []
         if (!cancelled && catalog.length) setProfiles(catalog)
       })
+      // eslint-disable-next-line no-restricted-syntax -- best-effort profile refresh; the catalog already loaded via loadList, so a failure here is non-fatal
       .catch(() => {})
     return () => {
       cancelled = true
@@ -186,9 +187,11 @@ export default function AdversaryCampaignFabric() {
     try {
       const body = { client_id: selectedClientId, goal }
       if (profileId) body.profile_id = profileId
+      // apiFetch serializes an object body and sets the JSON Content-Type header
+      // itself; pre-stringifying skips that header, so Axum rejects the payload.
       const data = await apiFetch('/api/campaigns', {
         method: 'POST',
-        body: JSON.stringify(body),
+        body,
       })
       await loadList()
       if (data?.campaign?.id) await loadOne(data.campaign.id)
@@ -319,7 +322,10 @@ export default function AdversaryCampaignFabric() {
     const raw = active?.world_state?.proven_facts
     return new Set(Array.isArray(raw) ? raw.map(String) : [])
   }, [active?.world_state?.proven_facts])
-  const steps = Array.isArray(active?.steps) ? active.steps : []
+  const steps = useMemo(
+    () => (Array.isArray(active?.steps) ? active.steps : []),
+    [active?.steps],
+  )
   const visibleSteps = useMemo(
     () => (provenOnly ? steps.filter((s) => proofStatusOf(s) === 'proven') : steps),
     [steps, provenOnly],

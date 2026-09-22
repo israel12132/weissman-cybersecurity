@@ -484,7 +484,10 @@ export default function EngineManagementConsole() {
                       <div className="flex items-center gap-3 mb-2">
                         {/* Status Toggle */}
                         <Button variant="unstyled"
+                          type="button"
                           onClick={() => toggleEngine(engine.id, engine.enabled)}
+                          aria-pressed={engine.enabled}
+                          aria-label={t(`${NS}.toggle_aria`, { name: engine.name })}
                           className={`p-1.5 rounded-lg border transition-colors ${
                             engine.enabled
                               ? 'bg-green-500/20 text-green-400 border-green-500/30 hover:bg-green-500/30'
@@ -492,9 +495,9 @@ export default function EngineManagementConsole() {
                           }`}
                         >
                           {engine.enabled ? (
-                            <Play className="w-3 h-3" />
+                            <Play className="w-3 h-3" aria-hidden="true" />
                           ) : (
-                            <Pause className="w-3 h-3" />
+                            <Pause className="w-3 h-3" aria-hidden="true" />
                           )}
                         </Button>
 
@@ -569,10 +572,12 @@ export default function EngineManagementConsole() {
                     {/* Actions */}
                     <div className="flex items-center gap-2">
                       <Button variant="unstyled"
+                        type="button"
                         onClick={() => openConfigModal(engine)}
+                        aria-label={t(`${NS}.configure_aria`, { name: engine.name })}
                         className="px-3 py-1.5 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg text-xs font-medium hover:bg-cyan-500/30 transition-colors"
                       >
-                        <Settings className="w-3 h-3" />
+                        <Settings className="w-3 h-3" aria-hidden="true" />
                       </Button>
                     </div>
                   </div>

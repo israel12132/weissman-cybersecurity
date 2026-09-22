@@ -316,7 +316,7 @@ export default function SovereignDefenseMatrix() {
       syncAt={historyUnavailable ? null : lastUpdated}
       evidence={t('pages.sovereignDefense.evidence_notice')}
       breadcrumbs={[
-        { label: t('nav.engines'), to: '/engine-matrix' },
+        { label: t('nav.engines'), to: '/engines' },
         { label: t('pages.sovereignDefense.breadcrumb') },
       ]}
       actions={(
@@ -411,7 +411,7 @@ export default function SovereignDefenseMatrix() {
             </label>
 
             {runState.msg && (
-              <p className="text-[11px] font-mono text-cyan-300/90">{runState.msg}</p>
+              <p role="status" aria-live="polite" className="text-[11px] font-mono text-cyan-300/90">{runState.msg}</p>
             )}
 
             <AnimatePresence mode="wait">

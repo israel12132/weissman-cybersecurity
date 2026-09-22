@@ -2183,7 +2183,9 @@
       "evidence_notice": "Scheduled scan definitions from GET/POST /api/scan-schedules. Cron fires enqueue real POST /api/command-center/scan jobs — empty calendar means no schedules configured yet.",
       "delete_failed": "Failed to delete schedule",
       "delete_success": "Schedule deleted",
-      "delete_title": "Delete schedule"
+      "delete_title": "Delete schedule",
+      "pause_schedule": "Pause schedule",
+      "enable_schedule": "Enable schedule"
     },
     "systemConfiguration": {
       "title": "System Configuration",
@@ -2959,7 +2961,8 @@
       "sev_info": "Info",
       "link_findings": "Findings Command Center",
       "link_findings_desc": "Triage every open finding",
-      "evidence_notice": "CVE feed from GET /api/threat-intel/feed (NVD-sourced). Environment correlation overlays your tenant severity counts from GET /api/dashboard/exec-kpis — not a standalone threat theater."
+      "evidence_notice": "CVE feed from GET /api/threat-intel/feed (NVD-sourced). Environment correlation overlays your tenant severity counts from GET /api/dashboard/exec-kpis — not a standalone threat theater.",
+      "clear_search": "Clear search"
     },
     "incidentResponseCenter": {
       "title": "Incident Response Center",
@@ -3368,7 +3371,9 @@
       "evidence_notice": "Engine roster and tenant enablement from GET /api/ceo/god-mode/snapshot. Snapshot failure stays unavailable — GET /api/health is not a catalog. Toggles persist via PUT /api/ceo/tenant/engines; config via PUT /api/system/config.",
       "export_csv": "Export CSV",
       "unavailable_title": "Engine catalog unavailable",
-      "unavailable_body": "Live engine roster could not be confirmed. Empty is not a catalog."
+      "unavailable_body": "Live engine roster could not be confirmed. Empty is not a catalog.",
+      "toggle_aria": "Toggle engine {{name}}",
+      "configure_aria": "Configure engine {{name}}"
     },
     "strategicEngineProgram": {
       "back_matrix": "Back to Engine Matrix",
@@ -3658,7 +3663,8 @@
         }
       },
       "unavailable_title": "Kill-chain view unavailable",
-      "unavailable_body": "Kill-chain and findings telemetry could not be confirmed. Zero chains is not a quiet ATT&CK surface."
+      "unavailable_body": "Kill-chain and findings telemetry could not be confirmed. Zero chains is not a quiet ATT&CK surface.",
+      "filter_severity_aria": "Filter chains by severity"
     },
     "rateLimitAnalytics": {
       "title": "Rate Limit Analytics",
@@ -3756,7 +3762,9 @@
       "detected": "Detected",
       "evidence_notice": "AI pattern synthesis from GET /api/soc/ai-patterns with fallback to GET /api/findings/clusters — models summarize live tenant evidence only.",
       "unavailable_title": "AI analysis intel unavailable",
-      "unavailable_body": "GET /api/findings could not be confirmed. Zero patterns is not a quiet threat landscape."
+      "unavailable_body": "GET /api/findings could not be confirmed. Zero patterns is not a quiet threat landscape.",
+      "filter_category_aria": "Filter by category",
+      "filter_severity_aria": "Filter by severity"
     },
     "askWeissman": {
       "evidence_notice": "Natural-language answers compiled via POST /api/ask only — read-only SQL against tenant-scoped data with audit logging. Transcript is session-local until you export it.",
@@ -5061,7 +5069,8 @@
       "stage_whois": "WHOIS Lookup",
       "stage_email": "Email Records",
       "stage_pattern": "Pattern Generation",
-      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant."
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
+      "select_domain_aria": "Select {{domain}}"
     },
     "topTierEngineHub": {
       "back_matrix": "← Engine Matrix",

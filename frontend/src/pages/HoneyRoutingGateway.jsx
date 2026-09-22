@@ -83,7 +83,7 @@ export default function HoneyRoutingGateway() {
   useEffect(() => {
     apiFetch('/api/clients')
       .then((d) => { if (Array.isArray(d)) setClients(d) })
-      .catch(() => {})
+      .catch(() => { /* client list unavailable — dropdown stays empty, target can still be typed */ })
   }, [])
 
   useClientTargetPrefill(clientId, clients, setTarget, { onlyIfEmpty: false })
@@ -217,7 +217,7 @@ export default function HoneyRoutingGateway() {
       syncAt={lastUpdated}
       evidence={t('pages.honeyRouting.evidence_notice')}
       breadcrumbs={[
-        { label: t('nav.engines'), to: '/engine-matrix' },
+        { label: t('nav.engines'), to: '/engines' },
         { label: t('pages.honeyRouting.breadcrumb') },
       ]}
       actions={(

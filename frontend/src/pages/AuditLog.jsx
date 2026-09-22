@@ -401,6 +401,7 @@ export default function AuditLog() {
               value={verifyHash}
               onChange={(e) => setVerifyHash(e.target.value)}
               placeholder={t('audit.verify_placeholder')}
+              aria-label={t('audit.verify_placeholder')}
               spellCheck={false}
               className="flex-1 min-w-0 bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl px-3 py-2.5 text-sm font-mono text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-emerald-500/40"
             />
@@ -416,7 +417,7 @@ export default function AuditLog() {
 
           {verifyResult && (
             verifyResult.verified ? (
-              <div className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
+              <div role="status" aria-live="polite" className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
                 <div className="flex items-center gap-2 text-emerald-300 text-sm font-semibold">
                   <BadgeCheck className="w-4 h-4" />
                   {t('audit.verify_ok')}
@@ -429,7 +430,7 @@ export default function AuditLog() {
                 </div>
               </div>
             ) : (
-              <div className="mt-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3">
+              <div role="status" aria-live="polite" className="mt-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3">
                 <div className="flex items-center gap-2 text-rose-300 text-sm font-semibold">
                   <ShieldAlert className="w-4 h-4" />
                   {t('audit.verify_fail')}
@@ -566,6 +567,7 @@ export default function AuditLog() {
               <select
                 value={pageSize}
                 onChange={(e) => { setPageSize(Number(e.target.value)); setOffset(0) }}
+                aria-label={t('audit.rows_per_page')}
                 className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2 py-1 text-[var(--text-secondary)] focus:outline-none focus:border-cyan-500/40"
               >
                 {PAGE_SIZES.map((n) => (

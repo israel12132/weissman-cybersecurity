@@ -586,16 +586,18 @@ function CoveragePanel({ t }) {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                aria-label={t('pages.threatIntelHub.search_placeholder')}
                 placeholder={t('pages.threatIntelHub.search_placeholder')}
                 className="w-full bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg pl-9 pr-8 py-2 text-xs text-[var(--text-secondary)] placeholder-[var(--text-muted)] font-mono focus:outline-none focus:border-cyan-500/40"
               />
               {search && (
                 <Button variant="unstyled"
                   type="button"
+                  aria-label={t('pages.threatIntelHub.clear_search')}
                   onClick={() => setSearch('')}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-disabled)] hover:text-[var(--text-tertiary)]"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <X className="w-3.5 h-3.5" aria-hidden="true" />
                 </Button>
               )}
             </div>
@@ -698,6 +700,7 @@ export default function ThreatIntelHub() {
       )}
       <Button variant="unstyled"
         type="button"
+        aria-pressed={auto}
         onClick={() => setAuto((v) => !v)}
         className={`px-2.5 py-1.5 rounded-lg text-[11px] font-mono border transition-colors ${
           auto

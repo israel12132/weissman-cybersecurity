@@ -340,7 +340,10 @@ export default function Clients() {
         )}
 
         {scanToast && (
-          <div className={`rounded-xl border px-4 py-3 ${
+          <div
+            role={scanToast.kind === 'ok' ? 'status' : 'alert'}
+            aria-live={scanToast.kind === 'ok' ? 'polite' : 'assertive'}
+            className={`rounded-xl border px-4 py-3 ${
             scanToast.kind === 'ok'
               ? 'bg-emerald-950/25 border-emerald-500/30 text-emerald-200'
               : 'bg-rose-950/25 border-rose-500/30 text-rose-300'

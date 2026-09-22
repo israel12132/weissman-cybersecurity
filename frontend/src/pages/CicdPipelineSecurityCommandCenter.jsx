@@ -135,7 +135,7 @@ function Section({ title, icon, accent = '#84cc16', count, defaultOpen = true, c
   const [open, setOpen] = useState(defaultOpen)
   return (
     <div className="rounded-xl border bg-[var(--table-surface)] overflow-hidden" style={{ borderColor: `${accent}22` }}>
-      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-[var(--row-hover-bg)] transition-colors">
+      <Button variant="unstyled" type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-[var(--row-hover-bg)] transition-colors">
         <span className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.18em] font-semibold" style={{ color: accent }}>
           <span>{icon}</span>
           {title}
@@ -490,8 +490,13 @@ export default function CicdPipelineSecurityCommandCenter() {
   const appendLine = useCallback((msg) => setLines((prev) => [...prev.slice(-400), msg]), [])
 
   useEffect(() => {
-    // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-    apiFetch('/api/clients').then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
+    apiFetch('/api/clients')
+      .then((d) => {
+        const list = Array.isArray(d) ? d : Array.isArray(d?.clients) ? d.clients : null
+        if (list) setClients(list)
+      })
+      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -713,7 +718,7 @@ export default function CicdPipelineSecurityCommandCenter() {
               </Section>
 
               <Section title={t('cicdSec.sec_payload', 'Live Payload Preview')} icon="📦" accent="#64748b" count={paramCount} defaultOpen={false}>
-                <Button variant="unstyled" type="button" onClick={() => setShowPreview((s) => !s)} className="text-[10px] font-mono text-lime-300/70 hover:text-lime-200">
+                <Button variant="unstyled" type="button" aria-expanded={showPreview} onClick={() => setShowPreview((s) => !s)} className="text-[10px] font-mono text-lime-300/70 hover:text-lime-200">
                   {showPreview ? t('cicdSec.hide_json', 'hide JSON') : t('cicdSec.show_json', 'show exact request JSON')}
                 </Button>
                 {showPreview && (

@@ -133,7 +133,9 @@ export default function ComplianceFrameworks() {
       window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Failed to generate report:', err);
-      setError(t('pages.complianceFrameworks.export_failed'));
+      // A transient PDF export failure must not blank the whole page (setError
+      // hides all content behind the "unavailable" state); surface it as a toast.
+      toast.error(t('pages.complianceFrameworks.export_failed'));
     } finally {
       setExporting(false);
     }

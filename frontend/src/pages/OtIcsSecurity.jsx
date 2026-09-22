@@ -173,6 +173,7 @@ function OtEngineCard({ engine, clientId, clients, onScanComplete, onFindingsUpd
           type="button"
           onClick={handleRun}
           disabled={status === 'running' || !clientId}
+          aria-label={t('pages.otIcsSecurity.scan')}
           className="shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-mono uppercase border border-cyan-500/30 text-cyan-400/70 hover:bg-cyan-500/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
         >
           {status === 'running' ? '⟳' : t('pages.otIcsSecurity.scan')}
@@ -497,7 +498,10 @@ export default function OtIcsSecurity() {
         </div>
 
         {toast && (
-          <div className={`fixed top-16 end-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${
+          <div
+            role={toast.sev === 'error' ? 'alert' : 'status'}
+            aria-live={toast.sev === 'error' ? 'assertive' : 'polite'}
+            className={`fixed top-16 end-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${
             toast.sev === 'error'
               ? 'bg-rose-950/90 border-rose-500/40 text-rose-200'
               : 'bg-[var(--bg-1)] border-cyan-500/30 text-cyan-300'

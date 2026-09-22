@@ -2183,7 +2183,9 @@
       "evidence_notice": "הגדרות סריקה מתוזמנות מ-GET/POST /api/scan-schedules. cron מפעיל jobs אמיתיים של POST /api/command-center/scan — לוח ריק = אין schedules מוגדרים.",
       "delete_failed": "מחיקת התזמון נכשלה",
       "delete_success": "התזמון נמחק",
-      "delete_title": "מחיקת תזמון"
+      "delete_title": "מחיקת תזמון",
+      "pause_schedule": "השהה תזמון",
+      "enable_schedule": "הפעל תזמון"
     },
     "systemConfiguration": {
       "title": "הגדרות מערכת",
@@ -2959,7 +2961,8 @@
       "sev_info": "מידע",
       "link_findings": "מרכז פיקוד ממצאים",
       "link_findings_desc": "טריאז' לכל ממצא פתוח",
-      "evidence_notice": "feed CVE מ-GET /api/threat-intel/feed (מקור NVD). overlay correlation לסביבה שלך מספירות חומרה ב-GET /api/dashboard/exec-kpis — לא threat theater עצמאי."
+      "evidence_notice": "feed CVE מ-GET /api/threat-intel/feed (מקור NVD). overlay correlation לסביבה שלך מספירות חומרה ב-GET /api/dashboard/exec-kpis — לא threat theater עצמאי.",
+      "clear_search": "נקה חיפוש"
     },
     "incidentResponseCenter": {
       "title": "מרכז תגובה לאירועים",
@@ -3611,7 +3614,9 @@
       "evidence_notice": "רשימת מנועים והפעלת טננט מ-GET /api/ceo/god-mode/snapshot. כשל ב-snapshot נשאר לא-זמין — GET /api/health אינו קטלוג. מתגים נשמרים דרך PUT /api/ceo/tenant/engines; תצורה דרך PUT /api/system/config.",
       "export_csv": "ייצוא CSV",
       "unavailable_title": "קטלוג המנועים אינו זמין",
-      "unavailable_body": "לא ניתן לאשר את רשימת המנועים החיה. ריק אינו קטלוג."
+      "unavailable_body": "לא ניתן לאשר את רשימת המנועים החיה. ריק אינו קטלוג.",
+      "toggle_aria": "החלף מנוע {{name}}",
+      "configure_aria": "הגדר מנוע {{name}}"
     },
     "strategicEngineProgram": {
       "back_matrix": "חזרה למטריצת מנועים",
@@ -3901,7 +3906,8 @@
         }
       },
       "unavailable_title": "תצוגת kill-chain אינה זמינה",
-      "unavailable_body": "טלמטריית kill-chain וממצאים לא אושרו. אפס שרשראות אינו משטח ATT&CK שקט."
+      "unavailable_body": "טלמטריית kill-chain וממצאים לא אושרו. אפס שרשראות אינו משטח ATT&CK שקט.",
+      "filter_severity_aria": "סנן שרשראות לפי חומרה"
     },
     "rateLimitAnalytics": {
       "title": "ניתוח מגבלות קצב",
@@ -3999,7 +4005,9 @@
       "detected": "זוהה",
       "evidence_notice": "סינתזת דפוסים AI מ-GET /api/soc/ai-patterns עם fallback ל-GET /api/findings/clusters — מודלים מסכמים רק הוכחות tenant חיות.",
       "unavailable_title": "מודיעין ניתוח AI אינו זמין",
-      "unavailable_body": "לא ניתן לאשר את GET /api/findings. אפס דפוסים אינו משטח איומים שקט."
+      "unavailable_body": "לא ניתן לאשר את GET /api/findings. אפס דפוסים אינו משטח איומים שקט.",
+      "filter_category_aria": "סנן לפי קטגוריה",
+      "filter_severity_aria": "סנן לפי חומרה"
     },
     "askWeissman": {
       "evidence_notice": "תשובות בשפה טבעית מ-POST /api/ask בלבד — SQL לקריאה בלבד על נתוני tenant עם יומן ביקורת. התמליל מקומי לסשן עד לייצוא.",
@@ -5061,7 +5069,8 @@
       "stage_whois": "WHOIS",
       "stage_email": "רשומות אימייל",
       "stage_pattern": "יצירת תבניות",
-      "clients_unavailable": "API הלקוחות אינו זמין — בורר חסר אינו tenant חסר."
+      "clients_unavailable": "API הלקוחות אינו זמין — בורר חסר אינו tenant חסר.",
+      "select_domain_aria": "בחר {{domain}}"
     },
     "topTierEngineHub": {
       "back_matrix": "← מטריצת מנועים",

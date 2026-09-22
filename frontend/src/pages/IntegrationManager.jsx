@@ -373,6 +373,8 @@ export default function IntegrationManager() {
                     <Button variant="unstyled"
                       type="button"
                       onClick={() => deleteIntegration(integration.id)}
+                      title={t('common.delete')}
+                      aria-label={t('common.delete')}
                       className="p-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -522,7 +524,9 @@ function AddIntegrationModal({ integration, existing = null, onClose, onSave }) 
               : t('pages.integrationManager.add_integration_modal')}
           </h3>
           <Button variant="unstyled"
+            type="button"
             onClick={onClose}
+            aria-label={t('common.close')}
             className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
           >
             ✕
