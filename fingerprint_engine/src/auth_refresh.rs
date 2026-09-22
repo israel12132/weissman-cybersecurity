@@ -63,7 +63,14 @@ pub async fn build_session_cookie_headers(
         assigned_client_id,
     )?;
     let access_line = crate::auth_jwt::session_cookie_value(&minted.token);
-    let refresh = issue_refresh_token(pool, user_id, tenant_id, Some(&minted.jti)).await?;
+    let refresh = issue_refresh_token(
+        pool,
+        user_id,
+        tenant_id,
+        Some(&minted.jti),
+        binding.bind_ip.as_deref(),
+    )
+    .await?;
     Ok((minted.token, access_line, refresh_cookie_value(&refresh)))
 }
 
@@ -192,6 +199,74 @@ fn refresh_ttl_days() -> i64 {
         .clamp(1, 365)
 }
 
+/// Idle window (minutes) after which an un-refreshed session is force-revoked on its
+/// next refresh. `WEISSMAN_SESSION_IDLE_MINUTES` (default 15), clamped to [1, 43200]
+/// (30 days) so a misconfigured value can neither disable the control nor overflow.
+fn session_idle_minutes_default() -> i64 {
+    std::env::var("WEISSMAN_SESSION_IDLE_MINUTES")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(15)
+        .clamp(1, 43_200)
+}
+
+/// Effective idle window for `tenant_id`: the tenant's `system_configs.session_timeout_minutes`
+/// when present and in range [1, 43200], otherwise the env/default. Read inside the caller's
+/// rotation transaction so the check is consistent with the `FOR UPDATE` row lock. weissman_auth
+/// holds SELECT on system_configs (20250501120000); RLS is bypassed on the auth pool, so the
+/// tenant_id predicate is the isolation.
+async fn idle_minutes_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tenant_id: i64,
+) -> Result<i64, sqlx::Error> {
+    let raw: Option<String> = sqlx::query_scalar(
+        "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'session_timeout_minutes'",
+    )
+    .bind(tenant_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+    Ok(raw
+        .and_then(|s| s.trim().parse::<i64>().ok())
+        .filter(|m| *m >= 1 && *m <= 43_200)
+        .unwrap_or_else(session_idle_minutes_default))
+}
+
+/// Concurrent active refresh rows allowed per user at mint time. `WEISSMAN_MAX_SESSIONS_PER_USER`
+/// (default 0 = unlimited), clamped to [0, 10000].
+fn max_sessions_per_user() -> i64 {
+    std::env::var("WEISSMAN_MAX_SESSIONS_PER_USER")
+        .ok()
+        .and_then(|s| s.parse::<i64>().ok())
+        .filter(|n| *n >= 0)
+        .unwrap_or(0)
+        .clamp(0, 10_000)
+}
+
+/// When a per-user session cap is configured, revoke the oldest active refresh rows beyond the
+/// cap (keeping the newest `cap` by created_at). Best-effort; returns rows revoked. Runs on the
+/// auth pool (BYPASSRLS), so `user_id` alone scopes the prune across the user's single tenant.
+async fn enforce_session_cap(pool: &PgPool, user_id: i64) -> Result<u64, sqlx::Error> {
+    let cap = max_sessions_per_user();
+    if cap <= 0 {
+        return Ok(0);
+    }
+    let res = sqlx::query(
+        r#"UPDATE user_refresh_tokens SET revoked_at = now()
+           WHERE id IN (
+               SELECT id FROM user_refresh_tokens
+               WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now()
+               ORDER BY created_at DESC
+               OFFSET $2
+           )
+           AND revoked_at IS NULL"#,
+    )
+    .bind(user_id)
+    .bind(cap)
+    .execute(pool)
+    .await?;
+    Ok(res.rows_affected())
+}
+
 fn hash_token(raw: &str) -> Vec<u8> {
     let mut h = Sha256::new();
     h.update(raw.trim().as_bytes());
@@ -210,21 +285,29 @@ pub async fn issue_refresh_token(
     user_id: i64,
     tenant_id: i64,
     access_jti: Option<&str>,
+    created_ip: Option<&str>,
 ) -> Result<String, sqlx::Error> {
     let raw = generate_opaque_token();
     let th = hash_token(&raw);
     let exp = chrono::Utc::now() + chrono::Duration::days(refresh_ttl_days());
     sqlx::query(
-        r#"INSERT INTO user_refresh_tokens (user_id, tenant_id, token_hash, expires_at, access_jti)
-           VALUES ($1, $2, $3, $4, $5)"#,
+        r#"INSERT INTO user_refresh_tokens
+               (user_id, tenant_id, token_hash, expires_at, last_used_at, created_ip, access_jti)
+           VALUES ($1, $2, $3, $4, now(), $5, $6)"#,
     )
     .bind(user_id)
     .bind(tenant_id)
     .bind(&th)
     .bind(exp)
+    .bind(created_ip)
     .bind(access_jti)
     .execute(pool)
     .await?;
+    // Concurrent-session cap: prune the oldest active rows beyond the configured ceiling now
+    // that this new session exists. Best-effort -- a prune failure must not fail a valid login.
+    if let Err(e) = enforce_session_cap(pool, user_id).await {
+        tracing::warn!(target: "auth", user_id, error = %e, "session cap prune failed at mint");
+    }
     Ok(raw)
 }
 
@@ -249,7 +332,8 @@ pub async fn rotate_refresh_token(
     )
     .await?;
     let row = sqlx::query(
-        r#"SELECT id, user_id, tenant_id FROM user_refresh_tokens
+        r#"SELECT id, user_id, tenant_id, created_at, last_used_at, created_ip
+           FROM user_refresh_tokens
            WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > now()
            FOR UPDATE"#,
     )
@@ -309,19 +393,68 @@ pub async fn rotate_refresh_token(
     let old_id: i64 = row.try_get("id")?;
     let user_id: i64 = row.try_get("user_id")?;
     let tenant_id: i64 = row.try_get("tenant_id")?;
+    let created_at: chrono::DateTime<chrono::Utc> = row.try_get("created_at")?;
+    let last_used_at: Option<chrono::DateTime<chrono::Utc>> = row.try_get("last_used_at")?;
+    let created_ip: Option<String> = row.try_get("created_ip").ok().flatten();
+
+    // ── Idle timeout ─────────────────────────────────────────────────────────────
+    // `last_used_at` is stamped at mint and refreshed on every rotation, so the gap to
+    // now is exactly "time since this session was last exercised". Past the idle window
+    // (env WEISSMAN_SESSION_IDLE_MINUTES, default 15; tenant override via
+    // system_configs.session_timeout_minutes) the whole token family is revoked -- the
+    // user's active rows and the access JWTs bound to them -- and the refresh is rejected,
+    // so a long-dormant refresh cookie cannot silently resurrect a session.
+    let idle_minutes = idle_minutes_in_tx(&mut tx, tenant_id)
+        .await
+        .unwrap_or_else(|_| session_idle_minutes_default());
+    let last_seen = last_used_at.unwrap_or(created_at);
+    if chrono::Utc::now().signed_duration_since(last_seen)
+        > chrono::Duration::minutes(idle_minutes)
+    {
+        let jtis: Vec<String> = sqlx::query_scalar(
+            r#"SELECT access_jti FROM user_refresh_tokens
+               WHERE user_id = $1 AND access_jti IS NOT NULL AND expires_at > now()"#,
+        )
+        .bind(user_id)
+        .fetch_all(&mut *tx)
+        .await?;
+        sqlx::query(
+            r#"UPDATE user_refresh_tokens SET revoked_at = now()
+               WHERE user_id = $1 AND revoked_at IS NULL"#,
+        )
+        .bind(user_id)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        let expiry = chrono::Utc::now() + chrono::Duration::hours(6);
+        for jti in jtis {
+            let _ = revoke_access_jti(pool, &jti, expiry).await;
+        }
+        metrics::counter!("weissman_refresh_idle_timeout_total").increment(1);
+        tracing::info!(
+            target: "auth",
+            user_id,
+            tenant_id,
+            idle_minutes,
+            "refresh rejected: session idle beyond window; revoked token family"
+        );
+        return Err(RefreshTokenError::InvalidOrRevoked);
+    }
 
     let new_raw = generate_opaque_token();
     let new_hash = hash_token(&new_raw);
     let exp = chrono::Utc::now() + chrono::Duration::days(refresh_ttl_days());
 
     let new_id: i64 = sqlx::query_scalar(
-        r#"INSERT INTO user_refresh_tokens (user_id, tenant_id, token_hash, expires_at, access_jti)
-           VALUES ($1, $2, $3, $4, NULL) RETURNING id"#,
+        r#"INSERT INTO user_refresh_tokens
+               (user_id, tenant_id, token_hash, expires_at, last_used_at, created_ip, access_jti)
+           VALUES ($1, $2, $3, $4, now(), $5, NULL) RETURNING id"#,
     )
     .bind(user_id)
     .bind(tenant_id)
     .bind(&new_hash)
     .bind(exp)
+    .bind(created_ip.as_deref())
     .fetch_one(&mut *tx)
     .await?;
 
@@ -335,6 +468,81 @@ pub async fn rotate_refresh_token(
 
     tx.commit().await?;
     Ok((user_id, tenant_id, new_raw))
+}
+
+/// One of the caller's own active sessions, for GET /api/auth/sessions.
+#[derive(Debug)]
+pub struct ActiveSession {
+    pub id: i64,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub last_used_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub expires_at: chrono::DateTime<chrono::Utc>,
+    pub ip: Option<String>,
+}
+
+/// List a user's active (unrevoked, unexpired) refresh sessions, newest first. Runs on the
+/// auth pool (BYPASSRLS); `tenant_id` scopes the query defensively even though `user_id` is
+/// unique to one tenant.
+pub async fn list_active_sessions_for_user(
+    pool: &PgPool,
+    user_id: i64,
+    tenant_id: i64,
+) -> Result<Vec<ActiveSession>, sqlx::Error> {
+    let rows = sqlx::query(
+        r#"SELECT id, created_at, last_used_at, expires_at, created_ip
+           FROM user_refresh_tokens
+           WHERE user_id = $1 AND tenant_id = $2
+             AND revoked_at IS NULL AND expires_at > now()
+           ORDER BY created_at DESC"#,
+    )
+    .bind(user_id)
+    .bind(tenant_id)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .iter()
+        .map(|r| ActiveSession {
+            id: r.try_get("id").unwrap_or(0),
+            created_at: r
+                .try_get("created_at")
+                .unwrap_or_else(|_| chrono::Utc::now()),
+            last_used_at: r.try_get("last_used_at").ok().flatten(),
+            expires_at: r
+                .try_get("expires_at")
+                .unwrap_or_else(|_| chrono::Utc::now()),
+            ip: r.try_get("created_ip").ok().flatten(),
+        })
+        .collect())
+}
+
+/// "Sign out everywhere": revoke every active refresh row for `user_id` and, best-effort,
+/// revoke the access JWTs bound to them until their natural expiry. Returns the number of
+/// refresh rows revoked. Runs on the auth pool (BYPASSRLS).
+pub async fn revoke_all_sessions_for_user(
+    pool: &PgPool,
+    user_id: i64,
+) -> Result<u64, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    let jtis: Vec<String> = sqlx::query_scalar(
+        r#"SELECT access_jti FROM user_refresh_tokens
+           WHERE user_id = $1 AND access_jti IS NOT NULL AND expires_at > now()"#,
+    )
+    .bind(user_id)
+    .fetch_all(&mut *tx)
+    .await?;
+    let res = sqlx::query(
+        r#"UPDATE user_refresh_tokens SET revoked_at = now()
+           WHERE user_id = $1 AND revoked_at IS NULL"#,
+    )
+    .bind(user_id)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    let expiry = chrono::Utc::now() + chrono::Duration::hours(6);
+    for jti in jtis {
+        let _ = revoke_access_jti(pool, &jti, expiry).await;
+    }
+    Ok(res.rows_affected())
 }
 
 fn refresh_secure_suffix() -> &'static str {

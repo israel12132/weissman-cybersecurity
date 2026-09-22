@@ -225,6 +225,108 @@ async fn api_auth_me(Extension(auth): Extension<AuthContext>) -> Response {
     (StatusCode::OK, Json(body)).into_response()
 }
 
+/// GET /api/auth/sessions -- the caller's own active refresh sessions
+/// (created_at, last_used_at, expires_at, origin ip when captured at mint).
+async fn api_auth_sessions_list(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
+    let sessions = match crate::auth_refresh::list_active_sessions_for_user(
+        state.auth_pool.as_ref(),
+        auth.user_id,
+        auth.tenant_id,
+    )
+    .await
+    {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::error!(target: "auth", error = %e, "session list query failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                    "session store unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    let items: Vec<Value> = sessions
+        .iter()
+        .map(|s| {
+            json!({
+                "id": s.id,
+                "created_at": s.created_at.to_rfc3339(),
+                "last_used_at": s.last_used_at.map(|d| d.to_rfc3339()),
+                "expires_at": s.expires_at.to_rfc3339(),
+                "ip": s.ip,
+            })
+        })
+        .collect();
+    (
+        StatusCode::OK,
+        Json(json!({ "ok": true, "count": items.len(), "sessions": items })),
+    )
+        .into_response()
+}
+
+/// POST /api/auth/sessions/revoke-all -- "sign out everywhere" for the current user.
+/// Revokes every active refresh token and the access JWTs bound to them, audits the
+/// action, and clears the caller's own cookies.
+async fn api_auth_sessions_revoke_all(
+    State(state): State<Arc<AppState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
+    let revoked = match crate::auth_refresh::revoke_all_sessions_for_user(
+        state.auth_pool.as_ref(),
+        auth.user_id,
+    )
+    .await
+    {
+        Ok(n) => n,
+        Err(e) => {
+            tracing::error!(target: "auth", error = %e, "revoke-all sessions failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                    "session revocation unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    // Best-effort audit on the app pool (audit_logs is tenant-scoped + FORCE RLS).
+    let ip = extract_client_ip(&headers, addr);
+    if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
+        let _ = audit_log::insert_audit(
+            &mut tx,
+            auth.tenant_id,
+            Some(auth.user_id),
+            &format!("user:{}", auth.user_id),
+            "session_revoke_all",
+            &format!("revoked {revoked} active session(s) (sign out everywhere)"),
+            &ip,
+        )
+        .await;
+        let _ = tx.commit().await;
+    }
+    let mut res = (
+        StatusCode::OK,
+        Json(json!({ "ok": true, "revoked": revoked })),
+    )
+        .into_response();
+    append_set_cookie(
+        res.headers_mut(),
+        &crate::auth_jwt::session_cookie_clear_value(),
+    );
+    append_set_cookie(
+        res.headers_mut(),
+        &crate::auth_refresh::refresh_cookie_clear_value(),
+    );
+    res
+}
+
 fn extract_access_cookie(headers: &HeaderMap) -> Option<String> {
     let cookie_h = headers.get(axum::http::header::COOKIE)?.to_str().ok()?;
     let prefix = format!("{}=", crate::auth_jwt::WEISSMAN_COOKIE_NAME);

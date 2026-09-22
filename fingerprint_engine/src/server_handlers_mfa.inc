@@ -616,3 +616,140 @@ async fn api_auth_mfa_disable(
     )
         .into_response()
 }
+
+#[derive(serde::Deserialize)]
+struct StepUpBody {
+    #[serde(alias = "code")]
+    totp_code: String,
+}
+
+/// POST /api/auth/step-up — verify the caller's CURRENT TOTP and mint a short-lived step-up
+/// assertion token. Requires a valid session (auth middleware injects `AuthContext`) AND MFA
+/// enabled. The returned token is presented in `X-Weissman-StepUp` on privileged operations and
+/// checked by `crate::auth_stepup::require_step_up`. Mirrors the mfa/verify fetch+lockout+verify
+/// pattern; TOTP brute force is throttled via the shared per-(tenant,email) lockout store.
+async fn api_auth_step_up(
+    State(state): State<Arc<AppState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    Extension(auth): Extension<AuthContext>,
+    headers: HeaderMap,
+    body: axum::extract::Json<StepUpBody>,
+) -> Response {
+    let ip = extract_client_ip(&headers, addr);
+    let code = body.totp_code.trim();
+    // `users` is FORCE RLS; the lookup MUST run inside a tenant-scoped tx or it matches zero rows.
+    let mut vtx = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
+        Ok(t) => t,
+        Err(e) => {
+            tracing::error!(target: "auth_stepup", error = %e, "step-up tenant tx failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({
+                    "ok": false,
+                    "detail": "Authentication service temporarily unavailable",
+                    "code": "auth_degraded"
+                })),
+            )
+                .into_response();
+        }
+    };
+    let row = match sqlx::query(
+        r#"SELECT COALESCE(mfa_secret,'') AS mfa_secret, COALESCE(mfa_enabled, false) AS mfa_enabled,
+                  COALESCE(NULLIF(trim(email), ''), '') AS email
+           FROM users WHERE id = $1 AND tenant_id = $2 AND is_active = true"#,
+    )
+    .bind(auth.user_id)
+    .bind(auth.tenant_id)
+    .fetch_optional(&mut *vtx)
+    .await
+    {
+        Ok(Some(row)) => row,
+        Ok(None) => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(json!({"ok": false, "detail": "User not found"})),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            tracing::error!(target: "auth_stepup", error = %e, "step-up user lookup failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({
+                    "ok": false,
+                    "detail": "Authentication service temporarily unavailable",
+                    "code": "auth_degraded"
+                })),
+            )
+                .into_response();
+        }
+    };
+    let _ = vtx.commit().await;
+    let stored_secret: String = row.try_get("mfa_secret").unwrap_or_default();
+    let secret: String = crate::auth_mfa::decrypt_secret_at_rest(&stored_secret);
+    let enabled: bool = row.try_get("mfa_enabled").unwrap_or(false);
+    let email: String = row.try_get("email").unwrap_or_default();
+    match crate::http::check_lockout_status(auth.tenant_id, &email).await {
+        crate::http::LockoutStatus::Locked(retry_after) => {
+            return crate::http::locked_response(retry_after);
+        }
+        crate::http::LockoutStatus::DistributedStoreUnavailable => {
+            return crate::http::rate_limit_redis::distributed_store_unavailable_response();
+        }
+        crate::http::LockoutStatus::Allowed => {}
+    }
+    if !enabled || secret.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "ok": false,
+                "detail": "Step-up requires MFA. Enable MFA (POST /api/auth/mfa/setup) first."
+            })),
+        )
+            .into_response();
+    }
+    if !crate::auth_mfa::verify_code(&secret, code) {
+        crate::http::record_failure(auth.tenant_id, &email).await;
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({"ok": false, "detail": "Invalid verification code"})),
+        )
+            .into_response();
+    }
+    crate::http::clear_failures(auth.tenant_id, &email).await;
+    // Audit the fresh assertion (best-effort, tenant-scoped).
+    if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
+        let _ = audit_log::insert_audit(
+            &mut tx,
+            auth.tenant_id,
+            Some(auth.user_id),
+            &email,
+            "auth_step_up",
+            "Step-up re-authentication granted",
+            &ip,
+        )
+        .await;
+        let _ = tx.commit().await;
+    }
+    let token = match crate::auth_jwt::create_step_up_token(auth.user_id, auth.tenant_id) {
+        Ok(t) => t,
+        Err(e) => {
+            tracing::error!(target: "auth_stepup", error = %e, "step-up token mint failed");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"ok": false, "detail": "step-up token issuance failed"})),
+            )
+                .into_response();
+        }
+    };
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "step_up_token": token,
+            "token_type": "stepup",
+            "expires_in": crate::auth_jwt::step_up_token_ttl_secs(),
+        })),
+    )
+        .into_response()
+}

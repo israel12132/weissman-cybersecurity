@@ -3,7 +3,7 @@
 
 use axum::{
     extract::{Extension, Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     Json,
 };
@@ -254,6 +254,7 @@ pub async fn api_admin_users_list(
 pub async fn api_admin_users_create(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
+    headers: HeaderMap,
     Json(body): Json<CreateUserBody>,
 ) -> Response {
     let auth = match require_admin_access(state.auth_pool.as_ref(), &auth).await {
@@ -372,6 +373,13 @@ pub async fn api_admin_users_create(
             .into_response();
     }
 
+    // Step-up: minting a CEO or owner is a privileged operation — require a FRESH MFA
+    // assertion (X-Weissman-StepUp header), not merely a valid admin session.
+    if role == crate::rbac::roles::CEO || role == crate::rbac::roles::OWNER {
+        if let Err(r) = crate::auth_stepup::require_step_up(&headers, &auth) {
+            return r;
+        }
+    }
     if role == crate::rbac::roles::CEO {
         if let Err(r) = crate::rbac::require_can_assign_ceo(&auth) {
             return r;
@@ -511,6 +519,7 @@ pub async fn api_admin_users_update(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
     Path(user_id): Path<i64>,
+    headers: HeaderMap,
     Json(body): Json<UpdateUserBody>,
 ) -> Response {
     let auth = match require_admin_access(state.auth_pool.as_ref(), &auth).await {
@@ -592,6 +601,14 @@ pub async fn api_admin_users_update(
     };
 
     if let Some(ref role) = valid_role {
+        // Step-up: promoting a user TO ceo/owner is privileged — require a FRESH MFA
+        // assertion (X-Weissman-StepUp header) in addition to the admin session. The open
+        // `tx` is rolled back automatically on early-return drop (matching the sibling gates).
+        if role == crate::rbac::roles::CEO || role == crate::rbac::roles::OWNER {
+            if let Err(r) = crate::auth_stepup::require_step_up(&headers, &auth) {
+                return r;
+            }
+        }
         if role == crate::rbac::roles::CEO {
             if let Err(r) = crate::rbac::require_can_assign_ceo(&auth) {
                 return r;

@@ -308,6 +308,42 @@ async fn auth_guard(
     if path.starts_with("/api/") || path.starts_with("/ws/") {
         let extracted = extract_token_from_request(&request, path);
         if let Some((t, source)) = extracted {
+            // Service-account API keys (wsk_<prefix>_<secret>): a non-interactive machine
+            // credential presented as `Authorization: Bearer wsk_...`. Resolve it to a
+            // synthetic AuthContext + ApiKeyIdentity, enforce the fail-closed per-route
+            // scope gate, and bypass the human-JWT jti / RBAC-revalidation path.
+            if source == TokenSource::HeaderOrCookie
+                && t.starts_with(crate::api_keys::KEY_TOKEN_PREFIX)
+            {
+                match crate::api_keys::authenticate_api_key(state.as_ref(), &t).await {
+                    Ok(Some((ctx, ident))) => {
+                        let m = request.method().clone();
+                        let p = request.uri().path().to_string();
+                        if let Err(resp) =
+                            crate::api_keys::enforce_api_key_scope(&m, &p, &ident.scopes)
+                        {
+                            return resp;
+                        }
+                        request.extensions_mut().insert(ctx);
+                        request.extensions_mut().insert(ident);
+                        return next.run(request).await;
+                    }
+                    Ok(None) => {
+                        return (
+                            StatusCode::UNAUTHORIZED,
+                            Json(json!({"detail": "Invalid or revoked API key", "ok": false})),
+                        )
+                            .into_response();
+                    }
+                    Err(()) => {
+                        return (
+                            StatusCode::SERVICE_UNAVAILABLE,
+                            Json(json!({"detail": "Auth service unavailable", "ok": false})),
+                        )
+                            .into_response();
+                    }
+                }
+            }
             if let Some(mut ctx) = verify_token_for_request(&t, path, source) {
                 if auth_jwt::is_user_access_context(&ctx) {
                     let Some(ref jti) = ctx.jti else {

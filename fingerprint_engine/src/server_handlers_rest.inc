@@ -540,6 +540,240 @@ async fn api_audit_export(
         .into_response()
 }
 
+/// GET /api/audit/stream — cursor-paginated, read-only audit export for SIEM ingestion.
+///
+/// `?since_id=<cursor>&limit=<=1000` returns tenant-scoped `audit_logs` rows with `id > since_id`
+/// ordered by `id ASC` as a JSON `events` array plus a `next_cursor` (max id in the page), so a
+/// SIEM connector polls incrementally: pass the previous response's `next_cursor` as the next
+/// `since_id`. `limit` is clamped to 1..=1000 — a poll can never trigger an unbounded scan.
+///
+/// Auth: admin-only (`require_admin`). The api-keys work item (no `api_keys` table exists yet)
+/// would add an `audit:read` scope to OR in here; until then this is strictly admin-gated.
+async fn api_audit_stream(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    // The audit trail (actor emails, IPs, targets, action details) is admin-only; a plain GET
+    // otherwise bypasses mutation_rbac_middleware and is readable by any viewer.
+    if let Err(r) = crate::rbac::require_admin(&auth) {
+        return r;
+    }
+    let since_id: i64 = q
+        .get("since_id")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(0)
+        .max(0);
+    let limit: i64 = q
+        .get("limit")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(1000)
+        .clamp(1, 1000);
+
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::audit_logs_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    };
+
+    // RLS (begin_tenant_tx sets the tenant GUC) AND an explicit tenant_id predicate: defense in
+    // depth. Keyset pagination on the PK (`id > $2` + LIMIT) — no OFFSET, no full scan.
+    let rows = match sqlx::query(
+        r#"SELECT id,
+                  created_at,
+                  COALESCE(user_label, '')  AS user_label,
+                  COALESCE(action_type, '') AS action_type,
+                  COALESCE(details, '')     AS details,
+                  COALESCE(ip_address, '')  AS ip_address
+             FROM audit_logs
+            WHERE tenant_id = $1
+              AND id > $2
+            ORDER BY id ASC
+            LIMIT $3"#,
+    )
+    .bind(auth.tenant_id)
+    .bind(since_id)
+    .bind(limit)
+    .fetch_all(&mut *tx)
+    .await
+    {
+        Ok(r) => r,
+        Err(_) => {
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::audit_logs_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::audit_logs_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
+
+    let mut max_id: i64 = since_id;
+    let events: Vec<Value> = rows
+        .into_iter()
+        .map(|r| {
+            let id = r.try_get::<i64, _>("id").unwrap_or(0);
+            if id > max_id {
+                max_id = id;
+            }
+            json!({
+                "id": id,
+                "created_at": r.try_get::<chrono::DateTime<Utc>, _>("created_at").ok().map(|d| d.to_rfc3339()),
+                "user_label": r.try_get::<String, _>("user_label").unwrap_or_default(),
+                "action_type": r.try_get::<String, _>("action_type").unwrap_or_default(),
+                "details": r.try_get::<String, _>("details").unwrap_or_default(),
+                "ip_address": r.try_get::<String, _>("ip_address").unwrap_or_default(),
+            })
+        })
+        .collect();
+
+    let count = events.len();
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "stream": "weissman-audit-stream-v1",
+            "tenant_id": auth.tenant_id,
+            "events": events,
+            "count": count,
+            "since_id": since_id,
+            "next_cursor": max_id,
+            "limit": limit,
+            "has_more": count as i64 == limit,
+        })),
+    )
+        .into_response()
+}
+
+/// GET /api/audit/nl-stream — cursor-paginated AI-query (natural-language /api/ask) audit trail
+/// for SIEM. Same keyset-cursor contract as `/api/audit/stream` but over `nl_query_audit`.
+///
+/// `compiled_sql` and `plan_json` are intentionally NOT exported: they can embed tenant schema
+/// and query-result shape, and a SIEM only needs the who/what/when/outcome of each AI query.
+async fn api_audit_nl_stream(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_admin(&auth) {
+        return r;
+    }
+    let since_id: i64 = q
+        .get("since_id")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(0)
+        .max(0);
+    let limit: i64 = q
+        .get("limit")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(1000)
+        .clamp(1, 1000);
+
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::audit_logs_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    };
+
+    let rows = match sqlx::query(
+        r#"SELECT id,
+                  asked_at,
+                  user_id,
+                  COALESCE(question, '') AS question,
+                  rows_returned,
+                  elapsed_ms,
+                  COALESCE(error, '')    AS error
+             FROM nl_query_audit
+            WHERE tenant_id = $1
+              AND id > $2
+            ORDER BY id ASC
+            LIMIT $3"#,
+    )
+    .bind(auth.tenant_id)
+    .bind(since_id)
+    .bind(limit)
+    .fetch_all(&mut *tx)
+    .await
+    {
+        Ok(r) => r,
+        Err(_) => {
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::audit_logs_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::audit_logs_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
+
+    let mut max_id: i64 = since_id;
+    let events: Vec<Value> = rows
+        .into_iter()
+        .map(|r| {
+            let id = r.try_get::<i64, _>("id").unwrap_or(0);
+            if id > max_id {
+                max_id = id;
+            }
+            json!({
+                "id": id,
+                "asked_at": r.try_get::<chrono::DateTime<Utc>, _>("asked_at").ok().map(|d| d.to_rfc3339()),
+                "user_id": r.try_get::<Option<i64>, _>("user_id").ok().flatten(),
+                "question": r.try_get::<String, _>("question").unwrap_or_default(),
+                "rows_returned": r.try_get::<i32, _>("rows_returned").unwrap_or(0),
+                "elapsed_ms": r.try_get::<i32, _>("elapsed_ms").unwrap_or(0),
+                "error": r.try_get::<String, _>("error").unwrap_or_default(),
+            })
+        })
+        .collect();
+
+    let count = events.len();
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "stream": "weissman-nl-query-audit-stream-v1",
+            "tenant_id": auth.tenant_id,
+            "events": events,
+            "count": count,
+            "since_id": since_id,
+            "next_cursor": max_id,
+            "limit": limit,
+            "has_more": count as i64 == limit,
+        })),
+    )
+        .into_response()
+}
+
 async fn api_enterprise_settings_get(State(state): State<Arc<AppState>>, Extension(auth): Extension<AuthContext>) -> Response {
     // alert_webhook_url is a bearer credential for the customer's alert channel; the PATCH is
     // admin-gated, so the GET must be too (a plain GET otherwise skips mutation_rbac_middleware).

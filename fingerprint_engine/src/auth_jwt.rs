@@ -210,7 +210,7 @@ fn auth_context_from_claims(c: JwtClaims) -> Option<AuthContext> {
                 assigned_client_id: None,
             })
         }
-        Some("refresh") | Some("mfa_pending") => None,
+        Some("refresh") | Some("mfa_pending") | Some("stepup") => None,
         _ => {
             if c.sub <= 0 {
                 return None;
@@ -385,6 +385,86 @@ pub fn create_mfa_pending_token(
     )
 }
 
+/// Step-up assertion TTL in seconds. Default 5 min; env `WEISSMAN_STEPUP_MINUTES` (clamped 1..=15).
+#[must_use]
+pub fn step_up_token_ttl_secs() -> i64 {
+    std::env::var("WEISSMAN_STEPUP_MINUTES")
+        .ok()
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(5)
+        .clamp(1, 15)
+        * 60
+}
+
+/// Claims for a step-up (fresh re-auth) assertion token. Deliberately NOT an access token:
+/// it carries `typ: "stepup"` (rejected by `verify_access_token` / `auth_context_from_claims`)
+/// plus an explicit `stepup: true` marker, and is presented in the `X-Weissman-StepUp` header
+/// ALONGSIDE a normal session for privileged operations (see `crate::auth_stepup`).
+#[derive(Debug, Serialize, Deserialize)]
+struct StepUpClaims {
+    sub: i64,
+    tid: i64,
+    exp: i64,
+    iat: i64,
+    typ: String,
+    stepup: bool,
+}
+
+/// Mint a short-lived step-up assertion token for `user_id`/`tenant_id`. Signed with the
+/// current JWT secret; verified by [`verify_step_up_token`]. Returns an error when the JWT
+/// secret is uninitialized or the subject/tenant are invalid.
+pub fn create_step_up_token(
+    user_id: i64,
+    tenant_id: i64,
+) -> Result<String, jsonwebtoken::errors::Error> {
+    let secret = jwt_secret();
+    if secret.is_empty() {
+        return Err(jsonwebtoken::errors::ErrorKind::InvalidToken.into());
+    }
+    if user_id <= 0 || tenant_id <= 0 {
+        return Err(jsonwebtoken::errors::ErrorKind::InvalidToken.into());
+    }
+    let now = chrono::Utc::now();
+    let exp = (now + chrono::Duration::seconds(step_up_token_ttl_secs())).timestamp();
+    let claims = StepUpClaims {
+        sub: user_id,
+        tid: tenant_id,
+        exp,
+        iat: now.timestamp(),
+        typ: "stepup".to_string(),
+        stepup: true,
+    };
+    encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(secret),
+    )
+}
+
+/// Verify a step-up assertion token. Returns `(user_id, tenant_id)` only when the signature,
+/// expiry, `typ` and `stepup` marker all check out. Tries every key in the verification keyring
+/// (current + rotated-out previous) exactly like access tokens.
+#[must_use]
+pub fn verify_step_up_token(token: &str) -> Option<(i64, i64)> {
+    let mut validation = Validation::default();
+    validation.validate_exp = true;
+    for key in verify_keys() {
+        if key.is_empty() {
+            continue;
+        }
+        if let Ok(d) = decode::<StepUpClaims>(token, &DecodingKey::from_secret(&key), &validation) {
+            let c = d.claims;
+            if c.typ == "stepup" && c.stepup && c.sub > 0 && c.tid > 0 {
+                return Some((c.sub, c.tid));
+            }
+            // Signature verified with this key but the claims are not a valid step-up token;
+            // trying other keys cannot change the payload, so reject.
+            return None;
+        }
+    }
+    None
+}
+
 /// Verify stream contextual binding (IP + optional TLS fingerprint).
 #[must_use]
 pub fn verify_stream_context(auth: &AuthContext, client_ip: &str, tls_fp: Option<&str>) -> bool {
@@ -453,7 +533,7 @@ pub fn verify_access_token(token: &str) -> Option<AuthContext> {
     };
     if matches!(
         c.typ.as_deref(),
-        Some("refresh") | Some("mfa_pending") | Some("sse_ticket")
+        Some("refresh") | Some("mfa_pending") | Some("sse_ticket") | Some("stepup")
     ) {
         tracing::debug!(target: "auth_jwt", "Rejected refresh token used as access token");
         return None;
@@ -777,5 +857,32 @@ mod agent_token_tests {
             !verify_stream_context(&a, "198.51.100.9", Some("ja3-xyz")),
             "IP mismatch => reject even when fp matches"
         );
+    }
+
+    #[test]
+    fn step_up_token_roundtrips_user_and_tenant() {
+        let secret = b"unit-test-secret-at-least-32-chars-long";
+        let _ = JWT_SECRET.set(secret.to_vec());
+        let token = create_step_up_token(11, 4).expect("mint step-up");
+        assert_eq!(verify_step_up_token(&token), Some((11, 4)));
+    }
+
+    #[test]
+    fn step_up_token_is_not_accepted_as_access_token() {
+        // A step-up assertion must NEVER authenticate an API call as a full session.
+        let secret = b"unit-test-secret-at-least-32-chars-long";
+        let _ = JWT_SECRET.set(secret.to_vec());
+        let token = create_step_up_token(11, 4).expect("mint step-up");
+        assert!(verify_access_token(&token).is_none());
+    }
+
+    #[test]
+    fn access_token_is_not_accepted_as_step_up() {
+        let secret = b"unit-test-secret-at-least-32-chars-long";
+        let _ = JWT_SECRET.set(secret.to_vec());
+        let minted =
+            create_access_token(11, 4, "admin", false, &StreamBinding::default(), None)
+                .expect("mint access");
+        assert!(verify_step_up_token(&minted.token).is_none());
     }
 }

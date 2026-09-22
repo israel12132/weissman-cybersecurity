@@ -185,6 +185,11 @@ pub fn required_min_role(method: &Method, path: &str) -> Option<&'static str> {
     if path.starts_with("/api/admin") {
         return Some(roles::ADMIN);
     }
+    // GDPR data-subject rights (export/erasure) are destructive, tenant-wide data
+    // operations — admin-and-above only, same as /api/admin.
+    if path.starts_with("/api/gdpr") {
+        return Some(roles::ADMIN);
+    }
     if path.starts_with("/api/clients") {
         // Create (POST /api/clients) and delete are owner-only (CEO/superadmin).
         // Nested mutations (scan, config, update) stay operator+ so staff and

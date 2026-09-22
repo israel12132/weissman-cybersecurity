@@ -263,6 +263,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/auth/mfa/enable", post(api_auth_mfa_enable))
         .route("/api/auth/mfa/disable", post(api_auth_mfa_disable))
         .route("/api/auth/mfa/status", get(api_auth_mfa_status))
+        .route("/api/auth/step-up", post(api_auth_step_up))
         // Endpoint Agent
         .route(
             "/api/agents/enrollment-tokens",
@@ -343,13 +344,39 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/quota", get(api_quota))
         .route("/api/audit-logs", get(api_audit_logs))
         .route("/api/audit/export", get(api_audit_export))
+        // ── GDPR data-subject rights (DSR): export + right-to-erasure ──
+        // Admin-only: enforced in-handler via crate::rbac::require_admin AND
+        // centrally by rbac::required_min_role's /api/gdpr → ADMIN rule.
+        // Tenant-scoped (RLS + tenant_id filters) and audited.
+        .route("/api/gdpr/export", post(api_gdpr_export))
+        .route("/api/gdpr/erase", post(api_gdpr_erase))
+        // SIEM ingestion: cursor-paginated, read-only audit stream. Poll incrementally with
+        // ?since_id=<next_cursor>&limit=<=1000; keyset-paginated on the PK, never a full scan.
+        .route("/api/audit/stream", get(api_audit_stream))
+        // SIEM ingestion: AI-query (/api/ask) natural-language audit trail, same cursor contract.
+        .route("/api/audit/nl-stream", get(api_audit_nl_stream))
         .route("/api/auth/me", get(api_auth_me))
+        .route("/api/auth/sessions", get(api_auth_sessions_list))
+        .route(
+            "/api/auth/sessions/revoke-all",
+            post(api_auth_sessions_revoke_all),
+        )
         // ── Self-service profile + per-client messaging/help board ────────────
         .route("/api/account/profile", get(api_account_profile))
         .route("/api/account/avatar", post(api_account_avatar_set))
         .route(
             "/api/messages",
             get(api_messages_list).post(api_messages_create),
+        )
+        // ── Service-account API keys (admin-only management; machine auth lives in auth_guard) ──
+        .route(
+            "/api/admin/api-keys",
+            get(crate::api_keys::api_admin_api_keys_list)
+                .post(crate::api_keys::api_admin_api_keys_create),
+        )
+        .route(
+            "/api/admin/api-keys/:id",
+            delete(crate::api_keys::api_admin_api_keys_revoke),
         )
         // ── Admin user management (CEO/Superadmin only) ───────────────────────
         .route(

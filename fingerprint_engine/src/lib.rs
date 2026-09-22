@@ -47,9 +47,11 @@ pub mod attack_coverage;
 pub mod attack_exposure;
 pub mod attack_path;
 pub mod audit_log;
+pub mod gdpr_dsr;
 pub mod auth_bootstrap;
 pub mod auth_jwt;
 pub mod auth_refresh;
+pub mod auth_stepup;
 pub mod battlespace_topology;
 pub mod benchmark;
 pub mod billing;
@@ -195,6 +197,7 @@ pub mod validator;
 pub mod waf_signals;
 
 pub mod admin_users;
+pub mod api_keys;
 pub mod admission_signature_enforcement;
 pub mod advanced_ai_engines;
 // ── Next-Gen Arsenal (20 world-class additions) ──
