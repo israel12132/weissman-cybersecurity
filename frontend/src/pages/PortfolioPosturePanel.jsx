@@ -176,7 +176,7 @@ export default function PortfolioPosturePanel() {
                   onClick={() => setGradeFilter((prev) => (prev === g ? 'all' : g))}
                   aria-pressed={active}
                   disabled={n === 0}
-                  title={t('clients_page.portfolio_grade_filter', { grade: g, defaultValue: `Filter to grade ${g}` })}
+                  title={t('clients_page.portfolio_grade_filter', { grade: g })}
                   className={`w-full flex items-center gap-2 rounded-md px-1 py-0.5 text-left transition-colors ${active ? 'bg-[var(--row-hover-bg)]' : 'hover:bg-[var(--row-hover-bg)]'} disabled:opacity-40 disabled:cursor-default`}
                 >
                   <span className="w-4 text-xs font-bold" style={{ color: gradeColor(g) }}>{g}</span>
@@ -189,13 +189,13 @@ export default function PortfolioPosturePanel() {
             })}
           </div>
           {gradeFilter !== 'all' && (
-            <button
-              type="button"
+            <Button
+              variant="unstyled"
               onClick={() => setGradeFilter('all')}
               className="mt-2 text-[10px] font-mono text-[var(--text-accent)] hover:underline"
             >
-              {t('clients_page.portfolio_clear_grade', { defaultValue: 'Clear grade filter' })}
-            </button>
+              {t('clients_page.portfolio_clear_grade')}
+            </Button>
           )}
           <div className="mt-3 text-[10px] font-mono text-[var(--text-muted)]">
             {t('clients_page.portfolio_fleet', {

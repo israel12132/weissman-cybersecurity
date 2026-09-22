@@ -467,7 +467,7 @@ export default function AdversaryCampaignFabric() {
         )}
 
         {selectedClientId != null && !loading && campaigns.length > 0 && visible.length === 0 && (
-          <p className="text-xs font-mono text-[var(--text-muted)] px-1">{t(`${NS}.no_status_match`, { defaultValue: 'No campaigns match this filter.' })}</p>
+          <p className="text-xs font-mono text-[var(--text-muted)] px-1">{t(`${NS}.no_status_match`)}</p>
         )}
 
         {selectedClientId != null && !loading && visible.length > 0 && (

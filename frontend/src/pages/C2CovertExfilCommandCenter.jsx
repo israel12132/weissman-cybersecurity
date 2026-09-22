@@ -123,7 +123,7 @@ function Scorecard({ score, grade }) {
   return (
     <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/5 p-5 mb-6 flex flex-wrap items-center gap-6">
       <div>
-        <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{t('pages.c2CovertExfil.scorecard_title', { defaultValue: 'Covert-channel posture' })}</div>
+        <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{t('pages.c2CovertExfil.scorecard_title')}</div>
         <div className="text-4xl font-mono font-semibold" style={{ color: gradeColor(grade) }}>
           {score ?? '—'}<span className="text-lg text-[var(--text-muted)]">/100</span>
         </div>
@@ -135,7 +135,7 @@ function Scorecard({ score, grade }) {
         {grade || '—'}
       </div>
       <p className="text-xs text-[var(--text-secondary)] max-w-xl font-mono">
-        {t('pages.c2CovertExfil.scorecard_desc', { defaultValue: 'Live fused assessment — beacon Z-score, DNS entropy, HTTP/3/WSS, NTP/ICMP feasibility, LSB stego, CDN/Tor fronting, ingress choke-points. No simulated findings.' })}
+        {t('pages.c2CovertExfil.scorecard_desc')}
       </p>
     </div>
   )

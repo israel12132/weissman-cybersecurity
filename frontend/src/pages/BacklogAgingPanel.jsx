@@ -108,10 +108,7 @@ export default function BacklogAgingPanel() {
     <div className="bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
       <div className="px-4 pt-4">
         <EvidenceNotice>
-          {t('pages.remediationHub.aging_evidence_notice', {
-            defaultValue:
-              'Live backlog from GET /api/remediation/aging/:clientId — open findings bucketed by age from the tenant-scoped remediation store. No fabricated aging telemetry.',
-          })}
+          {t('pages.remediationHub.aging_evidence_notice')}
         </EvidenceNotice>
       </div>
       <div className="p-4 border-b border-[var(--border-default)] flex items-center justify-between gap-3 flex-wrap">

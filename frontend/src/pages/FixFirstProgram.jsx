@@ -190,10 +190,7 @@ export default function FixFirstProgram() {
     <div className="bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
       <div className="px-4 pt-4">
         <EvidenceNotice>
-          {t('pages.remediationHub.program_evidence_notice', {
-            defaultValue:
-              'Live remediation program from GET /api/remediation/priority/:clientId — backend-ranked, root-cause deduplicated, with EPSS/KEV effective risk, attack-graph choke points and SLA clocks. Nothing is recomputed in the browser; no fabricated remediation telemetry.',
-          })}
+          {t('pages.remediationHub.program_evidence_notice')}
         </EvidenceNotice>
       </div>
       <div className="p-4 border-b border-[var(--border-default)] flex items-center justify-between gap-3 flex-wrap">

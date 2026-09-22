@@ -100,10 +100,7 @@ export default function SlaForecastStrip() {
     <div className="bg-[var(--table-surface)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
       <div className="px-4 pt-4">
         <EvidenceNotice>
-          {t('pages.remediationHub.forecast_evidence_notice', {
-            defaultValue:
-              'Live forecast from GET /api/remediation/sla-forecast/:clientId — cumulative SLA-breach counts by horizon (KEV subset called out) for the selected tenant. No fabricated telemetry.',
-          })}
+          {t('pages.remediationHub.forecast_evidence_notice')}
         </EvidenceNotice>
       </div>
       <div className="p-4 border-b border-[var(--border-default)] flex items-center justify-between gap-3 flex-wrap">
