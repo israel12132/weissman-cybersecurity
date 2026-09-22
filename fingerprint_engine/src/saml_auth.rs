@@ -179,6 +179,10 @@ struct ParsedSaml {
     assertion_id: Option<String>,
     name_id: Option<String>,
     email_attr: Option<String>,
+    /// Group/role claim AttributeValues collected ONLY from inside the single verified
+    /// `<Assertion>` (same anti-XSW scoping as `email_attr`). Sorted + deduped so the value
+    /// mirrors `scim::groups_from_saml_xml` for the legitimate signed case.
+    assertion_groups: Vec<String>,
     cond_not_before: Option<String>,
     cond_not_on_or_after: Option<String>,
     audiences: Vec<String>,
@@ -189,7 +193,14 @@ struct ParsedSaml {
 
 /// Handle a Start/Empty element: read the attributes we care about, scoped to the *single* assertion
 /// where required. `stack` holds the element's ancestors (self not yet pushed).
-fn on_open(e: &BytesStart, stack: &[String], p: &mut ParsedSaml, is_start: bool, attr_email: &mut bool) {
+fn on_open(
+    e: &BytesStart,
+    stack: &[String],
+    p: &mut ParsedSaml,
+    is_start: bool,
+    attr_email: &mut bool,
+    attr_group: &mut bool,
+) {
     let name = start_local(e);
     match name.as_str() {
         "Assertion" => {
@@ -245,6 +256,11 @@ fn on_open(e: &BytesStart, stack: &[String], p: &mut ParsedSaml, is_start: bool,
                 if low.contains("email") || low.contains("mail") {
                     *attr_email = true;
                 }
+                // Same group-ish Name set as `scim::groups_from_saml_xml`
+                // (case-insensitive substring `groups?`/`Group`/`memberOf`).
+                if low.contains("group") || low.contains("memberof") {
+                    *attr_group = true;
+                }
             }
         }
         _ => {}
@@ -259,16 +275,31 @@ fn parse_saml_response(xml: &str) -> Result<ParsedSaml, String> {
     let mut p = ParsedSaml::default();
     let mut stack: Vec<String> = Vec::new();
     let mut current_attr_is_email = false;
+    let mut current_attr_is_group = false;
     let mut buf: Vec<u8> = Vec::new();
 
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => {
-                on_open(&e, &stack, &mut p, true, &mut current_attr_is_email);
+                on_open(
+                    &e,
+                    &stack,
+                    &mut p,
+                    true,
+                    &mut current_attr_is_email,
+                    &mut current_attr_is_group,
+                );
                 stack.push(start_local(&e));
             }
             Ok(Event::Empty(e)) => {
-                on_open(&e, &stack, &mut p, false, &mut current_attr_is_email);
+                on_open(
+                    &e,
+                    &stack,
+                    &mut p,
+                    false,
+                    &mut current_attr_is_email,
+                    &mut current_attr_is_group,
+                );
             }
             Ok(Event::Text(t)) => {
                 let txt = t.unescape().unwrap_or_default().into_owned();
@@ -295,6 +326,11 @@ fn parse_saml_response(xml: &str) -> Result<ParsedSaml, String> {
                                 p.email_attr = Some(txt);
                             }
                         }
+                        Some("AttributeValue")
+                            if current_attr_is_group && ancestor(&stack, "Assertion") =>
+                        {
+                            p.assertion_groups.push(txt);
+                        }
                         _ => {}
                     }
                 }
@@ -302,6 +338,7 @@ fn parse_saml_response(xml: &str) -> Result<ParsedSaml, String> {
             Ok(Event::End(e)) => {
                 if end_local(&e) == "Attribute" {
                     current_attr_is_email = false;
+                    current_attr_is_group = false;
                 }
                 stack.pop();
             }
@@ -311,6 +348,11 @@ fn parse_saml_response(xml: &str) -> Result<ParsedSaml, String> {
         }
         buf.clear();
     }
+
+    // Normalize to match `scim::groups_from_saml_xml` output (sorted + deduped) for the
+    // legitimate signed case.
+    p.assertion_groups.sort();
+    p.assertion_groups.dedup();
 
     Ok(p)
 }
@@ -761,13 +803,20 @@ pub async fn saml_acs(
     weissman_db::auth_access::record_auth_access(auth, r.tenant_id, "saml_acs")
         .await
         .map_err(|_| auth_store_down())?;
-    let claim_groups = crate::scim::groups_from_saml_xml(&xml);
+    // Group/role claims drive authorization (resolve_sso_user -> role_from_claim_groups ->
+    // apply_groups_to_user UPDATEs users.role), so they MUST come only from inside the single
+    // signature-verified <Assertion> -- the same anti-XSW scoping already used for NameID/email.
+    // Scanning the raw document (the previous `groups_from_saml_xml(&xml)`) let an IdP that signs
+    // only the assertion splice an unsigned Response-scope <AttributeStatement> to escalate the
+    // role. `parsed` is the single-assertion parse shared by both the verified and lab branches,
+    // so the scoping is identical regardless of branch.
+    let claim_groups: &[String] = &parsed.assertion_groups;
     let user_id = crate::scim::resolve_sso_user(
         auth,
         state.app_pool.as_ref(),
         r.tenant_id,
         &email,
-        &claim_groups,
+        claim_groups,
     )
     .await?;
     let ip = crate::http::extract_client_ip(&headers, addr);
@@ -1117,6 +1166,86 @@ mod tests {
         assert_eq!(p.name_id.as_deref(), Some("user-123-opaque"));
         assert_eq!(p.email_attr.as_deref(), Some("alice@corp.example"));
         assert_eq!(validate_assertion(&p, &ctx("_req-1")).unwrap(), "alice@corp.example");
+    }
+
+    #[test]
+    fn injected_response_scope_groups_ignored() {
+        // XSW on GROUP claims: the IdP signs ONLY the assertion, which carries NO group
+        // attributes. The attacker splices an unsigned <AttributeStatement> with
+        // groups=admins at RESPONSE scope (outside the assertion). xmlsec still verifies the
+        // intact assertion and the single-assertion check still passes, but the group claim must
+        // be scoped to the verified assertion, so the injected group is ignored (empty) and the
+        // role cannot be escalated.
+        let a = assertion(
+            "_assert-1",
+            "alice@corp.example",
+            ISS,
+            ACS,
+            &rfc3339_offset(1),
+            &rfc3339_offset(1),
+            "_req-1",
+        );
+        let doc = format!(
+            r#"<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" InResponseTo="_req-1">
+  <samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status>
+  <ds:Signature><ds:SignedInfo/></ds:Signature>
+  <saml:AttributeStatement>
+    <saml:Attribute Name="groups"><saml:AttributeValue>admins</saml:AttributeValue></saml:Attribute>
+  </saml:AttributeStatement>
+  {a}
+</samlp:Response>"#
+        );
+        let p = parse_saml_response(&doc).unwrap();
+        assert_eq!(p.assertion_count, 1);
+        // The injected Response-scope group is outside the assertion -> not collected.
+        assert!(
+            p.assertion_groups.is_empty(),
+            "injected Response-scope groups must be ignored, got {:?}",
+            p.assertion_groups
+        );
+        // Identity still resolves correctly from the verified assertion.
+        assert_eq!(
+            validate_assertion(&p, &ctx("_req-1")).unwrap(),
+            "alice@corp.example"
+        );
+    }
+
+    #[test]
+    fn groups_inside_assertion_collected() {
+        // Legitimate case: group AttributeValues INSIDE the signed assertion are collected
+        // (sorted + deduped), so authorization mapping is unchanged for honest IdPs.
+        let doc = format!(
+            r#"<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" InResponseTo="_req-1">
+  <samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status>
+  <ds:Signature><ds:SignedInfo/></ds:Signature>
+  <saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_assert-1">
+    <saml:Subject>
+      <saml:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">alice@corp.example</saml:NameID>
+      <saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer">
+        <saml:SubjectConfirmationData Recipient="{ACS}" NotOnOrAfter="{noa}" InResponseTo="_req-1"/>
+      </saml:SubjectConfirmation>
+    </saml:Subject>
+    <saml:Conditions NotBefore="2020-01-01T00:00:00Z" NotOnOrAfter="{noa}">
+      <saml:AudienceRestriction><saml:Audience>{ISS}</saml:Audience></saml:AudienceRestriction>
+    </saml:Conditions>
+    <saml:AttributeStatement>
+      <saml:Attribute Name="groups">
+        <saml:AttributeValue>analysts</saml:AttributeValue>
+        <saml:AttributeValue>admins</saml:AttributeValue>
+      </saml:Attribute>
+    </saml:AttributeStatement>
+  </saml:Assertion>
+</samlp:Response>"#,
+            ACS = ACS,
+            ISS = ISS,
+            noa = rfc3339_offset(1),
+        );
+        let p = parse_saml_response(&doc).unwrap();
+        assert_eq!(p.assertion_count, 1);
+        assert_eq!(
+            p.assertion_groups,
+            vec!["admins".to_string(), "analysts".to_string()]
+        );
     }
 
     #[tokio::test(flavor = "multi_thread")]

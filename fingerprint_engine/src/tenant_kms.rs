@@ -286,11 +286,28 @@ fn provider(pool: &PgPool) -> Arc<dyn KeyProvider> {
 
 fn build_provider_from_env(pool: &PgPool) -> Arc<dyn KeyProvider> {
     let sel = std::env::var("WEISSMAN_KMS_PROVIDER").unwrap_or_default();
-    let sel = sel.trim().to_ascii_lowercase();
-    if sel == "aws" || sel == "kms" {
-        Arc::new(AwsKmsKeyProvider::new(Arc::new(pool.clone())))
-    } else {
-        Arc::new(LocalKeyProvider)
+    provider_by_name(&sel, pool)
+}
+
+/// Memoized `local` provider (stateless) — the historic default and the value written for
+/// pre-BYOK / fallback DEK rows.
+static LOCAL_PROVIDER: OnceLock<Arc<dyn KeyProvider>> = OnceLock::new();
+/// Memoized `aws` provider, so its KMS client cache / `SdkConfig` survive across unwraps even
+/// when `aws` is NOT the process-global (env-selected) provider.
+static AWS_PROVIDER: OnceLock<Arc<dyn KeyProvider>> = OnceLock::new();
+
+/// Select (and memoize) the [`KeyProvider`] whose persisted `tenant_dek.provider` name matches
+/// `name`, so an existing DEK is ALWAYS unwrapped by the same provider family that wrapped it —
+/// independent of the process-global `WEISSMAN_KMS_PROVIDER`. Unknown / empty names map to
+/// `local`, matching how the default (and any pre-`provider`-column) rows were wrapped.
+fn provider_by_name(name: &str, pool: &PgPool) -> Arc<dyn KeyProvider> {
+    match name.trim().to_ascii_lowercase().as_str() {
+        "aws" | "kms" => AWS_PROVIDER
+            .get_or_init(|| Arc::new(AwsKmsKeyProvider::new(Arc::new(pool.clone()))))
+            .clone(),
+        _ => LOCAL_PROVIDER
+            .get_or_init(|| Arc::new(LocalKeyProvider))
+            .clone(),
     }
 }
 
@@ -335,6 +352,14 @@ fn cache_put(tenant_id: i64, dek: [u8; 32]) {
                 expires: Instant::now() + ttl(),
             },
         );
+    }
+}
+
+/// Drop any cached unwrapped DEK for a tenant. Used to honor a crypto-shredded / disabled CMK
+/// on the next read instead of waiting out the cache TTL.
+fn cache_evict(tenant_id: i64) {
+    if let Ok(mut guard) = dek_cache().lock() {
+        guard.remove(&tenant_id);
     }
 }
 
@@ -443,22 +468,28 @@ async fn get_or_create_dek(pool: &PgPool, tenant_id: i64) -> Result<[u8; 32], Ke
     if let Some(dek) = cache_get(tenant_id) {
         return Ok(dek);
     }
-    let prov = provider(pool);
-    if let Some((wrapped, _)) = load_wrapped_dek(pool, tenant_id).await? {
+    // Existing DEK: unwrap with the provider that WRAPPED it (its stored per-row name), never
+    // the process-global env-selected one — otherwise a provider switch orphans the DEK.
+    if let Some((wrapped, stored_provider)) = load_wrapped_dek(pool, tenant_id).await? {
+        let prov = provider_by_name(&stored_provider, pool);
         let dek = prov.unwrap_dek(tenant_id, &wrapped).await?;
         cache_put(tenant_id, dek);
         return Ok(dek);
     }
+    // No DEK yet: provision one under the process-selected (env) provider and record its name.
+    let prov = provider(pool);
     let (dek, wrapped) = prov.provision_dek(tenant_id).await?;
     if store_wrapped_dek(pool, tenant_id, &wrapped, prov.name()).await? {
         cache_put(tenant_id, dek);
         Ok(dek)
     } else {
-        // Concurrent writer won the INSERT — adopt their DEK, discard ours.
-        let (wrapped2, _) = load_wrapped_dek(pool, tenant_id)
+        // Concurrent writer won the INSERT — adopt their DEK, unwrapping with THEIR provider.
+        let (wrapped2, stored_provider2) = load_wrapped_dek(pool, tenant_id)
             .await?
             .ok_or(KeyProviderError::NoTenantKey)?;
-        let dek2 = prov.unwrap_dek(tenant_id, &wrapped2).await?;
+        let dek2 = provider_by_name(&stored_provider2, pool)
+            .unwrap_dek(tenant_id, &wrapped2)
+            .await?;
         cache_put(tenant_id, dek2);
         Ok(dek2)
     }
@@ -469,10 +500,11 @@ async fn get_existing_dek(pool: &PgPool, tenant_id: i64) -> Result<[u8; 32], Key
     if let Some(dek) = cache_get(tenant_id) {
         return Ok(dek);
     }
-    let prov = provider(pool);
-    let (wrapped, _) = load_wrapped_dek(pool, tenant_id)
+    let (wrapped, stored_provider) = load_wrapped_dek(pool, tenant_id)
         .await?
         .ok_or(KeyProviderError::NoTenantKey)?;
+    // Unwrap with the provider that wrapped THIS row, not the env-selected global one.
+    let prov = provider_by_name(&stored_provider, pool);
     let dek = prov.unwrap_dek(tenant_id, &wrapped).await?;
     cache_put(tenant_id, dek);
     Ok(dek)
@@ -493,14 +525,31 @@ pub async fn encrypt_secret_for_tenant(pool: &PgPool, tenant_id: i64, plaintext:
 
 /// Transparently decrypt a stored secret. `wzt1:` values use the tenant DEK; everything
 /// else (legacy `wzv1:` envelopes, plaintext) is handled by the legacy CEO-vault path.
-pub async fn decrypt_secret_for_tenant(pool: &PgPool, tenant_id: i64, stored: &str) -> String {
+pub async fn decrypt_secret_for_tenant(
+    pool: &PgPool,
+    tenant_id: i64,
+    stored: &str,
+) -> Result<String, KeyProviderError> {
     if !stored.starts_with(TENANT_PREFIX) {
-        return crate::ceo::vault::decrypt_secret(stored);
+        // Legacy wzv1:/wzi1:/plaintext — infallible legacy keyring path, behavior unchanged.
+        return Ok(crate::ceo::vault::decrypt_secret(stored));
     }
-    match get_existing_dek(pool, tenant_id).await {
-        Ok(dek) => gcm_open_tagged(&dek, stored).unwrap_or_else(|| stored.to_string()),
-        Err(_) => stored.to_string(),
-    }
+    let dek = match get_existing_dek(pool, tenant_id).await {
+        Ok(dek) => dek,
+        Err(e) => {
+            // BUG 3: a KMS-side unwrap failure (AccessDenied / NotFound /
+            // KMSInvalidStateException for a Disabled or PendingDeletion CMK) means the CMK is
+            // gone or crypto-shredded. Drop any cached DEK so the shred is honored on the next
+            // read instead of lingering for up to the cache TTL. Then fail closed.
+            if matches!(&e, KeyProviderError::Kms(_)) {
+                cache_evict(tenant_id);
+            }
+            return Err(e);
+        }
+    };
+    // Fail-closed: an auth-tag mismatch / corrupt ciphertext is an error, NEVER the raw
+    // `wzt1:` ciphertext handed back to the caller as if it were plaintext.
+    gcm_open_tagged(&dek, stored).ok_or(KeyProviderError::Crypto)
 }
 
 // ── AES-256-GCM helpers ───────────────────────────────────────────

@@ -270,12 +270,21 @@ pub async fn list_vault_rows(
     for r in rows {
         out.push(row_to_vault(&r)?);
     }
-    for row in &mut out {
+    // Decrypt each row's secret. A wzt1: row we cannot unwrap/open (KMS outage, disabled or
+    // crypto-shredded CMK, auth-tag mismatch) is SKIPPED — never surfaced as ciphertext posing
+    // as plaintext. Legacy wzv1:/plaintext rows take the infallible path and are always kept.
+    let mut decrypted = Vec::with_capacity(out.len());
+    for mut row in out {
         let stored = std::mem::take(&mut row.detection_signature);
-        row.detection_signature =
-            crate::tenant_kms::decrypt_secret_for_tenant(pool, tenant_id, &stored).await;
+        match crate::tenant_kms::decrypt_secret_for_tenant(pool, tenant_id, &stored).await {
+            Ok(plaintext) => {
+                row.detection_signature = plaintext;
+                decrypted.push(row);
+            }
+            Err(_) => continue,
+        }
     }
-    Ok(out)
+    Ok(decrypted)
 }
 
 pub async fn get_vault_row(
@@ -298,8 +307,19 @@ pub async fn get_vault_row(
     match out {
         Some(mut v) => {
             let stored = std::mem::take(&mut v.detection_signature);
+            // Fail-closed: a wzt1: row that will not decrypt (KMS outage / shredded CMK /
+            // auth-tag mismatch) surfaces as an error the handler turns into 500 — never
+            // ciphertext posing as plaintext. Legacy wzv1:/plaintext rows decrypt infallibly
+            // (Ok), so their behavior is unchanged. Map KeyProviderError into this fn's
+            // sqlx::Error result type (matching the crate's existing Configuration usage).
             v.detection_signature =
-                crate::tenant_kms::decrypt_secret_for_tenant(pool, tenant_id, &stored).await;
+                crate::tenant_kms::decrypt_secret_for_tenant(pool, tenant_id, &stored)
+                    .await
+                    .map_err(|e| {
+                        sqlx::Error::Configuration(
+                            format!("tenant secret decrypt failed: {e}").into(),
+                        )
+                    })?;
             Ok(Some(v))
         }
         None => Ok(None),
