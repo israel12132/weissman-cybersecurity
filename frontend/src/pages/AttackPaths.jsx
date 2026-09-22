@@ -483,12 +483,6 @@ export default function AttackPaths() {
               <ExecutiveWidget label={t(`${NS}.kpi_top_risk`)} value={topRisk.toFixed(1)} hint={t(`${NS}.kpi_top_risk_hint`)} accent={riskColor(topRisk)} />
             </div>
 
-            {display?.jewel_count === 0 && (
-              <div role="status" className="rounded-xl border border-amber-500/30 bg-amber-950/30 px-4 py-3 text-sm text-amber-100 font-mono">
-                {t(`${NS}.zero_jewel_banner`)}
-              </div>
-            )}
-
             <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--table-surface)] p-4 flex flex-wrap items-center gap-3">
               <label className="flex items-center gap-2 text-[12px] text-[var(--text-secondary)]">
                 <input type="checkbox" checked={blockSmb} onChange={(e) => setBlockSmb(e.target.checked)} />

@@ -185,7 +185,7 @@ export default function TargetIntelligence() {
         </div>
       )}
 
-      {data && (
+      {data && p && sel && (
         <div className="grid gap-5 md:grid-cols-2">
           {/* ── Target profile ── */}
           <section className="rounded-xl border border-[var(--border-default)] bg-bg-2 p-4">
@@ -231,25 +231,29 @@ export default function TargetIntelligence() {
               <Field label={t('targetIntel.fields.private')} value={p.is_private ? t('targetIntel.yes') : null} />
             </div>
 
-            <div className="text-[11px] uppercase tracking-wider text-text-muted mt-4 mb-1">
-              {t('targetIntel.provenance')}
-            </div>
-            <div className="mb-2">
-              <Field label={t('targetIntel.fields.registrableDomain')} value={prov.registrable_domain} />
-              <Field label={t('targetIntel.fields.subdomain')} value={prov.subdomain} />
-              <Field label={t('targetIntel.fields.publicSuffix')} value={prov.public_suffix} />
-              <Field label={t('targetIntel.fields.tldClass')} value={prov.tld_class !== 'Unknown' ? prov.tld_class : null} />
-              <Field label={t('targetIntel.fields.hosting')} value={prov.hosting_provider} />
-              <Field
-                label={t('targetIntel.fields.networkClass')}
-                value={prov.network_class !== 'Unknown' ? prov.network_class : null}
-              />
-              <Field label={t('targetIntel.fields.idn')} value={prov.idn ? t('targetIntel.yes') : null} />
-              <Field label={t('targetIntel.fields.homographRisk')} value={prov.homograph_risk ? `⚠ ${t('targetIntel.yes')}` : null} />
-              {Array.isArray(prov.resolved_ips) && prov.resolved_ips.length > 0 && (
-                <Field label={t('targetIntel.fields.resolvedIps')} value={prov.resolved_ips.join(', ')} />
-              )}
-            </div>
+            {prov && (
+              <>
+                <div className="text-[11px] uppercase tracking-wider text-text-muted mt-4 mb-1">
+                  {t('targetIntel.provenance')}
+                </div>
+                <div className="mb-2">
+                  <Field label={t('targetIntel.fields.registrableDomain')} value={prov.registrable_domain} />
+                  <Field label={t('targetIntel.fields.subdomain')} value={prov.subdomain} />
+                  <Field label={t('targetIntel.fields.publicSuffix')} value={prov.public_suffix} />
+                  <Field label={t('targetIntel.fields.tldClass')} value={prov.tld_class !== 'Unknown' ? prov.tld_class : null} />
+                  <Field label={t('targetIntel.fields.hosting')} value={prov.hosting_provider} />
+                  <Field
+                    label={t('targetIntel.fields.networkClass')}
+                    value={prov.network_class !== 'Unknown' ? prov.network_class : null}
+                  />
+                  <Field label={t('targetIntel.fields.idn')} value={prov.idn ? t('targetIntel.yes') : null} />
+                  <Field label={t('targetIntel.fields.homographRisk')} value={prov.homograph_risk ? `⚠ ${t('targetIntel.yes')}` : null} />
+                  {Array.isArray(prov.resolved_ips) && prov.resolved_ips.length > 0 && (
+                    <Field label={t('targetIntel.fields.resolvedIps')} value={prov.resolved_ips.join(', ')} />
+                  )}
+                </div>
+              </>
+            )}
 
             {Array.isArray(p.facets) && p.facets.length > 0 && (
               <div className="mt-3">
@@ -269,7 +273,7 @@ export default function TargetIntelligence() {
               </div>
             )}
 
-            {Array.isArray(prov.evidence) && prov.evidence.length > 0 && (
+            {Array.isArray(prov?.evidence) && prov.evidence.length > 0 && (
               <div className="mt-3">
                 <div className="text-[11px] uppercase tracking-wider text-text-muted mb-1">
                   {t('targetIntel.evidence')}

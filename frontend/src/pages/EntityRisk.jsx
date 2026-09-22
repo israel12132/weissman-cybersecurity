@@ -44,7 +44,7 @@ export default function EntityRisk() {
         apiFetch('/api/ueba/peer-anomalies?limit=100').catch(() => ({ outliers: [] })),
       ])
       if (er?.ok === false) throw new Error(er.detail || 'load failed')
-      setEntities(Array.isArray(er.entities) ? er.entities : [])
+      setEntities(Array.isArray(er?.entities) ? er.entities : [])
       setOutliers(Array.isArray(pa?.outliers) ? pa.outliers : [])
     } catch (e) {
       setError(e.message || t(`${NS}.load_failed`))

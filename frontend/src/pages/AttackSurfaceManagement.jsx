@@ -746,8 +746,8 @@ export default function AttackSurfaceManagement() {
 
   useEffect(() => {
     const c = clients.find((x) => String(x.id) === String(selectedClientId))
-    const t = firstClientTarget(c)
-    if (t) setTarget(t)
+    const tgt = firstClientTarget(c)
+    if (tgt) setTarget(tgt)
   }, [selectedClientId, clients])
 
   const showToast = useCallback((sev, msg) => {
