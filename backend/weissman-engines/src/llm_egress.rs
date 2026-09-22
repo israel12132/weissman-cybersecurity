@@ -166,7 +166,7 @@ fn is_private_ip(ip: &IpAddr) -> bool {
             v6.is_loopback()                                 // ::1
                 || v6.is_unspecified()                       // ::
                 || (v6.segments()[0] & 0xfe00) == 0xfc00     // fc00::/7 unique-local
-                || (v6.segments()[0] & 0xffc0) == 0xfe80     // fe80::/10 link-local
+                || (v6.segments()[0] & 0xffc0) == 0xfe80 // fe80::/10 link-local
         }
     }
 }
@@ -262,9 +262,9 @@ mod tests {
             "http://10.4.2.9:8000/v1",
             "http://172.16.0.3:8000/v1",
             "http://192.168.1.50:8000/v1",
-            "http://100.64.3.7:8000/v1",                 // RFC6598 (k8s pod net)
-            "http://vllm:8000/v1",                       // single-label service
-            "http://llm.default.svc.cluster.local/v1",   // k8s service DNS
+            "http://100.64.3.7:8000/v1", // RFC6598 (k8s pod net)
+            "http://vllm:8000/v1",       // single-label service
+            "http://llm.default.svc.cluster.local/v1", // k8s service DNS
             "http://gateway.internal/v1",
         ] {
             let host = parse_host(base).expect("host");
@@ -319,4 +319,3 @@ mod tests {
         assert!(llm_egress_allowed("http://").is_err());
     }
 }
-

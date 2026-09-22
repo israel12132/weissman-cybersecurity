@@ -70,15 +70,21 @@ pub trait KeyProvider: Send + Sync {
     ///
     /// # Errors
     /// Returns [`KeyProviderError`] when key material is unavailable or the wrap fails.
-    async fn wrap_dek(&self, tenant_id: i64, plaintext_dek: &[u8; 32])
-        -> Result<Vec<u8>, KeyProviderError>;
+    async fn wrap_dek(
+        &self,
+        tenant_id: i64,
+        plaintext_dek: &[u8; 32],
+    ) -> Result<Vec<u8>, KeyProviderError>;
 
     /// Unwrap a wrapped DEK for the tenant.
     ///
     /// # Errors
     /// Returns [`KeyProviderError`] when key material is unavailable or the unwrap fails.
-    async fn unwrap_dek(&self, tenant_id: i64, wrapped: &[u8])
-        -> Result<[u8; 32], KeyProviderError>;
+    async fn unwrap_dek(
+        &self,
+        tenant_id: i64,
+        wrapped: &[u8],
+    ) -> Result<[u8; 32], KeyProviderError>;
 
     /// Provision a fresh DEK for the tenant, returning `(plaintext_dek, wrapped_dek)`.
     ///
@@ -255,9 +261,9 @@ impl KeyProvider for AwsKmsKeyProvider {
             .send()
             .await
             .map_err(|e| KeyProviderError::Kms(format!("generate_data_key: {e}")))?;
-        let pt = out
-            .plaintext()
-            .ok_or_else(|| KeyProviderError::Kms("generate_data_key: empty plaintext".to_string()))?;
+        let pt = out.plaintext().ok_or_else(|| {
+            KeyProviderError::Kms("generate_data_key: empty plaintext".to_string())
+        })?;
         let ct = out.ciphertext_blob().ok_or_else(|| {
             KeyProviderError::Kms("generate_data_key: empty ciphertext".to_string())
         })?;
@@ -615,7 +621,10 @@ mod tests {
     #[test]
     fn tenant_dek_wrong_key_and_wrong_prefix_fail() {
         let enc = gcm_seal_tagged(&[9u8; 32], "topsecret").expect("seal");
-        assert!(gcm_open_tagged(&[8u8; 32], &enc).is_none(), "wrong key fails");
+        assert!(
+            gcm_open_tagged(&[8u8; 32], &enc).is_none(),
+            "wrong key fails"
+        );
         // A wzv1:/plaintext value is not a wzt1: envelope.
         assert!(gcm_open_tagged(&[9u8; 32], "wzv1:abc").is_none());
         assert!(gcm_open_tagged(&[9u8; 32], "legacy-plaintext").is_none());
@@ -627,7 +636,11 @@ mod tests {
         let kek = [3u8; 32];
         let dek = [7u8; 32];
         let wrapped = gcm_seal_raw(&kek, &dek).expect("wrap");
-        assert_ne!(wrapped.as_slice(), &dek[..], "wrapped DEK must be ciphertext");
+        assert_ne!(
+            wrapped.as_slice(),
+            &dek[..],
+            "wrapped DEK must be ciphertext"
+        );
         assert_eq!(gcm_open_raw(&kek, &wrapped), Some(dek));
         assert_eq!(gcm_open_raw(&[4u8; 32], &wrapped), None, "wrong KEK fails");
     }

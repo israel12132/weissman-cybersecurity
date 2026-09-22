@@ -1495,8 +1495,12 @@ pub fn build_client_report_html(
     brand_name: Option<&str>,
 ) -> String {
     let date = israel_now();
-    let brand_h1 = brand_name.map(escape).unwrap_or_else(|| "WEISSMAN CYBERSECURITY".to_string());
-    let brand_title = brand_name.map(escape).unwrap_or_else(|| "Weissman".to_string());
+    let brand_h1 = brand_name
+        .map(escape)
+        .unwrap_or_else(|| "WEISSMAN CYBERSECURITY".to_string());
+    let brand_title = brand_name
+        .map(escape)
+        .unwrap_or_else(|| "Weissman".to_string());
     let brand_footer = brand_name
         .map(escape)
         .unwrap_or_else(|| "Weissman Cybersecurity".to_string());
@@ -1701,9 +1705,15 @@ mod watermark_tests {
 
     #[test]
     fn valid_report_has_no_watermark() {
-        let pdf =
-            build_compliance_framework_pdf("Acme", "ISO/IEC 27001:2022", 80, &controls(), None, None)
-                .expect("pdf builds");
+        let pdf = build_compliance_framework_pdf(
+            "Acme",
+            "ISO/IEC 27001:2022",
+            80,
+            &controls(),
+            None,
+            None,
+        )
+        .expect("pdf builds");
         let body = String::from_utf8_lossy(&pdf);
         assert!(!body.contains("INVALID - INCONSISTENT STATE"));
         assert!(!body.contains("REPORT VOID"));

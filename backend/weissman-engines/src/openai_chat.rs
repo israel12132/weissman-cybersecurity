@@ -220,9 +220,14 @@ pub struct LlmClientErrorBody {
 /// Structured LLM failure (maps to frontend-facing `LlmClientErrorBody`).
 #[derive(Debug, Clone)]
 pub enum LlmError {
-    CircuitOpen { cooldown_secs: u64 },
+    CircuitOpen {
+        cooldown_secs: u64,
+    },
     Unreachable(String),
-    Http { status: u16, body_preview: String },
+    Http {
+        status: u16,
+        body_preview: String,
+    },
     Timeout,
     Decode(String),
     EmptyContent,

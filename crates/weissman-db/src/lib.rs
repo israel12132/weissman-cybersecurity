@@ -225,12 +225,19 @@ pub async fn enforce_pool_budget_for_fleet(
         let Ok(max_conn) = max_conn.parse::<u32>() else {
             return Ok(());
         };
-        (max_conn.saturating_sub(reserved), "postgres_max_connections")
+        (
+            max_conn.saturating_sub(reserved),
+            "postgres_max_connections",
+        )
     };
 
-    let Some(diag) =
-        fleet_budget_overflow(process_label, per_pod_ceiling, replicas, budget, budget_source)
-    else {
+    let Some(diag) = fleet_budget_overflow(
+        process_label,
+        per_pod_ceiling,
+        replicas,
+        budget,
+        budget_source,
+    ) else {
         return Ok(());
     };
 

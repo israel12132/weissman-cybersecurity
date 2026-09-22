@@ -1041,7 +1041,10 @@ mod tests {
         let p = parse_saml_response(&doc).unwrap();
         assert_eq!(p.assertion_count, 1);
         assert_eq!(p.name_id.as_deref(), Some("alice@corp.example"));
-        assert_eq!(validate_assertion(&p, &ctx("_req-1")).unwrap(), "alice@corp.example");
+        assert_eq!(
+            validate_assertion(&p, &ctx("_req-1")).unwrap(),
+            "alice@corp.example"
+        );
     }
 
     #[test]
@@ -1165,7 +1168,10 @@ mod tests {
         let p = parse_saml_response(&doc).unwrap();
         assert_eq!(p.name_id.as_deref(), Some("user-123-opaque"));
         assert_eq!(p.email_attr.as_deref(), Some("alice@corp.example"));
-        assert_eq!(validate_assertion(&p, &ctx("_req-1")).unwrap(), "alice@corp.example");
+        assert_eq!(
+            validate_assertion(&p, &ctx("_req-1")).unwrap(),
+            "alice@corp.example"
+        );
     }
 
     #[test]
@@ -1267,17 +1273,16 @@ mod tests {
             .await
             .expect("connect");
         // saml_seen_assertions.tenant_id references tenants(id); use a real tenant or skip.
-        let tenant_id: i64 = match sqlx::query_scalar::<_, i64>(
-            "SELECT id FROM tenants ORDER BY id LIMIT 1",
-        )
-        .fetch_optional(&pool)
-        .await
-        .ok()
-        .flatten()
-        {
-            Some(id) => id,
-            None => return,
-        };
+        let tenant_id: i64 =
+            match sqlx::query_scalar::<_, i64>("SELECT id FROM tenants ORDER BY id LIMIT 1")
+                .fetch_optional(&pool)
+                .await
+                .ok()
+                .flatten()
+            {
+                Some(id) => id,
+                None => return,
+            };
         let aid = format!("_replay-{}", uuid::Uuid::new_v4());
         let exp = chrono::Utc::now() + chrono::Duration::minutes(5);
         assert!(
@@ -1298,4 +1303,3 @@ mod tests {
             .await;
     }
 }
-

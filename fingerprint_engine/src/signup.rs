@@ -663,7 +663,7 @@ mod tests {
         assert!(validate_password("123456789012").is_err()); // all digits
         assert!(validate_password("abcdefghij12").is_ok()); // mixed classes
         assert!(validate_password(&"a1".repeat(200)).is_err()); // 400 bytes > 72
-        // bcrypt 72-byte truncation boundary (mixed classes so only length decides).
+                                                                // bcrypt 72-byte truncation boundary (mixed classes so only length decides).
         assert!(validate_password(&format!("a{}", "1".repeat(72))).is_err()); // 73 bytes
         assert!(validate_password(&format!("a{}", "1".repeat(71))).is_ok()); // 72 bytes
     }
