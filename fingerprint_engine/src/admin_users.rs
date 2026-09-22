@@ -279,7 +279,7 @@ pub async fn api_admin_users_create(
     }
     // bcrypt silently truncates at 72 bytes, so a longer passphrase would authenticate on any
     // 72-byte prefix collision. Reject over-long input rather than discarding its entropy.
-    if body.password.as_bytes().len() > 72 {
+    if body.password.as_bytes().len() > weissman_db::BCRYPT_MAX_PASSWORD_BYTES {
         return (
             StatusCode::BAD_REQUEST,
             Json(json!({"ok": false, "detail": "Password must be at most 72 bytes"})),

@@ -40,7 +40,6 @@ pub fn self_serve_enabled() -> bool {
 
 const TOKEN_LIFETIME_SECS: u64 = 24 * 3600; // 24 hours
 const MIN_PASSWORD_LEN: usize = 12;
-const MAX_PASSWORD_LEN: usize = 256;
 const MAX_EMAIL_LEN: usize = 254;
 
 #[derive(Debug, Deserialize)]
@@ -122,8 +121,11 @@ fn validate_password(p: &str) -> Result<(), String> {
             MIN_PASSWORD_LEN
         ));
     }
-    if p.len() > MAX_PASSWORD_LEN {
-        return Err("password too long".into());
+    // bcrypt hashes only the first 72 bytes and silently discards the rest, so a longer
+    // passphrase would authenticate on any 72-byte prefix collision and lose entropy.
+    // Reject over-long input (matches admin_users.rs; `str::len()` is already bytes).
+    if p.len() > weissman_db::BCRYPT_MAX_PASSWORD_BYTES {
+        return Err("password must be at most 72 bytes".into());
     }
     // Require some character-class diversity. NIST 800-63B actually deprecates this kind
     // of rule in favour of length-only, but enterprise buyers expect it; trade-off chosen
@@ -660,7 +662,10 @@ mod tests {
         assert!(validate_password("abcdefghijkl").is_err()); // all alpha
         assert!(validate_password("123456789012").is_err()); // all digits
         assert!(validate_password("abcdefghij12").is_ok()); // mixed classes
-        assert!(validate_password(&"a1".repeat(200)).is_err()); // > 256 chars
+        assert!(validate_password(&"a1".repeat(200)).is_err()); // 400 bytes > 72
+        // bcrypt 72-byte truncation boundary (mixed classes so only length decides).
+        assert!(validate_password(&format!("a{}", "1".repeat(72))).is_err()); // 73 bytes
+        assert!(validate_password(&format!("a{}", "1".repeat(71))).is_ok()); // 72 bytes
     }
 
     #[test]

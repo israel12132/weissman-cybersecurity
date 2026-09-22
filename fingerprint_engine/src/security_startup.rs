@@ -3,6 +3,13 @@
 use std::sync::OnceLock;
 use weissman_core::tls_policy::is_production_environment;
 
+/// Production floor for `WEISSMAN_JWT_SECRET` length (characters). Single source of
+/// truth shared with [`crate::auth_jwt::init_jwt_secret_from_env`] so the boot guard
+/// and the JWT-init path can never drift to different floors. 48 is the canonical
+/// value across the k8s secret generator, `verify_env_secrets.mjs`, the live launcher,
+/// and the platform posture self-scan; docs recommend `openssl rand -base64 48`.
+pub const MIN_JWT_SECRET_LEN_PROD: usize = 48;
+
 const WEAK_JWT_SECRETS: &[&str] = &[
     "change-me-in-production-docker",
     "changeme",
@@ -41,8 +48,10 @@ fn enforce_production_security_policy_with_scope(scope: StartupScope) -> Result<
 
     if let Ok(secret) = std::env::var("WEISSMAN_JWT_SECRET") {
         let t = secret.trim();
-        if t.len() < 48 {
-            return Err("WEISSMAN_JWT_SECRET must be at least 48 characters in production".into());
+        if t.len() < MIN_JWT_SECRET_LEN_PROD {
+            return Err(format!(
+                "WEISSMAN_JWT_SECRET must be at least {MIN_JWT_SECRET_LEN_PROD} characters in production"
+            ));
         }
         let lower = t.to_ascii_lowercase();
         if WEAK_JWT_SECRETS

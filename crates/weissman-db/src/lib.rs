@@ -24,6 +24,14 @@ use sqlx::{Postgres, Transaction};
 use std::sync::Arc;
 use std::time::Duration;
 
+/// bcrypt hashes only the first 72 bytes of a password and silently ignores the rest
+/// (it errors only on an embedded NUL, never on length). Every password-set path must
+/// reject longer input rather than persist a hash over a truncated secret — otherwise two
+/// passwords sharing a 72-byte prefix authenticate identically and any entropy past byte 72
+/// is discarded without warning. Single source of truth so the cap cannot drift between the
+/// HTTP handlers and the env-bootstrap paths (drift is exactly what left signup uncapped).
+pub const BCRYPT_MAX_PASSWORD_BYTES: usize = 72;
+
 /// Primary application database URL (role `weissman_app`, RLS). Read from `DATABASE_URL` when the process starts each call.
 pub fn database_url_from_env() -> Result<String, std::env::VarError> {
     std::env::var("DATABASE_URL")
@@ -756,7 +764,18 @@ pub async fn ensure_admin_user(auth_pool: &PgPool) -> Result<(), sqlx::Error> {
                 .ok()
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty())
-                .and_then(|p| bcrypt::hash(&p, bcrypt::DEFAULT_COST).ok())
+                .and_then(|p| {
+                    if p.len() > BCRYPT_MAX_PASSWORD_BYTES {
+                        tracing::error!(
+                            target: "security_audit",
+                            "WEISSMAN_ADMIN_PASSWORD is {} bytes; bcrypt truncates at {} — refusing to seed a truncated admin credential",
+                            p.len(),
+                            BCRYPT_MAX_PASSWORD_BYTES
+                        );
+                        return None;
+                    }
+                    bcrypt::hash(&p, bcrypt::DEFAULT_COST).ok()
+                })
         })
         .or_else(|| {
             if matches!(
@@ -823,7 +842,18 @@ pub async fn ensure_master_bootstrap_user(auth_pool: &PgPool) -> Result<(), sqlx
                 .ok()
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty())
-                .and_then(|p| bcrypt::hash(&p, bcrypt::DEFAULT_COST).ok())
+                .and_then(|p| {
+                    if p.len() > BCRYPT_MAX_PASSWORD_BYTES {
+                        tracing::error!(
+                            target: "security_audit",
+                            "WEISSMAN_MASTER_BOOTSTRAP_PASSWORD is {} bytes; bcrypt truncates at {} — refusing to seed a truncated bootstrap credential",
+                            p.len(),
+                            BCRYPT_MAX_PASSWORD_BYTES
+                        );
+                        return None;
+                    }
+                    bcrypt::hash(&p, bcrypt::DEFAULT_COST).ok()
+                })
         });
     let Some(hash) = hash_opt else {
         tracing::debug!(

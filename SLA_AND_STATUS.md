@@ -4,10 +4,16 @@ Last updated: 2026-08-18
 
 ## 1) Availability objective
 
-- Target monthly uptime for production service: **99.95%**.
-- Maximum permitted downtime per calendar month: **21.9 minutes**.
-- Availability is measured monthly as:
-  - `((total minutes - unavailable minutes) / total minutes) * 100`
+The availability target is **tied to the deployed reference architecture** — the two are contracted together, because a single-node deployment cannot arithmetically meet a 99.95% budget.
+
+| Deployment tier | Reference architecture | Monthly uptime target | Max downtime/month |
+|---|---|---|---|
+| **Enterprise HA** (required for the 99.95% SLA) | Kubernetes app tier with ≥2 backend/worker replicas + anti-affinity + HPA + PDB; **replicated** managed PostgreSQL (CloudNativePG or managed service) with a hot standby and automated failover; Redis with failover; continuous PITR backups (see `docs/operations/ENCRYPTED-DR-PITR.md`) | **99.95%** | **21.9 minutes** |
+| **Standard** (single-node Docker Compose quickstart) | One Postgres, one Redis, one backend/worker on a single host; logical (pg_dump) backups | **99.5% best-effort** (not the 99.95% SLA) | ~3.6 hours |
+
+- The **99.95%** figure applies **only** to the Enterprise HA reference architecture above. The single-host `docker-compose.prod.yml` quickstart is explicitly **not** covered by the 99.95% target; use the Kubernetes/CNPG stack for any account under an availability SLA.
+- Availability is measured monthly as `((total minutes - unavailable minutes) / total minutes) * 100`.
+- The exact reference architecture the SLA is measured against is named in the signed Order Form.
 
 ## 2) What is considered unavailable
 
@@ -35,7 +41,7 @@ Last updated: 2026-08-18
 | **SEV-3** | Single engine failure, UI degradation, non-critical bug | **≤ 4 business hours** | Daily |
 | **SEV-4** | Question, docs, feature request | **≤ 1 business day** | Weekly |
 
-- **On-call coverage: 24 hours / 7 days / 365 days per year** (including Israeli holidays).
+- **On-call coverage** and the contracted response window for your plan are specified in the Order Form. 24×7×365 coverage is offered on Enterprise plans and is backed by a staffed on-call rotation (minimum two qualified responders) and escalation contacts named in the Order Form; do not rely on 24×7 response for a plan whose Order Form does not state it.
 - Post-incident review (PIR) delivered within **5 business days** for SEV-1/SEV-2.
 
 ## 5) Incident communication and status transparency
@@ -52,7 +58,7 @@ Last updated: 2026-08-18
 
 ## 6) Data residency & regions
 
-Weissman supports the following deployment regions:
+Data residency is achieved by **where the instance is deployed**, not by an application-layer routing flag. Each customer instance runs in one region and its data stays there; residency across regions means a separate, independently-deployed instance — Weissman does not run a single cross-region cluster that silently moves data between the locations below.
 
 | Region code | Location | Regulatory relevance |
 |---|---|---|
@@ -61,9 +67,9 @@ Weissman supports the following deployment regions:
 | `US-East` | Virginia (AWS us-east-1) | SOC 2, NIST SP 800-53 |
 | `AU-East` | Sydney (AWS ap-southeast-2) | Australian Privacy Act |
 
-- Cloud SaaS default: **`IL`** for Israeli customers; `EU-West` for EU customers.
-- Self-hosted deployments: data never leaves customer infrastructure.
-- Region is enforced at the application layer via `WEISSMAN_REGION` and `region_manager.should_process_tenant`.
+- Cloud SaaS default: **`IL`** for Israeli customers; `EU-West` for EU customers. The region for your account is fixed at provisioning and stated in the Order Form.
+- Self-hosted / dedicated deployments: data never leaves customer infrastructure, regardless of the `WEISSMAN_REGION` label.
+- `WEISSMAN_REGION` records the deployment's region for labeling and for the LLM/AI egress guard (which fails closed on an out-of-region inference endpoint — see §on AI). It is **not** a substitute for deploying the instance in the correct region; regional separation is a deployment/infrastructure property, not an app flag.
 
 ## 7) Support and escalation
 

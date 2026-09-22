@@ -410,3 +410,117 @@ async fn portal_client_scope_isolates_customers_behaviorally() {
         .expect("drop probe table");
     drop(conn);
 }
+
+/// Base tables that carry a `tenant_id` column AND deliberately use the fail-OPEN policy
+/// form (`... app.current_tenant_id IS NULL OR tenant_id = ...`), where an unset tenant GUC
+/// makes every row visible. This is only ever acceptable when BOTH hold:
+///   * the table has a legitimate unscoped writer/reader (a worker/migration path that runs
+///     with no tenant GUC), AND
+///   * `weissman_app` holding a grant on it cannot leak another tenant's *customer* data.
+///
+/// Every entry is a reviewed decision — adding one is a claim that a missing `begin_tenant_tx`
+/// on this table is NOT a cross-tenant disclosure. Per-tenant customer-finding tables must use
+/// the fail-CLOSED form instead (`tenant_id = public.app_current_tenant_id()`), so that a
+/// forgotten GUC yields zero rows rather than the whole table.
+const FAIL_OPEN_TENANT_TABLES: &[&str] = &[
+    // Authentication / BYPASSRLS audit events. The worker and the migration runner
+    // legitimately WRITE these with no tenant context (see 20260817000000), so the policy
+    // must accept an unset GUC. Reads are code-scoped; it is not exposed via weissman_ro.
+    "security_events",
+];
+
+/// Contract 4: no `tenant_id` table may carry the fail-OPEN GUC-escape policy unless it is on
+/// [`FAIL_OPEN_TENANT_TABLES`]. A fail-open policy on a table of per-tenant customer data turns a
+/// forgotten `begin_tenant_tx` from a safe zero-row read into a cross-tenant LEAK, and the plain
+/// tenant-GUC contract (contract 1) does NOT catch it — a fail-open policy still references the
+/// GUC, so `has_guc` is true and it passes there. This closes that blind spot.
+#[tokio::test]
+async fn no_unlisted_tenant_table_uses_the_fail_open_guc_escape() {
+    let url = test_database_url();
+    if url.is_empty() {
+        return;
+    }
+    let pool = connect(&url).await;
+
+    // One row per base table with a tenant_id column, plus whether ANY of its policies carries
+    // the fail-open GUC-escape branch (`current_setting(...app.current_tenant_id...) IS NULL` or
+    // the cast-safe `app_current_tenant_id() IS NULL`).
+    let rows = sqlx::query(
+        r#"
+        WITH t AS (
+            SELECT c.oid, c.relname AS table_name
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE c.relkind = 'r'
+              AND NOT (c.relpersistence = 'u' AND right(c.relname, 6) = '_probe')
+              AND n.nspname = 'public'
+              AND EXISTS (
+                  SELECT 1 FROM information_schema.columns col
+                  WHERE col.table_schema = n.nspname
+                    AND col.table_name = c.relname
+                    AND col.column_name = 'tenant_id')
+        ), pol AS (
+            SELECT polrelid,
+                   bool_or(
+                       pg_get_expr(polqual, polrelid) ILIKE '%current_setting%is null%'
+                    OR pg_get_expr(polqual, polrelid) ILIKE '%app_current_tenant_id() is null%'
+                   ) AS fail_open
+            FROM pg_policy GROUP BY polrelid
+        )
+        SELECT t.table_name, coalesce(p.fail_open, false) AS fail_open
+        FROM t LEFT JOIN pol p ON p.polrelid = t.oid
+        ORDER BY 1
+        "#,
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("introspect tenant_id table policies for the fail-open escape");
+
+    assert!(
+        !rows.is_empty(),
+        "no tenant_id tables found — schema not migrated? refusing to pass vacuously"
+    );
+
+    let mut fail_open_tables: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut offenders: Vec<String> = Vec::new();
+    for row in &rows {
+        let table: String = row.get("table_name");
+        let fail_open: bool = row.get("fail_open");
+        if !fail_open {
+            continue;
+        }
+        fail_open_tables.insert(table.clone());
+        if !FAIL_OPEN_TENANT_TABLES.contains(&table.as_str()) {
+            offenders.push(table);
+        }
+    }
+
+    assert!(
+        offenders.is_empty(),
+        "{} tenant_id table(s) use the fail-OPEN `... IS NULL OR tenant_id = ...` policy but are \
+         not on FAIL_OPEN_TENANT_TABLES. On a table of per-tenant data this is a cross-tenant leak \
+         waiting for a missing begin_tenant_tx. Convert to the fail-closed form \
+         `USING (tenant_id = public.app_current_tenant_id())` (see 20260922120000 for the c2/dns \
+         precedent), or, if the table truly needs an unscoped worker path, add it to \
+         FAIL_OPEN_TENANT_TABLES in crates/weissman-db/tests/rls_live_schema_contract.rs with the \
+         reason:\n  {}",
+        offenders.len(),
+        offenders.join("\n  ")
+    );
+
+    // Stale-entry guard: an allowlisted table that is no longer fail-open (converted to
+    // fail-closed, or dropped) must be removed from the list so it cannot rot into a silent
+    // permanent exemption. Mirrors the stale-entry check in bypassrls_write_grants_contract.
+    let stale: Vec<&str> = FAIL_OPEN_TENANT_TABLES
+        .iter()
+        .copied()
+        .filter(|t| !fail_open_tables.contains(*t))
+        .collect();
+    assert!(
+        stale.is_empty(),
+        "FAIL_OPEN_TENANT_TABLES lists table(s) that are no longer fail-open in the live schema \
+         (good — but remove them from the allowlist so it stays a true record of the exceptions): \
+         {:?}",
+        stale
+    );
+}
