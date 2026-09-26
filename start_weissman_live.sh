@@ -414,6 +414,11 @@ ensure_env() {
     # job-bus RLS and midnight billing cannot aggregate across tenants.
     DB_WORKER_PASSWORD
     DB_ANALYTICS_PASSWORD
+    # PgBouncer auth_user (weissman_pgbouncer). Required by the prod overlay's pooler service
+    # (${DB_PGBOUNCER_AUTH_PASSWORD:?}); the boot role-sync applies it to the DB role so the
+    # pooler can run its auth_query. Without it compose refuses to start the pooler and every
+    # backend/worker DSN (pgbouncer:6432) is dead on arrival.
+    DB_PGBOUNCER_AUTH_PASSWORD
     WEISSMAN_JWT_SECRET
     WEISSMAN_METRICS_TOKEN
     WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET

@@ -231,6 +231,37 @@ pub async fn sync_role_passwords_from_env_on_boot() -> Result<(), sqlx::Error> {
         }
     }
 
+    // PgBouncer auth_user (weissman_pgbouncer). The pooler logs in with this role only to run
+    // its auth_query; the launcher generates DB_PGBOUNCER_AUTH_PASSWORD and compose hands it to
+    // both the pooler and the server, so align the DB role here exactly like the DSN roles
+    // above. Without this the operator would have to ALTER ROLE by hand after every
+    // regeneration — and a mismatch means every pooled DSN (pgbouncer:6432) is dead on boot.
+    let pgb_pw = std::env::var("DB_PGBOUNCER_AUTH_PASSWORD")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    if let Some(pw) = pgb_pw {
+        let role = std::env::var("DB_PGBOUNCER_AUTH_USER")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "weissman_pgbouncer".to_string());
+        alter_role_password(&pool, &role, &pw).await?;
+        if role.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+            if let Err(e) = sqlx::query(&format!("ALTER ROLE {role} LOGIN"))
+                .execute(&pool)
+                .await
+            {
+                tracing::warn!(
+                    target: "auth_rotation",
+                    role = %role,
+                    error = %e,
+                    "could not restore LOGIN on pgbouncer auth role"
+                );
+            }
+        }
+    }
+
     Ok(())
 }
 

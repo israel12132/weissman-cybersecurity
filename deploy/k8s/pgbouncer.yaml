@@ -37,7 +37,7 @@ spec:
                 topologyKey: kubernetes.io/hostname
       containers:
         - name: pgbouncer
-          image: edoburu/pgbouncer:1.23.1-p2
+          image: edoburu/pgbouncer:v1.23.1-p2
           ports:
             - containerPort: 6432
           env:

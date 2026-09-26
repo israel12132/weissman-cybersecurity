@@ -150,6 +150,11 @@ services:
       WEISSMAN_COOKIE_SECURE: "1"
       # App/auth/intel(=DATABASE_URL) DSNs go through PgBouncer (transaction pooling on :6432).
       WEISSMAN_DB_POOLER_MODE: transaction
+      # Handed to the server (not only the pooler) so the boot role-sync in
+      # crates/weissman-db/src/auth_rotation.rs keeps the weissman_pgbouncer role's password
+      # aligned with the value the launcher generated — no manual ALTER ROLE, ever.
+      DB_PGBOUNCER_AUTH_USER: ${DB_PGBOUNCER_AUTH_USER:-weissman_pgbouncer}
+      DB_PGBOUNCER_AUTH_PASSWORD: ${DB_PGBOUNCER_AUTH_PASSWORD:?set DB_PGBOUNCER_AUTH_PASSWORD for the pooler auth_user}
       WEISSMAN_DB_POOLER_MAX_CLIENT_CONN: "2000"
       # Total pooled processes in the compose stack (backend + worker) — fleet-admission budget.
       WEISSMAN_EXPECTED_REPLICAS: "2"
