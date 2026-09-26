@@ -12,3 +12,10 @@ node_modules/
 .envrc
 .envrc.private
 config.yaml
+
+# Nested checkouts / clones inside the repo (e.g. a second worktree or an old clone dropped
+# in the tree) must never enter the build context: they carry their own .env and .git and
+# would bloat every image build by hundreds of MB. .gitignore already hides them from git
+# (/weissman-*); this keeps them out of Docker too.
+weissman-*/
+**/weissman-cybersecurity/
