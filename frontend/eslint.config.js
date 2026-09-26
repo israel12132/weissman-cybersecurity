@@ -29,6 +29,8 @@ const jsxA11yWarnings = Object.fromEntries(
 export default [
   {
     ignores: [
+      // Local-only bundle output (start_weissman.sh --local writes it); never lint build artifacts.
+      'dist-www/**',
       'dist/**',
       'coverage/**',
       'playwright-report/**',
@@ -65,6 +67,10 @@ export default [
       'react/jsx-uses-react': 'off',
       // This is a JavaScript project; we don't enforce prop-types.
       'react/prop-types': 'off',
+      // A module imported twice compiles in dev but is a hard PARSE_ERROR in the production
+      // bundle (rolldown "Identifier has already been declared") — it broke the image build
+      // on main on 2026-09-26. Make it a lint error so `npm run lint` / the pre-push hook catch it.
+      'no-duplicate-imports': 'error',
       // Rules of Hooks is a genuine correctness gate; dependency completeness is advisory.
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',

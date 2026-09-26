@@ -16,8 +16,6 @@ import Button from '../components/ui/Button'
 import { downloadCsv } from '../lib/exportFindingsCsv'
 import { useStepUpAction, STEP_UP_CANCELLED } from '../hooks/useStepUpAction'
 import StepUpModal from '../components/auth/StepUpModal'
-import { useStepUpAction, STEP_UP_CANCELLED } from '../hooks/useStepUpAction'
-import StepUpModal from '../components/auth/StepUpModal'
 
 const columnHelper = createColumnHelper()
 

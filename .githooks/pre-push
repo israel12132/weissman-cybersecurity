@@ -106,17 +106,31 @@ run_gates() { # $1 = sha, $2 = label
     else red "$sh failed — run it locally for details"; fail=1; fi
   done
 
-  # 5) eslint on frontend files that differ from the remote ref (needs node_modules).
+  # 5) Frontend: eslint on files that differ from the remote ref, then the SAME production
+  #    build chain deploy/frontend.Dockerfile runs (param defs → import-cycle gate → provider
+  #    wiring gate → vite build). A duplicated import or a new import cycle compiles fine in
+  #    dev and only explodes in the image build — this is where main broke on 2026-09-26.
   if have npx && [[ -d "$ROOT/frontend/node_modules" && -n "${3:-}" ]]; then
     local changed
-    changed="$(git -C "$ROOT" diff --name-only "$3" "$sha" -- 'frontend/src/*.js' 'frontend/src/*.jsx' 'frontend/src/**/*.js' 'frontend/src/**/*.jsx' 2>/dev/null | sed 's#^frontend/##' | sort -u)"
+    changed="$(git -C "$ROOT" diff --name-only "$3" "$sha" -- 'frontend/' 2>/dev/null | sed 's#^frontend/##' | sort -u)"
     if [[ -n "$changed" ]]; then
       ln -s "$ROOT/frontend/node_modules" "$tmp/frontend/node_modules" 2>/dev/null || true
       local existing=""
-      while IFS= read -r f; do [[ -f "$tmp/frontend/$f" ]] && existing+="$f "; done <<<"$changed"
+      while IFS= read -r f; do
+        [[ "$f" == *.js || "$f" == *.jsx ]] && [[ "$f" == src/* ]] && [[ -f "$tmp/frontend/$f" ]] && existing+="$f "
+      done <<<"$changed"
       if [[ -n "$existing" ]]; then
         if (cd "$tmp/frontend" && npx eslint $existing >/dev/null 2>&1); then green "eslint on changed frontend files"
         else red "eslint failed on changed frontend files — cd frontend && npx eslint $existing"; fail=1; fi
+      fi
+      if (cd "$tmp/frontend" \
+          && node ../scripts/generate_engine_param_defs.mjs >/dev/null 2>&1 \
+          && node ../scripts/verify-import-cycles.mjs >/dev/null 2>&1 \
+          && node ../scripts/verify-provider-wiring.mjs >/dev/null 2>&1 \
+          && npx vite build --logLevel error >/dev/null 2>&1); then
+        green "frontend production build (param defs, import cycles, provider wiring, vite build)"
+      else
+        red "frontend production build failed — cd frontend && node ../scripts/verify-import-cycles.mjs && node ../scripts/verify-provider-wiring.mjs && npx vite build"; fail=1
       fi
     fi
   fi
