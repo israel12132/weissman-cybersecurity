@@ -473,7 +473,7 @@ async fn api_gdpr_erase(
     };
 
     // Append-only trails are retained (Art. 17(3) exemption); count for the summary.
-    let audit_logs_retained: i64 = sqlx::query_scalar::<_, i64>(
+    let audit_logs_retained: i64 = match sqlx::query_scalar::<_, i64>(
         r#"SELECT count(*) FROM audit_logs
            WHERE tenant_id = $1 AND (lower(user_label) = lower($2) OR actor_user_id = $3)"#,
     )
@@ -482,17 +482,31 @@ async fn api_gdpr_erase(
     .bind(subject_user_id)
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
+    {
+        Ok(n) => n,
+        Err(_) => {
+            // A store failure must not be reported as "0 records retained" — the erasure
+            // summary is a compliance artefact and has to be honest or not exist at all.
+            let _ = tx.rollback().await;
+            return gdpr_unavailable();
+        }
+    };
 
     let nl_query_audit_retained: i64 = if let Some(uid) = subject_user_id {
-        sqlx::query_scalar::<_, i64>(
+        match sqlx::query_scalar::<_, i64>(
             "SELECT count(*) FROM nl_query_audit WHERE tenant_id = $1 AND user_id = $2",
         )
         .bind(auth.tenant_id)
         .bind(uid)
         .fetch_one(&mut *tx)
         .await
-        .unwrap_or(0)
+        {
+            Ok(n) => n,
+            Err(_) => {
+                let _ = tx.rollback().await;
+                return gdpr_unavailable();
+            }
+        }
     } else {
         0
     };

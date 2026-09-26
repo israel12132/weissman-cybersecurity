@@ -1048,7 +1048,16 @@ async fn api_reports_executive(
         .map(|p| p.compliance_percent)
         .unwrap_or(100);
 
-    let brand_name = tenant_brand_name(&state, auth.tenant_id).await;
+    let brand_name = match tenant_brand_name(&state, auth.tenant_id).await {
+        Ok(b) => b,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::report_pdf_unavailable_json("database unavailable")),
+            )
+                .into_response();
+        }
+    };
     let params = crate::executive_pdf::ExecutiveBoardParams {
         org_label: tenant_name.clone(),
         client_label: client_name.clone(),
