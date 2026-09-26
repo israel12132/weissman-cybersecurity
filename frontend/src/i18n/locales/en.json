@@ -1099,6 +1099,11 @@
     "logo_failed": "Logo upload failed",
     "download_pdf": "Download PDF",
     "download_xlsx": "Download Excel",
+    "report_view": "View / Print report",
+    "report_view_hebrew": "צפה בעברית",
+    "report_view_english": "View report (EN)",
+    "report_board": "Board report",
+    "report_opening": "Opening…",
     "more_queued": "+{{count}} more queued"
   },
   "clients": {

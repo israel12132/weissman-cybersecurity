@@ -2,7 +2,11 @@
  * Authenticated blob download for board PDF / real XLSX (never a naked <a href>
  * that drops the JWT).
  */
-export async function downloadAuthenticatedReport(apiFetch, url, { expectType, fallbackName } = {}) {
+export async function downloadAuthenticatedReport(
+  apiFetch,
+  url,
+  { expectType, fallbackName } = {},
+) {
   const res = await apiFetch(url, { raw: true })
   const contentType = (res.headers.get('Content-Type') || '').toLowerCase()
   if (expectType && !contentType.includes(expectType.toLowerCase())) {
@@ -13,7 +17,7 @@ export async function downloadAuthenticatedReport(apiFetch, url, { expectType, f
   const blob = await res.blob()
   const disposition = res.headers.get('Content-Disposition') || ''
   const match = disposition.match(/filename="?([^";\n]+)"?/)
-  let filename = match ? match[1].trim() : (fallbackName || 'Weissman_report')
+  let filename = match ? match[1].trim() : fallbackName || 'Weissman_report'
   const objectUrl = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = objectUrl
@@ -48,7 +52,9 @@ export function downloadClientXlsx(apiFetch, clientId) {
 export async function openClientReportView(apiFetch, clientId, lang = 'en', kind = 'technical') {
   const code = lang === 'he' ? 'he' : 'en'
   const rk = kind === 'executive' || kind === 'board' ? 'executive' : 'technical'
-  const res = await apiFetch(`/api/clients/${clientId}/report/view?lang=${code}&kind=${rk}`, { raw: true })
+  const res = await apiFetch(`/api/clients/${clientId}/report/view?lang=${code}&kind=${rk}`, {
+    raw: true,
+  })
   const contentType = (res.headers.get('Content-Type') || '').toLowerCase()
   if (!contentType.includes('text/html')) {
     throw new Error(`unexpected content-type: ${contentType || 'unknown'}`)

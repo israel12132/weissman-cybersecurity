@@ -271,7 +271,16 @@ async fn api_client_report_pdf(
             )
         })
         .collect();
-    let brand_name = tenant_brand_name(&state, auth.tenant_id).await;
+    let brand_name = match tenant_brand_name(&state, auth.tenant_id).await {
+        Ok(b) => b,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::report_pdf_unavailable_json("database unavailable")),
+            )
+                .into_response();
+        }
+    };
     let pdf_bytes: Vec<u8> = match crate::pdf_report::build_client_report_pdf(&client_name, &findings, proof.as_ref(), brand_name.as_deref()) {
         Ok(b) => b,
         Err(e) => {
@@ -371,6 +380,7 @@ async fn api_client_report_view(
                 COALESCE(raw_data::text,'{}') AS raw_data, \
                 COALESCE(kev_listed,false) AS kev_listed, \
                 epss_score, \
+                COALESCE(proof_status,'observed') AS proof_status, \
                 COALESCE(to_char(discovered_at,'YYYY-MM-DD'),'') AS discovered_at \
          FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC",
     )
@@ -389,7 +399,7 @@ async fn api_client_report_view(
     };
 
     // Latest engagement (optional) for the assessment window and rules of engagement.
-    let engagement = sqlx::query(
+    let engagement = match sqlx::query(
         "SELECT COALESCE(to_char(start_at,'YYYY-MM-DD'),'') AS start_at, \
                 COALESCE(to_char(end_at,'YYYY-MM-DD'),'') AS end_at, \
                 COALESCE(roe_mode,'') AS roe_mode \
@@ -398,8 +408,19 @@ async fn api_client_report_view(
     .bind(id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    {
+        // `None` = the client has no engagement yet (window/RoE simply omitted from the report).
+        Ok(row) => row,
+        // A store failure must not silently degrade the deliverable into "no engagement".
+        Err(_) => {
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::report_pdf_unavailable_json("database unavailable")),
+            )
+                .into_response();
+        }
+    };
 
     let proof = match get_crypto_proof_for_client_tx(&mut tx, auth.tenant_id, id).await {
         Ok(p) => p,
@@ -413,6 +434,20 @@ async fn api_client_report_view(
         }
         Err(_) => None,
     };
+    // Cloud-misconfiguration findings live in a sibling table; fetch them within the same tx so the
+    // report aggregates every recorded finding for the client, not just the `vulnerabilities` rows.
+    let cloud_rows = sqlx::query(
+        "SELECT COALESCE(rule_id,'') AS rule_id, COALESCE(severity,'') AS severity, \
+                COALESCE(title,'') AS title, COALESCE(resource_type,'') AS resource_type, \
+                COALESCE(resource_id,'') AS resource_id, COALESCE(region,'') AS region, \
+                COALESCE(detail_json,'{}') AS detail_json, \
+                COALESCE(to_char(discovered_at,'YYYY-MM-DD'),'') AS discovered_at \
+         FROM cloud_scan_findings WHERE client_id = $1 ORDER BY discovered_at DESC",
+    )
+    .bind(id)
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default();
     if tx.commit().await.is_err() {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -472,9 +507,49 @@ async fn api_client_report_view(
                 kev: r.try_get::<bool, _>("kev_listed").unwrap_or(false),
                 epss,
                 discovered_at: r.try_get::<String, _>("discovered_at").unwrap_or_default(),
+                proof_status: r.try_get::<String, _>("proof_status").unwrap_or_default(),
             }
         })
         .collect();
+
+    // Fold the cloud-misconfiguration findings (fetched above, in-tx) into the finding set so the
+    // report aggregates every recorded finding for the client — nothing hidden in a sibling table.
+    let mut findings = findings;
+    for r in cloud_rows {
+        let resource_type = r.try_get::<String, _>("resource_type").unwrap_or_default();
+        let resource_id = r.try_get::<String, _>("resource_id").unwrap_or_default();
+        let region = r.try_get::<String, _>("region").unwrap_or_default();
+        let detail_raw = r.try_get::<String, _>("detail_json").unwrap_or_default();
+        let rd: serde_json::Value = serde_json::from_str(&detail_raw).unwrap_or(serde_json::Value::Null);
+        let affected = [resource_type.as_str(), resource_id.as_str(), region.as_str()]
+            .into_iter()
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join(" · ");
+        findings.push(ReportFinding {
+            id: 0,
+            finding_id: r.try_get::<String, _>("rule_id").unwrap_or_default(),
+            title: r.try_get::<String, _>("title").unwrap_or_default(),
+            severity: r.try_get::<String, _>("severity").unwrap_or_default(),
+            source: "cloud".to_string(),
+            status: "OPEN".to_string(),
+            description: get_multi(&rd, &["description", "detail", "summary"]),
+            poc_exploit: String::new(),
+            cvss_score: None,
+            cvss_vector: String::new(),
+            cwe: get_multi(&rd, &["cwe"]),
+            cve: String::new(),
+            owasp: String::new(),
+            mitre: String::new(),
+            affected,
+            remediation: get_multi(&rd, &["remediation", "fix", "recommendation"]),
+            references: Vec::new(),
+            kev: false,
+            epss: None,
+            discovered_at: r.try_get::<String, _>("discovered_at").unwrap_or_default(),
+            proof_status: "validated_safe_proof".to_string(),
+        });
+    }
 
     let now = chrono_tz::Asia::Jerusalem.from_utc_datetime(&chrono::Utc::now().naive_utc());
     let generated_at = now.format("%Y-%m-%d %H:%M %Z").to_string();
@@ -497,7 +572,16 @@ async fn api_client_report_view(
         Some((h, _qr, v)) => (Some(h.clone()), Some(v.clone())),
         None => (None, None),
     };
-    let brand_name = tenant_brand_name(&state, auth.tenant_id).await;
+    let brand_name = match tenant_brand_name(&state, auth.tenant_id).await {
+        Ok(b) => b,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::report_pdf_unavailable_json("database unavailable")),
+            )
+                .into_response();
+        }
+    };
 
     let meta = ReportMeta {
         client_name,
@@ -527,21 +611,37 @@ async fn api_client_report_view(
         .chars()
         .map(|c| if c.is_alphanumeric() { c } else { '_' })
         .collect::<String>();
-    (
-        StatusCode::OK,
-        [
-            (
-                axum::http::header::CONTENT_TYPE,
-                "text/html; charset=utf-8".to_string(),
-            ),
-            (
-                axum::http::header::CONTENT_DISPOSITION,
-                format!("inline; filename=\"Weissman_Report_{safe_name}_{}.html\"", lang.code_public()),
-            ),
-        ],
-        html,
-    )
-        .into_response()
+    let mut res = Response::new(Body::from(html));
+    res.headers_mut().insert(
+        CONTENT_TYPE,
+        HeaderValue::from_static("text/html; charset=utf-8"),
+    );
+    res.headers_mut().insert(
+        CONTENT_DISPOSITION,
+        HeaderValue::try_from(format!(
+            "inline; filename=\"Weissman_Report_{safe_name}_{}.html\"",
+            lang.code_public()
+        ))
+        .unwrap_or_else(|_| HeaderValue::from_static("inline")),
+    );
+    // Parity with the PDF sibling plus a document-level CSP: the report is script-free and
+    // self-contained (inline <style>, data: fonts, inline SVG), so nothing else may ever load
+    // or execute inside it even if a future template change slipped an unescaped value through.
+    res.headers_mut().insert(
+        axum::http::HeaderName::from_static("x-content-type-options"),
+        HeaderValue::from_static("nosniff"),
+    );
+    res.headers_mut().insert(
+        axum::http::HeaderName::from_static("content-security-policy"),
+        HeaderValue::from_static(
+            "default-src 'none'; style-src 'unsafe-inline'; font-src data:; img-src data:; base-uri 'none'; form-action 'none'",
+        ),
+    );
+    res.headers_mut().insert(
+        axum::http::HeaderName::from_static("referrer-policy"),
+        HeaderValue::from_static("no-referrer"),
+    );
+    res
 }
 
 async fn api_client_report_crypto_proof(

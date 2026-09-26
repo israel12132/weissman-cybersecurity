@@ -1024,6 +1024,11 @@
     "logo_failed": "העלאת הלוגו נכשלה",
     "download_pdf": "הורד PDF",
     "download_xlsx": "הורד Excel",
+    "report_view": "צפה / הדפס דוח",
+    "report_view_hebrew": "צפה בעברית",
+    "report_view_english": "View report (EN)",
+    "report_board": "דוח לדירקטוריון",
+    "report_opening": "פותח…",
     "more_queued": "+{{count}} נוספים בתור"
   },
   "clients": {

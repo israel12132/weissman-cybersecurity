@@ -2,7 +2,11 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Button from './ui/Button'
 import { apiFetch } from '../utils/apiFetch'
-import { downloadClientPdf, downloadClientXlsx, openClientReportView } from '../lib/downloadClientReport'
+import {
+  downloadClientPdf,
+  downloadClientXlsx,
+  openClientReportView,
+} from '../lib/downloadClientReport'
 
 export default function ClientReportDownloadBar({ clientId, className = '' }) {
   const { t, i18n } = useTranslation()
@@ -13,10 +17,13 @@ export default function ClientReportDownloadBar({ clientId, className = '' }) {
 
   const uiLang = (i18n?.language || 'en').toLowerCase().startsWith('he') ? 'he' : 'en'
   const otherLang = uiLang === 'he' ? 'en' : 'he'
-  const viewLabel = uiLang === 'he' ? 'צפה / הדפס דוח' : 'View / Print report'
-  const otherLabel = uiLang === 'he' ? 'View report (EN)' : 'צפה בעברית'
-  const boardLabel = uiLang === 'he' ? 'דוח לדירקטוריון' : 'Board report'
-  const runningLabel = uiLang === 'he' ? 'פותח…' : 'Opening…'
+  const viewLabel = t('client_detail.report_view')
+  // The cross-language button is deliberately labelled in its TARGET language (a language
+  // switch affordance), so the key is chosen by the UI language rather than translated.
+  const otherLabel =
+    uiLang === 'he' ? t('client_detail.report_view_english') : t('client_detail.report_view_hebrew')
+  const boardLabel = t('client_detail.report_board')
+  const runningLabel = t('client_detail.report_opening')
 
   async function run(kind) {
     setError('')
@@ -25,7 +32,8 @@ export default function ClientReportDownloadBar({ clientId, className = '' }) {
       if (kind === 'pdf') await downloadClientPdf(apiFetch, clientId)
       else if (kind === 'xlsx') await downloadClientXlsx(apiFetch, clientId)
       else if (kind === 'view') await openClientReportView(apiFetch, clientId, uiLang, 'technical')
-      else if (kind === 'view-other') await openClientReportView(apiFetch, clientId, otherLang, 'technical')
+      else if (kind === 'view-other')
+        await openClientReportView(apiFetch, clientId, otherLang, 'technical')
       else if (kind === 'board') await openClientReportView(apiFetch, clientId, uiLang, 'executive')
     } catch (e) {
       setError(e?.message || t('client_detail.export_server_failed'))
@@ -71,7 +79,9 @@ export default function ClientReportDownloadBar({ clientId, className = '' }) {
           onClick={() => run('pdf')}
           className="px-4 py-2 rounded-xl text-[11px] font-mono border border-rose-500/40 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 disabled:opacity-50"
         >
-          {busy === 'pdf' ? t('client_detail.export_server_running') : t('client_detail.download_pdf')}
+          {busy === 'pdf'
+            ? t('client_detail.export_server_running')
+            : t('client_detail.download_pdf')}
         </Button>
         <Button
           variant="unstyled"
@@ -80,11 +90,15 @@ export default function ClientReportDownloadBar({ clientId, className = '' }) {
           onClick={() => run('xlsx')}
           className="px-4 py-2 rounded-xl text-[11px] font-mono border border-emerald-500/40 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-50"
         >
-          {busy === 'xlsx' ? t('client_detail.export_server_running') : t('client_detail.download_xlsx')}
+          {busy === 'xlsx'
+            ? t('client_detail.export_server_running')
+            : t('client_detail.download_xlsx')}
         </Button>
       </div>
       {error && (
-        <p className="mt-2 text-xs text-rose-300 font-mono" role="alert">{error}</p>
+        <p className="mt-2 text-xs text-rose-300 font-mono" role="alert">
+          {error}
+        </p>
       )}
     </div>
   )
