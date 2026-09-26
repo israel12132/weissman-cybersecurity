@@ -98,6 +98,14 @@ resource "aws_db_subnet_group" "this" {
   tags       = local.tags
 }
 
+# The data tier is reached only from inside the VPC and never needs to talk to the internet:
+# RDS and ElastiCache are managed services with no outbound dependencies of their own, so
+# their security groups allow egress only within the VPC CIDR (Trivy AVD-AWS-0104 blocks
+# 0.0.0.0/0 egress at CRITICAL in CI).
+data "aws_vpc" "this" {
+  id = var.vpc_id
+}
+
 resource "aws_security_group" "db" {
   name_prefix = "${local.name}-db-"
   description = "Weissman ${var.customer_name} RDS Postgres access"
@@ -129,11 +137,11 @@ resource "aws_vpc_security_group_ingress_rule" "db_from_cidr" {
   description       = "Postgres from allowed CIDR"
 }
 
-resource "aws_vpc_security_group_egress_rule" "db_all" {
+resource "aws_vpc_security_group_egress_rule" "db_vpc" {
   security_group_id = aws_security_group.db.id
-  cidr_ipv4         = "0.0.0.0/0"
+  cidr_ipv4         = data.aws_vpc.this.cidr_block
   ip_protocol       = "-1"
-  description       = "Allow all egress"
+  description       = "Egress within the VPC only (managed Postgres has no internet dependency)"
 }
 
 resource "aws_db_parameter_group" "this" {
@@ -227,11 +235,11 @@ resource "aws_vpc_security_group_ingress_rule" "redis_from_cidr" {
   description       = "Redis from allowed CIDR"
 }
 
-resource "aws_vpc_security_group_egress_rule" "redis_all" {
+resource "aws_vpc_security_group_egress_rule" "redis_vpc" {
   security_group_id = aws_security_group.redis.id
-  cidr_ipv4         = "0.0.0.0/0"
+  cidr_ipv4         = data.aws_vpc.this.cidr_block
   ip_protocol       = "-1"
-  description       = "Allow all egress"
+  description       = "Egress within the VPC only (managed Redis has no internet dependency)"
 }
 
 resource "aws_elasticache_parameter_group" "this" {
