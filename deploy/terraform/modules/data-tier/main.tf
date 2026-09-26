@@ -171,6 +171,10 @@ resource "aws_db_instance" "this" {
   max_allocated_storage = var.db_max_allocated_storage
   storage_type          = "gp3"
   storage_encrypted     = true
+  # Ship the Postgres server log and major-version-upgrade log to CloudWatch Logs so
+  # authentication failures, slow queries and DDL are auditable (Semgrep
+  # aws-db-instance-no-logging is a blocking CI rule).
+  enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
   kms_key_id            = var.db_kms_key_id
 
   db_name  = var.db_name
