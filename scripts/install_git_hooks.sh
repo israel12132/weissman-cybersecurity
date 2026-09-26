@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # scripts/install_git_hooks.sh — point this clone at the repo's versioned hooks (.githooks/).
-# Idempotent; run once per clone (start_weissman.sh also calls it when run from a checkout).
+# Idempotent; run once per clone. ./start_weissman.sh calls it automatically when it is run
+# from a git checkout (see the hooks step near the top of that script).
 set -euo pipefail
 ROOT="$(git -C "$(dirname "$0")/.." rev-parse --show-toplevel)"
 git -C "$ROOT" config core.hooksPath .githooks

@@ -246,8 +246,27 @@ pub async fn sync_role_passwords_from_env_on_boot() -> Result<(), sqlx::Error> {
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| "weissman_pgbouncer".to_string());
-        alter_role_password(&pool, &role, &pw).await?;
-        if role.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        if !role.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+            tracing::warn!(
+                target: "auth_rotation",
+                role = %role,
+                "DB_PGBOUNCER_AUTH_USER failed the identifier allowlist — pooler role sync skipped"
+            );
+        } else {
+            // Unlike weissman_app/auth/ro/worker/analytics, no migration creates the pooler role
+            // (the operator note in 20260922151000_pgbouncer_auth_query.sql left it manual), so a
+            // fresh database would make the ALTER below fail and abort boot. Create it here,
+            // idempotently, with the least-privilege shape that migration documents; then the
+            // EXECUTE grant that migration could only apply if the role already existed.
+            let ensure = format!(
+                "DO $$ BEGIN \
+                   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{role}') THEN \
+                     CREATE ROLE {role} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS NOINHERIT; \
+                   END IF; \
+                 END $$"
+            );
+            sqlx::query(&ensure).execute(&pool).await?;
+            alter_role_password(&pool, &role, &pw).await?;
             if let Err(e) = sqlx::query(&format!("ALTER ROLE {role} LOGIN"))
                 .execute(&pool)
                 .await
@@ -257,6 +276,28 @@ pub async fn sync_role_passwords_from_env_on_boot() -> Result<(), sqlx::Error> {
                     role = %role,
                     error = %e,
                     "could not restore LOGIN on pgbouncer auth role"
+                );
+            }
+            let grant = format!(
+                "DO $$ BEGIN \
+                   IF EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace \
+                              WHERE n.nspname = 'public' AND p.proname = 'pgbouncer_get_auth') THEN \
+                     GRANT EXECUTE ON FUNCTION public.pgbouncer_get_auth(text) TO {role}; \
+                   END IF; \
+                 END $$"
+            );
+            if let Err(e) = sqlx::query(&grant).execute(&pool).await {
+                tracing::warn!(
+                    target: "auth_rotation",
+                    role = %role,
+                    error = %e,
+                    "could not grant auth_query EXECUTE to the pgbouncer auth role"
+                );
+            } else {
+                tracing::info!(
+                    target: "auth_rotation",
+                    role = %role,
+                    "pgbouncer auth role ensured, password synced, auth_query grant applied"
                 );
             }
         }

@@ -558,7 +558,9 @@ async fn api_client_report_view(
             kev: false,
             epss: None,
             discovered_at: r.try_get::<String, _>("discovered_at").unwrap_or_default(),
-            proof_status: "validated_safe_proof".to_string(),
+            // Cloud posture rows are API-read configuration signals; they never pass the P1
+            // safe-proof layer, so they must not claim a proof state they did not earn.
+            proof_status: "observed".to_string(),
         });
     }
 
@@ -622,6 +624,9 @@ async fn api_client_report_view(
         .chars()
         .map(|c| if c.is_alphanumeric() { c } else { '_' })
         .collect::<String>();
+    // The Command Center opens this document from a blob: URL, where response headers do not
+    // apply — so the same policy also travels inside the document (report_document_policy).
+    let html = crate::report_document_policy::inject_document_csp(html);
     let mut res = Response::new(Body::from(html));
     res.headers_mut().insert(
         CONTENT_TYPE,
@@ -644,9 +649,7 @@ async fn api_client_report_view(
     );
     res.headers_mut().insert(
         axum::http::HeaderName::from_static("content-security-policy"),
-        HeaderValue::from_static(
-            "default-src 'none'; style-src 'unsafe-inline'; font-src data:; img-src data:; base-uri 'none'; form-action 'none'",
-        ),
+        HeaderValue::from_static(crate::report_document_policy::REPORT_CSP),
     );
     res.headers_mut().insert(
         axum::http::HeaderName::from_static("referrer-policy"),

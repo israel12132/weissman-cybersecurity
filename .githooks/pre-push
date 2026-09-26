@@ -63,10 +63,12 @@ run_gates() { # $1 = sha, $2 = label
   # 1b) include_bytes!/include_str! targets must exist in the pushed tree too.
   missing=""
   while IFS=: read -r file _ line; do
-    local rel target
+    local rel
     rel="$(sed -E 's/.*include_(bytes|str)!\("([^"]+)"\).*/\2/' <<<"$line")"
-    target="$(realpath -m "$tmp/$(dirname "$file")/$rel" 2>/dev/null)"
-    [[ -n "$target" && ! -f "$target" ]] && missing+="  $file → $rel"$'\n'
+    # Resolve relative to the declaring file with plain cd + test (no GNU realpath dependency).
+    if ! ( cd "$tmp/$(dirname "$file")" 2>/dev/null && [[ -f "$rel" ]] ); then
+      missing+="  $file → $rel"$'\n'
+    fi
   done < <(cd "$tmp" && grep -rnE 'include_(bytes|str)!\("[^"]+"\)' --include='*.rs' --exclude-dir=target --exclude-dir=legacy --exclude-dir=node_modules . | sed -E 's#^\./##')
   if [[ -n "$missing" ]]; then red "embedded assets referenced but absent from the pushed tree (forgot git add?):"; printf '%s' "$missing" >&2; fail=1
   else green "every include_bytes!/include_str! asset exists in the pushed tree"; fi
@@ -94,9 +96,11 @@ run_gates() { # $1 = sha, $2 = label
     done
   else dim "node not found — script gates skipped"; fi
 
-  # 4) Launcher / compose / gateway contracts (bash only).
+  # 4) Launcher / compose contract (bash only). The gateway contract is deliberately NOT run
+  #    here: it starts docker containers with fixed names, so two sessions pushing at once
+  #    would collide and one push would be blocked spuriously — CI runs it on every push.
   local sh
-  for sh in scripts/test_launcher_contract.sh scripts/test_gateway_contract.sh; do
+  for sh in scripts/test_launcher_contract.sh; do
     [[ -f "$tmp/$sh" ]] || continue
     if (cd "$tmp" && bash "$sh" >/dev/null 2>&1); then green "$sh"
     else red "$sh failed — run it locally for details"; fail=1; fi

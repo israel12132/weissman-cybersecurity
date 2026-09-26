@@ -45,7 +45,9 @@ describe('ClientReportDownloadBar', () => {
 
   it('offers the OTHER language as a switch: Hebrew UI → English report, English UI → Hebrew report', async () => {
     const { unmount } = render(<ClientReportDownloadBar clientId={42} />)
-    fireEvent.click(screen.getByRole('button', { name: 'client_detail.report_view_hebrew' }))
+    const toHebrew = screen.getByRole('button', { name: 'client_detail.report_view_hebrew' })
+    expect(toHebrew).toHaveAttribute('dir', 'rtl')
+    fireEvent.click(toHebrew)
     await waitFor(() =>
       expect(lib.openClientReportView).toHaveBeenCalledWith(apiFetch, 42, 'he', 'technical'),
     )
@@ -53,7 +55,9 @@ describe('ClientReportDownloadBar', () => {
 
     i18nState.language = 'he-IL'
     render(<ClientReportDownloadBar clientId={42} />)
-    fireEvent.click(screen.getByRole('button', { name: 'client_detail.report_view_english' }))
+    const toEnglish = screen.getByRole('button', { name: 'client_detail.report_view_english' })
+    expect(toEnglish).toHaveAttribute('dir', 'ltr')
+    fireEvent.click(toEnglish)
     await waitFor(() =>
       expect(lib.openClientReportView).toHaveBeenCalledWith(apiFetch, 42, 'en', 'technical'),
     )

@@ -150,6 +150,7 @@ pub mod recon;
 pub mod regex_util;
 pub mod remediation_priority;
 pub mod remediation_verify;
+pub mod report_document_policy;
 pub mod report_studio;
 pub mod reporter;
 pub mod request_trace;

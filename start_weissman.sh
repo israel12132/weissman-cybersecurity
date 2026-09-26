@@ -22,6 +22,12 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
 
+# Versioned git hooks (.githooks/pre-push runs the fast CI gates before a push). Installed
+# here so every operator checkout gets them without a separate step; harmless outside git.
+if [[ -d "$ROOT/.git" && -x "$ROOT/scripts/install_git_hooks.sh" ]]; then
+  "$ROOT/scripts/install_git_hooks.sh" >/dev/null 2>&1 || true
+fi
+
 # rustup installs cargo here; a fresh login shell on Pop!_OS often misses it.
 if [[ -f "${HOME}/.cargo/env" ]]; then
   # shellcheck disable=SC1091

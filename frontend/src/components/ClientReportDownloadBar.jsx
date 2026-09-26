@@ -58,6 +58,9 @@ export default function ClientReportDownloadBar({ clientId, className = '' }) {
           variant="unstyled"
           type="button"
           disabled={!!busy}
+          // Labelled in its TARGET language, so isolate its bidi direction from the surrounding UI
+          // (otherwise "View report (EN)" renders as "(View report (EN" inside the RTL layout).
+          dir={otherLang === 'he' ? 'rtl' : 'ltr'}
           onClick={() => run('view-other')}
           className="px-3 py-2 rounded-xl text-[11px] font-mono border border-cyan-500/20 bg-cyan-500/5 text-cyan-300/80 hover:bg-cyan-500/15 disabled:opacity-50"
         >
