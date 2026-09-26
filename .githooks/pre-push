@@ -1,15 +1,24 @@
 #!/usr/bin/env bash
-# .githooks/pre-push — the fast half of CI, run BEFORE anything leaves this machine.
+# .githooks/pre-push — the fast half of CI, run against the COMMITS BEING PUSHED, before
+# anything leaves this machine.
 #
 # WHY: main went red in September 2026 because a commit was pushed without `cargo fmt`, the
-# handler-honesty ratchet regressed, and a new Rust module referenced by lib.rs was left
-# untracked (which compiles locally and breaks every clean checkout). None of that survives
-# this hook. It runs only cheap, deterministic checks (seconds, no cargo build); the heavy
-# gates (clippy, tests, e2e) stay in CI.
+# handler-honesty ratchet regressed, doc metrics drifted, and a new Rust module referenced
+# by lib.rs was left untracked (compiles locally, breaks every clean checkout). None of that
+# survives this hook.
+#
+# HOW: for every ref that lands on main, or that is the branch you are currently on, the
+# pushed commit is exported with `git archive` into a temp dir and the gates run THERE —
+# so uncommitted edits in your working tree (yours or another session's) can neither mask
+# nor cause a failure, and an untracked file simply does not exist in the export. Pushing an
+# unrelated branch (e.g. backing up an old feature branch) is not gated.
+#
+# Only cheap, deterministic checks run here (seconds, no cargo build); clippy, tests and e2e
+# stay in CI.
 #
 # Install once per clone:  scripts/install_git_hooks.sh   (sets core.hooksPath = .githooks)
-# Skip in an emergency:    WEISSMAN_SKIP_HOOKS=1 git push   (the push is still gated by CI)
-set -euo pipefail
+# Skip in an emergency:    WEISSMAN_SKIP_HOOKS=1 git push   (CI still gates the push)
+set -uo pipefail
 
 if [[ "${WEISSMAN_SKIP_HOOKS:-0}" == "1" ]]; then
   echo "pre-push: WEISSMAN_SKIP_HOOKS=1 — skipping local gates (CI still applies)" >&2
@@ -17,119 +26,118 @@ if [[ "${WEISSMAN_SKIP_HOOKS:-0}" == "1" ]]; then
 fi
 
 ROOT="$(git rev-parse --show-toplevel)"
-cd "$ROOT"
-
-fail=0
-red()   { printf '\033[31m✖ %s\033[0m\n' "$*" >&2; fail=1; }
+HEAD_SHA="$(git rev-parse HEAD)"
+ZERO="0000000000000000000000000000000000000000"
+have() { command -v "$1" >/dev/null 2>&1; }
+red()   { printf '\033[31m✖ %s\033[0m\n' "$*" >&2; }
 green() { printf '\033[32m✔ %s\033[0m\n' "$*" >&2; }
-have()  { command -v "$1" >/dev/null 2>&1; }
+dim()   { printf '\033[2m  %s\033[0m\n' "$*" >&2; }
 
-# 1) Untracked source that committed code references — the "works on my machine" trap.
-#    Every `pub mod x;` / `mod x;` in a tracked Rust file must resolve to a TRACKED file.
-missing_mods=""
-while IFS= read -r decl; do
-  file="${decl%%:*}"; modname="$(sed -E 's/.*\bmod[[:space:]]+([A-Za-z0-9_]+)[[:space:]]*;.*/\1/' <<<"${decl#*:}")"
-  dir="$(dirname "$file")"
-  # lib.rs / main.rs / mod.rs declare siblings; other files declare into a same-named dir.
-  base="$(basename "$file")"
-  if [[ "$base" == "lib.rs" || "$base" == "main.rs" || "$base" == "mod.rs" ]]; then
-    cands=("$dir/$modname.rs" "$dir/$modname/mod.rs")
-  else
-    stem="${base%.rs}"
-    cands=("$dir/$stem/$modname.rs" "$dir/$stem/$modname/mod.rs")
-  fi
-  found=0
-  for c in "${cands[@]}"; do
-    if git ls-files --error-unmatch "$c" >/dev/null 2>&1; then found=1; break; fi
-  done
-  if [[ $found -eq 0 ]]; then
-    # Inline `mod x { ... }` blocks and #[path] overrides are rare here; only flag when the
-    # file exists on disk but is untracked (the exact failure mode we are guarding against).
-    for c in "${cands[@]}"; do
-      if [[ -f "$c" ]]; then missing_mods+="  $file → $c (exists on disk, NOT tracked by git)"$'\n'; fi
+run_gates() { # $1 = sha, $2 = label
+  local sha="$1" label="$2" fail=0 tmp
+  tmp="$(mktemp -d "${TMPDIR:-/tmp}/weissman-prepush.XXXXXX")" || return 1
+  trap 'rm -rf "$tmp"' RETURN
+  git -C "$ROOT" archive --format=tar "$sha" | tar -x -C "$tmp" || { red "could not export $sha"; return 1; }
+  echo "pre-push: gating $label (${sha:0:10}) in an exported copy…" >&2
+
+  # 1) Every `mod x;` declared in a crate root / mod.rs of the exported tree must resolve to a
+  #    file — the untracked-module trap. Declarations in other files (which resolve into a
+  #    same-named directory, or carry a #[path = "…"] override, as several engines here do)
+  #    are left to the compiler; a `#[path]` directly above the line is skipped everywhere.
+  local missing=""
+  while IFS=: read -r file lineno decl; do
+    local modname dir base prev
+    base="$(basename "$file")"
+    [[ "$base" == "lib.rs" || "$base" == "main.rs" || "$base" == "mod.rs" ]] || continue
+    prev="$(sed -n "$((lineno-1))p" "$tmp/$file" 2>/dev/null)"
+    [[ "$prev" == *'#[path'* ]] && continue
+    modname="$(sed -E 's/.*\bmod[[:space:]]+([A-Za-z0-9_]+)[[:space:]]*;.*/\1/' <<<"$decl")"
+    dir="$(dirname "$file")"
+    if [[ ! -f "$tmp/$dir/$modname.rs" && ! -f "$tmp/$dir/$modname/mod.rs" ]]; then
+      missing+="  $file:$lineno → mod $modname (no $dir/$modname.rs or $dir/$modname/mod.rs in the pushed tree)"$'\n'
+    fi
+  done < <(cd "$tmp" && grep -rnE '^[[:space:]]*(pub(\([a-z]+\))?[[:space:]]+)?mod[[:space:]]+[A-Za-z0-9_]+[[:space:]]*;' --include='lib.rs' --include='main.rs' --include='mod.rs' --exclude-dir=target --exclude-dir=legacy --exclude-dir=node_modules . | sed -E 's#^\./##')
+  if [[ -n "$missing" ]]; then red "Rust modules declared but absent from the pushed tree (forgot git add?):"; printf '%s' "$missing" >&2; fail=1
+  else green "every declared Rust module exists in the pushed tree"; fi
+
+  # 1b) include_bytes!/include_str! targets must exist in the pushed tree too.
+  missing=""
+  while IFS=: read -r file _ line; do
+    local rel target
+    rel="$(sed -E 's/.*include_(bytes|str)!\("([^"]+)"\).*/\2/' <<<"$line")"
+    target="$(realpath -m "$tmp/$(dirname "$file")/$rel" 2>/dev/null)"
+    [[ -n "$target" && ! -f "$target" ]] && missing+="  $file → $rel"$'\n'
+  done < <(cd "$tmp" && grep -rnE 'include_(bytes|str)!\("[^"]+"\)' --include='*.rs' --exclude-dir=target --exclude-dir=legacy --exclude-dir=node_modules . | sed -E 's#^\./##')
+  if [[ -n "$missing" ]]; then red "embedded assets referenced but absent from the pushed tree (forgot git add?):"; printf '%s' "$missing" >&2; fail=1
+  else green "every include_bytes!/include_str! asset exists in the pushed tree"; fi
+
+  # 2) rustfmt — the exact CI command (no build).
+  if have cargo; then
+    if (cd "$tmp" && cargo fmt --all --check >/dev/null 2>&1); then green "cargo fmt --all --check"
+    else red "cargo fmt --all --check failed — run: cargo fmt --all, commit, push again"; fail=1; fi
+  else dim "cargo not found — rustfmt gate skipped"; fi
+
+  # 3) Node ratchets / contracts (read-only, fast).
+  if have node; then
+    local gate script
+    for gate in \
+      "scripts/verify_handler_honesty.mjs" \
+      "scripts/sync_doc_metrics.mjs --check" \
+      "scripts/verify_doc_metrics.mjs" \
+      "scripts/verify_frontend_route_contract.mjs" \
+      "scripts/verify_i18n_no_default_values.mjs" \
+      "scripts/verify_i18n_template_keys.mjs"; do
+      script="${gate%% *}"
+      [[ -f "$tmp/$script" ]] || continue
+      if (cd "$tmp" && node $gate >/dev/null 2>&1); then green "node $gate"
+      else red "node $gate failed — run it locally for details"; fail=1; fi
     done
-  fi
-done < <(git grep -nE '^[[:space:]]*(pub(\([a-z]+\))?[[:space:]]+)?mod[[:space:]]+[A-Za-z0-9_]+[[:space:]]*;' -- '*.rs' ':!target' ':!legacy' | sed -E 's/^([^:]+):[0-9]+:/\1:/')
-if [[ -n "$missing_mods" ]]; then
-  red "Rust modules referenced by tracked code are untracked (git add them):"
-  printf '%s' "$missing_mods" >&2
-else
-  green "every declared Rust module is tracked"
-fi
+  else dim "node not found — script gates skipped"; fi
 
-# 1b) include_bytes!/include_str! assets must be tracked too.
-missing_assets=""
-while IFS= read -r line; do
-  file="${line%%:*}"; rel="$(sed -E 's/.*include_(bytes|str)!\("([^"]+)"\).*/\2/' <<<"${line#*:}")"
-  target="$(cd "$(dirname "$file")" && realpath -m "$rel" 2>/dev/null | sed "s#^$ROOT/##")"
-  if [[ -n "$target" && -f "$target" ]] && ! git ls-files --error-unmatch "$target" >/dev/null 2>&1; then
-    missing_assets+="  $file → $target"$'\n'
-  fi
-done < <(git grep -nE 'include_(bytes|str)!\("[^"]+"\)' -- '*.rs' ':!target' ':!legacy' | sed -E 's/^([^:]+):[0-9]+:/\1:/')
-if [[ -n "$missing_assets" ]]; then
-  red "embedded assets referenced by tracked code are untracked (git add them):"
-  printf '%s' "$missing_assets" >&2
-else
-  green "every include_bytes!/include_str! asset is tracked"
-fi
-
-# 2) rustfmt — the exact CI command. Seconds, no build.
-if have cargo; then
-  if cargo fmt --all --check >/dev/null 2>&1; then
-    green "cargo fmt --all --check"
-  else
-    red "cargo fmt --all --check failed — run: cargo fmt --all"
-  fi
-else
-  echo "pre-push: cargo not found, skipping rustfmt" >&2
-fi
-
-# 3) Node-based CI ratchets/contracts (all read-only, all fast).
-if have node; then
-  for gate in \
-    "scripts/verify_handler_honesty.mjs" \
-    "scripts/sync_doc_metrics.mjs --check" \
-    "scripts/verify_doc_metrics.mjs" \
-    "scripts/verify_frontend_route_contract.mjs" \
-    "scripts/verify_i18n_no_default_values.mjs" \
-    "scripts/verify_i18n_template_keys.mjs"; do
-    script="${gate%% *}"
-    [[ -f "$script" ]] || continue
-    if node $gate >/dev/null 2>&1; then
-      green "node $gate"
-    else
-      red "node $gate failed — run it for details"
-    fi
+  # 4) Launcher / compose / gateway contracts (bash only).
+  local sh
+  for sh in scripts/test_launcher_contract.sh scripts/test_gateway_contract.sh; do
+    [[ -f "$tmp/$sh" ]] || continue
+    if (cd "$tmp" && bash "$sh" >/dev/null 2>&1); then green "$sh"
+    else red "$sh failed — run it locally for details"; fail=1; fi
   done
-else
-  echo "pre-push: node not found, skipping script gates" >&2
-fi
 
-# 4) Launcher / compose contract (bash only, ~10s).
-if [[ -f scripts/test_launcher_contract.sh ]]; then
-  if bash scripts/test_launcher_contract.sh >/dev/null 2>&1; then
-    green "scripts/test_launcher_contract.sh"
-  else
-    red "scripts/test_launcher_contract.sh failed — run it for details"
-  fi
-fi
-
-# 5) Frontend lint on files changed vs upstream (eslint only; vitest stays in CI).
-if have npx && [[ -d frontend/node_modules ]]; then
-  upstream="$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || echo origin/main)"
-  changed="$(git diff --name-only "$upstream"...HEAD -- 'frontend/src/**/*.js' 'frontend/src/**/*.jsx' 2>/dev/null | sed 's#^frontend/##' || true)"
-  if [[ -n "$changed" ]]; then
-    if (cd frontend && npx eslint $changed >/dev/null 2>&1); then
-      green "eslint on $(wc -l <<<"$changed") changed frontend file(s)"
-    else
-      red "eslint failed on changed frontend files — run: cd frontend && npx eslint <files>"
+  # 5) eslint on frontend files that differ from the remote ref (needs node_modules).
+  if have npx && [[ -d "$ROOT/frontend/node_modules" && -n "${3:-}" ]]; then
+    local changed
+    changed="$(git -C "$ROOT" diff --name-only "$3" "$sha" -- 'frontend/src/*.js' 'frontend/src/*.jsx' 'frontend/src/**/*.js' 'frontend/src/**/*.jsx' 2>/dev/null | sed 's#^frontend/##' | sort -u)"
+    if [[ -n "$changed" ]]; then
+      ln -s "$ROOT/frontend/node_modules" "$tmp/frontend/node_modules" 2>/dev/null || true
+      local existing=""
+      while IFS= read -r f; do [[ -f "$tmp/frontend/$f" ]] && existing+="$f "; done <<<"$changed"
+      if [[ -n "$existing" ]]; then
+        if (cd "$tmp/frontend" && npx eslint $existing >/dev/null 2>&1); then green "eslint on changed frontend files"
+        else red "eslint failed on changed frontend files — cd frontend && npx eslint $existing"; fail=1; fi
+      fi
     fi
   fi
-fi
+  return $fail
+}
 
-if [[ $fail -ne 0 ]]; then
+overall=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [[ "$local_sha" == "$ZERO" ]] && continue            # branch deletion
+  gated=0
+  [[ "$remote_ref" == "refs/heads/main" ]] && gated=1  # anything landing on main
+  [[ "$local_sha" == "$HEAD_SHA" ]] && gated=1         # the branch you are working on
+  if [[ $gated -eq 0 ]]; then
+    dim "pre-push: $local_ref → $remote_ref is neither main nor your current HEAD — not gated"
+    continue
+  fi
+  base=""
+  [[ "$remote_sha" != "$ZERO" ]] && git -C "$ROOT" cat-file -e "$remote_sha" 2>/dev/null && base="$remote_sha"
+  [[ -z "$base" ]] && base="$(git -C "$ROOT" merge-base "$local_sha" origin/main 2>/dev/null || true)"
+  if ! run_gates "$local_sha" "$local_ref → $remote_ref" "$base"; then overall=1; fi
+done
+
+if [[ $overall -ne 0 ]]; then
   echo >&2
-  echo "pre-push: blocked. Fix the items above (or WEISSMAN_SKIP_HOOKS=1 to bypass — CI will still fail)." >&2
+  red "pre-push: blocked. Fix the items above, commit, and push again (WEISSMAN_SKIP_HOOKS=1 bypasses; CI will still fail)."
   exit 1
 fi
 green "pre-push: all local gates green"
