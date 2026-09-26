@@ -297,6 +297,253 @@ async fn api_client_report_pdf(
     res
 }
 
+/// `GET /api/clients/:id/report/view?lang=he|en` — the flagship customer deliverable rendered by
+/// [`crate::report_studio`] as a self-contained, printable, bilingual HTML report from the *full*
+/// live finding model (CVSS + vector, CWE/CVE/OWASP/MITRE, KEV/EPSS, status, evidence, remediation,
+/// affected asset, engagement scope, crypto proof). The browser prints it to PDF, so Hebrew renders
+/// with embedded fonts and no server-side headless browser is required. Tenant-scoped via RLS;
+/// white-label brand is applied when the tenant has one.
+async fn api_client_report_view(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<i64>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    use chrono::TimeZone as _;
+    use crate::report_studio::{
+        render_client_report_html, render_executive_report_html, Lang, ReportFinding, ReportMeta,
+    };
+
+    let lang = Lang::parse(params.get("lang").map(String::as_str));
+    let kind = params
+        .get("kind")
+        .map(String::as_str)
+        .unwrap_or("technical")
+        .to_ascii_lowercase();
+
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::report_pdf_unavailable_json("database unavailable")),
+        )
+            .into_response();
+    };
+
+    // Client cover + scope.
+    let client_row = match sqlx::query(
+        "SELECT COALESCE(name,'') AS name, COALESCE(domains,'[]') AS domains, COALESCE(ip_ranges,'[]') AS ip_ranges, COALESCE(contact_email,'') AS contact_email FROM clients WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(&mut *tx)
+    .await
+    {
+        Ok(Some(r)) => r,
+        Ok(None) => {
+            let _ = tx.rollback().await;
+            return (StatusCode::NOT_FOUND, Json(json!({"error": "client not found"}))).into_response();
+        }
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::client_lookup_unavailable_json("database unavailable")),
+            )
+                .into_response();
+        }
+    };
+    let client_name: String = client_row.try_get::<String, _>("name").unwrap_or_default();
+    let contact_email: String = client_row.try_get::<String, _>("contact_email").unwrap_or_default();
+    let parse_str_array = |raw: &str| -> Vec<String> {
+        serde_json::from_str::<Vec<String>>(raw).unwrap_or_default()
+    };
+    let mut scope_assets = parse_str_array(&client_row.try_get::<String, _>("domains").unwrap_or_default());
+    scope_assets.extend(parse_str_array(&client_row.try_get::<String, _>("ip_ranges").unwrap_or_default()));
+
+    // Findings — the full model, not the six-field tuple.
+    let rows = match sqlx::query(
+        "SELECT id, \
+                COALESCE(finding_id,'') AS finding_id, \
+                COALESCE(title,'') AS title, \
+                COALESCE(severity,'') AS severity, \
+                COALESCE(source,'') AS source, \
+                COALESCE(status,'') AS status, \
+                COALESCE(description,'') AS description, \
+                COALESCE(poc_exploit,'') AS poc_exploit, \
+                COALESCE(raw_data::text,'{}') AS raw_data, \
+                COALESCE(kev_listed,false) AS kev_listed, \
+                epss_score, \
+                COALESCE(to_char(discovered_at,'YYYY-MM-DD'),'') AS discovered_at \
+         FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC",
+    )
+    .bind(id)
+    .fetch_all(&mut *tx)
+    .await
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::report_pdf_unavailable_json("database unavailable")),
+            )
+                .into_response();
+        }
+    };
+
+    // Latest engagement (optional) for the assessment window and rules of engagement.
+    let engagement = sqlx::query(
+        "SELECT COALESCE(to_char(start_at,'YYYY-MM-DD'),'') AS start_at, \
+                COALESCE(to_char(end_at,'YYYY-MM-DD'),'') AS end_at, \
+                COALESCE(roe_mode,'') AS roe_mode \
+         FROM engagements WHERE client_id = $1 ORDER BY start_at DESC LIMIT 1",
+    )
+    .bind(id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
+
+    let proof = match get_crypto_proof_for_client_tx(&mut tx, auth.tenant_id, id).await {
+        Ok(p) => p,
+        Err(e) if e.starts_with("store_down:") => {
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::report_pdf_unavailable_json("database unavailable")),
+            )
+                .into_response();
+        }
+        Err(_) => None,
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::report_pdf_unavailable_json("database unavailable")),
+        )
+            .into_response();
+    }
+
+    // Map DB rows → the rich report model, reading extras out of the raw_data JSON.
+    let get_multi = |rd: &serde_json::Value, keys: &[&str]| -> String {
+        for k in keys {
+            if let Some(s) = rd.get(*k).and_then(|x| x.as_str()) {
+                if !s.trim().is_empty() {
+                    return s.to_string();
+                }
+            }
+        }
+        String::new()
+    };
+    let findings: Vec<ReportFinding> = rows
+        .into_iter()
+        .map(|r| {
+            let raw = r.try_get::<String, _>("raw_data").unwrap_or_else(|_| "{}".into());
+            let rd: serde_json::Value = serde_json::from_str(&raw).unwrap_or(serde_json::Value::Null);
+            let cvss_score = rd
+                .get("cvss_score")
+                .and_then(|x| x.as_f64().or_else(|| x.as_str().and_then(|s| s.parse().ok())))
+                .or_else(|| rd.get("cvss").and_then(|x| x.as_f64()));
+            let references = rd
+                .get("references")
+                .and_then(|x| x.as_array())
+                .map(|a| a.iter().filter_map(|e| e.as_str().map(str::to_string)).collect())
+                .unwrap_or_default();
+            let epss = r
+                .try_get::<Option<f32>, _>("epss_score")
+                .ok()
+                .flatten()
+                .map(f64::from);
+            ReportFinding {
+                id: r.try_get::<i64, _>("id").unwrap_or(0),
+                finding_id: r.try_get::<String, _>("finding_id").unwrap_or_default(),
+                title: r.try_get::<String, _>("title").unwrap_or_default(),
+                severity: r.try_get::<String, _>("severity").unwrap_or_default(),
+                source: r.try_get::<String, _>("source").unwrap_or_default(),
+                status: r.try_get::<String, _>("status").unwrap_or_default(),
+                description: r.try_get::<String, _>("description").unwrap_or_default(),
+                poc_exploit: r.try_get::<String, _>("poc_exploit").unwrap_or_default(),
+                cvss_score,
+                cvss_vector: get_multi(&rd, &["cvss_vector", "vector"]),
+                cwe: get_multi(&rd, &["cwe"]),
+                cve: get_multi(&rd, &["cve"]),
+                owasp: get_multi(&rd, &["owasp", "owasp_top10", "owasp_category"]),
+                mitre: get_multi(&rd, &["mitre_attack", "mitre", "attack"]),
+                affected: get_multi(&rd, &["target", "affected", "url", "host", "asset"]),
+                remediation: get_multi(&rd, &["remediation", "fix", "recommendation"]),
+                references,
+                kev: r.try_get::<bool, _>("kev_listed").unwrap_or(false),
+                epss,
+                discovered_at: r.try_get::<String, _>("discovered_at").unwrap_or_default(),
+            }
+        })
+        .collect();
+
+    let now = chrono_tz::Asia::Jerusalem.from_utc_datetime(&chrono::Utc::now().naive_utc());
+    let generated_at = now.format("%Y-%m-%d %H:%M %Z").to_string();
+    let report_id = format!("WC-{}-{:05}", now.format("%Y%m"), id);
+    let (assessment_window, roe_mode) = match &engagement {
+        Some(e) => {
+            let start = e.try_get::<String, _>("start_at").unwrap_or_default();
+            let end = e.try_get::<String, _>("end_at").unwrap_or_default();
+            let window = match (start.is_empty(), end.is_empty()) {
+                (false, false) => Some(format!("{start} – {end}")),
+                (false, true) => Some(start),
+                _ => None,
+            };
+            let roe = e.try_get::<String, _>("roe_mode").ok().filter(|s| !s.is_empty());
+            (window, roe)
+        }
+        None => (None, None),
+    };
+    let (crypto_hash, verify_url) = match &proof {
+        Some((h, _qr, v)) => (Some(h.clone()), Some(v.clone())),
+        None => (None, None),
+    };
+    let brand_name = tenant_brand_name(&state, auth.tenant_id).await;
+
+    let meta = ReportMeta {
+        client_name,
+        brand_name,
+        report_id,
+        version: "1.0".to_string(),
+        generated_at,
+        assessment_window,
+        assessment_type: None,
+        scope_assets,
+        exclusions: Vec::new(),
+        roe_mode,
+        crypto_hash,
+        verify_url,
+        contact_email: (!contact_email.trim().is_empty()).then_some(contact_email),
+    };
+
+    let html = if kind == "executive" || kind == "board" {
+        // Compliance posture is optional; passing None keeps the board report honest (no fabricated
+        // percentages) until the compliance engine is wired into this path.
+        render_executive_report_html(&meta, &findings, None, lang)
+    } else {
+        render_client_report_html(&meta, &findings, lang)
+    };
+    let safe_name = meta
+        .client_name
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '_' })
+        .collect::<String>();
+    (
+        StatusCode::OK,
+        [
+            (
+                axum::http::header::CONTENT_TYPE,
+                "text/html; charset=utf-8".to_string(),
+            ),
+            (
+                axum::http::header::CONTENT_DISPOSITION,
+                format!("inline; filename=\"Weissman_Report_{safe_name}_{}.html\"", lang.code_public()),
+            ),
+        ],
+        html,
+    )
+        .into_response()
+}
+
 async fn api_client_report_crypto_proof(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
