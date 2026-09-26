@@ -436,7 +436,7 @@ async fn api_client_report_view(
     };
     // Cloud-misconfiguration findings live in a sibling table; fetch them within the same tx so the
     // report aggregates every recorded finding for the client, not just the `vulnerabilities` rows.
-    let cloud_rows = sqlx::query(
+    let cloud_rows = match sqlx::query(
         "SELECT COALESCE(rule_id,'') AS rule_id, COALESCE(severity,'') AS severity, \
                 COALESCE(title,'') AS title, COALESCE(resource_type,'') AS resource_type, \
                 COALESCE(resource_id,'') AS resource_id, COALESCE(region,'') AS region, \
@@ -447,7 +447,18 @@ async fn api_client_report_view(
     .bind(id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(rows) => rows,
+        // Never let a store failure quietly drop every cloud finding from a customer deliverable.
+        Err(_) => {
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::report_pdf_unavailable_json("database unavailable")),
+            )
+                .into_response();
+        }
+    };
     if tx.commit().await.is_err() {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
