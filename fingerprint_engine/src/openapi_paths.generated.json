@@ -3,8 +3,8 @@
     "by": "scripts/generate_openapi.mjs",
     "source": "fingerprint_engine/src/http/serve_route_groups.rs",
     "note": "DO NOT EDIT BY HAND. Run: node scripts/generate_openapi.mjs",
-    "routeCount": 449,
-    "operationCount": 510
+    "routeCount": 450,
+    "operationCount": 511
   },
   "tags": [
     {
@@ -4496,6 +4496,37 @@
           }
         ],
         "x-handler": "api_client_report_pdf"
+      }
+    },
+    "/api/clients/{id}/report/view": {
+      "get": {
+        "tags": [
+          "Clients"
+        ],
+        "summary": "GET /api/clients/{id}/report/view",
+        "operationId": "get_api_clients_id_report_view",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-handler": "api_client_report_view"
       }
     },
     "/api/clients/{id}/risk-graph": {

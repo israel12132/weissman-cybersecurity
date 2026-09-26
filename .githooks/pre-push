@@ -88,7 +88,8 @@ run_gates() { # $1 = sha, $2 = label
       "scripts/verify_doc_metrics.mjs" \
       "scripts/verify_frontend_route_contract.mjs" \
       "scripts/verify_i18n_no_default_values.mjs" \
-      "scripts/verify_i18n_template_keys.mjs"; do
+      "scripts/verify_i18n_template_keys.mjs" \
+      "scripts/generate_openapi.mjs --check"; do
       script="${gate%% *}"
       [[ -f "$tmp/$script" ]] || continue
       if (cd "$tmp" && node $gate >/dev/null 2>&1); then green "node $gate"
