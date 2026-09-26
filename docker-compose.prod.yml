@@ -42,7 +42,7 @@ services:
   # DEFAULT_POOL_SIZE of real Postgres backends, so horizontal scale no longer exhausts
   # max_connections=200. See crates/weissman-db pooler_transaction_mode / enforce_pool_budget_for_fleet.
   pgbouncer:
-    image: edoburu/pgbouncer:1.23.1-p2
+    image: edoburu/pgbouncer:v1.23.1-p2
     logging: *default-logging
     depends_on:
       postgres:

@@ -151,6 +151,7 @@ pub mod regex_util;
 pub mod remediation_priority;
 pub mod remediation_verify;
 pub mod reporter;
+pub mod report_studio;
 pub mod request_trace;
 pub mod resilience;
 pub mod risk_superposition_collapse_engine;
