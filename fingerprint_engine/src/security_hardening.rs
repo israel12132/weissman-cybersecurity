@@ -352,7 +352,7 @@ fn extract_target_host(raw: &str) -> Result<String, &'static str> {
     Ok(host.to_ascii_lowercase())
 }
 
-fn is_private_or_reserved_ip(ip: &IpAddr) -> bool {
+pub(crate) fn is_private_or_reserved_ip(ip: &IpAddr) -> bool {
     match ip {
         IpAddr::V4(v4) => {
             let o = v4.octets();

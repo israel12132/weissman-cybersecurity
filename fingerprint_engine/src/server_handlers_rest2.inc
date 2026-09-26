@@ -890,12 +890,27 @@ async fn api_findings_export_csv(
 
 /// GET /api/openapi.json — OpenAPI 3.1 spec documenting the public Weissman API.
 async fn api_openapi_spec() -> Response {
-    let spec = serde_json::json!({
+    (StatusCode::OK, Json(openapi_spec_value())).into_response()
+}
+
+/// Cached, merged OpenAPI 3.1 document. Built once. The curated operations authored below are
+/// overlaid on the auto-generated route stubs in `openapi_paths.generated.json` (produced by
+/// `scripts/generate_openapi.mjs` from the axum route table) so every registered route is
+/// documented while curated endpoints keep their rich request/response schemas.
+/// See docs/API_VERSIONING.md.
+fn openapi_spec_value() -> &'static serde_json::Value {
+    static SPEC: std::sync::OnceLock<serde_json::Value> = std::sync::OnceLock::new();
+    SPEC.get_or_init(build_openapi_spec)
+}
+
+/// Assemble the served spec: curated hand-authored operations merged over generated route stubs.
+fn build_openapi_spec() -> serde_json::Value {
+    let mut spec = serde_json::json!({
         "openapi": "3.1.0",
         "info": {
             "title": "Weissman Cybersecurity API",
             "version": env!("CARGO_PKG_VERSION"),
-            "description": "Offensive Intelligence Platform — Attack Surface Management, Dark Web Intel, Exploit Validation, and Executive Reporting.",
+            "description": "Offensive Intelligence Platform — Attack Surface Management, Dark Web Intel, Exploit Validation, and Executive Reporting. Every path is also reachable under the stable `/api/v1` prefix alias; see the versioning & deprecation policy in docs/API_VERSIONING.md.",
             "contact": {
                 "name": "Weissman Security",
                 "url": "https://weissman.security"
@@ -1507,5 +1522,46 @@ async fn api_openapi_spec() -> Response {
             }
         }
     });
-    (StatusCode::OK, Json(spec)).into_response()
+    merge_generated_route_paths(&mut spec);
+    spec
+}
+
+/// Overlay the curated `paths` already present in `spec` on top of the generated route stubs so the
+/// served spec covers every registered route. Curated operations win per `(path, method)`. The
+/// generated file is embedded at compile time; a malformed artifact degrades gracefully to the
+/// curated-only spec rather than failing the endpoint.
+fn merge_generated_route_paths(spec: &mut serde_json::Value) {
+    const GENERATED: &str = include_str!("openapi_paths.generated.json");
+    let generated: serde_json::Value = match serde_json::from_str(GENERATED) {
+        Ok(v) => v,
+        Err(_) => return,
+    };
+    let gen_paths = match generated.get("paths").and_then(|v| v.as_object()) {
+        Some(p) => p.clone(),
+        None => return,
+    };
+    let curated = spec
+        .get("paths")
+        .and_then(|v| v.as_object())
+        .cloned()
+        .unwrap_or_default();
+    let mut merged = gen_paths;
+    for (path, ops) in curated {
+        match merged.get_mut(path.as_str()).and_then(|v| v.as_object_mut()) {
+            Some(existing) => {
+                if let Some(ops_obj) = ops.as_object() {
+                    for (method, op) in ops_obj {
+                        existing.insert(method.clone(), op.clone());
+                    }
+                }
+            }
+            None => {
+                merged.insert(path, ops);
+            }
+        }
+    }
+    spec["paths"] = serde_json::Value::Object(merged);
+    if let Some(tags) = generated.get("tags").cloned() {
+        spec["tags"] = tags;
+    }
 }

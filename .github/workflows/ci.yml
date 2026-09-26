@@ -529,6 +529,9 @@ jobs:
       - name: MITRE ATT&CK currency gate (no stale/revoked technique IDs)
         run: node scripts/mitre_attack_coverage.mjs --check
 
+      - name: OpenAPI route-coverage drift gate (spec documents every registered route)
+        run: node scripts/generate_openapi.mjs --check
+
       - name: Engine coverage & ATT&CK docs are in sync with source
         run: |
           node scripts/engine_coverage_accuracy_report.mjs >/dev/null

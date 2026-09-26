@@ -14,6 +14,10 @@ import { confirmDialog } from '../utils/confirmDialog'
 import useFocusTrap from '../hooks/useFocusTrap'
 import Button from '../components/ui/Button'
 import { downloadCsv } from '../lib/exportFindingsCsv'
+import { useStepUpAction, STEP_UP_CANCELLED } from '../hooks/useStepUpAction'
+import StepUpModal from '../components/auth/StepUpModal'
+import { useStepUpAction, STEP_UP_CANCELLED } from '../hooks/useStepUpAction'
+import StepUpModal from '../components/auth/StepUpModal'
 
 const columnHelper = createColumnHelper()
 
@@ -32,6 +36,12 @@ export default function AdminManagement() {
   const [usersUnavailable, setUsersUnavailable] = useState(false)
   const [successMsg, setSuccessMsg] = useState(null)
 
+  // Step-up (fresh re-auth) gate: granting the ceo/owner role is a privileged operation the
+  // backend can require a fresh MFA assertion for (403 step_up_required when
+  // WEISSMAN_REQUIRE_STEPUP is on). runWithStepUp transparently prompts + retries with the
+  // X-Weissman-StepUp header; non-privileged grants never trigger the modal.
+  const { runWithStepUp, stepUpModalProps } = useStepUpAction()
+
   // New user form state
   const [newEmail, setNewEmail] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -47,7 +57,9 @@ export default function AdminManagement() {
   const [editIsSuperadmin, setEditIsSuperadmin] = useState(false)
   const [editAssignedClientId, setEditAssignedClientId] = useState('')
   const editModalRef = useRef(null)
-  useFocusTrap(editModalRef, !!editingUser && !usersUnavailable)
+  // Suspend the edit dialog's own focus trap while the step-up modal is layered on top, so
+  // the two portals don't fight over Tab focus (the step-up modal runs its own trap).
+  useFocusTrap(editModalRef, !!editingUser && !usersUnavailable && !stepUpModalProps.open)
 
   // Roles that confine a user to a single client: the portal `client` role and
   // any role below admin (viewer / analyst / operator). For `client` a client is
@@ -104,17 +116,20 @@ export default function AdminManagement() {
     setError(null)
     setSuccessMsg(null)
     try {
-      await apiFetch('/api/admin/users', {
-        method: 'POST',
-        body: {
-          email: newEmail.trim(),
-          password: newPassword,
-          role: newRole,
-          is_superadmin: roleCanScope(newRole) ? false : newIsSuperadmin,
-          assigned_client_id:
-            roleCanScope(newRole) && newAssignedClientId ? Number(newAssignedClientId) : null,
-        },
-      })
+      await runWithStepUp((suHeaders) =>
+        apiFetch('/api/admin/users', {
+          method: 'POST',
+          headers: suHeaders,
+          body: {
+            email: newEmail.trim(),
+            password: newPassword,
+            role: newRole,
+            is_superadmin: roleCanScope(newRole) ? false : newIsSuperadmin,
+            assigned_client_id:
+              roleCanScope(newRole) && newAssignedClientId ? Number(newAssignedClientId) : null,
+          },
+        }),
+      )
       setSuccessMsg(t('pages.adminManagement.user_created'))
       setNewEmail('')
       setNewPassword('')
@@ -123,7 +138,9 @@ export default function AdminManagement() {
       setNewAssignedClientId('')
       await loadUsers()
     } catch (err) {
-      if (err?.response) {
+      if (err?.code === STEP_UP_CANCELLED) {
+        // Operator dismissed the re-auth prompt — treat as a no-op, not a failure.
+      } else if (err?.response) {
         const d = await err.response.json().catch(() => ({}))
         setError(d.detail || 'Failed to create user')
       } else {
@@ -143,22 +160,27 @@ export default function AdminManagement() {
     setSubmitting(true)
     setError(null)
     try {
-      await apiFetch(`/api/admin/users/${editingUser.id}`, {
-        method: 'PATCH',
-        body: {
-          role: editRole,
-          is_superadmin: roleCanScope(editRole) ? false : editIsSuperadmin,
-          assigned_client_id:
-            roleCanScope(editRole) && editAssignedClientId
-              ? Number(editAssignedClientId) || null
-              : null,
-        },
-      })
+      await runWithStepUp((suHeaders) =>
+        apiFetch(`/api/admin/users/${editingUser.id}`, {
+          method: 'PATCH',
+          headers: suHeaders,
+          body: {
+            role: editRole,
+            is_superadmin: roleCanScope(editRole) ? false : editIsSuperadmin,
+            assigned_client_id:
+              roleCanScope(editRole) && editAssignedClientId
+                ? Number(editAssignedClientId) || null
+                : null,
+          },
+        }),
+      )
       setSuccessMsg(t('pages.adminManagement.user_updated'))
       setEditingUser(null)
       await loadUsers()
     } catch (err) {
-      if (err?.response) {
+      if (err?.code === STEP_UP_CANCELLED) {
+        // Operator dismissed the re-auth prompt — treat as a no-op, not a failure.
+      } else if (err?.response) {
         const d = await err.response.json().catch(() => ({}))
         setError(d.detail || 'Failed to update user')
       } else {
@@ -732,6 +754,8 @@ export default function AdminManagement() {
           </div>
         </section>
       </div>
+
+      <StepUpModal {...stepUpModalProps} />
     </PageShell>
   )
 }

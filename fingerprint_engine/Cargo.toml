@@ -162,6 +162,10 @@ sqlparser = { version = "0.53", default-features = false, features = ["std"] }
 # Sovereign Shield: OpenSSH-format Ed25519 for phantom SSH canaries
 ssh-key = { version = "0.6", default-features = false, features = ["std", "ed25519", "rand_core"] }
 rand_core = "0.6"
+# WebAuthn / FIDO2 passkeys (phishing-resistant MFA). `danger-allow-state-serialisation`
+# lets the ceremony's PasskeyRegistration/PasskeyAuthentication state be persisted between
+# the stateless start/finish calls (short-TTL server-side store, never a client cookie).
+webauthn-rs = { version = "0.5.5", features = ["danger-allow-state-serialisation"] }
 redis = { version = "0.27", default-features = false, features = ["tokio-comp", "connection-manager"] }
 tokio-tungstenite = { version = "0.24", features = ["native-tls", "connect"] }
 native-tls = "0.2"

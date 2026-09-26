@@ -408,8 +408,7 @@ pub async fn rotate_refresh_token(
         .await
         .unwrap_or_else(|_| session_idle_minutes_default());
     let last_seen = last_used_at.unwrap_or(created_at);
-    if chrono::Utc::now().signed_duration_since(last_seen)
-        > chrono::Duration::minutes(idle_minutes)
+    if chrono::Utc::now().signed_duration_since(last_seen) > chrono::Duration::minutes(idle_minutes)
     {
         let jtis: Vec<String> = sqlx::query_scalar(
             r#"SELECT access_jti FROM user_refresh_tokens
@@ -518,10 +517,7 @@ pub async fn list_active_sessions_for_user(
 /// "Sign out everywhere": revoke every active refresh row for `user_id` and, best-effort,
 /// revoke the access JWTs bound to them until their natural expiry. Returns the number of
 /// refresh rows revoked. Runs on the auth pool (BYPASSRLS).
-pub async fn revoke_all_sessions_for_user(
-    pool: &PgPool,
-    user_id: i64,
-) -> Result<u64, sqlx::Error> {
+pub async fn revoke_all_sessions_for_user(pool: &PgPool, user_id: i64) -> Result<u64, sqlx::Error> {
     let mut tx = pool.begin().await?;
     let jtis: Vec<String> = sqlx::query_scalar(
         r#"SELECT access_jti FROM user_refresh_tokens

@@ -1,0 +1,49 @@
+# Example per-customer variables for a DEDICATED (single-tenant) Weissman instance.
+# Copy to terraform.tfvars (git-ignored) and fill in real infrastructure ids.
+# See docs/adr/0003-dedicated-single-tenant-tier.md and
+#     docs/adr/0004-terraform-dedicated-provisioning.md.
+
+aws_region = "eu-west-1"
+
+# ---- Customer identity -----------------------------------------------------
+customer_name = "acme"
+domain        = "acme.weissmancyber.com"
+sizing        = "medium" # small | medium | large
+
+# ---- Bring-your-own customer VPC + EKS cluster -----------------------------
+vpc_id                 = "vpc-0123456789abcdef0"
+db_subnet_ids          = ["subnet-0aaa1111", "subnet-0bbb2222", "subnet-0ccc3333"]
+redis_subnet_ids       = ["subnet-0aaa1111", "subnet-0bbb2222", "subnet-0ccc3333"]
+app_security_group_ids = ["sg-0eksnodegroup0000"] # EKS node group SG(s)
+eks_cluster_name       = "acme-weissman"
+
+# ---- Image (prefer an immutable, cosign-verified digest) -------------------
+image_digest = "sha256:REPLACE_WITH_COSIGN_VERIFIED_DIGEST"
+# image_tag  = "v1.2.3"   # used only when image_digest is empty
+
+# ---- Ingress ---------------------------------------------------------------
+ingress_class_name     = "nginx"
+ingress_cluster_issuer = "letsencrypt-prod"
+
+# ---- Optional sizing overrides (else derived from `sizing`) ----------------
+# db_instance_class        = "db.r7g.large"
+# db_allocated_storage     = 100
+# db_max_allocated_storage = 500
+# redis_node_type          = "cache.r7g.large"
+# redis_num_nodes          = 2
+
+# ---- Data-tier safety knobs ------------------------------------------------
+db_multi_az              = true
+db_backup_retention_days = 14
+db_deletion_protection   = true
+db_skip_final_snapshot   = false
+
+# ---- Tags ------------------------------------------------------------------
+tags = {
+  "owner"       = "platform"
+  "cost-center" = "dedicated-acme"
+}
+
+# NOTE: no secret values here. The stack MINTS this customer's own JWT and
+# secrets-at-rest vault keys and DB/Redis credentials, records them in AWS
+# Secrets Manager, and injects them into the Helm release. See the README.

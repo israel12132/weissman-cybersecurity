@@ -10,6 +10,7 @@ security-relevant; keep each one to context / decision / enforcement / consequen
 | [0001](0001-multi-tenant-and-customer-isolation.md) | Multi-tenant and customer (MSSP) data isolation |
 | [0002](0002-authentication-rbac-and-secrets.md) | Authentication, RBAC, and secrets-at-rest |
 | [0003](0003-dedicated-single-tenant-tier.md) | Dedicated (single-tenant) deployment tier vs logical (shared-RLS) tier |
+| [0004](0004-terraform-dedicated-provisioning.md) | Terraform provisioning for the dedicated (single-tenant) tier |
 
 Reviewer note: changes to the paths in `.github/CODEOWNERS` (isolation, migrations,
 auth, deploy, engines) require a named human review. The standing exit criterion for

@@ -3202,6 +3202,133 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
                 )
                     .into_response();
             }
+            // ── Phishing-resistant MFA (WebAuthn passkeys) ──────────────────
+            // When the tenant sets system_configs 'webauthn_required'=true, a user
+            // with an enrolled passkey finishes login via the WebAuthn ceremony
+            // (/api/auth/webauthn/authenticate/*) using the mfa_pending token below —
+            // this takes precedence over TOTP. A user without a passkey is gated the
+            // same way as the TOTP enrollment gate (bootstrap: enroll once, then retry).
+            let webauthn_required = match db::begin_tenant_tx(&state.app_pool, tenant_id).await {
+                Ok(mut tx) => {
+                    let flag = sqlx::query_scalar::<_, String>(
+                        "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'webauthn_required'",
+                    )
+                    .bind(tenant_id)
+                    .fetch_optional(&mut *tx)
+                    .await;
+                    if tx.commit().await.is_err() {
+                        return (
+                            StatusCode::SERVICE_UNAVAILABLE,
+                            Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                                "Authentication service temporarily unavailable; cannot verify MFA policy",
+                            )),
+                        )
+                            .into_response();
+                    }
+                    match flag {
+                        Ok(v) => matches!(v.as_deref().map(str::trim), Some("true") | Some("1") | Some("yes")),
+                        Err(_) => {
+                            return (
+                                StatusCode::SERVICE_UNAVAILABLE,
+                                Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                                    "Authentication service temporarily unavailable; cannot verify MFA policy",
+                                )),
+                            )
+                                .into_response();
+                        }
+                    }
+                }
+                Err(_) => {
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                            "Authentication service temporarily unavailable; cannot verify MFA policy",
+                        )),
+                    )
+                        .into_response();
+                }
+            };
+            if webauthn_required {
+                let has_passkey = match db::begin_tenant_tx(&state.app_pool, tenant_id).await {
+                    Ok(mut tx) => {
+                        let c = sqlx::query_scalar::<_, i64>(
+                            "SELECT count(*) FROM webauthn_credentials WHERE tenant_id = $1 AND user_id = $2",
+                        )
+                        .bind(tenant_id)
+                        .bind(user_id)
+                        .fetch_one(&mut *tx)
+                        .await;
+                        if tx.commit().await.is_err() {
+                            return (
+                                StatusCode::SERVICE_UNAVAILABLE,
+                                Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                                    "Authentication service temporarily unavailable; cannot verify passkey enrollment",
+                                )),
+                            )
+                                .into_response();
+                        }
+                        match c {
+                            Ok(n) => n > 0,
+                            Err(_) => {
+                                return (
+                                    StatusCode::SERVICE_UNAVAILABLE,
+                                    Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                                        "Authentication service temporarily unavailable; cannot verify passkey enrollment",
+                                    )),
+                                )
+                                    .into_response();
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        return (
+                            StatusCode::SERVICE_UNAVAILABLE,
+                            Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                                "Authentication service temporarily unavailable; cannot verify passkey enrollment",
+                            )),
+                        )
+                            .into_response();
+                    }
+                };
+                if !has_passkey {
+                    tracing::warn!(target: "auth", user_id, tenant_id, "WebAuthn required by tenant policy but no passkey enrolled");
+                    return (
+                        StatusCode::FORBIDDEN,
+                        Json(json!({
+                            "ok": false,
+                            "webauthn_enrollment_required": true,
+                            "detail": "Passkey (WebAuthn) enrollment required by tenant policy. Enroll a passkey, then retry.",
+                            "code": "webauthn_enrollment_required"
+                        })),
+                    )
+                        .into_response();
+                }
+                let mfa_token = match crate::auth_jwt::create_mfa_pending_token(
+                    user_id,
+                    tenant_id,
+                    &role,
+                    is_superadmin,
+                ) {
+                    Ok(t) => t,
+                    Err(_) => {
+                        return (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(json!({"ok": false, "detail": "MFA session failed"})),
+                        )
+                            .into_response();
+                    }
+                };
+                return (
+                    StatusCode::OK,
+                    Json(json!({
+                        "ok": false,
+                        "webauthn_required": true,
+                        "mfa_token": mfa_token,
+                        "detail": "Complete passkey (WebAuthn) verification",
+                    })),
+                )
+                    .into_response();
+            }
             if tenant_requires_mfa && !mfa_enabled {
                 tracing::warn!(target: "auth", user_id, tenant_id, "MFA required by tenant policy but user has not enrolled");
                 return (

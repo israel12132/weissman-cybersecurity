@@ -880,9 +880,8 @@ mod agent_token_tests {
     fn access_token_is_not_accepted_as_step_up() {
         let secret = b"unit-test-secret-at-least-32-chars-long";
         let _ = JWT_SECRET.set(secret.to_vec());
-        let minted =
-            create_access_token(11, 4, "admin", false, &StreamBinding::default(), None)
-                .expect("mint access");
+        let minted = create_access_token(11, 4, "admin", false, &StreamBinding::default(), None)
+            .expect("mint access");
         assert!(verify_step_up_token(&minted.token).is_none());
     }
 }

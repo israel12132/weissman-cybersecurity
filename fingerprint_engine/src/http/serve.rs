@@ -258,6 +258,19 @@ static PUBLIC_ROUTES: &[(Method, &str, RouteGate)] = &[
     ),
     (Method::POST, "/api/auth/signup", RouteGate::Always),
     (Method::GET, "/api/auth/verify", RouteGate::Always),
+    // WebAuthn passkey LOGIN ceremony: runs before a session exists, authenticated by
+    // the mfa_pending token in the body (verified in the handler), not a JWT. The
+    // register/* counterparts are NOT here — they require a live session.
+    (
+        Method::POST,
+        "/api/auth/webauthn/authenticate/start",
+        RouteGate::Always,
+    ),
+    (
+        Method::POST,
+        "/api/auth/webauthn/authenticate/finish",
+        RouteGate::Always,
+    ),
     (Method::POST, "/api/public/demo-request", RouteGate::Always),
     (Method::POST, "/api/v1/alerts/aws-canary", RouteGate::Always),
     // Public service status (SLA_AND_STATUS.md §4) — must be readable during an incident.
@@ -2102,6 +2115,45 @@ fn mount_legal_static(api: Router) -> Router {
     api.merge(legal)
 }
 
+/// Routes registered natively under `/api/v1/...` (real endpoints, not aliases). These are never
+/// rewritten by `api_v1_alias_rewrite`.
+const V1_NATIVE_ROUTES: &[&str] = &["/api/v1/alerts/aws-canary"];
+
+/// Map a `/api/v1/<x>` request path to its canonical `/api/<x>` form. Returns `None` when the path
+/// is not in the v1 alias namespace, or is a natively-versioned route that must route as-is.
+fn v1_canonical_path(path: &str) -> Option<String> {
+    let suffix = path.strip_prefix("/api/v1")?;
+    if !suffix.starts_with('/') {
+        return None; // e.g. "/api/v1beta/..." — not the v1 namespace
+    }
+    if V1_NATIVE_ROUTES.contains(&path) {
+        return None;
+    }
+    Some(format!("/api{suffix}"))
+}
+
+/// Outermost layer: `/api/v1/...` is a stable prefix alias for `/api/...`. Rewriting the request
+/// URI here — before routing, tenant/client scope, and RBAC — means the whole v1 surface reuses the
+/// canonical handlers and every security layer verbatim, with no duplicated routes or scope logic
+/// (client isolation and the public-route allow-list are keyed on the canonical `/api/...` paths).
+/// See docs/API_VERSIONING.md.
+async fn api_v1_alias_rewrite(mut request: Request<Body>, next: Next) -> Response {
+    if let Some(canonical) = v1_canonical_path(request.uri().path()) {
+        let new_pq = match request.uri().query() {
+            Some(q) => format!("{canonical}?{q}"),
+            None => canonical,
+        };
+        if let Ok(pq) = new_pq.parse::<axum::http::uri::PathAndQuery>() {
+            let mut parts = request.uri().clone().into_parts();
+            parts.path_and_query = Some(pq);
+            if let Ok(uri) = axum::http::Uri::from_parts(parts) {
+                *request.uri_mut() = uri;
+            }
+        }
+    }
+    next.run(request).await
+}
+
 /// Builds the full Axum router (API, static Command Center, WebSockets).
 ///
 /// CORS and global rate limiting are applied by the **`weissman-server`** binary only — this keeps
@@ -2160,6 +2212,9 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .layer(middleware::from_fn(
             crate::http::privilege_header_proxy_middleware,
         ))
+        // `/api/v1/*` stable alias → canonical `/api/*`. Outermost (added last = runs first) so
+        // routing and every auth/scope/RBAC layer below observe the canonical path.
+        .layer(middleware::from_fn(api_v1_alias_rewrite))
         .with_state(state);
     // Frontend is built with base: '/command-center/' so assets at /command-center/assets/...
     let app = if let Some(dir) = static_dir {
@@ -2362,6 +2417,25 @@ mod public_route_guard_tests {
             login > auth,
             "login_rate_limit_middleware must be layered after auth_guard (outer / pre-auth)"
         );
+    }
+
+    #[test]
+    fn v1_alias_rewrites_to_canonical_and_preserves_native_routes() {
+        // Alias namespace collapses to the canonical /api/* path.
+        assert_eq!(
+            super::v1_canonical_path("/api/v1/findings").as_deref(),
+            Some("/api/findings")
+        );
+        assert_eq!(
+            super::v1_canonical_path("/api/v1/clients/42/report/pdf").as_deref(),
+            Some("/api/clients/42/report/pdf")
+        );
+        // Natively-versioned routes are left untouched (they route as-is).
+        assert_eq!(super::v1_canonical_path("/api/v1/alerts/aws-canary"), None);
+        // Non-alias paths are ignored.
+        assert_eq!(super::v1_canonical_path("/api/findings"), None);
+        assert_eq!(super::v1_canonical_path("/api/v1beta/x"), None);
+        assert_eq!(super::v1_canonical_path("/status"), None);
     }
 }
 

@@ -45,7 +45,9 @@ async fn api_auth_mfa_verify(
     };
     let row = match sqlx::query(
         r#"SELECT COALESCE(mfa_secret,'') AS mfa_secret, COALESCE(mfa_enabled, false) AS mfa_enabled,
-                  COALESCE(NULLIF(trim(email), ''), '') AS email
+                  COALESCE(NULLIF(trim(email), ''), '') AS email,
+                  (SELECT value FROM system_configs WHERE tenant_id = $2 AND key = 'webauthn_required') AS webauthn_required,
+                  (SELECT count(*) FROM webauthn_credentials WHERE tenant_id = $2 AND user_id = $1) AS passkey_count
            FROM users WHERE id = $1 AND tenant_id = $2 AND is_active = true"#,
     )
     .bind(ctx.user_id)
@@ -79,6 +81,29 @@ async fn api_auth_mfa_verify(
     let secret: String = crate::auth_mfa::decrypt_secret_at_rest(&stored_secret);
     let enabled: bool = row.try_get("mfa_enabled").unwrap_or(false);
     let email: String = row.try_get("email").unwrap_or_default();
+    // MAJOR-1 fix: enforce the mandated factor at token CONSUMPTION, not just at login.
+    // If the tenant requires phishing-resistant MFA (webauthn_required) AND this user has a
+    // passkey enrolled, TOTP is not an acceptable second factor here — otherwise an AiTM
+    // attacker who relays password+OTP could bypass WebAuthn entirely. The user must complete
+    // the WebAuthn ceremony (/api/auth/webauthn/authenticate/*) instead.
+    let webauthn_required = row
+        .try_get::<Option<String>, _>("webauthn_required")
+        .ok()
+        .flatten()
+        .map(|v| matches!(v.trim(), "1" | "true" | "yes"))
+        .unwrap_or(false);
+    let passkey_count: i64 = row.try_get("passkey_count").unwrap_or(0);
+    if webauthn_required && passkey_count > 0 {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({
+                "ok": false,
+                "code": "webauthn_required",
+                "detail": "This tenant requires a passkey (WebAuthn); complete /api/auth/webauthn/authenticate — TOTP is not accepted for this account."
+            })),
+        )
+            .into_response();
+    }
     match crate::http::check_lockout_status(ctx.tenant_id, &email).await {
         crate::http::LockoutStatus::Locked(retry_after) => {
             return crate::http::locked_response(retry_after);

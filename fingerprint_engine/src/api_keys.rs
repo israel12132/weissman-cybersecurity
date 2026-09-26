@@ -168,11 +168,13 @@ pub async fn authenticate_api_key(
 
     // Best-effort last_used_at touch in its own tenant tx; never fails the request.
     if let Ok(mut tx) = db::begin_tenant_tx(state.app_pool.as_ref(), tenant_id).await {
-        let _ = sqlx::query("UPDATE api_keys SET last_used_at = now() WHERE id = $1 AND tenant_id = $2")
-            .bind(key_id)
-            .bind(tenant_id)
-            .execute(&mut *tx)
-            .await;
+        let _ = sqlx::query(
+            "UPDATE api_keys SET last_used_at = now() WHERE id = $1 AND tenant_id = $2",
+        )
+        .bind(key_id)
+        .bind(tenant_id)
+        .execute(&mut *tx)
+        .await;
         let _ = tx.commit().await;
     }
 
@@ -301,7 +303,8 @@ pub async fn api_admin_api_keys_create(
     let (id, created_at) = match inserted {
         Ok(row) => (
             row.try_get::<i64, _>("id").unwrap_or(0),
-            row.try_get::<chrono::DateTime<chrono::Utc>, _>("created_at").ok(),
+            row.try_get::<chrono::DateTime<chrono::Utc>, _>("created_at")
+                .ok(),
         ),
         Err(_) => {
             let _ = tx.rollback().await;
@@ -309,7 +312,12 @@ pub async fn api_admin_api_keys_create(
         }
     };
     // Tamper-evident audit in the same tx: no key without an audit row.
-    let details = format!("name={} prefix={} scopes={}", name, prefix, scopes.join(","));
+    let details = format!(
+        "name={} prefix={} scopes={}",
+        name,
+        prefix,
+        scopes.join(",")
+    );
     if crate::audit_log::insert_audit(
         &mut tx,
         auth.tenant_id,
@@ -388,7 +396,11 @@ pub async fn api_admin_api_keys_list(
                     })
                 })
                 .collect();
-            (StatusCode::OK, Json(json!({ "ok": true, "api_keys": items }))).into_response()
+            (
+                StatusCode::OK,
+                Json(json!({ "ok": true, "api_keys": items })),
+            )
+                .into_response()
         }
         Err(_) => unavailable(),
     }
@@ -471,14 +483,14 @@ mod tests {
         )
         .is_err());
         // Admin-management path is never reachable by a key.
-        assert!(enforce_api_key_scope(
-            &g,
-            "/api/admin/api-keys",
-            &["findings:read".to_string()]
-        )
-        .is_err());
+        assert!(
+            enforce_api_key_scope(&g, "/api/admin/api-keys", &["findings:read".to_string()])
+                .is_err()
+        );
         // Listed route, wrong scope → denied.
-        assert!(enforce_api_key_scope(&g, "/api/audit-logs", &["findings:read".to_string()]).is_err());
+        assert!(
+            enforce_api_key_scope(&g, "/api/audit-logs", &["findings:read".to_string()]).is_err()
+        );
         // Listed route, right scope → allowed.
         assert!(enforce_api_key_scope(&g, "/api/audit-logs", &["audit:read".to_string()]).is_ok());
         assert!(enforce_api_key_scope(&g, "/api/findings", &["findings:read".to_string()]).is_ok());

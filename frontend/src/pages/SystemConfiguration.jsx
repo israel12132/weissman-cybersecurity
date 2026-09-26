@@ -10,6 +10,8 @@ import EvidenceNotice from '../components/ui/EvidenceNotice';
 import { SkeletonBar } from '../components/ui/Skeleton';
 import { api } from '../utils/apiFetch';
 import Button from '../components/ui/Button'
+import ActiveSessionsPanel from '../components/auth/ActiveSessionsPanel'
+import ActiveSessionsPanel from '../components/auth/ActiveSessionsPanel'
 
 const NS = 'pages.systemConfiguration';
 
@@ -540,6 +542,8 @@ function SecuritySettings({ config = {}, onChange, configUnavailable = false }) 
           </label>
           <MfaSelfServicePanel />
         </div>
+
+        <ActiveSessionsPanel />
       </div>
     </div>
   );

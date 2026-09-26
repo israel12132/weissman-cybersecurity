@@ -34,6 +34,22 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/findings/:id/push-cortex",
             post(api_findings_push_cortex),
         )
+        // ITSM connectors (ServiceNow / Jira): open tickets from findings. The static
+        // `itsm` segment is a sibling of the `/api/integrations/:id` param route below,
+        // the same static-vs-param shape matchit 0.7.3 already accepts for
+        // `/api/findings/clusters` vs `/api/findings/:id/*` in this router.
+        .route(
+            "/api/integrations/itsm",
+            post(api_itsm_connector_create).get(api_itsm_connector_list),
+        )
+        .route(
+            "/api/integrations/itsm/:id",
+            delete(api_itsm_connector_delete),
+        )
+        .route(
+            "/api/findings/:id/itsm-ticket",
+            post(api_finding_itsm_ticket_create),
+        )
         .route("/api/intel/status", get(api_intel_status))
         .route("/api/attack-coverage", get(api_attack_coverage))
         .route("/api/intel/suppressions", get(api_intel_suppressions))
@@ -264,6 +280,27 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/auth/mfa/disable", post(api_auth_mfa_disable))
         .route("/api/auth/mfa/status", get(api_auth_mfa_status))
         .route("/api/auth/step-up", post(api_auth_step_up))
+        // ── WebAuthn / FIDO2 passkeys (phishing-resistant MFA) ────────────────
+        // register/* are AUTHED (Extension<AuthContext>): a signed-in user enrols a
+        // passkey. authenticate/* are UNAUTHENTICATED (declared in serve.rs
+        // PUBLIC_ROUTES) because they run during login and consume the mfa_pending
+        // token, exactly like /api/auth/mfa/verify.
+        .route(
+            "/api/auth/webauthn/register/start",
+            post(crate::webauthn_mfa::api_webauthn_register_start),
+        )
+        .route(
+            "/api/auth/webauthn/register/finish",
+            post(crate::webauthn_mfa::api_webauthn_register_finish),
+        )
+        .route(
+            "/api/auth/webauthn/authenticate/start",
+            post(crate::webauthn_mfa::api_webauthn_authenticate_start),
+        )
+        .route(
+            "/api/auth/webauthn/authenticate/finish",
+            post(crate::webauthn_mfa::api_webauthn_authenticate_finish),
+        )
         // Endpoint Agent
         .route(
             "/api/agents/enrollment-tokens",

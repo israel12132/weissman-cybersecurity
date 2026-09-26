@@ -7849,6 +7849,41 @@
     }
   },
   "components": {
+    "stepUpModal": {
+      "title": "Confirm it's you",
+      "description": "This privileged action needs a fresh security check.",
+      "hint": "Enter the current 6-digit code from your authenticator app.",
+      "code_label": "Authentication code",
+      "code_placeholder": "123456",
+      "verify": "Verify",
+      "errors": {
+        "invalid_code": "Invalid or expired code. Enter the current code from your authenticator.",
+        "mfa_required": "Step-up requires MFA. Enable MFA in Security settings first.",
+        "locked": "Too many attempts. Wait a moment and try again.",
+        "degraded": "Authentication service is temporarily unavailable. Try again shortly.",
+        "failed": "Step-up verification failed. Please try again."
+      }
+    },
+    "activeSessions": {
+      "title": "Active sessions",
+      "description": "Devices and locations with an active sign-in to your account.",
+      "refresh": "Refresh",
+      "loading": "Loading sessions…",
+      "empty": "No active sessions.",
+      "ip_label": "IP:",
+      "ip_unknown": "unknown",
+      "created_label": "Signed in:",
+      "last_used_label": "Last active:",
+      "unknown_time": "unknown",
+      "never": "—",
+      "revoke_all_action": "Sign out everywhere",
+      "revoke_all_title": "Sign out everywhere?",
+      "revoke_all_confirm": "This ends every active session, including this one. You will need to sign in again.",
+      "errors": {
+        "load_failed": "Failed to load active sessions",
+        "revoke_failed": "Failed to sign out sessions"
+      }
+    },
     "cockpit": {
       "tabs": {
         "overview": "Overview",
