@@ -1163,7 +1163,11 @@ fn assurance_block(findings: &[ReportFinding], lang: Lang) -> String {
         let s = f.status.trim().to_ascii_lowercase();
         if is_fp(f) {
             fp += 1;
-        } else if s.contains("fixed") || s.contains("remed") || s.contains("closed") || s.contains("resolved") {
+        } else if s.contains("fixed")
+            || s.contains("remed")
+            || s.contains("closed")
+            || s.contains("resolved")
+        {
             fixed += 1;
         } else if s.is_empty() || s == "open" {
             open += 1;
